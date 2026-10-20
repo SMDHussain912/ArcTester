@@ -5,10 +5,10 @@ dist/
 build/
 coverage/
 
-# prisma / sqlite (local only, never commit real db)
+# prisma / sqlite (local only, never commit real db or local env)
 *.db
 *.db-journal
-/api/prisma/migrations/
+/api/.env
 /api/.env
 
 # env

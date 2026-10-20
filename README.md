@@ -48,8 +48,8 @@ npm run dev:web
 
 ## Phases
 
-- [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton (this step)
-- [ ] **1. Prisma schema, migrations, seed, question import with tests**
+- [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
+- [x] **1. Prisma schema, migrations, seed, question import with tests** (this step)
 - [ ] **2. Selection service with unit tests** (unseen → wrong → oldest-seen, shuffle in group)
 - [ ] **3. Mock-test engine** (build test, timer, auto-submit, scoring)
 - [ ] **4. UI** (home, test screen with palette, result review with explanations)
@@ -57,6 +57,59 @@ npm run dev:web
 - [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
+
+## Phase 1 — Question bank (Prisma + SQLite + Zod)
+
+Why validated strings instead of Prisma enums: SQLite has no enum column type
+(it would silently become plain text anyway), so `difficulty`/`source` are
+`String` columns and Zod enforces the allowed values in code — one source of
+truth, no false safety. Same reason options live in a JSON string column:
+SQLite has no array type, so Zod enforces "exactly 4 non-empty strings" before
+anything is stored.
+
+Duplicates are blocked by a `UNIQUE` hash on the normalized question text
+(lowercase, trimmed, collapsed spaces), so " WHAT is 2+2? " and
+"what is 2+2?" count as the same question — at the database level.
+
+### Database scripts
+
+```bash
+cp api/.env.example api/.env          # DATABASE_URL="file:./dev.db"
+npm run prisma:generate --workspace=api
+npm run prisma:migrate --workspace=api # creates + applies migration
+npm run prisma:seed --workspace=api    # idempotent: 28 now, 0 on re-run
+```
+
+### Import formats
+
+**JSON** — a list shaped like the legacy `BASE` array:
+
+```json
+[["Maths", "What is 2 + 2?", ["3", "4", "5", "6"], 1, "Basic addition."]]
+```
+
+Each item: `[subject, question, [optionA, optionB, optionC, optionD], correctIndex 0-3, explanation?]`.
+
+**CSV** — header row required. Columns:
+
+```text
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+```
+
+Required: `subject, text, optionA, optionB, optionC, optionD, correctIndex`.
+Optional (defaults): `topic` → `General`, `explanation` → `""`,
+`source` → `csv`, `difficulty` → `medium` (must be `easy|medium|hard`).
+Quoted fields may contain commas/newlines; `""` is an escaped quote.
+
+Both imports run in **one transaction** (all valid rows land, or none do) and
+return a report shaped like:
+
+```json
+{ "added": 2, "duplicates": 1, "total": 4, "invalid": [{ "row": 3, "reason": "…" }] }
+```
+
+Row numbers are 1-based (JSON counts from the first item; CSV counts the
+header as row 1).
 
 ## Project rules
 
