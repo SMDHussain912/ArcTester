@@ -5,12 +5,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
-import {
-  createHmac,
-  randomBytes,
-  scryptSync,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -124,9 +119,30 @@ export interface AuthedRequest extends Request {
   user?: { id: number; email: string };
 }
 
-/** Middleware: require a valid session cookie. Protects user data routes. */
+/**
+ * Pull the session token out of a request.
+ *
+ * Two sources are accepted:
+ *  - the httpOnly cookie (the web app),
+ *  - `Authorization: Bearer <jwt>` (native mobile apps, which have no cookie
+ *    jar and would otherwise have to keep the token in plain storage).
+ *
+ * The cookie wins when both are present, so the web app can never be
+ * downgraded to a weaker transport by accident.
+ */
+export function readSessionToken(req: Request): string | null {
+  const cookieToken = getCookie(req, COOKIE_NAME);
+  if (cookieToken) return cookieToken;
+
+  const header = req.headers.authorization;
+  if (typeof header !== "string") return null;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+/** Middleware: require a valid session (cookie or bearer token). */
 export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction): void {
-  const token = getCookie(req, COOKIE_NAME);
+  const token = readSessionToken(req);
   if (!token) return next(forbidden("Sign in before using the test engine."));
   try {
     const payload = verifyJwt(token);
@@ -149,7 +165,7 @@ function setSessionCookie(res: Response, token: string): void {
     "Set-Cookie",
     `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${
       secure ? "; Secure" : ""
-    }`,
+    }`
   );
 }
 
@@ -189,13 +205,36 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
+  // Same as /login, but returns the JWT in the body instead of only setting a
+  // cookie. Native mobile apps have no cookie jar, so they send the token
+  // back as `Authorization: Bearer <jwt>`. The web app never uses this.
+  router.post("/token", async (req, res, next) => {
+    try {
+      const input = LoginSchema.parse(req.body);
+      const user = await db.user.findUnique({ where: { email: input.email } });
+      if (!user || !verifyPassword(input.password, user.passwordHash)) {
+        return next(badRequest("Invalid email or password."));
+      }
+      const token = signJwt({ sub: String(user.id), email: user.email });
+      res.json({
+        ok: true,
+        token,
+        tokenType: "Bearer",
+        expiresIn: JWT_TTL_SECONDS,
+        user: { id: user.id, email: user.email },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/logout", (_req, res) => {
     clearSessionCookie(res);
     res.json({ ok: true, message: "Signed out." });
   });
 
   router.get("/me", async (req, res, next) => {
-    const token = getCookie(req, COOKIE_NAME);
+    const token = readSessionToken(req);
     if (!token) return next(forbidden("Not signed in."));
     try {
       const payload = verifyJwt(token);
@@ -212,4 +251,3 @@ export function authRouter(db: PrismaClient): Router {
 
   return router;
 }
-

@@ -33,6 +33,29 @@ curl http://localhost:4000/health
 npm run dev:web
 ```
 
+Open <http://localhost:3000>, create an account on **Sign in**, and start a
+test. The API runs on :4000 and the web app talks to it at
+`http://localhost:4000` (set in `web/.env.local`).
+
+### Running on a phone (same Wi-Fi)
+
+Both servers bind to all interfaces by default, so a phone on the same
+network can reach them — but the API's CORS allowlist only accepts
+`localhost` origins, and the web app's API URL is hard-coded to
+`localhost:4000`, which on a phone points at the phone itself.
+
+To make it work from a real device:
+
+1. Find your machine's LAN IP: `hostname -I` (e.g. `192.168.1.5`).
+2. In `web/.env.local`, point the app at the LAN IP:
+   `NEXT_PUBLIC_API_URL=http://192.168.1.5:4000`.
+3. Allow that origin in the API's CORS check in `api/src/index.ts`
+   (`localCors`) — the current regex only matches `localhost` / `127.0.0.1`.
+4. Open `http://192.168.1.5:3000` on the phone.
+
+For a native app, no cookie is needed: use `POST /auth/token` and send
+`Authorization: Bearer <jwt>` (see "Mobile app" below).
+
 ## Scripts (repo root)
 
 | Command                | What it does                 |
@@ -46,6 +69,14 @@ npm run dev:web
 | `npm run format`       | Prettier write               |
 | `npm run format:check` | Prettier check (CI-friendly) |
 
+Question bank (run from the repo root):
+
+| Command                                              | What it does                       |
+| ---------------------------------------------------- | ---------------------------------- |
+| `npm run import:questions --workspace=api -- <file>` | Import questions from CSV or JSON  |
+| `npm run import:questions --workspace=api`           | Seed the starter bank (idempotent) |
+| `npm run prisma:migrate --workspace=api`             | Create/apply migrations            |
+
 ## Phases
 
 - [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
@@ -54,7 +85,8 @@ npm run dev:web
 - [x] **3. Mock-test engine** (build test, timer, auto-submit, scoring) — API only
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
-- [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
+- [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
+- [ ] **7 (later).** Dockerfile, GitHub Actions, native mobile client
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
@@ -180,6 +212,40 @@ return a report shaped like:
 Row numbers are 1-based (JSON counts from the first item; CSV counts the
 header as row 1).
 
+### Uploading questions (import command)
+
+Both formats above are loadable with one command. The path is relative to the
+`api/` folder:
+
+```bash
+# CSV
+npm run import:questions --workspace=api -- prisma/questions-template.csv
+
+# JSON
+npm run import:questions --workspace=api -- /home/me/questions.json
+
+# No file -> seeds the starter bank (same as prisma:seed)
+npm run import:questions --workspace=api
+```
+
+`api/prisma/questions-template.csv` is a ready-to-copy template with the
+header row and three example rows.
+
+The command prints a summary and lists any invalid rows with their row
+numbers:
+
+```
+prisma/questions-template.csv: 3 added, 0 duplicates skipped, 0 invalid, 3 rows read.
+```
+
+Re-running is safe: questions with the same text (ignoring case and extra
+spaces) are treated as duplicates and skipped, so you can keep re-importing an
+updated file without creating copies.
+
+Invalid rows never stop the run — the valid rows are still imported, and each
+bad row is reported with a reason (missing column, wrong `correctIndex`,
+empty option, and so on).
+
 ## Phase 5 — Analytics (`api/src/analytics.ts` + `analyticsRoutes.ts`)
 
 No UI yet — API endpoints only, same Zod validation + friendly-error middleware.
@@ -205,6 +271,62 @@ All endpoints live under `/analytics/*` behind the same hand-rolled CORS
 ordering, history sorting, export round-trip into a fresh test server, bad
 payloads, unknown question rejection, and duplicate-id idempotency
 (`api/tests/analytics.test.ts`).
+
+## Phase 6 — Auth (`api/src/auth.ts`)
+
+Accounts own their progress. The **question bank stays shared** — everyone
+reads the same questions, but attempts and stats are scoped to one user.
+
+- `POST /auth/register` — create an account (email + password, min 8 chars).
+- `POST /auth/login` — signs in and sets the `ecet_session` cookie.
+- `POST /auth/token` — same check, but returns the JWT in the body for
+  native clients (see "Mobile app" below).
+- `POST /auth/logout` — clears the cookie.
+- `GET /auth/me` — the signed-in user.
+
+Zero new libraries: JWT is signed with Node's built-in `crypto`
+(HMAC-SHA256) and passwords are hashed with `scrypt` + a random salt.
+
+**Sessions.** The web app stores the session in an **httpOnly cookie**, so the
+token is never reachable from JavaScript (an XSS bug cannot steal it). React
+holds only the current user in context. `requireAuth` guards `/tests*` and
+`/analytics/*`; the shared `GET /bank` stays public.
+
+**Expiry.** The token lives 7 days. When the API answers 401/403 the web app
+refreshes the session and returns you to the sign-in prompt instead of
+showing a raw failure.
+
+**Per-user progress.** `Attempt.userId` is required, and `Stat` is unique per
+`(userId, questionId)`. The migration drops progress that had no owner
+rather than silently assigning it to an arbitrary account.
+
+## Mobile app
+
+The API is already usable from a native client — a native app has no cookie
+jar, so it exchanges credentials for a bearer token once and sends it on
+every request:
+
+```bash
+# 1. get a token (returns { token, tokenType: "Bearer", expiresIn, user })
+curl -X POST http://localhost:4000/auth/token \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com","password":"yourpassword"}'
+
+# 2. use it
+curl -X POST http://localhost:4000/tests \
+  -H 'content-type: application/json' \
+  -H 'authorization: Bearer <token>' \
+  -d '{"mode":"practice","subject":"Java","count":5}'
+```
+
+`requireAuth` accepts **either** the cookie **or** `Authorization: Bearer
+<jwt>`. The cookie wins when both are present, so the web app is never
+downgraded to a weaker transport by accident.
+
+For a real device, the API must be reachable over the LAN and the CORS
+allowlist widened beyond `localhost` — see "Running on a phone" above.
+A React Native / Expo client can reuse the same endpoints with no new
+server-side work.
 
 ## Project rules
 

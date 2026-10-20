@@ -17,7 +17,9 @@ function localCors(_req: express.Request, res: express.Response, next: express.N
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    // "authorization" is needed by native/mobile clients that send a bearer
+    // token instead of relying on the cookie.
+    res.setHeader("Access-Control-Allow-Headers", "content-type,authorization");
     // The session lives in an httpOnly cookie, so the browser must be allowed
     // to send credentials cross-origin. Without this the cookie is dropped.
     res.setHeader("Access-Control-Allow-Credentials", "true");
