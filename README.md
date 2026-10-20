@@ -53,7 +53,7 @@ npm run dev:web
 - [x] **2. Selection service with unit tests** (pure functions, no routes/DB)
 - [x] **3. Mock-test engine** (build test, timer, auto-submit, scoring) — API only
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
-- [ ] **5. Analytics** (weak-topics report, score history, progress export/import)
+- [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
@@ -179,6 +179,32 @@ return a report shaped like:
 
 Row numbers are 1-based (JSON counts from the first item; CSV counts the
 header as row 1).
+
+## Phase 5 — Analytics (`api/src/analytics.ts` + `analyticsRoutes.ts`)
+
+No UI yet — API endpoints only, same Zod validation + friendly-error middleware.
+
+- `GET /analytics/weak-topics` — per-subject (and per-topic) rows
+  `{ subject, topic, seen, wrong, accuracy }` sorted weakest-first
+  (lowest accuracy; ties by most wrong). Includes `weakest` — the single
+  weakest subject, or `null` when nothing has been seen yet.
+- `GET /analytics/history` — submitted attempts newest first:
+  `{ attemptId, mode, startedAt, finishedAt, score, total, expired }`.
+- `GET /analytics/export` — full personal backup:
+  `{ exportedAt, stats[{questionId, seen, wrong, lastSeen}],
+attempts[...], answers[{attemptId, questionId, chosen, isCorrect}] }`.
+  Download this file; it's your offline progress snapshot.
+- `POST /analytics/import` — restore a backup. Validates strictly with Zod,
+  rejects references to unknown questions (import never invents questions),
+  merges stats additively (seen/wrong stack; lastSeen keeps the newer),
+  skips duplicate attempt ids, and re-links answers only to attempts that
+  exist. Returns `{ addedStats, updatedStats, addedAttempts, skippedDuplicates }`.
+
+All endpoints live under `/analytics/*` behind the same hand-rolled CORS
+(localhost origins only) and error middleware. Tests cover weakest-first
+ordering, history sorting, export round-trip into a fresh test server, bad
+payloads, unknown question rejection, and duplicate-id idempotency
+(`api/tests/analytics.test.ts`).
 
 ## Project rules
 
