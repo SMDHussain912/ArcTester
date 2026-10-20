@@ -15,8 +15,8 @@ export function parseCsv(content: string): CsvTable {
     field = "";
   };
   const pushRow = () => {
-    // Skip fully-empty lines (e.g. trailing newline).
-    if (row.length === 1 && row[0].trim() === "" && field.trim() === "") {
+    // Skip blank lines (empty or whitespace-only): all cells blank + field blank.
+    if (field.trim() === "" && row.every((cell) => cell.trim() === "")) {
       row = [];
       field = "";
       return;

@@ -49,14 +49,33 @@ npm run dev:web
 ## Phases
 
 - [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
-- [x] **1. Prisma schema, migrations, seed, question import with tests** (this step)
-- [ ] **2. Selection service with unit tests** (unseen → wrong → oldest-seen, shuffle in group)
+- [x] **1. Prisma schema, migrations, seed, question import with tests**
+- [x] **2. Selection service with unit tests** (this step: pure functions, no routes/DB)
 - [ ] **3. Mock-test engine** (build test, timer, auto-submit, scoring)
 - [ ] **4. UI** (home, test screen with palette, result review with explanations)
 - [ ] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
+
+## Phase 2 — Selection service (pure functions, `api/src/selection.ts`)
+
+No Prisma, no I/O, no hidden `Math.random`. The caller passes in candidates +
+stats + a random function, so tests inject a fixed/seeded source and stay
+deterministic. Phase 3 will wire this to the DB + routes without touching it.
+
+- `selectQuestions(candidates, stats, requested, random)` → unseen first
+  (shuffled), then wrong with higher `wrong` first (shuffled within equal
+  counts), then the rest by oldest `lastSeen` (strict, never shuffled).
+  Dedupes by id, never returns more than requested, rejects negative counts.
+- `selectMockTest(candidates, stats, random)` → applies the 16 official quotas
+  (Maths 50 … Python 8 = 200) in paper order and returns
+  `{ questions, shortfalls: [{ subject, requested, available }] }`. Thin banks
+  contribute what exists; the UI will render each shortfall as a warning.
+- `nextStat(prev, outcome, now)` → `seen + 1`, `lastSeen = now`; `correct`
+  heals `wrong - 1` (floor 0), `wrong`/`unanswered` hurt `wrong + 1`.
+- Helpers: `shuffleArray` (Fisher-Yates, pure), `createSeededRandom`
+  (mulberry32, no deps), `MOCK_QUOTAS` / `MOCK_TOTAL` (= 200).
 
 ## Phase 1 — Question bank (Prisma + SQLite + Zod)
 
