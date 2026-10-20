@@ -55,7 +55,9 @@ model Attempt {
   id        Int             @id @default(autoincrement())
   mode      String          @default("mock")
   startedAt DateTime        @default(now())
+  deadline  DateTime?
   finishedAt DateTime?
+  expired   Boolean         @default(false)
   answers   AttemptAnswer[]
 }
 

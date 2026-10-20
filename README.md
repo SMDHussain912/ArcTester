@@ -50,13 +50,34 @@ npm run dev:web
 
 - [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
 - [x] **1. Prisma schema, migrations, seed, question import with tests**
-- [x] **2. Selection service with unit tests** (this step: pure functions, no routes/DB)
-- [ ] **3. Mock-test engine** (build test, timer, auto-submit, scoring)
+- [x] **2. Selection service with unit tests** (pure functions, no routes/DB)
+- [x] **3. Mock-test engine** (build test, timer, auto-submit, scoring) — API only
 - [ ] **4. UI** (home, test screen with palette, result review with explanations)
 - [ ] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
+
+## Phase 3 — Mock-test engine (`api/src/testService.ts` + `testRoutes.ts`)
+
+API only, no UI. Routes validate with Zod and pass errors to a friendly
+error middleware (`api/src/errors.ts`): Zod → 400 with per-field reasons,
+app errors → their status, anything else → generic 500 (raw errors are never
+leaked to the UI). Tests run on a temp SQLite DB served over a real port —
+no new libraries (plain `fetch`, no supertest).
+
+- `POST /tests` — `{mode: "mock"|"practice"|"mistakes", subject?, count?}`.
+  Builds the set with the Phase 2 selector, persists an `Attempt` with
+  `startedAt` + `deadline` (mock = 180 min; else 0.9 min/question, min 5).
+  Returns questions **without** `correctIndex`/`explanation` plus
+  `warnings[]` (one per shortfall).
+- `POST /tests/:id/submit` — `{answers: [{questionId, selectedIndex|null}]}`.
+  Scores server-side, persists `AttemptAnswer`s and updates `Stat`s via
+  `nextStat` in ONE transaction. 409 on a second submit; 400 for answers
+  outside that attempt; unanswered counts as wrong. A submit after the
+  deadline is still accepted but marked `expired: true`.
+- `GET /tests/:id/result` — score, per-subject breakdown, and per-question
+  `correctIndex` + `explanation`; 403 until the test is submitted.
 
 ## Phase 2 — Selection service (pure functions, `api/src/selection.ts`)
 
