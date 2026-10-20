@@ -52,7 +52,7 @@ npm run dev:web
 - [x] **1. Prisma schema, migrations, seed, question import with tests**
 - [x] **2. Selection service with unit tests** (pure functions, no routes/DB)
 - [x] **3. Mock-test engine** (build test, timer, auto-submit, scoring) — API only
-- [ ] **4. UI** (home, test screen with palette, result review with explanations)
+- [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [ ] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [ ] **6 (later).** auth (JWT), Dockerfile, GitHub Actions
 
@@ -78,6 +78,35 @@ no new libraries (plain `fetch`, no supertest).
   deadline is still accepted but marked `expired: true`.
 - `GET /tests/:id/result` — score, per-subject breakdown, and per-question
   `correctIndex` + `explanation`; 403 until the test is submitted.
+- `GET /tests/:id` — in-progress attempt for **restore-on-refresh**: sanitized
+  questions, `deadline`, `serverNow`, and the saved selections. 404 if the
+  attempt does not exist; **409** once submitted (with a pointer to the result).
+- `GET /bank` — per-subject question counts + `total` for the home page.
+
+CORS: the API allows `http://localhost:*` / `127.0.0.1` origins only (hand-rolled
+8-line middleware — no `cors` package, so no new dependency).
+
+## Phase 4 — UI (`/web`, Next.js App Router)
+
+Plain CSS in one global stylesheet (`web/app/globals.css`) — no UI libraries.
+Light/dark follows `prefers-color-scheme`; every control is keyboard reachable
+with a visible focus ring; labels wrap every input; mobile-friendly at 360px.
+
+- **Home** (`/`) — mode picker (mock / practice / mistakes), subject + count
+  for practice, live bank counts, shortfall warnings, friendly error banner.
+- **Test** (`/test/[id]`) — one question at a time, option select, clear answer,
+  mark for review, palette (answered / marked / unanswered / current), countdown
+  computed from the **server** deadline minus **elapsed client time** (so a wrong
+  system clock cannot extend a paper), auto-submit at the deadline, confirm
+  before manual submit, `beforeunload` warning, and **restore on refresh** via
+  `GET /tests/:id` + `sessionStorage`.
+- **Result** (`/result/[id]`) — score, per-subject table, wrong-answer review
+  with the correct option and explanation; expired attempts get a warning.
+- **API client** (`web/lib/api.ts`) — typed, base URL from
+  `NEXT_PUBLIC_API_URL` (see `web/.env.local.example`), every failure becomes a
+  friendly sentence (never raw error text).
+- **Tests** — pure helpers only, node env, no jsdom:
+  `lib/timer.test.ts` (9), `lib/palette.test.ts` (5), `lib/answers.test.ts` (6).
 
 ## Phase 2 — Selection service (pure functions, `api/src/selection.ts`)
 

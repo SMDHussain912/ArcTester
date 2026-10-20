@@ -1,22 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AP ECET CSE Mock Test (Offline)",
   description: "Offline AP ECET CSE mock-test platform for personal study.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          fontFamily: "system-ui, sans-serif",
-          maxWidth: 760,
-          margin: "0 auto",
-          padding: 16,
-        }}
-      >
-        {children}
+      <body>
+        <a className="skip" href="#main">
+          Skip to content
+        </a>
+        <main id="main">{children}</main>
       </body>
     </html>
   );

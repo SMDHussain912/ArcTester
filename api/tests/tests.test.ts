@@ -164,4 +164,54 @@ describe("submit + result", () => {
     };
     expect(result.expired).toBe(true);
   });
+
+  describe("GET /tests/:id (restore in-progress)", () => {
+    it("returns sanitized questions, deadline and serverNow", async () => {
+      const created = (await postJson(`${server.baseUrl}/tests`, {
+        mode: "practice",
+        subject: "Maths",
+        count: 2,
+      })) as { status: number; json: { attemptId: number } };
+      const view = await getJson(`${server.baseUrl}/tests/${created.json.attemptId}`);
+      expect(view.status).toBe(200);
+      const body = view.json as {
+        attemptId: number;
+        deadline: string;
+        serverNow: string;
+        questions: { id: number; text: string; options: string[] }[];
+        saved: { questionId: number; selectedIndex: number | null }[];
+      };
+      expect(body.attemptId).toBe(created.json.attemptId);
+      expect(Number.isNaN(Date.parse(body.deadline))).toBe(false);
+      expect(Number.isNaN(Date.parse(body.serverNow))).toBe(false);
+      expect(body.questions).toHaveLength(2);
+      expect(body.saved).toHaveLength(2);
+      expect(body.saved.every((s) => s.selectedIndex === null)).toBe(true);
+      for (const q of body.questions) {
+        expect(q).not.toHaveProperty("correctIndex");
+        expect(q).not.toHaveProperty("explanation");
+      }
+    });
+
+    it("returns 404 for a missing attempt", async () => {
+      const res = await getJson(`${server.baseUrl}/tests/99999`);
+      expect(res.status).toBe(404);
+      expect((res.json as { error: string }).error).toBe("Test not found.");
+    });
+
+    it("returns 409 after submission, pointing at the result", async () => {
+      const created = (await postJson(`${server.baseUrl}/tests`, {
+        mode: "practice",
+        subject: "Physics",
+        count: 1,
+      })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
+      await postJson(`${server.baseUrl}/tests/${created.json.attemptId}/submit`, {
+        answers: [{ questionId: created.json.questions[0].id, selectedIndex: null }],
+      });
+      const res = await getJson(`${server.baseUrl}/tests/${created.json.attemptId}`);
+      expect(res.status).toBe(409);
+      expect((res.json as { error: string }).error).toContain("already submitted");
+      expect((res.json as { error: string }).error).toContain("result");
+    });
+  });
 });

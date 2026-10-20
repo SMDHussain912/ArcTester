@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { badRequest } from "./errors.js";
 import {
   CreateTestSchema,
   createTest,
+  getAttemptView,
   getResult,
   submitTest,
   SubmitTestSchema,
@@ -14,6 +14,23 @@ const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export function testRouter(db: PrismaClient): Router {
   const router = Router();
+
+  router.get("/bank", async (_req, res, next) => {
+    try {
+      const rows = await db.subject.findMany({
+        select: { name: true, _count: { select: { questions: true } } },
+        orderBy: { name: "asc" },
+      });
+      const subjects = rows.map((r) => ({ subject: r.name, count: r._count.questions }));
+      res.json({
+        subjects,
+        total: subjects.reduce((sum, s) => sum + s.count, 0),
+        serverNow: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/tests", async (req, res, next) => {
     try {
@@ -48,7 +65,9 @@ export function testRouter(db: PrismaClient): Router {
 
   router.get("/tests/:id", async (req, res, next) => {
     try {
-      throw badRequest("Use GET /tests/:id/result after submitting.");
+      const { id } = AttemptIdSchema.parse(req.params);
+      const view = await getAttemptView(db, id);
+      res.json(view);
     } catch (error) {
       next(error);
     }

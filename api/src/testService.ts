@@ -380,3 +380,64 @@ export async function getResult(db: PrismaClient, attemptId: number): Promise<Te
     questions,
   };
 }
+
+export interface AttemptView {
+  attemptId: number;
+  mode: TestMode;
+  deadline: string;
+  serverNow: string;
+  questions: PublicQuestion[];
+  /** Saved selections so a refresh can restore the paper. */
+  saved: { questionId: number; selectedIndex: number | null }[];
+}
+
+/** In-progress attempt for restore-on-refresh. 404 if missing, 409 if submitted. */
+export async function getAttemptView(
+  db: PrismaClient,
+  attemptId: number,
+  now: Date = new Date()
+): Promise<AttemptView> {
+  const attempt = await db.attempt.findUnique({
+    where: { id: attemptId },
+    include: {
+      answers: {
+        include: {
+          question: {
+            select: {
+              id: true,
+              text: true,
+              options: true,
+              subject: { select: { name: true } },
+              topic: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!attempt) throw notFound("Test not found.");
+  if (attempt.finishedAt) {
+    throw conflict("This test was already submitted. View the result instead.");
+  }
+  if (!attempt.deadline) throw conflict("This test has no deadline. Please start a new test.");
+
+  return {
+    attemptId: attempt.id,
+    mode: attempt.mode as TestMode,
+    deadline: attempt.deadline.toISOString(),
+    serverNow: now.toISOString(),
+    questions: attempt.answers.map((a) =>
+      toPublicQuestion({
+        id: a.question.id,
+        subject: a.question.subject.name,
+        topic: a.question.topic?.name ?? null,
+        text: a.question.text,
+        options: a.question.options,
+      })
+    ),
+    saved: attempt.answers.map((a) => ({
+      questionId: a.questionId,
+      selectedIndex: a.chosen,
+    })),
+  };
+}
