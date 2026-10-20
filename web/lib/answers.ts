@@ -37,6 +37,8 @@ export function friendlyError(status: number, fallback = "Something went wrong."
   switch (status) {
     case 400:
       return "That request was not valid. Please check your choices.";
+    case 401:
+      return "Please sign in to continue.";
     case 403:
       return "You cannot view that yet.";
     case 404:

@@ -56,9 +56,9 @@ function sortWeakest(rows: TopicRow[]): TopicRow[] {
   });
 }
 
-export async function getWeakTopics(db: PrismaClient): Promise<WeakTopicsReport> {
+export async function getWeakTopics(db: PrismaClient, userId: number): Promise<WeakTopicsReport> {
   const stats = await db.stat.findMany({
-    where: { seen: { gt: 0 } },
+    where: { userId, seen: { gt: 0 } },
     include: {
       question: {
         select: { subject: { select: { name: true } }, topic: { select: { name: true } } },
@@ -107,8 +107,9 @@ export async function getWeakTopics(db: PrismaClient): Promise<WeakTopicsReport>
   return { subjects: sortWeakest(subjects), weakest: all[0] ?? null };
 }
 
-export async function getHistory(db: PrismaClient): Promise<HistoryItem[]> {
+export async function getHistory(db: PrismaClient, userId: number): Promise<HistoryItem[]> {
   const attempts = await db.attempt.findMany({
+    where: { userId },
     orderBy: { finishedAt: "desc" },
     include: {
       answers: { select: { isCorrect: true } },
@@ -128,11 +129,15 @@ export async function getHistory(db: PrismaClient): Promise<HistoryItem[]> {
   });
 }
 
-export async function exportProgress(db: PrismaClient): Promise<ExportPayload> {
+export async function exportProgress(
+  db: PrismaClient,
+  userId: number
+): Promise<ExportPayload> {
   const stats = await db.stat.findMany({
+    where: { userId },
     select: { questionId: true, seen: true, wrong: true, lastSeen: true },
   });
-  const history = await getHistory(db);
+  const history = await getHistory(db, userId);
   const attemptIds = history.map((h) => h.attemptId);
   const answers =
     attemptIds.length > 0
@@ -191,7 +196,11 @@ const ImportPayloadSchema = z.object({
   answers: z.array(ImportAnswerSchema).optional().default([]),
 });
 
-export async function importProgress(db: PrismaClient, raw: unknown): Promise<ImportReport> {
+export async function importProgress(
+  db: PrismaClient,
+  userId: number,
+  raw: unknown
+): Promise<ImportReport> {
   const parsed = ImportPayloadSchema.safeParse(raw);
   if (!parsed.success) {
     throw badRequest(
@@ -215,13 +224,17 @@ export async function importProgress(db: PrismaClient, raw: unknown): Promise<Im
     throw badRequest(`Backup references unknown questions: ${missing.join(", ")}`);
   }
 
+  // Stats merge into THIS user's rows only.
   let addedStats = 0;
   let updatedStats = 0;
   for (const s of stats) {
-    const prev = await db.stat.findUnique({ where: { questionId: s.questionId } });
+    const prev = await db.stat.findUnique({
+      where: { userId_questionId: { userId, questionId: s.questionId } },
+    });
     if (!prev) {
       await db.stat.create({
         data: {
+          userId,
           questionId: s.questionId,
           seen: s.seen,
           wrong: s.wrong,
@@ -231,7 +244,7 @@ export async function importProgress(db: PrismaClient, raw: unknown): Promise<Im
       addedStats += 1;
     } else {
       await db.stat.update({
-        where: { questionId: s.questionId },
+        where: { userId_questionId: { userId, questionId: s.questionId } },
         data: {
           seen: prev.seen + s.seen,
           wrong: prev.wrong + s.wrong,
@@ -242,42 +255,60 @@ export async function importProgress(db: PrismaClient, raw: unknown): Promise<Im
     }
   }
 
+  // Attempts keep their id when it is free (or already ours); otherwise they
+  // get a fresh id so one user's backup can never overwrite another's rows.
+  // `attemptIdMap` translates the backup's ids to the ids actually stored.
+  const attemptIdMap = new Map<number, number>();
   let addedAttempts = 0;
   let skippedDuplicates = 0;
   for (const a of attempts) {
     const prev = await db.attempt.findUnique({ where: { id: a.attemptId } });
     if (prev) {
-      skippedDuplicates += 1;
+      if (prev.userId === userId) {
+        // Already imported into this account — keep the original id.
+        attemptIdMap.set(a.attemptId, prev.id);
+        skippedDuplicates += 1;
+        continue;
+      }
+      // Owned by somebody else: re-import under a new id instead of clobbering.
+      const created = await db.attempt.create({
+        data: {
+          mode: a.mode,
+          userId,
+          startedAt: new Date(a.startedAt),
+          finishedAt: a.finishedAt ? new Date(a.finishedAt) : null,
+          expired: a.expired ?? false,
+        },
+      });
+      attemptIdMap.set(a.attemptId, created.id);
+      addedAttempts += 1;
       continue;
     }
-    await db.attempt.create({
+    const created = await db.attempt.create({
       data: {
         id: a.attemptId,
         mode: a.mode,
+        userId,
         startedAt: new Date(a.startedAt),
         finishedAt: a.finishedAt ? new Date(a.finishedAt) : null,
         expired: a.expired ?? false,
       },
     });
+    attemptIdMap.set(a.attemptId, created.id);
     addedAttempts += 1;
   }
 
-  const answerAttemptIds = new Set(answers.map((a) => a.attemptId));
-  const presentAttempts = await db.attempt.findMany({
-    where: { id: { in: [...answerAttemptIds] } },
-    select: { id: true },
-  });
-  const presentIds = new Set(presentAttempts.map((a) => a.id));
-
+  // Answers follow the (possibly remapped) attempt ids.
   for (const ans of answers) {
-    if (!presentIds.has(ans.attemptId)) continue;
+    const attemptId = attemptIdMap.get(ans.attemptId);
+    if (attemptId === undefined) continue;
     const existing = await db.attemptAnswer.findFirst({
-      where: { attemptId: ans.attemptId, questionId: ans.questionId },
+      where: { attemptId, questionId: ans.questionId },
     });
     if (existing) continue;
     await db.attemptAnswer.create({
       data: {
-        attemptId: ans.attemptId,
+        attemptId,
         questionId: ans.questionId,
         chosen: ans.chosen,
         isCorrect: ans.isCorrect,

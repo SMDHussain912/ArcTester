@@ -106,9 +106,15 @@ function toPublicQuestion(row: {
   };
 }
 
-async function loadStats(db: PrismaClient, questionIds: number[]): Promise<StatsById> {
+async function loadStats(
+  db: PrismaClient,
+  userId: number,
+  questionIds: number[]
+): Promise<StatsById> {
   if (questionIds.length === 0) return {};
-  const rows = await db.stat.findMany({ where: { questionId: { in: questionIds } } });
+  const rows = await db.stat.findMany({
+    where: { userId, questionId: { in: questionIds } },
+  });
   const stats: StatsById = {};
   for (const row of rows) {
     const stat: QuestionStat = { seen: row.seen, wrong: row.wrong };
@@ -126,6 +132,7 @@ function outcomeOf(selectedIndex: number | null, correctIndex: number): AnswerOu
 /** Build a test, persist the Attempt + its question links, return sanitized set. */
 export async function createTest(
   db: PrismaClient,
+  userId: number,
   input: z.infer<typeof CreateTestSchema>,
   now: Date = new Date()
 ): Promise<CreatedTest> {
@@ -135,6 +142,7 @@ export async function createTest(
   const candidates: AttemptRow[] = all.map((row) => ({ id: row.id, subject: row.subject.name }));
   const stats = await loadStats(
     db,
+    userId,
     candidates.map((c) => c.id)
   );
 
@@ -155,10 +163,13 @@ export async function createTest(
       ]);
     }
   } else {
+    // "mistakes" only surfaces questions THIS user has got wrong before.
     const wrongIds = new Set(
-      (await db.stat.findMany({ where: { seen: { gt: 0 }, wrong: { gt: 0 } } })).map(
-        (s) => s.questionId
-      )
+      (
+        await db.stat.findMany({
+          where: { userId, seen: { gt: 0 }, wrong: { gt: 0 } },
+        })
+      ).map((s) => s.questionId)
     );
     let pool = candidates.filter((c) => wrongIds.has(c.id));
     if (input.subject) pool = pool.filter((c) => c.subject === input.subject);
@@ -177,6 +188,7 @@ export async function createTest(
     const created = await tx.attempt.create({
       data: {
         mode: input.mode,
+        userId,
         startedAt: now,
         deadline: new Date(now.getTime() + minutesFor(input.mode, selected.length) * 60000),
       },
@@ -227,12 +239,13 @@ export async function createTest(
 /** Score server-side, persist answers + stats in ONE transaction. */
 export async function submitTest(
   db: PrismaClient,
+  userId: number,
   attemptId: number,
   input: z.infer<typeof SubmitTestSchema>,
   now: Date = new Date()
 ): Promise<SubmitSummary> {
-  const attempt = await db.attempt.findUnique({
-    where: { id: attemptId },
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, userId },
     include: { answers: { select: { id: true, questionId: true } } },
   });
   if (!attempt) throw notFound("Test not found.");
@@ -273,16 +286,19 @@ export async function submitTest(
         where: { attemptId, questionId: row.questionId },
         data: { chosen: row.chosen, isCorrect: row.isCorrect },
       });
-      const prev = await tx.stat.findUnique({ where: { questionId: row.questionId } });
+      const prev = await tx.stat.findUnique({
+        where: { userId_questionId: { userId, questionId: row.questionId } },
+      });
       const next = nextStat(
         prev ? { seen: prev.seen, wrong: prev.wrong, lastSeen: prev.lastSeen } : undefined,
         outcomeOf(row.chosen, correctById.get(row.questionId) ?? 0),
         now
       );
       await tx.stat.upsert({
-        where: { questionId: row.questionId },
+        where: { userId_questionId: { userId, questionId: row.questionId } },
         update: { seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen },
         create: {
+          userId,
           questionId: row.questionId,
           seen: next.seen,
           wrong: next.wrong,
@@ -327,9 +343,13 @@ export interface TestResult {
 }
 
 /** Full review (answers + explanations) only AFTER submission. */
-export async function getResult(db: PrismaClient, attemptId: number): Promise<TestResult> {
-  const attempt = await db.attempt.findUnique({
-    where: { id: attemptId },
+export async function getResult(
+  db: PrismaClient,
+  userId: number,
+  attemptId: number
+): Promise<TestResult> {
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, userId },
     include: {
       answers: {
         include: {
@@ -394,11 +414,12 @@ export interface AttemptView {
 /** In-progress attempt for restore-on-refresh. 404 if missing, 409 if submitted. */
 export async function getAttemptView(
   db: PrismaClient,
+  userId: number,
   attemptId: number,
   now: Date = new Date()
 ): Promise<AttemptView> {
-  const attempt = await db.attempt.findUnique({
-    where: { id: attemptId },
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, userId },
     include: {
       answers: {
         include: {

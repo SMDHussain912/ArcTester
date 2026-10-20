@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SessionProvider } from "../lib/session";
+import { SessionBar } from "../lib/session-bar";
 
 export const metadata: Metadata = {
   title: "AP ECET CSE Mock Test (Offline)",
@@ -18,7 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a className="skip" href="#main">
           Skip to content
         </a>
-        <main id="main">{children}</main>
+        <SessionProvider>
+          <SessionBar />
+          <main id="main">{children}</main>
+        </SessionProvider>
       </body>
     </html>
   );

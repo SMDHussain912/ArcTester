@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, ApiError, type AttemptView, type PublicQuestion } from "../../../lib/api";
+import { api, ApiError, isAuthError, type AttemptView, type PublicQuestion } from "../../../lib/api";
 import { fromSaved, toSubmitPayload } from "../../../lib/answers";
 import { paletteCounts, paletteStatuses } from "../../../lib/palette";
 import { formatMs, remainingMs } from "../../../lib/timer";
+import { RequireSession, useSession } from "../../../lib/session";
 
 const STORAGE_PREFIX = "ecet-attempt-";
 
@@ -41,8 +42,17 @@ function clearStorage(attemptId: number): void {
 }
 
 export default function TestPage() {
+  return (
+    <RequireSession>
+      <TestRunner />
+    </RequireSession>
+  );
+}
+
+function TestRunner() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { refresh } = useSession();
   const attemptId = Number(params.id);
 
   const [view, setView] = useState<AttemptView | null>(null);
@@ -78,9 +88,15 @@ export default function TestPage() {
           router.replace(`/result/${attemptId}`);
           return;
         }
+        // The session may have expired while the paper was open.
+        if (isAuthError(e)) {
+          void refresh();
+          setError(e.message);
+          return;
+        }
         setError(e instanceof ApiError ? e.message : "Could not load the test.");
       });
-  }, [attemptId, router]);
+  }, [attemptId, router, refresh]);
 
   // Tick the clock every second. We only trust elapsed DELTAS, not the
   // absolute local clock, so a wrong system time cannot extend a paper.
@@ -114,9 +130,14 @@ export default function TestPage() {
     } catch (e: unknown) {
       submittedRef.current = false;
       setSubmitting(false);
+      // The session may have expired while the paper was open. Refresh so the
+      // gate can show the sign-in prompt again.
+      if (isAuthError(e)) {
+        void refresh();
+      }
       setError(e instanceof ApiError ? e.message : "Could not submit the test.");
     }
-  }, [view, attemptId, answers, questions, router]);
+  }, [view, attemptId, answers, questions, router, refresh]);
 
   // Auto-submit at the deadline.
   useEffect(() => {

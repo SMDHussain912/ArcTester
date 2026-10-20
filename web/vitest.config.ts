@@ -4,7 +4,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: "node",
+    // Component tests need a DOM; the pure lib tests are happy either way.
+    environment: "jsdom",
+    globals: false,
     include: ["**/*.test.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

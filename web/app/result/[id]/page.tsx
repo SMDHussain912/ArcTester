@@ -2,11 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, ApiError, type TestResult } from "../../../lib/api";
+import { api, ApiError, isAuthError, type TestResult } from "../../../lib/api";
+import { RequireSession, useSession } from "../../../lib/session";
 
 export default function ResultPage() {
+  return (
+    <RequireSession>
+      <ResultLoader />
+    </RequireSession>
+  );
+}
+
+function ResultLoader() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { refresh } = useSession();
   const attemptId = Number(params.id);
 
   const [result, setResult] = useState<TestResult | null>(null);
@@ -20,10 +30,16 @@ export default function ResultPage() {
     api
       .result(attemptId)
       .then(setResult)
-      .catch((e: unknown) =>
-        setError(e instanceof ApiError ? e.message : "Could not load the result.")
-      );
-  }, [attemptId]);
+      .catch((e: unknown) => {
+        if (isAuthError(e)) {
+          // The session may have expired while the result page was open.
+          void refresh();
+          setError(e.message);
+          return;
+        }
+        setError(e instanceof ApiError ? e.message : "Could not load the result.");
+      });
+  }, [attemptId, refresh]);
 
   if (error) {
     return (

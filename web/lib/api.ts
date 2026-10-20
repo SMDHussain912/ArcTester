@@ -1,5 +1,10 @@
 // Typed API client for the ECET API. One place for every fetch, so the pages
 // never touch `fetch` directly and errors always come back as friendly text.
+//
+// The session lives in an httpOnly cookie set by the API, so every call must
+// send credentials. Without `credentials: "include"` the browser drops the
+// cookie on cross-origin requests (localhost:3000 -> localhost:4000) and every
+// protected route answers 403.
 
 import { friendlyError, type SubmitAnswer } from "./answers";
 
@@ -63,6 +68,16 @@ export interface BankInfo {
   serverNow: string;
 }
 
+export interface AuthUser {
+  id: number;
+  email: string;
+}
+
+export interface AuthSession {
+  ok: boolean;
+  user: AuthUser;
+}
+
 /** Thrown for any non-2xx; `.message` is always UI-safe. */
 export class ApiError extends Error {
   status: number;
@@ -72,11 +87,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * True when the failure means "you are not signed in" (or the session died).
+ * Doubles as a type guard so callers can read `error.message` straight away.
+ */
+export function isAuthError(error: unknown): error is ApiError {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
+      // Send the httpOnly session cookie on every call.
+      credentials: "include",
       headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
@@ -116,4 +141,24 @@ export const api = {
     }),
 
   result: (id: number) => request<TestResult>(`/tests/${id}/result`),
+
+  // --- Auth -------------------------------------------------------------
+  // The API answers 403 when there is no valid session, so `me()` is the
+  // "am I signed in?" probe and never throws for a plain signed-out visitor.
+
+  register: (email: string, password: string) =>
+    request<{ ok: boolean; message: string }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  login: (email: string, password: string) =>
+    request<AuthSession>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
+
+  me: () => request<AuthSession>("/auth/me"),
 };

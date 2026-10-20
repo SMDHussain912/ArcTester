@@ -9,6 +9,8 @@ import {
   SubmitTestSchema,
 } from "./testService.js";
 import type { PrismaClient } from "@prisma/client";
+import { analyticsRouter } from "./analyticsRoutes.js";
+import { requireAuth, type AuthedRequest } from "./auth.js";
 
 const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -32,46 +34,60 @@ export function testRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/tests", async (req, res, next) => {
+  router.post(
+    "/tests",
+    requireAuth,
+    async (req, res, next) => {
     try {
       const input = CreateTestSchema.parse(req.body);
-      const created = await createTest(db, input);
+      const created = await createTest(db, (req as AuthedRequest).user!.id, input);
       res.status(201).json(created);
     } catch (error) {
       next(error);
     }
   });
 
-  router.post("/tests/:id/submit", async (req, res, next) => {
+  router.post(
+    "/tests/:id/submit",
+    requireAuth,
+    async (req, res, next) => {
     try {
       const { id } = AttemptIdSchema.parse(req.params);
       const input = SubmitTestSchema.parse(req.body);
-      const summary = await submitTest(db, id, input);
+      const summary = await submitTest(db, (req as AuthedRequest).user!.id, id, input);
       res.json(summary);
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/tests/:id/result", async (req, res, next) => {
+  router.get(
+    "/tests/:id/result",
+    requireAuth,
+    async (req, res, next) => {
     try {
       const { id } = AttemptIdSchema.parse(req.params);
-      const result = await getResult(db, id);
+      const result = await getResult(db, (req as AuthedRequest).user!.id, id);
       res.json(result);
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/tests/:id", async (req, res, next) => {
+  router.get(
+    "/tests/:id",
+    requireAuth,
+    async (req, res, next) => {
     try {
       const { id } = AttemptIdSchema.parse(req.params);
-      const view = await getAttemptView(db, id);
+      const view = await getAttemptView(db, (req as AuthedRequest).user!.id, id);
       res.json(view);
     } catch (error) {
       next(error);
     }
   });
+
+  router.use("/analytics", analyticsRouter(db));
 
   return router;
 }

@@ -52,19 +52,93 @@ export async function startTestServer(
 
 export async function postJson(
   url: string,
-  body: unknown
+  body: unknown,
+  cookie?: string
 ): Promise<{ status: number; json: unknown }> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(cookie ? { cookie } : {}),
+    },
     body: JSON.stringify(body),
   });
   return { status: res.status, json: await res.json() };
 }
 
-export async function getJson(url: string): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(url);
+export async function getJson(
+  url: string,
+  cookie?: string
+): Promise<{ status: number; json: unknown }> {
+  const res = await fetch(url, cookie ? { headers: { cookie } } : undefined);
   return { status: res.status, json: await res.json() };
+}
+
+/** Read the `ecet_session` cookie out of a response's Set-Cookie headers. */
+export function sessionCookie(res: Response): string {
+  const raw = res.headers.getSetCookie?.() ?? [];
+  const found = raw.find((c) => c.startsWith("ecet_session="));
+  if (!found) throw new Error("No session cookie in response.");
+  return found.split(";")[0];
+}
+
+/**
+ * Register a brand-new account and sign it in. Returns the session cookie
+ * plus the new user's id, so tests can scope expectations to one account.
+ */
+export async function signUp(
+  baseUrl: string,
+  email: string,
+  password = "correct-horse-battery"
+): Promise<{ cookie: string; userId: number }> {
+  const reg = await fetch(`${baseUrl}/auth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (reg.status !== 201) {
+    throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);
+  }
+  const login = await fetch(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (login.status !== 200) {
+    throw new Error(`Login failed (${login.status}): ${await login.text()}`);
+  }
+  const body = (await login.json()) as { user: { id: number } };
+  return { cookie: sessionCookie(login), userId: body.user.id };
+}
+
+/** Sign in an existing account and return its session cookie. */
+export async function signIn(
+  baseUrl: string,
+  email: string,
+  password = "correct-horse-battery"
+): Promise<{ cookie: string; userId: number }> {
+  const login = await fetch(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (login.status !== 200) {
+    throw new Error(`Login failed (${login.status}): ${await login.text()}`);
+  }
+  const body = (await login.json()) as { user: { id: number } };
+  return { cookie: sessionCookie(login), userId: body.user.id };
+}
+
+/**
+ * Bind a session cookie to a base URL so tests can call `api.get("/tests/1")`
+ * without repeating the cookie on every request.
+ */
+export function bindSession(baseUrl: string, cookie: string) {
+  return {
+    baseUrl,
+    post: (path: string, body: unknown) => postJson(`${baseUrl}${path}`, body, cookie),
+    get: (path: string) => getJson(`${baseUrl}${path}`, cookie),
+  };
 }
 
 afterEach(async () => {

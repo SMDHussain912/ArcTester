@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importFromJson } from "../src/importService.js";
 import { buildApp } from "../src/index.js";
-import { getJson, postJson, startTestServer, type TestServer } from "./server.js";
+import { bindSession, signUp, startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
+let api: ReturnType<typeof bindSession>;
 
 const BANK: unknown[] = [
   ["Maths", "Maths Q1?", ["a1", "b1", "c1", "d1"], 0, "exp-m1"],
@@ -15,6 +16,8 @@ beforeAll(async () => {
   server = await startTestServer(buildApp);
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(3);
+  const session = await signUp(server.baseUrl, "analyst@example.com");
+  api = bindSession(server.baseUrl, session.cookie);
 });
 
 afterAll(async () => {
@@ -23,7 +26,7 @@ afterAll(async () => {
 
 describe("analytics", () => {
   it("GET /analytics/weak-topics is empty with no stats", async () => {
-    const { status, json } = await getJson(`${server.baseUrl}/analytics/weak-topics`);
+    const { status, json } = await api.get(`/analytics/weak-topics`);
     expect(status).toBe(200);
     const body = json as { subjects: unknown[]; weakest: unknown };
     expect(body.subjects).toEqual([]);
@@ -31,29 +34,29 @@ describe("analytics", () => {
   });
 
   it("builds two attempts so stats exist", async () => {
-    const c1 = (await postJson(`${server.baseUrl}/tests`, {
+    const c1 = (await api.post(`/tests`, {
       mode: "practice",
       subject: "Maths",
       count: 1,
     })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
     expect(c1.status).toBe(201);
-    await postJson(`${server.baseUrl}/tests/${c1.json.attemptId}/submit`, {
+    await api.post(`/tests/${c1.json.attemptId}/submit`, {
       answers: [{ questionId: c1.json.questions[0].id, selectedIndex: 0 }],
     });
 
-    const c2 = (await postJson(`${server.baseUrl}/tests`, {
+    const c2 = (await api.post(`/tests`, {
       mode: "practice",
       subject: "Physics",
       count: 1,
     })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
     expect(c2.status).toBe(201);
-    await postJson(`${server.baseUrl}/tests/${c2.json.attemptId}/submit`, {
+    await api.post(`/tests/${c2.json.attemptId}/submit`, {
       answers: [{ questionId: c2.json.questions[0].id, selectedIndex: 0 }],
     });
   });
 
   it("ranks weakest subject first", async () => {
-    const { status, json } = await getJson(`${server.baseUrl}/analytics/weak-topics`);
+    const { status, json } = await api.get(`/analytics/weak-topics`);
     expect(status).toBe(200);
     const body = json as {
       subjects: { subject: string; seen: number; wrong: number; accuracy: number }[];
@@ -69,7 +72,7 @@ describe("analytics", () => {
   });
 
   it("GET /analytics/history lists submitted attempts", async () => {
-    const { status, json } = await getJson(`${server.baseUrl}/analytics/history`);
+    const { status, json } = await api.get(`/analytics/history`);
     expect(status).toBe(200);
     const body = json as {
       attemptId: number;
@@ -89,7 +92,7 @@ describe("analytics", () => {
   });
 
   it("GET /analytics/export returns stats + attempts + answers", async () => {
-    const { status, json } = await getJson(`${server.baseUrl}/analytics/export`);
+    const { status, json } = await api.get(`/analytics/export`);
     expect(status).toBe(200);
     const body = json as {
       exportedAt: string;
@@ -104,7 +107,7 @@ describe("analytics", () => {
   });
 
   it("POST /analytics/import round-trips into a fresh DB", async () => {
-    const exportRes = await getJson(`${server.baseUrl}/analytics/export`);
+    const exportRes = await api.get(`/analytics/export`);
     const payload = exportRes.json as {
       exportedAt: string;
       stats: unknown[];
@@ -116,7 +119,11 @@ describe("analytics", () => {
     const report = await importFromJson(fresh.db, BANK);
     expect(report.added).toBe(3);
 
-    const importRes = await postJson(`${fresh.baseUrl}/analytics/import`, payload);
+    // A different account in the fresh DB — import must land under this user.
+    const freshSession = await signUp(fresh.baseUrl, "restored@example.com");
+    const freshApi = bindSession(fresh.baseUrl, freshSession.cookie);
+
+    const importRes = await freshApi.post(`/analytics/import`, payload);
     expect(importRes.status).toBe(200);
     const importBody = importRes.json as {
       addedStats: number;
@@ -127,7 +134,7 @@ describe("analytics", () => {
     expect(importBody.addedStats).toBeGreaterThan(0);
     expect(importBody.addedAttempts).toBeGreaterThan(0);
 
-    const weak = await getJson(`${fresh.baseUrl}/analytics/weak-topics`);
+    const weak = await freshApi.get(`/analytics/weak-topics`);
     const weakBody = weak.json as { subjects: { subject: string; accuracy: number }[] };
     expect(weakBody.subjects.length).toBeGreaterThan(0);
 
@@ -135,7 +142,7 @@ describe("analytics", () => {
   });
 
   it("POST /analytics/import rejects unknown question ids", async () => {
-    const res = await postJson(`${server.baseUrl}/analytics/import`, {
+    const res = await api.post(`/analytics/import`, {
       stats: [{ questionId: 999999, seen: 1, wrong: 0 }],
     });
     expect(res.status).toBe(400);
@@ -143,21 +150,21 @@ describe("analytics", () => {
   });
 
   it("POST /analytics/import rejects malformed payload", async () => {
-    const res = await postJson(`${server.baseUrl}/analytics/import`, "not json");
+    const res = await api.post(`/analytics/import`, "not json");
     expect(res.status).toBe(400);
   });
 
   it("POST /analytics/import is idempotent on duplicate attempt ids", async () => {
-    const exportRes = await getJson(`${server.baseUrl}/analytics/export`);
+    const exportRes = await api.get(`/analytics/export`);
     const payload = exportRes.json as {
       exportedAt: string;
       stats: unknown[];
       attempts: unknown[];
       answers: unknown[];
     };
-    const first = await postJson(`${server.baseUrl}/analytics/import`, payload);
+    const first = await api.post(`/analytics/import`, payload);
     expect(first.status).toBe(200);
-    const second = await postJson(`${server.baseUrl}/analytics/import`, payload);
+    const second = await api.post(`/analytics/import`, payload);
     expect(second.status).toBe(200);
     const body = second.json as { skippedDuplicates: number };
     expect(body.skippedDuplicates).toBeGreaterThan(0);

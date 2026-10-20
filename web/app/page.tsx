@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError, type BankInfo } from "../lib/api";
+import { api, ApiError, isAuthError, type BankInfo } from "../lib/api";
+import { RequireSession, useSession } from "../lib/session";
 
 type Mode = "mock" | "practice" | "mistakes";
 
 export default function HomePage() {
   const router = useRouter();
+  const { status, user, refresh } = useSession();
   const [bank, setBank] = useState<BankInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("mock");
@@ -39,7 +41,13 @@ export default function HomePage() {
       const created = await api.createTest(body);
       router.push(`/test/${created.attemptId}`);
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : "Could not start the test.");
+      // The session may have expired between the page load and this click.
+      if (isAuthError(e)) {
+        await refresh();
+        setError("Your session expired. Please sign in again to start a test.");
+      } else {
+        setError(e instanceof ApiError ? e.message : "Could not start the test.");
+      }
       setStarting(false);
     }
   }
@@ -63,66 +71,77 @@ export default function HomePage() {
         )}
       </div>
 
-      <div className="card">
-        <h2>Start a test</h2>
-
-        <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="mute">Mode</legend>
-          {(
-            [
-              ["mock", "Full mock — official pattern (200 Q, 180 min)"],
-              ["practice", "Practice one subject"],
-              ["mistakes", "Revise my mistakes"],
-            ] as [Mode, string][]
-          ).map(([value, label]) => (
-            <label key={value} style={{ border: 0, padding: "2px 0" }}>
-              <input
-                type="radio"
-                name="mode"
-                value={value}
-                checked={mode === value}
-                onChange={() => setMode(value)}
-              />
-              <span>{label}</span>
-            </label>
-          ))}
-        </fieldset>
-
-        {mode !== "mock" ? (
-          <div className="row" style={{ marginTop: 12 }}>
-            <label style={{ border: 0, padding: 0 }}>
-              <span className="mute">Subject</span>
-              <select value={subject} onChange={(e) => setSubject(e.target.value)}>
-                {(bank?.subjects ?? []).map((s) => (
-                  <option key={s.subject} value={s.subject}>
-                    {s.subject} ({s.count})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={{ border: 0, padding: 0 }}>
-              <span className="mute">Questions</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={count}
-                onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
-                style={{ width: 90 }}
-              />
-            </label>
+      <RequireSession>
+        {status === "authenticated" && user ? (
+          <div className="card">
+            <p className="mute">
+              Signed in as <b>{user.email}</b> — your attempts and statistics are saved to this
+              account.
+            </p>
           </div>
-        ) : (
-          <p className="warn">
-            The full mock uses Maths 50, Physics 25, Chemistry 25 and 100 CSE questions in the
-            official unit split. Missing questions are skipped with a warning.
-          </p>
-        )}
+        ) : null}
 
-        <button onClick={start} disabled={starting || !bank}>
-          {starting ? "Starting…" : "Start test"}
-        </button>
-      </div>
+        <div className="card">
+          <h2>Start a test</h2>
+
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="mute">Mode</legend>
+            {(
+              [
+                ["mock", "Full mock — official pattern (200 Q, 180 min)"],
+                ["practice", "Practice one subject"],
+                ["mistakes", "Revise my mistakes"],
+              ] as [Mode, string][]
+            ).map(([value, label]) => (
+              <label key={value} style={{ border: 0, padding: "2px 0" }}>
+                <input
+                  type="radio"
+                  name="mode"
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => setMode(value)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          {mode !== "mock" ? (
+            <div className="row" style={{ marginTop: 12 }}>
+              <label style={{ border: 0, padding: 0 }}>
+                <span className="mute">Subject</span>
+                <select value={subject} onChange={(e) => setSubject(e.target.value)}>
+                  {(bank?.subjects ?? []).map((s) => (
+                    <option key={s.subject} value={s.subject}>
+                      {s.subject} ({s.count})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ border: 0, padding: 0 }}>
+                <span className="mute">Questions</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={count}
+                  onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+                  style={{ width: 90 }}
+                />
+              </label>
+            </div>
+          ) : (
+            <p className="warn">
+              The full mock uses Maths 50, Physics 25, Chemistry 25 and 100 CSE questions in the
+              official unit split. Missing questions are skipped with a warning.
+            </p>
+          )}
+
+          <button onClick={start} disabled={starting || !bank}>
+            {starting ? "Starting…" : "Start test"}
+          </button>
+        </div>
+      </RequireSession>
 
       {bank && bank.subjects.length > 0 ? (
         <div className="card">

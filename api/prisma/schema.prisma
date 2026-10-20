@@ -46,19 +46,32 @@ model Question {
   questionHash String    @unique
   createdAt    DateTime  @default(now())
   answers      AttemptAnswer[]
-  stat         Stat?
+  stats        Stat[]
 
   @@index([subjectId])
 }
 
 model Attempt {
-  id        Int             @id @default(autoincrement())
-  mode      String          @default("mock")
-  startedAt DateTime        @default(now())
-  deadline  DateTime?
+  id         Int             @id @default(autoincrement())
+  mode       String          @default("mock")
+  startedAt  DateTime        @default(now())
+  deadline   DateTime?
   finishedAt DateTime?
-  expired   Boolean         @default(false)
-  answers   AttemptAnswer[]
+  expired    Boolean         @default(false)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  answers    AttemptAnswer[]
+
+  @@index([userId])
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  attempts     Attempt[]
+  stats        Stat[]
 }
 
 model AttemptAnswer {
@@ -77,8 +90,14 @@ model AttemptAnswer {
 model Stat {
   id         Int      @id @default(autoincrement())
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId Int      @unique
+  questionId Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
   seen       Int      @default(0)
   wrong      Int      @default(0)
   lastSeen   DateTime?
+
+  // One stat row per (user, question) pair.
+  @@unique([userId, questionId])
+  @@index([questionId])
 }

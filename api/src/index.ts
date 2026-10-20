@@ -2,6 +2,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
+import { authRouter } from "./auth.js";
 
 const db = new PrismaClient();
 
@@ -17,6 +18,9 @@ function localCors(_req: express.Request, res: express.Response, next: express.N
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "content-type");
+    // The session lives in an httpOnly cookie, so the browser must be allowed
+    // to send credentials cross-origin. Without this the cookie is dropped.
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   if (_req.method === "OPTIONS") {
     res.status(204).end();
@@ -35,6 +39,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   });
 
   app.use(testRouter(database));
+  app.use("/auth", authRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
