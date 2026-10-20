@@ -4,6 +4,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 # prisma / sqlite (local only, never commit real db or local env)
 *.db
