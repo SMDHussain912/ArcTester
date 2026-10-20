@@ -1,0 +1,25 @@
+# deps
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# prisma / sqlite (local only, never commit real db)
+*.db
+*.db-journal
+/api/prisma/migrations/
+/api/.env
+
+# env
+.env
+.env.local
+.env*.local
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# vitest
+test-results/

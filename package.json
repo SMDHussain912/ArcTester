@@ -1,0 +1,28 @@
+{
+  "name": "ecet-mock-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Offline AP ECET (CSE) mock-test platform — monorepo (web + api)",
+  "workspaces": [
+    "web",
+    "api"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=web",
+    "dev:api": "npm run dev --workspace=api",
+    "dev": "npm run dev --workspace=api & npm run dev --workspace=web",
+    "build": "npm run build --workspaces",
+    "build:web": "npm run build --workspace=web",
+    "build:api": "npm run build --workspace=api",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}
