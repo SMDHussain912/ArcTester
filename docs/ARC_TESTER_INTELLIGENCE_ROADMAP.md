@@ -877,3 +877,28 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - Add focused browser inference tests for model load, prediction, schema mismatch, fallback and disposal.
 - Add an admin UI for provenance selection and TensorFlow training controls; current workflow is API-level.
 - Validate real-anonymized datasets and actual model performance before activating any population model. A provenance label is an administrator attestation, not independent proof of consent or data quality.
+
+
+### Phase 7 — admin workspace, activation and browser inference verification — 2026-11-09
+
+**Implemented**
+- Added an administrator Model Intelligence workspace at `/admin/models`, linked from the main admin dashboard.
+- Admins can register numeric regression datasets, explicitly attest synthetic versus real-anonymized provenance, view registered datasets, configure TensorFlow epochs/batch size, run grouped training and inspect candidate/baseline metrics.
+- The UI requires an explicit authorization/de-identification attestation and documents that learner group IDs must be stable SHA-256 pseudonyms, not raw student identifiers.
+- Admin model listing now exposes only a computed TensorFlow production-eligibility boolean, not stored model artifact JSON.
+- Eligible TensorFlow candidates can be manually activated. Activation validates the TensorFlow artifact's own production gate and does not incorrectly require the legacy statistical evaluator.
+- The authenticated student artifact endpoint returns only an active production-eligible TensorFlow artifact with private/no-store caching.
+- Added browser inference tests for real TensorFlow.js model loading, normalization and prediction, unknown/missing/non-finite feature rejection, synthetic artifact rejection and disposal.
+- Added API lifecycle tests for eligible activation and artifact delivery, as well as synthetic activation blocking.
+- Added admin workspace UI test for dataset loading and the training-report flow.
+
+**Verification**
+- GitHub Actions run #640 passed on commit `71fcf5684092ccddf3b3260eb980ff2e6e39cfe7`.
+- Web/API tests, lint, production builds, clean Prisma migrations and mobile typecheck all passed.
+- Earlier run #630 also passed the end-to-end TensorFlow dataset-training route integration test (278 API tests and 67 web tests at that point).
+
+**Remaining before Phase 7 can be closed**
+1. Add a student-facing hybrid inference integration only after the population feature schema is fixed and compatible with the student's inference feature builder. Keep the statistical predictor as fallback.
+2. Test the full student path with an approved real-anonymized artifact in a controlled environment.
+3. Add production deployment checks for persistent database storage, model artifact size and model version freshness.
+4. Review npm audit findings separately; the CI dependency installation reported outstanding advisories, which are not resolved by the TensorFlow work.
