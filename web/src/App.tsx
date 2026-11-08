@@ -33,6 +33,18 @@ type Result = {
   }[];
 };
 
+function browserDeviceFingerprint(): string {
+  const key = "arctester-device-fingerprint";
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+  const fingerprint =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(key, fingerprint);
+  return fingerprint;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     ...init,
