@@ -399,6 +399,7 @@ export async function getHistory(
 
 export const RECOMMENDATION_MINIMUM_ANSWERS = 5;
 export const RECOMMENDATION_WEAK_ACCURACY = 0.6;
+export const RECOMMENDATION_RECENT_PRACTICE_DAYS = 7;
 
 export interface StudyRecommendation {
   id: string;
@@ -435,18 +436,45 @@ export async function getStudyRecommendations(
   db: PrismaClient,
   userId: number
 ): Promise<StudyRecommendationsReport> {
-  const [weakTopics, history] = await Promise.all([
+  const [weakTopics, history, recentActivity] = await Promise.all([
     getWeakTopics(db, userId),
     getHistory(db, userId, 1, 1),
+    db.$queryRaw<Array<{ subject: string; topic: string | null; lastPracticedAt: Date }>>`
+      SELECT
+        CASE WHEN aa.subjectSnapshot <> '' THEN aa.subjectSnapshot ELSE s.name END AS subject,
+        CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END AS topic,
+        MAX(a.finishedAt) AS lastPracticedAt
+      FROM AttemptAnswer aa
+      INNER JOIN Attempt a ON a.id = aa.attemptId
+      INNER JOIN Question q ON q.id = aa.questionId
+      INNER JOIN Subject s ON s.id = q.subjectId
+      LEFT JOIN Topic t ON t.id = q.topicId
+      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+      GROUP BY subject, topic
+    `,
   ]);
   const recommendations: StudyRecommendation[] = [];
+  const cooldownMs = RECOMMENDATION_RECENT_PRACTICE_DAYS * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const lastPracticedByTopic = new Map(
+    recentActivity.map((row) => [JSON.stringify([row.subject, row.topic]), new Date(row.lastPracticedAt).getTime()])
+  );
   const evidencedWeakTopics = weakTopics.topics
     .filter((row) =>
       row.accuracy !== null &&
       row.seen >= RECOMMENDATION_MINIMUM_ANSWERS &&
       row.accuracy < RECOMMENDATION_WEAK_ACCURACY
     )
+    .filter((row) => {
+      const lastPracticed = lastPracticedByTopic.get(JSON.stringify([row.subject, row.topic]));
+      return lastPracticed === undefined || now - lastPracticed >= cooldownMs;
+    })
     .slice(0, 3);
+  const recentlyPracticedWeakTopics = weakTopics.topics.filter((row) => {
+    if (row.accuracy === null || row.seen < RECOMMENDATION_MINIMUM_ANSWERS || row.accuracy >= RECOMMENDATION_WEAK_ACCURACY) return false;
+    const lastPracticed = lastPracticedByTopic.get(JSON.stringify([row.subject, row.topic]));
+    return lastPracticed !== undefined && now - lastPracticed < cooldownMs;
+  });
 
   for (const row of evidencedWeakTopics) {
     const accuracy = Math.round((row.accuracy ?? 0) * 100);
@@ -492,7 +520,9 @@ export async function getStudyRecommendations(
       priority: "low",
       title: history.total > 0 ? "Build a stronger topic baseline" : "Start with a diagnostic practice session",
       reason: history.total > 0
-        ? `No topic currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
+        ? recentlyPracticedWeakTopics.length > 0
+          ? `Your weak-topic evidence is valid, but ${recentlyPracticedWeakTopics.length} topic(s) were practiced within the last ${RECOMMENDATION_RECENT_PRACTICE_DAYS} days. Review those recent answers and explanations before receiving another revision prompt.`
+          : `No topic currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
         : "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
       subject: null,
       topic: null,
