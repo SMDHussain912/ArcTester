@@ -44,6 +44,15 @@ type RegisteredModel = {
   modelId: string; version: number; algorithm: string; task: string; dataset: string;
   isActive: boolean; createdAt: string; activatedAt: string | null;
 };
+type ModelAuditEvent = {
+  id: string; actorId: number | null; modelId: string; version: number;
+  action: string; details: Record<string, unknown>; createdAt: string;
+};
+type TrainedCandidate = {
+  modelId: string; version: number; algorithm: string; isActive: boolean;
+  trainRows: number; testRows: number; heldOutMetrics: object;
+  crossValidation: object | null; parameters: Record<string, number> | null;
+};
 type ModelEvaluationReport = {
   status: "PASSED" | "REJECTED"; evaluationDataset: string; datasetFingerprint: string;
   sampleCount: number; candidateVersion: number; baselineVersion: number;
@@ -253,6 +262,10 @@ export default function App() {
   const [modelBaselineVersion, setModelBaselineVersion] = useState("1");
   const [modelEvaluationDatasetId, setModelEvaluationDatasetId] = useState("");
   const [modelEvaluationReport, setModelEvaluationReport] = useState<ModelEvaluationReport | null>(null);
+  const [trainedCandidates, setTrainedCandidates] = useState<TrainedCandidate[]>([]);
+  const [modelAuditId, setModelAuditId] = useState("");
+  const [modelAuditEvents, setModelAuditEvents] = useState<ModelAuditEvent[]>([]);
+  const [modelAuditLoading, setModelAuditLoading] = useState(false);
   const [modelLabLoading, setModelLabLoading] = useState(false);
   const [modelLabNotice, setModelLabNotice] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -499,18 +512,34 @@ export default function App() {
     }
   }
 
+  async function loadModelAudit(modelId: string) {
+    setModelAuditId(modelId);
+    setModelAuditLoading(true);
+    try {
+      const response = await request<{ events: ModelAuditEvent[] }>(
+        `/admin/models/${encodeURIComponent(modelId)}/audit`,
+      );
+      setModelAuditEvents(response.events);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setModelAuditLoading(false);
+    }
+  }
+
   async function trainRegisteredDataset(datasetId: string) {
     setBusy(true);
     setError("");
     setModelLabNotice("");
     try {
-      const response = await request<{ models: Array<{ modelId: string; version: number; heldOutMetrics: Record<string, number | null> }> }>(
+      const response = await request<{ models: TrainedCandidate[] }>(
         `/admin/model-datasets/${encodeURIComponent(datasetId)}/train`,
         {
           method: "POST",
           body: JSON.stringify({ modelId: trainingModelPrefix, seed: 42 }),
         },
       );
+      setTrainedCandidates(response.models);
       setModelLabNotice(`Training completed: ${response.models.length} inactive candidates registered. Review and evaluate them before promotion.`);
       await refreshModelLab();
     } catch (cause) {
@@ -1611,8 +1640,17 @@ export default function App() {
             </div>
             <div className="panel">
               <div className="section-head"><div><p className="eyebrow">VERSION REGISTRY</p><h2>Registered models</h2></div></div>
-              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td>{!model.isActive && <button className="ghost" disabled={busy || model.version === 1} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</td></tr>)}</tbody></table></div>}
+              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td><div className="inline-actions"><button className="ghost" disabled={busy} onClick={() => void loadModelAudit(model.modelId)}>History</button>{!model.isActive && <button className="ghost" disabled={busy} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</div></td></tr>)}</tbody></table></div>}
             </div>
+            {trainedCandidates.length > 0 && <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">TRAINING REPORT</p><h2>Latest trained candidates</h2></div></div>
+              <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Train / holdout</th><th>Holdout metrics</th></tr></thead><tbody>{trainedCandidates.map((candidate) => <tr key={`${candidate.modelId}-${candidate.version}`}><td>{candidate.modelId}</td><td>{candidate.version}</td><td>{candidate.algorithm}</td><td>{candidate.trainRows} / {candidate.testRows}</td><td><pre>{JSON.stringify(candidate.heldOutMetrics, null, 2)}</pre></td></tr>)}</tbody></table></div>
+              <p className="muted">These are held-out experiment metrics, not a promotion approval. Evaluate against a registered baseline before activation.</p>
+            </div>}
+            {modelAuditId && <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h2>{modelAuditId}</h2></div><button className="ghost" disabled={modelAuditLoading} onClick={() => void loadModelAudit(modelAuditId)}>Refresh history</button></div>
+              {modelAuditLoading ? <p className="muted">Loading audit history…</p> : modelAuditEvents.length === 0 ? <p className="muted">No audit events recorded.</p> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Version</th><th>Actor</th><th>Details</th></tr></thead><tbody>{modelAuditEvents.map((event) => <tr key={event.id}><td>{new Date(event.createdAt).toLocaleString()}</td><td>{event.action}</td><td>{event.version}</td><td>{event.actorId ?? "Deleted user"}</td><td><pre>{JSON.stringify(event.details, null, 2)}</pre></td></tr>)}</tbody></table></div>}
+            </div>}
             <div className="panel">
               <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered datasets</h2></div></div>
               <div className="form-grid">
