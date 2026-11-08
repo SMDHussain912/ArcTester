@@ -1028,7 +1028,7 @@ export function examRouter(db: PrismaClient): Router {
   router.get("/exams/catalog", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const exams = await db.exam.findMany({
-        where: { status: "PUBLISHED", versions: { some: { publishedAt: { not: null } } } },
+        where: { versions: { some: { publishedAt: { not: null } } } },
         orderBy: { updatedAt: "desc" },
         include: { versions: {
           where: { publishedAt: { not: null } }, orderBy: { version: "desc" }, take: 1,
