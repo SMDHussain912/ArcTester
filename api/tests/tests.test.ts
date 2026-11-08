@@ -124,9 +124,9 @@ describe("POST /tests", () => {
   it("filters topic selections by both subject and topic name", async () => {
     const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
     const topic = await server.db.topic.upsert({
-      where: { subjectId_name: { subjectId: physics.id, name: "Algebra" } },
+      where: { subjectId_name: { subjectId: physics.id, name: "Mechanics" } },
       update: {},
-      create: { subjectId: physics.id, name: "Algebra" },
+      create: { subjectId: physics.id, name: "Mechanics" },
     });
     const physicsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: physics.id } });
     await server.db.question.update({ where: { id: physicsQuestion.id }, data: { topicId: topic.id } });
@@ -134,7 +134,7 @@ describe("POST /tests", () => {
     const { status, json } = await api.post("/tests", {
       mode: "practice",
       subjects: ["Maths", "Physics"],
-      topicFilters: [{ subject: "Maths", topic: "Algebra" }],
+      topicFilters: [{ subject: "Maths", topic: "Algebra" }, { subject: "Physics", topic: "Algebra" }],
       count: 10,
     });
     expect(status).toBe(201);
