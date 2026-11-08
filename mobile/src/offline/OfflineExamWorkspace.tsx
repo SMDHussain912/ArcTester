@@ -8,9 +8,11 @@ import {
   View,
 } from "react-native";
 import {
+  cacheAnnouncements,
   cacheExamPackage,
   getCachedExam,
   getOfflineAttempt,
+  listCachedAnnouncements,
   listCachedExams,
   listPendingSubmissions,
   markSubmissionSyncError,
@@ -18,6 +20,7 @@ import {
   queueOfflineSubmission,
   saveOfflineAnswer,
   startOfflineAttempt,
+  type CachedAnnouncement,
   type CachedExam,
   type ExamPackage,
   type PendingSubmission,
@@ -44,6 +47,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [cached, setCached] = useState<CachedExam[]>([]);
   const [pendingSubmissionIds, setPendingSubmissionIds] = useState<string[]>([]);
+  const [announcements, setAnnouncements] = useState<CachedAnnouncement[]>([]);
   const [activePackage, setActivePackage] = useState<ExamPackage | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -73,6 +77,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const refreshLocal = useCallback(async () => {
     setCached(await listCachedExams());
     setPendingSubmissionIds((await listPendingSubmissions()).map((item) => item.assignmentId));
+    setAnnouncements(await listCachedAnnouncements());
   }, []);
 
   const refreshAssignments = useCallback(async () => {
@@ -88,7 +93,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     setMessage("Internet connected");
     setError("");
     try {
-      setMessage("Uploading saved attempts");
+      setMessage("Uploading analytics");
       const pending = await listPendingSubmissions();
       for (const attempt of pending) {
         try {
@@ -126,6 +131,9 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
           // Keep any previously cached copy if this package is not currently downloadable.
         }
       }
+      setMessage("Loading admin messages");
+      const feed = await request<{ announcements: CachedAnnouncement[] }>("/announcements");
+      await cacheAnnouncements(feed.announcements);
       await refreshLocal();
       setMessage("Sync complete");
     } catch (cause) {
@@ -337,6 +345,13 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
         {online ? "Online · Sync enabled" : "Offline · Cached exams available"}
       </Text>
       {!!message && <Text style={{ color: "#526078" }}>{message}</Text>}
+      {announcements.map((announcement) => (
+        <View key={announcement.id} style={{ backgroundColor: "#eff6ff", borderRadius: 12, padding: 14 }}>
+          <Text style={{ color: "#172033", fontWeight: "800" }}>{announcement.title}</Text>
+          <Text style={{ color: "#344054", lineHeight: 21, marginTop: 5 }}>{announcement.message}</Text>
+          <Text style={{ color: "#748096", fontSize: 11, marginTop: 7 }}>{new Date(announcement.publishedAt).toLocaleString()}</Text>
+        </View>
+      ))}
       {syncing && <ActivityIndicator />}
       {displayAssignments.map((assignment) => {
         const local = cached.find((item) => item.package.assignmentId === assignment.id);
