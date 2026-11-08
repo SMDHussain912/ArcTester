@@ -780,7 +780,7 @@ export default function App() {
               <button className="ghost" disabled={busy} onClick={() => request<{ questions: AdminQuestion[] }>("/admin/question-bank").then(({ questions }) => setAdminQuestions(questions)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
             </div>
             <div className="bank-filter-toolbar">
-              <label>Subject
+              <label>Filter by subject
                 <select value={bankSubjectFilter} onChange={(event) => setBankSubjectFilter(event.target.value)}>
                   <option value="all">All subjects</option>
                   {[...new Set(adminQuestions.map((question) => question.subject))].sort((a, b) => a.localeCompare(b)).map((subject) => <option key={subject} value={subject}>{subject}</option>)}
