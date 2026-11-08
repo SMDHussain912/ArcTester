@@ -27,7 +27,15 @@ export default function LearningPage() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    void loadConcepts();
+    let cancelled = false;
+    setLoading(true);
+    api.learningConcepts()
+      .then((result) => { if (!cancelled) setConcepts(result.concepts); })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause instanceof ApiError ? cause.message : "Could not load the concept library.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [status]);
 
   if (status === "loading") return <p className="mute">Checking your session…</p>;
@@ -61,7 +69,7 @@ export default function LearningPage() {
           <button className="button button-primary" type="submit" disabled={loading}>
             {loading ? "Searching…" : "Search"}
           </button>
-          <button className="button button-secondary" type="button" disabled={loading && !query} onClick={() => { setQuery(""); void loadConcepts(""); }}>
+          <button className="button button-secondary" type="button" disabled={loading} onClick={() => { setQuery(""); void loadConcepts(""); }}>
             Clear
           </button>
         </form>
