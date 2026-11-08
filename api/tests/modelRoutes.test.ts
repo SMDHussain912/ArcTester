@@ -186,6 +186,41 @@ describe("admin model registry API", () => {
     expect(String(rejected.body.error ?? rejected.body.message)).toContain("SHA-256 pseudonymous groupId");
   });
 
+  it("runs grouped TensorFlow.js training through the registered dataset route without promotion", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index * 0.5 + (index % 4) * 0.1,
+      groupId: Math.floor(index / 10).toString(16).padStart(64, "0"),
+    }));
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "tensorflow-route-training-fixture",
+      task: "regression",
+      targetColumn: "next_score",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples,
+      sourceDescription: "Synthetic route integration fixture for TensorFlow training.",
+      sourceAttested: true,
+      datasetKind: "synthetic",
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
+      modelId: "tensorflow-route-fixture",
+      seed: 42,
+      epochs: 12,
+      batchSize: 16,
+    });
+    expect(trained.status).toBe(201);
+    expect(trained.body).toMatchObject({
+      ok: true,
+      promoted: false,
+      productionEligible: false,
+      split: { trainRows: 40, testRows: 20, trainGroups: 4, testGroups: 2 },
+    });
+    expect(trained.body.candidate).toMatchObject({ rows: 20 });
+    expect(trained.body.baseline).toMatchObject({ rows: 20 });
+  });
+
   it("persists explicit model dataset provenance and defaults old-style uploads to synthetic", async () => {
     const realSamples = Array.from({ length: 30 }, (_, index) => ({
       features: { practice_score: index },
