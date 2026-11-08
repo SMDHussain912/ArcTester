@@ -196,6 +196,7 @@ export interface AssignedExamResult {
     position: number;
     subject: string;
     topic: string | null;
+    relatedConcepts: { slug: string; title: string }[];
     text: string;
     options: string[];
     correctIndex: number;
