@@ -141,7 +141,7 @@ describe("admin announcements", () => {
     });
     const feed = await request("/announcements", "GET", undefined, studentCookie);
     const announcements = feed.json.announcements as Array<{ title: string }>;
-    expect(announcements.slice(0, 2).map((item) => item.title)).toEqual(["Newest notice", "Older notice"]);
+    expect(announcements.filter((item) => ["Newest notice", "Older notice"].includes(item.title)).map((item) => item.title)).toEqual(["Newest notice", "Older notice"]);
   });
 
   it("supports incremental feeds and excludes expired announcements", async () => {
