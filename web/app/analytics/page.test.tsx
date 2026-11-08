@@ -51,9 +51,7 @@ describe("student analytics page", () => {
       ).toBeInTheDocument()
     );
     expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/analytics/")
-      )
+      fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))
     ).toBe(false);
   });
 
