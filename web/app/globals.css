@@ -183,3 +183,33 @@ th { color: var(--muted); font-size: 11px; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+
+/* Authentication */
+.auth-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(340px, 1.1fr); min-height: min(690px, calc(100vh - 190px)); overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.auth-aside { display: flex; flex-direction: column; justify-content: space-between; gap: 40px; padding: clamp(24px, 5vw, 54px); background: var(--surface-soft); }
+.auth-aside h1 { max-width: 420px; font-size: clamp(30px, 4vw, 43px); }
+.auth-aside .muted { max-width: 390px; }
+.auth-footnote { margin: 0; color: var(--muted); font-size: 12px; }
+.auth-main { display: grid; place-items: center; padding: clamp(24px, 5vw, 58px); }
+.auth-card { width: 100%; max-width: 420px; }
+.auth-card h1 { font-size: 30px; }
+.auth-card form { margin-top: 26px; }
+.auth-mode { margin: 0 0 20px; padding: 0; border: 0; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
+.auth-tabs label { justify-content: center; align-items: center; margin: 0; padding: 9px 7px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.auth-tabs label.sel { color: var(--accent); }
+.auth-field { display: block; margin: 15px 0; padding: 0; border: 0; color: var(--ink); font-size: 12px; font-weight: 650; }
+.auth-field input { display: block; margin-top: 7px; font-weight: 400; }
+.auth-submit { width: 100%; margin-top: 10px; }
+.auth-signed-in { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.auth-back { margin: 22px 0 0; color: var(--muted); font-size: 12px; }
+.auth-back a:hover { color: var(--accent); }
+
+@media (max-width: 760px) {
+  .auth-layout { grid-template-columns: 1fr; }
+  .auth-aside { gap: 24px; padding: 24px; }
+  .auth-aside h1 { max-width: 520px; font-size: 29px; }
+  .auth-footnote { display: none; }
+  .auth-main { padding: 30px 22px; }
+}
