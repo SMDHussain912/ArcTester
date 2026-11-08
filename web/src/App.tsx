@@ -305,9 +305,7 @@ export default function App() {
     request<{ announcements: Announcement[] }>("/admin/announcements")
       .then(({ announcements: items }) => setAnnouncements(items))
       .catch((cause) => setError((cause as Error).message));
-    request<{ questions: AdminQuestion[] }>("/admin/question-bank")
-      .then(({ questions }) => setAdminQuestions(questions))
-      .catch((cause) => setError((cause as Error).message));
+    void fetchAllAdminQuestions().catch((cause) => setError((cause as Error).message));
     request<{ subjects: AdminSubject[] }>("/admin/subjects")
       .then(({ subjects }) => { const items = subjects ?? []; setAdminSubjects(items); if (items[0]) setNewTopicSubjectId(items[0].id); })
       .catch((cause) => setError((cause as Error).message));
@@ -426,6 +424,15 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function fetchAllAdminQuestions() {
+    const first = await request<{ questions: AdminQuestion[]; pages?: number }>("/admin/question-bank?page=1&pageSize=200");
+    const pages = Math.max(1, first.pages ?? 1);
+    const remaining = await Promise.all(Array.from({ length: pages - 1 }, (_, index) =>
+      request<{ questions: AdminQuestion[] }>(`/admin/question-bank?page=${index + 2}&pageSize=200`)
+    ));
+    setAdminQuestions([...first.questions, ...remaining.flatMap((page) => page.questions)]);
   }
 
   async function refreshAdminExams() {
@@ -603,8 +610,7 @@ export default function App() {
     try {
       await request(`/admin/topics/${topicId}`, { method: "DELETE" });
       await refreshSubjects();
-      const refreshed = await request<{ questions: AdminQuestion[] }>("/admin/question-bank");
-      setAdminQuestions(refreshed.questions);
+      await fetchAllAdminQuestions();
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
@@ -623,8 +629,7 @@ export default function App() {
       });
       setImportReport(response.report);
       setImportPreviewReady(false);
-      const refreshed = await request<{ questions: AdminQuestion[] }>("/admin/question-bank");
-      setAdminQuestions(refreshed.questions);
+      await fetchAllAdminQuestions();
       const bankInfo = await request<Bank>("/bank");
       setBank(bankInfo);
       await refreshSubjects();
@@ -972,6 +977,7 @@ export default function App() {
   async function submitTest() {
     if (!test) return;
     setBusy(true);
+    setError("");
     try {
       await request(`/tests/${test.attemptId}/submit`, {
         method: "POST",
@@ -998,6 +1004,31 @@ export default function App() {
     setBank(null);
     setTest(null);
     setResult(null);
+    setAnswers({});
+    setAssignmentAnswers({});
+    setActiveAssignmentPackage(null);
+    setAssignmentStartedAt(null);
+    setAssignmentDeadline(null);
+    setAssignmentSessionPaused(false);
+    setAssignmentResult(null);
+    setAssignmentResultForId(null);
+    setAssignedExams([]);
+    setAnnouncements([]);
+    setInvitations([]);
+    setAdminQuestions([]);
+    setAdminSubjects([]);
+    setAdminStudents([]);
+    setAdminExams([]);
+    setAdminAnalytics(null);
+    setLiveSessions([]);
+    setExamAttendance([]);
+    setSessionAudit(null);
+    setPracticeSubjects([]);
+    setPracticeTopicKeys([]);
+    setSelectedQuestionIds([]);
+    setSelectedStudentIds([]);
+    setError("");
+    setActivePage("dashboard");
   }
 
   if (!user) {
@@ -1289,7 +1320,7 @@ export default function App() {
             </form>
             <div className="section-head">
               <div><p className="eyebrow">REUSABLE CONTENT</p><h2>Question bank <span className="muted">({adminQuestions.length})</span></h2></div>
-              <button className="ghost" disabled={busy} onClick={() => request<{ questions: AdminQuestion[] }>("/admin/question-bank").then(({ questions }) => setAdminQuestions(questions)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+              <button className="ghost" disabled={busy} onClick={() => void fetchAllAdminQuestions().catch((cause) => setError((cause as Error).message))}>Refresh</button>
             </div>
             <div className="bank-filter-toolbar">
               <label>Filter by subject
