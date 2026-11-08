@@ -94,8 +94,8 @@ export function buildExamReadinessDataset(
     const prior = (histories.get(exam.userId) ?? []).filter((attempt) => attempt.timestamp < exam.startedTimestamp);
     if (prior.length < minimumPriorAttempts) continue;
     const recent = prior.slice(-recentWindow);
-    const accuracyMean = prior.reduce((sum, attempt) => sum + attempt.accuracy, 0) / prior.length;
-    const recentAccuracy = recent.reduce((sum, attempt) => sum + attempt.accuracy, 0) / recent.length;
+    const accuracyMean = Math.round((prior.reduce((sum, attempt) => sum + attempt.accuracy, 0) / prior.length) * 1e6) / 1e6;
+    const recentAccuracy = Math.round((recent.reduce((sum, attempt) => sum + attempt.accuracy, 0) / recent.length) * 1e6) / 1e6;
     const subjectCount = new Set(prior.flatMap((attempt) => attempt.subjects)).size;
     result.push({
       userId: exam.userId,
@@ -134,8 +134,8 @@ export function buildCurrentReadinessFeatures(
   return [
     history.length,
     history[history.length - 1].accuracy,
-    recent.reduce((sum, item) => sum + item.accuracy, 0) / recent.length,
-    history.reduce((sum, item) => sum + item.accuracy, 0) / history.length,
+    Math.round((recent.reduce((sum, item) => sum + item.accuracy, 0) / recent.length) * 1e6) / 1e6,
+    Math.round((history.reduce((sum, item) => sum + item.accuracy, 0) / history.length) * 1e6) / 1e6,
     history.reduce((sum, item) => sum + item.attempt.total, 0),
     new Set(history.flatMap((item) => item.attempt.subjects)).size,
   ];
