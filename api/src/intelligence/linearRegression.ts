@@ -152,6 +152,11 @@ export function evaluateLinearRegression(
   samples: RegressionSample[],
 ): RegressionMetrics {
   if (samples.length === 0) throw new Error("At least one evaluation sample is required");
+  for (const [index, sample] of samples.entries()) {
+    if (!Number.isFinite(sample.target)) {
+      throw new Error(`Evaluation sample ${index} contains a non-finite target`);
+    }
+  }
   const predictions = samples.map((sample) => predictLinearRegression(model, sample.features));
   const meanTarget = samples.reduce((sum, sample) => sum + sample.target, 0) / samples.length;
   const absoluteError = samples.reduce((sum, sample, index) =>
