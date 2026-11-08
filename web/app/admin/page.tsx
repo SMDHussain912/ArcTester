@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "../../lib/session";
-import { api, ApiError, type AdminExam, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
+import { api, ApiError, type AdminExam, type AdminAttendanceRow, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [liveSessions, setLiveSessions] = useState<AdminLiveSession[]>([]);
+  const [attendance, setAttendance] = useState<AdminAttendanceRow[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
   const [questionScoring, setQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
@@ -47,10 +48,11 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const [stats, examData, studentData, firstQuestionPage, liveData] = await Promise.all([
-      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200), api.adminLiveSessions(),
+    const [stats, examData, studentData, firstQuestionPage, liveData, attendanceData] = await Promise.all([
+      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200), api.adminLiveSessions(), api.adminExamAttendance(),
     ]);
     setLiveSessions(liveData.sessions);
+    setAttendance(attendanceData.attendance);
     const remainingPages = await Promise.all(
       Array.from({ length: Math.max(0, firstQuestionPage.pages - 1) }, (_, index) =>
         api.adminQuestions(index + 2, 200)
@@ -377,6 +379,23 @@ export default function AdminPage() {
                 <p key={event.id} className="mute">{new Date(event.createdAt).toLocaleString()} · {event.email} · {event.exam} · {event.type} — {event.detail}</p>
               ))}
             </details> : null}
+          </section>
+          <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Candidate attendance register</h2><span className="pill">{attendance.length} assigned candidates</span></div>
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead><tr><th>Candidate</th><th>Exam</th><th>Attendance</th><th>Started</th><th>Submitted</th><th>Result</th></tr></thead>
+                <tbody>{attendance.map((row) => (
+                  <tr key={row.assignmentId}>
+                    <td>{row.candidate.email}</td><td>{row.exam.title} · v{row.version}</td>
+                    <td>{row.attendanceStatus} · {row.connectivity}</td>
+                    <td>{row.session?.startedAt ? new Date(row.session.startedAt).toLocaleString() : "—"}</td>
+                    <td>{row.submission?.submittedAt ? new Date(row.submission.submittedAt).toLocaleString() : "—"}</td>
+                    <td>{row.submission ? row.submission.status : "Not submitted"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           </section>
         </>
       ) : null}
