@@ -318,7 +318,7 @@ export function examRouter(db: PrismaClient): Router {
           },
         }),
         db.attempt.findMany({
-          where: { finishedAt: { not: null } },
+          where: { finishedAt: { not: null }, user: { role: "STUDENT" } },
           select: {
             answers: {
               select: {
@@ -337,7 +337,7 @@ export function examRouter(db: PrismaClient): Router {
           },
         }),
         db.examSubmission.findMany({
-          where: { status: "GRADED" },
+          where: { status: "GRADED", assignment: { student: { role: "STUDENT" } } },
           select: {
             answers: {
               select: {
