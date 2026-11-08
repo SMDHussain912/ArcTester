@@ -133,6 +133,43 @@ describe("admin model registry API", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("activates and privately serves a production-eligible TensorFlow artifact", async () => {
+    const modelId = "tensorflow-approved-fixture";
+    const artifact = {
+      schemaVersion: 1,
+      format: "tensorflow-js-layers-model",
+      modelId,
+      version: 1,
+      task: "regression",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      normalization: { means: [0], scales: [1] },
+      modelTopology: {},
+      weightSpecs: [{ name: "dense/kernel", shape: [1, 1], dtype: "float32" }],
+      weightDataBase64: "AAAAAA==",
+      evaluation: {
+        candidateMae: 1, baselineMae: 1, candidateRmse: 1, baselineRmse: 1,
+        testSamples: 20, splitMethod: "grouped-student-holdout", datasetKind: "real-anonymized",
+      },
+      trainedAt: new Date().toISOString(),
+    };
+    await server.db.registeredModel.create({
+      data: {
+        modelId, version: 1, algorithm: "tensorflow-js-layers", task: "regression",
+        dataset: "approved-fixture", artifactJson: JSON.stringify(artifact), isActive: false,
+      },
+    });
+    const listed = await request("/admin/models");
+    expect((listed.body.models as Array<{ modelId: string; productionEligible: boolean }>).find((item) => item.modelId === modelId)?.productionEligible).toBe(true);
+
+    const activated = await request(`/admin/models/${modelId}/1/activate`, "POST", {});
+    expect(activated.status).toBe(200);
+    expect(activated.body.model).toMatchObject({ modelId, version: 1, isActive: true });
+
+    const delivered = await request(`/models/${modelId}/active/tensorflow`);
+    expect(delivered.status).toBe(200);
+    expect(delivered.body.artifact).toMatchObject({ modelId, version: 1, format: "tensorflow-js-layers-model" });
+  });
+
   it("blocks synthetic TensorFlow artifacts from activation", async () => {
     const modelId = "tensorflow-gate-fixture";
     const artifact = {
