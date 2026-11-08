@@ -50,6 +50,25 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/exam-results", async (_req, res, next) => {
+    try {
+      const submissions = await db.examSubmission.findMany({
+        orderBy: { receivedAt: "desc" },
+        take: 200,
+        include: { assignment: { include: {
+          student: { select: { id: true, email: true } },
+          examVersion: { include: { exam: { select: { id: true, title: true } } } },
+        } } },
+      });
+      res.json({ ok: true, results: submissions.map(s => ({
+        id: s.id, status: s.status, score: s.score, maximumScore: s.maximumScore,
+        submittedAt: s.submittedAt, receivedAt: s.receivedAt,
+        student: s.assignment.student, exam: s.assignment.examVersion.exam,
+        version: s.assignment.examVersion.version,
+      })) });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/exams/:id/preview", async (req, res, next) => {
     try {
       const exam = await db.exam.findUnique({
