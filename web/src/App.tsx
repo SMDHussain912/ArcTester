@@ -499,6 +499,7 @@ export default function App() {
           <nav aria-label="Admin navigation">
             <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Overview</button>
             <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
+            <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
             <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
             <button className={activePage === "invitations" ? "nav-active" : "nav-button"} onClick={() => setActivePage("invitations")}>Invitations</button>
           </nav>
@@ -602,6 +603,57 @@ export default function App() {
                   </div>}
                 </article>;
               })}
+            </div>
+          </section>
+          <section hidden={activePage !== "question-bank"} id="admin-question-bank">
+            <div className="section-head">
+              <div><p className="eyebrow">QUESTION AUTHORING</p><h2>Add a question</h2><p className="muted">Create four-option AP ECET questions and add them directly to your reusable bank.</p></div>
+            </div>
+            <form className="panel admin-form question-editor" onSubmit={(event) => void createQuestion(event)}>
+              <div className="question-editor-grid">
+                <label>Subject
+                  <input required maxLength={80} value={questionSubject} onChange={(event) => setQuestionSubject(event.target.value)} placeholder="Computer Science" />
+                </label>
+                <label>Topic
+                  <input maxLength={80} value={questionTopic} onChange={(event) => setQuestionTopic(event.target.value)} placeholder="Data Structures" />
+                </label>
+                <label>Difficulty
+                  <select value={questionDifficulty} onChange={(event) => setQuestionDifficulty(event.target.value as "easy" | "medium" | "hard")}>
+                    <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
+                  </select>
+                </label>
+              </div>
+              <label>Question
+                <textarea required rows={3} maxLength={4000} value={questionText} onChange={(event) => setQuestionText(event.target.value)} placeholder="Enter the complete question…" />
+              </label>
+              <div className="question-option-editor">
+                <div className="picker-heading"><strong>Answer options</strong><span>Select the radio button beside the correct answer</span></div>
+                {questionOptions.map((option, index) => (
+                  <div className="question-option-row" key={index}>
+                    <label className="question-correct-choice" title={`Mark option ${String.fromCharCode(65 + index)} as correct`}>
+                      <input type="radio" name="question-correct-answer" checked={questionCorrectIndex === index} onChange={() => setQuestionCorrectIndex(index)} />
+                      <strong>{String.fromCharCode(65 + index)}</strong>
+                    </label>
+                    <input required maxLength={1000} aria-label={`Option ${String.fromCharCode(65 + index)}`} value={option} onChange={(event) => setQuestionOptions((current) => current.map((item, i) => i === index ? event.target.value : item))} placeholder={`Option ${String.fromCharCode(65 + index)}`} />
+                  </div>
+                ))}
+              </div>
+              <label>Explanation <span className="muted">(shown after the student submits)</span>
+                <textarea rows={2} maxLength={3000} value={questionExplanation} onChange={(event) => setQuestionExplanation(event.target.value)} placeholder="Explain why the correct answer is right…" />
+              </label>
+              <button className="primary" disabled={busy}>{busy ? "Adding…" : "Add question to bank"}</button>
+            </form>
+            <div className="section-head">
+              <div><p className="eyebrow">REUSABLE CONTENT</p><h2>Question bank <span className="muted">({adminQuestions.length})</span></h2></div>
+              <button className="ghost" disabled={busy} onClick={() => request<{ questions: AdminQuestion[] }>("/admin/question-bank").then(({ questions }) => setAdminQuestions(questions)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+            </div>
+            <div className="panel admin-question-list">
+              {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.map((question) => (
+                <article className="admin-question-row" key={question.id}>
+                  <div><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><p>{question.text}</p><small className="muted">{question.difficulty ?? "medium"} · {question.options.length} options</small></div>
+                  <span className="status status-used">#{question.id}</span>
+                </article>
+              ))}
             </div>
           </section>
           <section hidden={activePage !== "announcements"} id="announcements">
