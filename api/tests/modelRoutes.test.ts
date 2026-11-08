@@ -220,7 +220,7 @@ describe("admin model registry API", () => {
       modelId: "tensorflow-fixture",
     });
     expect(rejected.status).toBe(400);
-    expect(String(rejected.body.error ?? rejected.body.message)).toContain("SHA-256 pseudonymous groupId");
+    expect(String(rejected.body.error ?? rejected.body.message)).toContain("keyed HMAC-SHA-256 pseudonymous groupId");
   });
 
   it("runs grouped TensorFlow.js training through the registered dataset route without promotion", async () => {
