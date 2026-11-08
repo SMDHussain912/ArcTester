@@ -161,6 +161,11 @@ function recordLoginFailure(email: string, now = Date.now()): number {
     for (const [key, value] of loginFailures) {
       if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(key);
     }
+    while (loginFailures.size > 5000) {
+      const oldestKey = loginFailures.keys().next().value;
+      if (oldestKey === undefined) break;
+      loginFailures.delete(oldestKey);
+    }
   }
   return loginRetryAfter(email, now);
 }
