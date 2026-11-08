@@ -84,6 +84,7 @@ model User {
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
+  modelEvaluations    ModelEvaluation[]    @relation("ModelEvaluationActor")
 }
 
 model Invitation {
@@ -369,4 +370,23 @@ model ModelRegistryAudit {
 
   @@index([modelId, version, createdAt])
   @@index([actorId, createdAt])
+}
+
+
+model ModelEvaluation {
+  id                 String   @id @default(cuid())
+  actor              User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId            Int?
+  modelId            String
+  candidateVersion   Int
+  baselineVersion    Int
+  evaluationDataset  String
+  datasetFingerprint String
+  sampleCount        Int
+  metricsJson        String
+  status             String
+  evaluatedAt        DateTime @default(now())
+
+  @@index([modelId, candidateVersion, evaluatedAt])
+  @@index([actorId, evaluatedAt])
 }
