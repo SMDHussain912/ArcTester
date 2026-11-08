@@ -50,6 +50,17 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/students", async (_req, res, next) => {
+    try {
+      const students = await db.user.findMany({
+        where: { role: "STUDENT" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, email: true, createdAt: true },
+      });
+      res.json({ ok: true, students });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/question-catalog", async (_req, res, next) => {
     try {
       const subjects = await db.subject.findMany({ orderBy: { name: "asc" }, include: {
