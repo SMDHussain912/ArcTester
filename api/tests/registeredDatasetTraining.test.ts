@@ -42,6 +42,8 @@ describe("registered dataset training", () => {
     expect(results[0]?.algorithm).toBe("multiple-linear-regression");
     expect(results[0]?.metrics).toHaveProperty("mae");
     expect(results[0]?.metrics).toHaveProperty("rmse");
+    expect(results[0]?.uncertainty).toMatchObject({ method: "holdout-rmse" });
+    expect(results[0]?.uncertainty?.residualStdDev).toBeGreaterThanOrEqual(0);
   });
 
   it("ranks classifiers by F1 then accuracy and regression models by error", () => {
