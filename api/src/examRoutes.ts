@@ -111,27 +111,149 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
-  router.get("/admin/question-bank", requireAuth, requireAdmin(db), async (_req, res, next) => {
+  router.get("/admin/question-bank", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const questions = await db.question.findMany({
-        orderBy: [{ subject: { name: "asc" } }, { id: "asc" }],
-        take: 500,
-        include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
-      });
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 500));
+      const search = String(req.query.search ?? "").trim();
+      const subjectName = String(req.query.subject ?? "").trim();
+      const topicName = String(req.query.topic ?? "").trim();
+      const difficulty = String(req.query.difficulty ?? "").trim();
+      const where = {
+        ...(subjectName ? { subject: { name: subjectName } } : {}),
+        ...(topicName ? { topic: { name: topicName } } : {}),
+        ...(difficulty ? { difficulty } : {}),
+        ...(search ? { OR: [
+          { text: { contains: search } },
+          { subject: { name: { contains: search } } },
+          { topic: { name: { contains: search } } },
+        ] } : {}),
+      };
+      const [total, questions] = await Promise.all([
+        db.question.count({ where }),
+        db.question.findMany({
+          where,
+          orderBy: [{ subject: { name: "asc" } }, { id: "asc" }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
+        }),
+      ]);
       res.json({
         ok: true,
+        page,
+        pageSize,
+        total,
+        pages: Math.ceil(total / pageSize),
         questions: questions.map((question) => ({
           id: question.id,
           subject: question.subject.name,
           topic: question.topic?.name ?? null,
           text: question.text,
           options: parseOptions(question.options),
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+          source: question.source,
           difficulty: question.difficulty,
         })),
       });
     } catch (error) {
       next(error);
     }
+  });
+
+  router.get("/admin/subjects", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const subjects = await db.subject.findMany({
+        orderBy: { name: "asc" },
+        include: { _count: { select: { questions: true, topics: true } }, topics: { orderBy: { name: "asc" } } },
+      });
+      res.json({ ok: true, subjects: subjects.map((subject) => ({
+        id: subject.id, name: subject.name, questionCount: subject._count.questions,
+        topics: subject.topics.map((topic) => ({ id: topic.id, name: topic.name })),
+      })) });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/subjects", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
+      const subject = await db.subject.upsert({ where: { name: input.name }, update: {}, create: { name: input.name } });
+      res.status(201).json({ ok: true, subject });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/subjects/:id/topics", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const subjectId = Number(req.params.id);
+      if (!Number.isInteger(subjectId) || subjectId < 1) return next(badRequest("Invalid subject ID."));
+      const input = z.object({ name: z.string().trim().min(1).max(80) }).parse(req.body);
+      const subject = await db.subject.findUnique({ where: { id: subjectId }, select: { id: true } });
+      if (!subject) return next(notFound("Subject not found."));
+      const topic = await db.topic.upsert({
+        where: { subjectId_name: { subjectId, name: input.name } },
+        update: {}, create: { subjectId, name: input.name },
+      });
+      res.status(201).json({ ok: true, topic });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/admin/topics/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id < 1) return next(badRequest("Invalid topic ID."));
+      const topic = await db.topic.findUnique({ where: { id }, select: { id: true } });
+      if (!topic) return next(notFound("Topic not found."));
+      await db.topic.delete({ where: { id } });
+      res.json({ ok: true, deleted: id });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/questions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id < 1) return next(badRequest("Invalid question ID."));
+      const input = QuestionInputSchema.parse(req.body);
+      const existing = await db.question.findUnique({ where: { id }, select: { id: true } });
+      if (!existing) return next(notFound("Question not found."));
+      const subject = await db.subject.upsert({ where: { name: input.subject }, update: {}, create: { name: input.subject } });
+      const topicName = input.topic?.trim() || "General";
+      const topic = await db.topic.upsert({
+        where: { subjectId_name: { subjectId: subject.id, name: topicName } },
+        update: {}, create: { subjectId: subject.id, name: topicName },
+      });
+      const question = await db.question.update({
+        where: { id },
+        data: {
+          subjectId: subject.id, topicId: topic.id, text: input.text,
+          options: JSON.stringify(input.options), correctIndex: input.correctIndex,
+          explanation: input.explanation, source: input.source,
+          difficulty: input.difficulty, questionHash: hashQuestion(input.text),
+        },
+        include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
+      });
+      res.json({ ok: true, question: {
+        id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
+        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
+        explanation: question.explanation, source: question.source, difficulty: question.difficulty,
+      } });
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as {code?: string}).code === "P2002") {
+        return next(conflict("Another question already uses this question text."));
+      }
+      next(error);
+    }
+  });
+
+  router.delete("/admin/questions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id < 1) return next(badRequest("Invalid question ID."));
+      const question = await db.question.findUnique({ where: { id }, select: { id: true } });
+      if (!question) return next(notFound("Question not found."));
+      await db.question.delete({ where: { id } });
+      res.json({ ok: true, deleted: id });
+    } catch (error) { next(error); }
   });
 
   router.get("/admin/students", requireAuth, requireAdmin(db), async (_req, res, next) => {
