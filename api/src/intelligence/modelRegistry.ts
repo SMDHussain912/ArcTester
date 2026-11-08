@@ -111,7 +111,7 @@ async function writeJsonAtomically(filePath: string, value: unknown): Promise<vo
   await mkdir(path.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\\n`, { encoding: "utf8", flag: "wx" });
+    await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
     await rename(temporaryPath, filePath);
   } catch (error) {
     const { unlink } = await import("node:fs/promises");
