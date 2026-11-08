@@ -43,12 +43,10 @@ describe("assigned exams page", () => {
       </SessionProvider>
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("Sign in to continue")).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText("Sign in to continue")).toBeInTheDocument());
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/exams/assigned"))).toBe(
+      false
     );
-    expect(
-      fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/exams/assigned"))
-    ).toBe(false);
   });
 
   it("lists an available exam for a signed-in student", async () => {
