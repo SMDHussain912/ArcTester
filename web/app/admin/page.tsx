@@ -8,7 +8,11 @@ import { api, ApiError, type AdminExam, type AdminOverview, type AdminQuestion, 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
   totals: { students: 0, exams: 0, assignments: 0, submissions: 0, submissionRate: 0, averagePercentage: null },
-  practice: { completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null, subjects: [], topics: [] },
+  practice: {
+    completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null,
+    subjects: [], topics: [],
+    questionPerformance: { minimumAnswers: 5, weakAccuracyThreshold: 0.6, insufficientSampleCount: 0, questions: [] },
+  },
   formalExams: { graded: 0, reviewRequired: 0, correct: 0, incorrect: 0, unanswered: 0, subjects: [], topics: [] },
   exams: [], recentSubmissions: [],
 };
@@ -168,6 +172,37 @@ export default function AdminPage() {
                 <tbody>{overview.practice.topics.map((row) => <tr key={row.subject + ":" + (row.topic ?? "unassigned")}><td>{row.subject}</td><td>{row.topic ?? "Unassigned"}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td></tr>)}</tbody>
               </table>
             </div> : null}
+          </section>
+          <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header">
+              <h2>Question difficulty signals</h2>
+              <span className="pill">{overview.practice.questionPerformance.questions.length} questions tracked</span>
+            </div>
+            <p className="mute">
+              Cohort practice only. A question is flagged after at least {overview.practice.questionPerformance.minimumAnswers} answered attempts
+              and accuracy below {Math.round(overview.practice.questionPerformance.weakAccuracyThreshold * 100)}%.
+              {overview.practice.questionPerformance.insufficientSampleCount > 0
+                ? ` ${overview.practice.questionPerformance.insufficientSampleCount} questions have insufficient sample size.`
+                : ""}
+            </p>
+            {overview.practice.questionPerformance.questions.filter((question) => question.weak).length === 0 ? (
+              <p className="mute">No question has enough evidence to be flagged as difficult.</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead><tr><th>Question ID</th><th>Subject</th><th>Topic</th><th>Difficulty</th><th>Answered</th><th>Correct</th><th>Incorrect</th><th>Accuracy</th></tr></thead>
+                  <tbody>
+                    {overview.practice.questionPerformance.questions.filter((question) => question.weak).slice(0, 12).map((question) => (
+                      <tr key={question.questionId}>
+                        <td>#{question.questionId}</td><td>{question.subject}</td><td>{question.topic ?? "Unassigned"}</td>
+                        <td>{question.difficulty}</td><td>{question.sampleSize}</td><td>{question.correct}</td><td>{question.incorrect}</td>
+                        <td>{question.accuracy === null ? "—" : `${Math.round(question.accuracy * 100)}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
           <section className="panel" style={{ marginTop: 18 }}>
             <div className="panel-header"><h2>Verified formal exam analytics</h2><span className="pill">{overview.formalExams.graded} graded · {overview.formalExams.reviewRequired} awaiting review</span></div>
