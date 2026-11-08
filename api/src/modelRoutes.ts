@@ -186,6 +186,14 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           }
         }
       }
+      if (input.datasetKind === "real-anonymized") {
+        if (input.samples.some((sample) => !sample.groupId)) {
+          return next(badRequest("Real learner datasets require a keyed HMAC-SHA-256 pseudonymous groupId on every sample."));
+        }
+        if (new Set(input.samples.map((sample) => sample.groupId)).size < 5) {
+          return next(badRequest("Real learner datasets require at least five distinct learner groups for a leakage-safe holdout."));
+        }
+      }
       if (input.task === "binary-classification") {
         if (input.samples.some((sample) => sample.target !== 0 && sample.target !== 1)) {
           return next(badRequest("Classification targets must be binary."));
@@ -232,7 +240,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
       if (!dataset) return next(notFound("Registered training dataset was not found."));
       const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
-      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
       const trained = trainRegisteredDataset(samples, featureSchema, dataset.task as "regression" | "binary-classification", input.seed);
       const ranked = rankTrainingResults(trained, dataset.task as "regression" | "binary-classification");
       const created = await db.$transaction(async (tx) => {
