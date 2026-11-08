@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "../../lib/session";
-import { api, ApiError, type AdminExam, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
+import { api, ApiError, type AdminExam, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
@@ -24,6 +24,7 @@ export default function AdminPage() {
   const [exams, setExams] = useState<AdminExam[]>([]);
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
+  const [liveSessions, setLiveSessions] = useState<AdminLiveSession[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
   const [questionScoring, setQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
@@ -46,9 +47,10 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const [stats, examData, studentData, firstQuestionPage] = await Promise.all([
-      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200),
+    const [stats, examData, studentData, firstQuestionPage, liveData] = await Promise.all([
+      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200), api.adminLiveSessions(),
     ]);
+    setLiveSessions(liveData.sessions);
     const remainingPages = await Promise.all(
       Array.from({ length: Math.max(0, firstQuestionPage.pages - 1) }, (_, index) =>
         api.adminQuestions(index + 2, 200)
@@ -68,6 +70,29 @@ export default function AdminPage() {
       load().catch((e: unknown) => setError(e instanceof ApiError ? e.message : "Could not load the admin workspace."));
     }
   }, [status, user?.role, load]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || user?.role !== "ADMIN") return;
+    const timer = window.setInterval(() => {
+      api.adminLiveSessions().then((result) => setLiveSessions(result.sessions)).catch(() => undefined);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [status, user?.role]);
+
+  async function controlSession(session: AdminLiveSession, action: "PAUSE" | "RESUME" | "TERMINATE") {
+    const reason = action === "TERMINATE" ? window.prompt("Reason for terminating this candidate session?") : "";
+    if (action === "TERMINATE" && reason === null) return;
+    if (!window.confirm(`${action} session for ${session.student.email}?`)) return;
+    try {
+      await api.adminSessionAction(session.id, action, reason ?? "");
+      const refreshed = await api.adminLiveSessions();
+      setLiveSessions(refreshed.sessions);
+      setNotice(`Session ${action.toLowerCase()} action recorded.`);
+      setError("");
+    } catch (cause: unknown) {
+      showError(cause, "Could not update the candidate session.");
+    }
+  }
 
   const filteredQuestions = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -323,6 +348,35 @@ export default function AdminPage() {
                 <tbody>{overview.recentSubmissions.map((item, index) => <tr key={index}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{item.score === null || item.maximumScore === null ? "Pending" : `${item.score} / ${item.maximumScore}`}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{item.status}</td></tr>)}</tbody>
               </table>
             </div>}
+          </section>
+          <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Live invigilation</h2><span className="pill">{liveSessions.length} active / interrupted sessions</span></div>
+            <p className="mute">Candidate sessions refresh every 15 seconds. A stale heartbeat indicates a connectivity gap, not proof of misconduct.</p>
+            {liveSessions.length === 0 ? <p className="mute">No candidates are currently taking an assigned examination.</p> : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead><tr><th>Candidate</th><th>Examination</th><th>Status</th><th>Last activity</th><th>Focus losses</th><th>Connection gaps</th><th>Invigilator actions</th></tr></thead>
+                  <tbody>{liveSessions.map((session) => (
+                    <tr key={session.id}>
+                      <td>{session.student.email}</td><td>{session.exam.title}</td>
+                      <td>{session.status} · {session.connectivity}</td>
+                      <td>{session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "—"}</td>
+                      <td>{session.focusLossCount}</td><td>{session.disconnectCount}</td>
+                      <td><div className="row" style={{ gap: 6 }}>
+                        {session.status === "ACTIVE" ? <button className="button button-secondary button-small" onClick={() => void controlSession(session, "PAUSE")}>Pause</button> : <button className="button button-secondary button-small" onClick={() => void controlSession(session, "RESUME")}>Resume</button>}
+                        <button className="button button-quiet button-small" onClick={() => void controlSession(session, "TERMINATE")}>Terminate</button>
+                      </div></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+            {liveSessions.some((session) => session.events.length) ? <details style={{ marginTop: 12 }}>
+              <summary>Recent invigilation events</summary>
+              {liveSessions.flatMap((session) => session.events.map((event) => ({ ...event, email: session.student.email, exam: session.exam.title }))).slice(0, 30).map((event) => (
+                <p key={event.id} className="mute">{new Date(event.createdAt).toLocaleString()} · {event.email} · {event.exam} · {event.type} — {event.detail}</p>
+              ))}
+            </details> : null}
           </section>
         </>
       ) : null}
