@@ -230,7 +230,7 @@ export default function App() {
     if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
         setTest({ ...restored, warnings: restored.warnings ?? [] });
-        setAnswers(Object.fromEntries(restored.saved.flatMap((answer) => answer.selectedIndex === null ? [] : [[answer.questionId, answer.selectedIndex]])));
+        setAnswers(Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const)));
         setActivePage("practice");
       }).catch(() => localStorage.removeItem("arctester-active-practice-attempt"));
     }
