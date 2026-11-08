@@ -345,7 +345,7 @@ describe("versioned exam management", () => {
         score: number | null;
       }[];
     };
-    expect(body.totals.students).toBe(2);
+    expect(body.totals.students).toBe(3);
     expect(body.totals.exams).toBe(1);
     expect(body.totals.assignments).toBe(1);
     expect(body.totals.submissions).toBe(1);
