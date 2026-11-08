@@ -9,15 +9,25 @@ import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me-in-production";
+const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
+const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
 const COOKIE_NAME = "ecet_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET must be set in production.");
+export function validateJwtSecret(secret: string, production = process.env.NODE_ENV === "production"): void {
+  if (!production) return;
+  if (
+    Buffer.byteLength(secret, "utf8") < 32 ||
+    secret === DEVELOPMENT_JWT_SECRET ||
+    /change[_ -]?me|replace[_ -]?me|example|placeholder/i.test(secret)
+  ) {
+    throw new Error("JWT_SECRET must be a strong, unique secret of at least 32 bytes in production. Generate one with: openssl rand -hex 32");
+  }
 }
+
+validateJwtSecret(JWT_SECRET);
 
 function base64Url(data: Buffer): string {
   return data.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

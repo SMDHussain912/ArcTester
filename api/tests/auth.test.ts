@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
+import { validateJwtSecret } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
 import {
   issueTestInvitation,
@@ -52,6 +53,22 @@ async function getJsonWithCookie(
   setCookieFromResponse(res);
   return { status: res.status, json: await res.json(), headers: res.headers };
 }
+
+describe("JWT secret configuration", () => {
+  it("rejects missing, weak and placeholder production secrets", () => {
+    expect(() => validateJwtSecret("", true)).toThrow(/at least 32 bytes/);
+    expect(() => validateJwtSecret("dev-secret-change-me-in-production", true)).toThrow(/at least 32 bytes/);
+    expect(() => validateJwtSecret("short-secret", true)).toThrow(/at least 32 bytes/);
+  });
+
+  it("accepts a sufficiently strong production secret", () => {
+    expect(() => validateJwtSecret("a".repeat(64), true)).not.toThrow();
+  });
+
+  it("does not require production-strength secrets in development or tests", () => {
+    expect(() => validateJwtSecret("", false)).not.toThrow();
+  });
+});
 
 describe("auth", () => {
   beforeAll(async () => {

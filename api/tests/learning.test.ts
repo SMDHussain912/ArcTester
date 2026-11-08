@@ -26,7 +26,7 @@ describe("offline learning package", () => {
     expect(response.status).toBe(403);
   });
 
-  it("exports a versioned study package with answer keys and explanations", async () => {
+  it("exports a versioned study package without exposing the question-bank answer key", async () => {
     const { status, json } = await api.get("/learning/package");
     expect(status).toBe(200);
     const body = json as {
@@ -39,13 +39,11 @@ describe("offline learning package", () => {
         subject: string;
         topic: string | null;
         options: string[];
-        correctIndex: number;
-        explanation: string;
         difficulty: string;
       }[];
     };
 
-    expect(body.schemaVersion).toBe(1);
+    expect(body.schemaVersion).toBe(2);
     expect(new Date(body.exportedAt).getTime()).toBeGreaterThan(0);
     expect(body.total).toBe(2);
     expect(body.subjects).toEqual(["Maths", "Physics"]);
@@ -53,9 +51,9 @@ describe("offline learning package", () => {
       subject: "Maths",
       topic: "General",
       options: ["3", "4", "5", "6"],
-      correctIndex: 1,
-      explanation: "Add the two values.",
       difficulty: "medium",
     });
+    expect(body.questions[0]).not.toHaveProperty("correctIndex");
+    expect(body.questions[0]).not.toHaveProperty("explanation");
   });
 });

@@ -43,3 +43,22 @@ jobs:
 
       - name: Build web and API
         run: npm run build
+
+  mobile:
+    name: Mobile typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install mobile dependencies
+        run: npm install --prefix mobile
+
+      - name: Typecheck mobile app
+        run: npm run typecheck --prefix mobile

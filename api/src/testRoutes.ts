@@ -53,8 +53,6 @@ export function testRouter(db: PrismaClient): Router {
           id: true,
           text: true,
           options: true,
-          correctIndex: true,
-          explanation: true,
           difficulty: true,
           subject: { select: { name: true } },
           topic: { select: { name: true } },
@@ -66,12 +64,10 @@ export function testRouter(db: PrismaClient): Router {
         topic: row.topic?.name ?? null,
         text: row.text,
         options: JSON.parse(row.options) as string[],
-        correctIndex: row.correctIndex,
-        explanation: row.explanation,
         difficulty: row.difficulty,
       }));
       res.json({
-        schemaVersion: 1,
+        schemaVersion: 2,
         exportedAt: new Date().toISOString(),
         total: questions.length,
         subjects: [...new Set(questions.map((question) => question.subject))],
