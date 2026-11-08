@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import {
   getHistory,
   getPerformanceOverview,
@@ -52,7 +53,11 @@ export function analyticsRouter(db: PrismaClient): Router {
 
   router.get("/history", requireAuth, async (req, res, next) => {
     try {
-      const history = await getHistory(db, (req as AuthedRequest).user!.id);
+      const query = z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(50).default(10),
+      }).parse(req.query);
+      const history = await getHistory(db, (req as AuthedRequest).user!.id, query.page, query.limit);
       res.json(history);
     } catch (error) {
       next(error);

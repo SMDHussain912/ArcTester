@@ -74,67 +74,58 @@ function sortWeakest(rows: TopicRow[]): TopicRow[] {
  * unanswered responses, so it is not an observed incorrect-answer total.
  */
 export async function getWeakTopics(db: PrismaClient, userId: number): Promise<WeakTopicsReport> {
-  const attempts = await db.attempt.findMany({
-    where: { userId, finishedAt: { not: null } },
-    include: {
-      answers: {
-        include: {
-          question: {
-            select: {
-              subject: { select: { name: true } },
-              topic: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
-  });
+  const aggregates = await db.$queryRaw<Array<{
+    subject: string; topic: string | null; correct: number; wrong: number; unanswered: number;
+  }>>`
+    SELECT
+      COALESCE(NULLIF(aa.subjectSnapshot, ''), s.name) AS subject,
+      CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END AS topic,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS wrong,
+      SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+    FROM AttemptAnswer aa
+    INNER JOIN Attempt a ON a.id = aa.attemptId
+    INNER JOIN Question q ON q.id = aa.questionId
+    INNER JOIN Subject s ON s.id = q.subjectId
+    LEFT JOIN Topic t ON t.id = q.topicId
+    WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+    GROUP BY subject, topic
+  `;
 
   type Counts = { correct: number; wrong: number; unanswered: number };
   const bySubject = new Map<string, Counts>();
   const byTopic = new Map<string, { subject: string; topic: string | null; counts: Counts }>();
-  const empty = (): Counts => ({ correct: 0, wrong: 0, unanswered: 0 });
-
-  for (const attempt of attempts) {
-    for (const answer of attempt.answers) {
-      const hasSnapshot = answer.subjectSnapshot.length > 0;
-      const subject = hasSnapshot ? answer.subjectSnapshot : answer.question.subject.name;
-      const topic = hasSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
-      const outcome = answer.chosen === null ? "unanswered" : answer.isCorrect ? "correct" : "wrong";
-      const subjectCounts = bySubject.get(subject) ?? empty();
-      subjectCounts[outcome] += 1;
-      bySubject.set(subject, subjectCounts);
-
-      const key = JSON.stringify([subject, topic]);
-      const topicEntry = byTopic.get(key) ?? { subject, topic, counts: empty() };
-      topicEntry.counts[outcome] += 1;
-      byTopic.set(key, topicEntry);
-    }
+  for (const aggregate of aggregates) {
+    const counts = {
+      correct: Number(aggregate.correct ?? 0),
+      wrong: Number(aggregate.wrong ?? 0),
+      unanswered: Number(aggregate.unanswered ?? 0),
+    };
+    const subjectCounts = bySubject.get(aggregate.subject) ?? { correct: 0, wrong: 0, unanswered: 0 };
+    subjectCounts.correct += counts.correct;
+    subjectCounts.wrong += counts.wrong;
+    subjectCounts.unanswered += counts.unanswered;
+    bySubject.set(aggregate.subject, subjectCounts);
+    byTopic.set(JSON.stringify([aggregate.subject, aggregate.topic]), {
+      subject: aggregate.subject, topic: aggregate.topic, counts,
+    });
   }
 
   const toRow = (subject: string, topic: string | null, counts: Counts): TopicRow => {
     const seen = counts.correct + counts.wrong;
     return {
-      subject,
-      topic,
-      seen,
-      correct: counts.correct,
-      wrong: counts.wrong,
-      incorrect: counts.wrong,
-      unanswered: counts.unanswered,
+      subject, topic, seen, correct: counts.correct, wrong: counts.wrong,
+      incorrect: counts.wrong, unanswered: counts.unanswered,
       accuracy: seen > 0 ? counts.correct / seen : null,
     };
   };
-
-  const subjects = sortWeakest(
-    [...bySubject.entries()].map(([name, counts]) => toRow(name, null, counts))
-  );
-  const topics = sortWeakest([...byTopic.values()].map((entry) =>
-    toRow(entry.subject, entry.topic, entry.counts)
-  ));
+  const subjects = sortWeakest([...bySubject.entries()].map(([name, counts]) => toRow(name, null, counts)));
+  const topics = sortWeakest([...byTopic.values()].map((entry) => toRow(entry.subject, entry.topic, entry.counts)));
   const candidates = sortWeakest([...subjects, ...topics].filter((row) => row.accuracy !== null));
   return { subjects, topics, weakest: candidates[0] ?? null };
 }
+
+export const QUESTION_ANALYTICS_MINIMUM_ANSWERS
 
 export const QUESTION_ANALYTICS_MINIMUM_ANSWERS = 5;
 export const QUESTION_ANALYTICS_WEAK_ACCURACY = 0.6;
@@ -167,53 +158,40 @@ export async function getQuestionPerformance(
   db: PrismaClient,
   userId: number
 ): Promise<QuestionPerformanceReport> {
-  const answers = await db.attemptAnswer.findMany({
-    where: { attempt: { userId, finishedAt: { not: null } } },
-    select: {
-      questionId: true,
-      chosen: true,
-      isCorrect: true,
-      subjectSnapshot: true,
-      topicSnapshot: true,
-      difficultySnapshot: true,
-      question: {
-        select: {
-          subject: { select: { name: true } },
-          topic: { select: { name: true } },
-          difficulty: true,
-        },
-      },
-    },
-  });
-  const rows = new Map<number, QuestionPerformanceRow>();
-  for (const answer of answers) {
-    const subject = answer.subjectSnapshot || answer.question.subject.name;
-    const topic = answer.subjectSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
-    const row = rows.get(answer.questionId) ?? {
-      questionId: answer.questionId,
-      subject,
-      topic,
-      difficulty: answer.difficultySnapshot || answer.question.difficulty,
-      seen: 0,
-      correct: 0,
-      incorrect: 0,
-      unanswered: 0,
-      accuracy: null,
-      sampleSize: 0,
-      sufficientData: false,
-      weak: false,
+  const aggregates = await db.$queryRaw<Array<{
+    questionId: number; subject: string; topic: string | null; difficulty: string;
+    correct: number; incorrect: number; unanswered: number;
+  }>>`
+    SELECT
+      aa.questionId AS questionId,
+      MAX(COALESCE(NULLIF(aa.subjectSnapshot, ''), s.name)) AS subject,
+      MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END) AS topic,
+      MAX(COALESCE(NULLIF(aa.difficultySnapshot, ''), q.difficulty)) AS difficulty,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+      SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+    FROM AttemptAnswer aa
+    INNER JOIN Attempt a ON a.id = aa.attemptId
+    INNER JOIN Question q ON q.id = aa.questionId
+    INNER JOIN Subject s ON s.id = q.subjectId
+    LEFT JOIN Topic t ON t.id = q.topicId
+    WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+    GROUP BY aa.questionId
+  `;
+  const questions: QuestionPerformanceRow[] = aggregates.map((row) => {
+    const correct = Number(row.correct ?? 0);
+    const incorrect = Number(row.incorrect ?? 0);
+    const unanswered = Number(row.unanswered ?? 0);
+    const seen = correct + incorrect;
+    const accuracy = seen > 0 ? correct / seen : null;
+    const sufficientData = seen >= QUESTION_ANALYTICS_MINIMUM_ANSWERS;
+    return {
+      questionId: row.questionId, subject: row.subject, topic: row.topic,
+      difficulty: row.difficulty, seen, correct, incorrect, unanswered,
+      accuracy, sampleSize: seen, sufficientData,
+      weak: sufficientData && accuracy !== null && accuracy < QUESTION_ANALYTICS_WEAK_ACCURACY,
     };
-    if (answer.chosen === null) row.unanswered += 1;
-    else if (answer.isCorrect) row.correct += 1;
-    else row.incorrect += 1;
-    row.seen = row.correct + row.incorrect;
-    row.sampleSize = row.seen;
-    row.accuracy = row.seen > 0 ? row.correct / row.seen : null;
-    row.sufficientData = row.sampleSize >= QUESTION_ANALYTICS_MINIMUM_ANSWERS;
-    row.weak = row.sufficientData && row.accuracy !== null && row.accuracy < QUESTION_ANALYTICS_WEAK_ACCURACY;
-    rows.set(answer.questionId, row);
-  }
-  const questions = [...rows.values()].sort((a, b) => {
+  }).sort((a, b) => {
     if (a.weak !== b.weak) return a.weak ? -1 : 1;
     if (a.accuracy === null && b.accuracy !== null) return 1;
     if (b.accuracy === null && a.accuracy !== null) return -1;
@@ -227,6 +205,8 @@ export async function getQuestionPerformance(
     questions,
   };
 }
+
+export interface PerformanceOverview
 
 export interface PerformanceOverview {
   generatedAt: string;
@@ -267,47 +247,71 @@ export async function getPerformanceOverview(
   db: PrismaClient,
   userId: number
 ): Promise<PerformanceOverview> {
-  const [attempts, submissions, weakTopics] = await Promise.all([
+  const [
+    practiceAttemptCount,
+    practiceTotalsRows,
+    recentAttempts,
+    weakTopics,
+    submissionCount,
+    gradedCount,
+    reviewRequiredCount,
+    gradedTotals,
+    formalRows,
+  ] = await Promise.all([
+    db.attempt.count({ where: { userId, finishedAt: { not: null } } }),
+    db.$queryRaw<Array<{ correct: number; incorrect: number; unanswered: number }>>`
+      SELECT
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+      FROM AttemptAnswer aa
+      INNER JOIN Attempt a ON a.id = aa.attemptId
+      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+    `,
     db.attempt.findMany({
       where: { userId, finishedAt: { not: null } },
-      orderBy: { finishedAt: "asc" },
-      include: {
-        answers: {
-          include: {
-            question: {
-              select: {
-                subject: { select: { name: true } },
-                topic: { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-    db.examSubmission.findMany({
-      where: { assignment: { studentId: userId } },
-      orderBy: { receivedAt: "asc" },
-      include: {
-        answers: {
-          include: {
-            examQuestion: { select: { subject: true, topic: true, marks: true } },
-          },
-        },
+      orderBy: { finishedAt: "desc" },
+      take: 12,
+      select: {
+        id: true, finishedAt: true,
+        answers: { select: { chosen: true, isCorrect: true } },
       },
     }),
     getWeakTopics(db, userId),
+    db.examSubmission.count({ where: { assignment: { studentId: userId } } }),
+    db.examSubmission.count({ where: { status: "GRADED", assignment: { studentId: userId } } }),
+    db.examSubmission.count({ where: { status: "REVIEW_REQUIRED", assignment: { studentId: userId } } }),
+    db.examSubmission.aggregate({
+      where: { status: "GRADED", assignment: { studentId: userId } },
+      _sum: { score: true, maximumScore: true },
+    }),
+    db.$queryRaw<Array<{
+      subject: string; correct: number; incorrect: number; unanswered: number;
+      awardedMarks: number; maximumMarks: number;
+    }>>`
+      SELECT eq.subject AS subject,
+        SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN ea.selectedIndex IS NULL THEN 1 ELSE 0 END) AS unanswered,
+        SUM(ea.awardedMarks) AS awardedMarks,
+        SUM(eq.marks) AS maximumMarks
+      FROM ExamSubmissionAnswer ea
+      INNER JOIN ExamSubmission es ON es.id = ea.submissionId
+      INNER JOIN ExamVersionQuestion eq ON eq.id = ea.examQuestionId
+      WHERE es.status = 'GRADED' AND es.assignmentId IN (
+        SELECT id FROM ExamAssignment WHERE studentId = ${userId}
+      )
+      GROUP BY eq.subject
+    `,
   ]);
 
-  let practiceCorrect = 0;
-  let practiceIncorrect = 0;
-  let practiceUnanswered = 0;
-  const trend = attempts.slice(-12).map((attempt) => {
-    let correct = 0;
-    let incorrect = 0;
-    for (const answer of attempt.answers) {
-      if (answer.chosen !== null && answer.isCorrect) correct += 1;
-      else if (answer.chosen !== null) incorrect += 1;
-    }
+  const practiceCorrect = Number(practiceTotalsRows[0]?.correct ?? 0);
+  const practiceIncorrect = Number(practiceTotalsRows[0]?.incorrect ?? 0);
+  const practiceUnanswered = Number(practiceTotalsRows[0]?.unanswered ?? 0);
+  const practiceAnswered = practiceCorrect + practiceIncorrect;
+  const trend = [...recentAttempts].reverse().map((attempt) => {
+    const correct = attempt.answers.filter((answer) => answer.chosen !== null && answer.isCorrect).length;
+    const incorrect = attempt.answers.filter((answer) => answer.chosen !== null && !answer.isCorrect).length;
     const answered = correct + incorrect;
     return {
       attemptId: attempt.id,
@@ -318,94 +322,88 @@ export async function getPerformanceOverview(
     };
   });
 
-  // Totals include every completed attempt; the trend is intentionally limited to 12.
-  for (const attempt of attempts) {
-    for (const answer of attempt.answers) {
-      if (answer.chosen === null) practiceUnanswered += 1;
-      else if (answer.isCorrect) practiceCorrect += 1;
-      else practiceIncorrect += 1;
-    }
-  }
-  const practiceAnswered = practiceCorrect + practiceIncorrect;
-
-  const graded = submissions.filter((submission) => submission.status === "GRADED");
-  const reviewRequired = submissions.filter((submission) => submission.status === "REVIEW_REQUIRED");
-  const verifiedAnswers = graded.flatMap((submission) => submission.answers);
-  const formalCorrect = verifiedAnswers.filter((answer) => answer.selectedIndex !== null && answer.isCorrect).length;
-  const formalIncorrect = verifiedAnswers.filter((answer) => answer.selectedIndex !== null && !answer.isCorrect).length;
-  const formalUnanswered = verifiedAnswers.filter((answer) => answer.selectedIndex === null).length;
-  const formalScore = graded.reduce((sum, submission) => sum + (submission.score ?? 0), 0);
-  const formalMaximum = graded.reduce((sum, submission) => sum + (submission.maximumScore ?? 0), 0);
-
-  const formalBySubject = new Map<string, {
-    correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number;
-  }>();
-  for (const answer of verifiedAnswers) {
-    const subject = answer.examQuestion.subject;
-    const row = formalBySubject.get(subject) ?? {
-      correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0,
+  const formalCorrect = formalRows.reduce((sum, row) => sum + Number(row.correct ?? 0), 0);
+  const formalIncorrect = formalRows.reduce((sum, row) => sum + Number(row.incorrect ?? 0), 0);
+  const formalUnanswered = formalRows.reduce((sum, row) => sum + Number(row.unanswered ?? 0), 0);
+  const formalScore = gradedTotals._sum.score ?? 0;
+  const formalMaximum = gradedTotals._sum.maximumScore ?? 0;
+  const formalSubjects = formalRows.map((row) => {
+    const correct = Number(row.correct ?? 0), incorrect = Number(row.incorrect ?? 0), unanswered = Number(row.unanswered ?? 0);
+    return {
+      subject: row.subject, correct, incorrect, unanswered,
+      awardedMarks: Number(row.awardedMarks ?? 0), maximumMarks: Number(row.maximumMarks ?? 0),
+      accuracy: correct + incorrect > 0 ? correct / (correct + incorrect) : null,
     };
-    if (answer.selectedIndex === null) row.unanswered += 1;
-    else if (answer.isCorrect) row.correct += 1;
-    else row.incorrect += 1;
-    row.awardedMarks += answer.awardedMarks;
-    row.maximumMarks += answer.examQuestion.marks;
-    formalBySubject.set(subject, row);
-  }
+  }).sort((a, b) => (a.accuracy ?? 2) - (b.accuracy ?? 2));
 
   return {
     generatedAt: new Date().toISOString(),
     practice: {
-      completedAttempts: attempts.length,
+      completedAttempts: practiceAttemptCount,
       questions: practiceCorrect + practiceIncorrect + practiceUnanswered,
-      correct: practiceCorrect,
-      incorrect: practiceIncorrect,
-      unanswered: practiceUnanswered,
+      correct: practiceCorrect, incorrect: practiceIncorrect, unanswered: practiceUnanswered,
       accuracy: practiceAnswered > 0 ? practiceCorrect / practiceAnswered : null,
       subjects: weakTopics.subjects,
       trend,
     },
     formalExams: {
-      submissions: submissions.length,
-      graded: graded.length,
-      reviewRequired: reviewRequired.length,
-      score: formalScore,
-      maximumScore: formalMaximum,
+      submissions: submissionCount, graded: gradedCount, reviewRequired: reviewRequiredCount,
+      score: formalScore, maximumScore: formalMaximum,
       scorePercentage: formalMaximum > 0 ? (formalScore / formalMaximum) * 100 : null,
-      correct: formalCorrect,
-      incorrect: formalIncorrect,
-      unanswered: formalUnanswered,
-      subjects: [...formalBySubject.entries()].map(([subject, row]) => ({
-        subject, ...row,
-        accuracy: row.correct + row.incorrect > 0
-          ? row.correct / (row.correct + row.incorrect)
-          : null,
-      })).sort((a, b) => (a.accuracy ?? 2) - (b.accuracy ?? 2)),
+      correct: formalCorrect, incorrect: formalIncorrect, unanswered: formalUnanswered,
+      subjects: formalSubjects,
     },
   };
 }
 
-export async function getHistory(db: PrismaClient, userId: number): Promise<HistoryItem[]> {
-  const attempts = await db.attempt.findMany({
-    where: { userId, finishedAt: { not: null } },
-    orderBy: { finishedAt: "desc" },
-    include: {
-      answers: { select: { isCorrect: true } },
-    },
-  });
-  return attempts.map((a) => {
-    const correct = a.answers.filter((x) => x.isCorrect).length;
-    return {
-      attemptId: a.id,
-      mode: a.mode,
-      startedAt: a.startedAt.toISOString(),
-      finishedAt: a.finishedAt ? a.finishedAt.toISOString() : null,
-      score: correct,
-      total: a.answers.length,
-      expired: a.expired,
-    };
-  });
+export async function getHistory
+
+export interface HistoryPage {
+  items: HistoryItem[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
+
+export async function getHistory(
+  db: PrismaClient,
+  userId: number,
+  page = 1,
+  limit = 10
+): Promise<HistoryPage> {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
+  const [rows, total] = await Promise.all([
+    db.$queryRaw<Array<{
+      attemptId: number; mode: string; startedAt: Date; finishedAt: Date | null;
+      expired: boolean; score: number; total: number;
+    }>>`
+      SELECT a.id AS attemptId, a.mode AS mode, a.startedAt AS startedAt,
+        a.finishedAt AS finishedAt, a.expired AS expired,
+        SUM(CASE WHEN aa.isCorrect = 1 THEN 1 ELSE 0 END) AS score,
+        COUNT(aa.id) AS total
+      FROM Attempt a
+      LEFT JOIN AttemptAnswer aa ON aa.attemptId = a.id
+      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+      GROUP BY a.id
+      ORDER BY a.finishedAt DESC
+      LIMIT ${safeLimit} OFFSET ${(safePage - 1) * safeLimit}
+    `,
+    db.attempt.count({ where: { userId, finishedAt: { not: null } } }),
+  ]);
+  return {
+    items: rows.map((row) => ({
+      attemptId: Number(row.attemptId), mode: row.mode,
+      startedAt: new Date(row.startedAt).toISOString(),
+      finishedAt: row.finishedAt ? new Date(row.finishedAt).toISOString() : null,
+      score: Number(row.score ?? 0), total: Number(row.total ?? 0), expired: Boolean(row.expired),
+    })),
+    page: safePage, limit: safeLimit, total, totalPages: Math.ceil(total / safeLimit),
+  };
+}
+
+export const RECOMMENDATION_MINIMUM_ANSWERS
 
 export const RECOMMENDATION_MINIMUM_ANSWERS = 5;
 export const RECOMMENDATION_WEAK_ACCURACY = 0.6;
@@ -447,7 +445,7 @@ export async function getStudyRecommendations(
 ): Promise<StudyRecommendationsReport> {
   const [weakTopics, history] = await Promise.all([
     getWeakTopics(db, userId),
-    getHistory(db, userId),
+    getHistory(db, userId, 1, 1),
   ]);
   const recommendations: StudyRecommendation[] = [];
   const evidencedWeakTopics = weakTopics.topics
@@ -514,7 +512,7 @@ export async function getStudyRecommendations(
 
   return {
     generatedAt: new Date().toISOString(),
-    basedOnAttempts: history.length,
+    basedOnAttempts: history.total,
     minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
     weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
     recommendations,

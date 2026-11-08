@@ -17,6 +17,9 @@ function AnalyticsDashboard() {
   const { status, user } = useSession();
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [history, setHistory] = useState<StudyHistoryItem[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(0);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
@@ -26,11 +29,13 @@ function AnalyticsDashboard() {
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
-    Promise.all([api.weakTopics(), api.studyHistory(), api.performanceOverview()])
+    Promise.all([api.weakTopics(), api.studyHistory(historyPage), api.performanceOverview()])
       .then(([weak, attempts, performance]) => {
         if (cancelled) return;
         setWeakTopics(weak);
-        setHistory(attempts);
+        setHistory(attempts.items);
+        setHistoryTotal(attempts.total);
+        setHistoryTotalPages(attempts.totalPages);
         setOverview(performance);
       })
       .catch((cause: unknown) => {
@@ -54,7 +59,7 @@ function AnalyticsDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [status]);
+  }, [status, historyPage]);
 
   if (status === "loading") return <p className="mute">Checking your session…</p>;
   if (status !== "authenticated") {
@@ -87,7 +92,7 @@ function AnalyticsDashboard() {
       <section className="stat-grid">
         <div className="stat-card">
           <div className="stat-label">Completed attempts</div>
-          <div className="stat-value">{loading ? "—" : completed.length}</div>
+          <div className="stat-value">{loading ? "—" : overview?.practice.completedAttempts ?? historyTotal}</div>
           <div className="stat-caption">Submitted practice sessions</div>
         </div>
         <div className="stat-card">
@@ -290,7 +295,7 @@ function AnalyticsDashboard() {
       <section className="panel">
         <div className="panel-header">
           <h2>Recent practice history</h2>
-          <span className="pill">{history.length} attempts</span>
+          <span className="pill">{historyTotal} attempts</span>
         </div>
         {loading ? <p className="mute">Loading your attempts…</p> : null}
         {!loading && history.length === 0 ? (
@@ -299,7 +304,7 @@ function AnalyticsDashboard() {
             <Link className="button button-primary" href="/">Start practicing</Link>
           </div>
         ) : null}
-        {history.slice(0, 10).map((item) => {
+        {history.map((item) => {
           const accuracy = item.total ? Math.round((item.score / item.total) * 100) : 0;
           return (
             <div key={item.attemptId} className="row" style={{ justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
@@ -314,6 +319,15 @@ function AnalyticsDashboard() {
             </div>
           );
         })}
+        {historyTotalPages > 1 ? (
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+            <span className="mute">Page {historyPage} of {historyTotalPages}</span>
+            <div className="row">
+              <button className="button button-secondary" disabled={historyPage <= 1 || loading} onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}>Previous</button>
+              <button className="button button-secondary" disabled={historyPage >= historyTotalPages || loading} onClick={() => setHistoryPage((current) => current + 1)}>Next</button>
+            </div>
+          </div>
+        ) : null}
       </section>
       <div className="row">
         <Link className="button button-secondary" href="/">Back to study dashboard</Link>

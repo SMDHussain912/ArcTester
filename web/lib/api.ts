@@ -277,6 +277,14 @@ export interface StudyHistoryItem {
   expired: boolean;
 }
 
+export interface StudyHistoryPage {
+  items: StudyHistoryItem[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface StudyRecommendation {
   id: string;
   priority: "high" | "medium" | "low";
@@ -570,7 +578,7 @@ export const api = {
   performanceOverview: () => request<PerformanceOverview>("/analytics/overview"),
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
   questionPerformance: () => request<QuestionPerformanceReport>("/analytics/question-performance"),
-  studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
+  studyHistory: (page = 1) => request<StudyHistoryPage>(`/analytics/history?page=${page}&limit=10`),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
   announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),

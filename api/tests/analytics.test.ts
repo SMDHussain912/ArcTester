@@ -503,24 +503,18 @@ describe("analytics", () => {
     expect(body.recommendations.some((item) => item.id.startsWith("review-topic-mistakes-"))).toBe(true);
   });
 
-  it("GET /analytics/history lists submitted attempts", async () => {
-    const { status, json } = await api.get(`/analytics/history`);
+  it("GET /analytics/history returns a bounded, paginated attempt summary", async () => {
+    const { status, json } = await api.get(`/analytics/history?page=1&limit=1`);
     expect(status).toBe(200);
     const body = json as {
-      attemptId: number;
-      mode: string;
-      score: number;
-      total: number;
-      expired: boolean;
-      finishedAt: string | null;
-    }[];
-    expect(body.length).toBeGreaterThanOrEqual(2);
-    expect(body.every((h) => h.total > 0)).toBe(true);
-    for (let i = 1; i < body.length; i++) {
-      expect(new Date(body[i - 1].finishedAt ?? 0).getTime()).toBeGreaterThanOrEqual(
-        new Date(body[i].finishedAt ?? 0).getTime()
-      );
-    }
+      items: { attemptId: number; mode: string; score: number; total: number; expired: boolean; finishedAt: string | null }[];
+      page: number; limit: number; total: number; totalPages: number;
+    };
+    expect(body).toMatchObject({ page: 1, limit: 1, total: 2, totalPages: 2 });
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].total).toBeGreaterThan(0);
+    const second = await api.get(`/analytics/history?page=2&limit=1`);
+    expect((second.json as typeof body).items[0].attemptId).not.toBe(body.items[0].attemptId);
   });
 
   it("GET /analytics/export returns stats + attempts + answers", async () => {
