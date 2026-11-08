@@ -386,7 +386,7 @@ export default function App() {
         `/exams/assignments/${assignmentId}/session/start`, { method: "POST", body: JSON.stringify({}) },
       );
       setActiveAssignmentPackage(response.package);
-      let restoredAnswers: Record<number, number> = {};
+      let restoredAnswers: Record<string, number> = {};
       try {
         const cached = JSON.parse(localStorage.getItem(assignedAnswersKey(assignmentId)) ?? "{}") as Record<string, unknown>;
         const validQuestionIds = new Set(response.package.questions.map((question) => question.id));
@@ -1122,6 +1122,10 @@ export default function App() {
     setResult(null);
     setAnswers({});
     setAssignmentAnswers({});
+    if (activeAssignmentPackage) {
+      localStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
+      localStorage.removeItem(assignedAttemptKey(activeAssignmentPackage.assignmentId));
+    }
     setActiveAssignmentPackage(null);
     setAssignmentStartedAt(null);
     setAssignmentDeadline(null);
