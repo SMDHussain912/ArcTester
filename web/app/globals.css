@@ -254,3 +254,32 @@ th { color: var(--muted); font-size: 11px; font-weight: 700; }
   .exam-controls { flex-wrap: wrap; }
   .exam-controls .button { flex: 1 1 auto; }
 }
+
+
+/* Results and review */
+.result-summary { display: grid; grid-template-columns: minmax(180px, .65fr) minmax(0, 1.35fr); gap: 26px; padding: clamp(20px, 4vw, 32px); }
+.result-score { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding-right: 22px; border-right: 1px solid var(--line); }
+.result-score > strong { font-size: clamp(42px, 6vw, 58px); line-height: 1.1; letter-spacing: -.06em; }
+.result-score > strong span { color: var(--muted); font-size: 22px; font-weight: 500; letter-spacing: -.03em; }
+.result-breakdown { min-width: 0; }
+.breakdown-row { margin: 12px 0; }
+.breakdown-row strong { font-size: 12px; }
+.breakdown-track { height: 7px; margin-top: 7px; overflow: hidden; border-radius: 99px; background: var(--surface-soft); }
+.breakdown-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.review-card { margin: 12px 0; }
+.review-question { margin: 18px 0 8px; font-size: 16px; }
+.review-options { display: grid; gap: 7px; margin: 12px 0; padding: 0; list-style: none; }
+.review-options li { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; }
+.review-options li > span:last-child { flex: 0 0 auto; color: var(--muted); font-size: 11px; }
+.review-options .correct-option { border-color: color-mix(in srgb, var(--success) 45%, var(--line)); background: color-mix(in srgb, var(--success) 8%, var(--surface)); }
+.review-options .correct-option > span:last-child { color: var(--success); }
+.review-options .selected-option { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+.review-options .selected-option > span:last-child { color: var(--danger); }
+.exp p { margin: 5px 0 0; color: var(--ink); }
+.result-footer { display: flex; justify-content: flex-start; margin-top: 22px; }
+
+@media (max-width: 680px) {
+  .result-summary { grid-template-columns: 1fr; gap: 20px; }
+  .result-score { padding: 0 0 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .review-options li { flex-direction: column; gap: 3px; }
+}
