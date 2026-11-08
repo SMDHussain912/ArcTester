@@ -151,10 +151,12 @@ describe("admin announcements", () => {
         title: "Expired message",
         message: "This must not be delivered.",
         expiresAt: new Date(Date.now() - 1000),
-        createdById: (await server.db.user.findUniqueOrThrow({
-          where: { email: "announcement-admin@arctester.test" },
-          select: { id: true },
-        })).id,
+        createdById: (
+          await server.db.user.findUniqueOrThrow({
+            where: { email: "announcement-admin@arctester.test" },
+            select: { id: true },
+          })
+        ).id,
       },
     });
 
