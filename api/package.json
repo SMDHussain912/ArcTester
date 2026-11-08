@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "import:questions": "tsx prisma/seed.ts",
-    "admin:bootstrap": "tsx prisma/bootstrapAdmin.ts"
+    "admin:bootstrap": "tsx prisma/bootstrapAdmin.ts",
+    "dataset:generate": "tsx src/intelligence/generateDatasets.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",
