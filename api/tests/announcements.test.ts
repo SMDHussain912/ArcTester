@@ -6,6 +6,7 @@ import { sessionCookie, startTestServer, type TestServer } from "./server.js";
 let server: TestServer;
 let adminCookie = "";
 let studentCookie = "";
+let secondStudentCookie = "";
 
 async function request(
   path: string,
@@ -44,6 +45,7 @@ describe("admin announcements", () => {
     server = await startTestServer(buildApp);
     adminCookie = await createSession("announcement-admin@arctester.test", "ADMIN");
     studentCookie = await createSession("announcement-student@arctester.test", "STUDENT");
+    secondStudentCookie = await createSession("announcement-student-2@arctester.test", "STUDENT");
   });
 
   afterAll(async () => {
@@ -57,11 +59,13 @@ describe("admin announcements", () => {
       {
         title: "Exam schedule updated",
         message: "Your mock exam starts at 10:00 AM tomorrow.",
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
       },
       adminCookie
     );
     expect(created.status).toBe(201);
-    expect((created.json.announcement as { title: string }).title).toBe("Exam schedule updated");
+    expect((created.json.announcement as { title: string; expiresAt: string }).title).toBe("Exam schedule updated");
+    expect((created.json.announcement as { expiresAt: string }).expiresAt).toBeTruthy();
 
     const feed = await request("/announcements", "GET", undefined, studentCookie);
     expect(feed.status).toBe(200);
@@ -84,6 +88,12 @@ describe("admin announcements", () => {
     expect(seenAnnouncements).toHaveLength(1);
     expect(seenAnnouncements[0].id).toBe(announcementId);
     expect(seenAnnouncements[0].seenAt).toBeTruthy();
+
+    const otherStudentFeed = await request("/announcements", "GET", undefined, secondStudentCookie);
+    const otherStudentAnnouncements = otherStudentFeed.json.announcements as Array<{ id: string; seenAt: string | null }>;
+    expect(otherStudentAnnouncements).toHaveLength(1);
+    expect(otherStudentAnnouncements[0].id).toBe(announcementId);
+    expect(otherStudentAnnouncements[0].seenAt).toBeNull();
   });
 
   it("rejects student publishing and invalid expiry dates", async () => {
