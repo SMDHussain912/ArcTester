@@ -106,6 +106,7 @@ Map the actual database fields before designing new tables or migrations. Prefer
 - `94a5f54` — simplify practice trend aggregation.
 - `98b2e4d` — avoid weak-area recommendations when there are no answered questions.
 - `ca429fe` — verify review-required formal submissions stay outside verified metrics.
+- `1da41d8` — initialize analytics test fixture state explicitly.
 
 ### Phase 0 audit — current repository findings (2026-11-08)
 
