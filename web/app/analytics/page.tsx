@@ -9,6 +9,7 @@ import {
   type StudyRecommendationsReport,
   type WeakTopicsReport,
   type PerformanceOverview,
+  type QuestionPerformanceReport,
 } from "../../lib/api";
 import { useSession } from "../../lib/session";
 
@@ -18,6 +19,7 @@ function AnalyticsDashboard() {
   const [history, setHistory] = useState<StudyHistoryItem[]>([]);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
+  const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,11 @@ function AnalyticsDashboard() {
     api.studyRecommendations()
       .then((report) => {
         if (!cancelled) setRecommendations(report);
+      })
+      .catch(() => undefined);
+    api.questionPerformance()
+      .then((report) => {
+        if (!cancelled) setQuestionPerformance(report);
       })
       .catch(() => undefined);
     return () => {
@@ -235,6 +242,39 @@ function AnalyticsDashboard() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Question-level performance</h2>
+          {questionPerformance ? <span className="pill">{questionPerformance.questions.length} questions tracked</span> : null}
+        </div>
+        {questionPerformance ? (
+          <>
+            <p className="muted">
+              A question is flagged as difficult only after at least {questionPerformance.minimumAnswers} answered attempts
+              and accuracy below {Math.round(questionPerformance.weakAccuracyThreshold * 100)}%.
+              {questionPerformance.insufficientSampleCount > 0 ? ` ${questionPerformance.insufficientSampleCount} questions do not have enough evidence yet.` : ""}
+            </p>
+            {questionPerformance.questions.filter((item) => item.weak).length === 0 ? (
+              <p className="muted">No question has crossed the evidence threshold for a weak-area flag.</p>
+            ) : (
+              <div className="stack">
+                {questionPerformance.questions.filter((item) => item.weak).slice(0, 8).map((item) => (
+                  <div key={item.questionId} className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                    <div>
+                      <strong>Question #{item.questionId} · {item.subject}</strong>
+                      <p className="mute">{item.topic ?? "Unassigned topic"} · {item.difficulty} · {item.sampleSize} answered attempts</p>
+                    </div>
+                    <span className="pill">{Math.round((item.accuracy ?? 0) * 100)}% accuracy</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="muted">Question-level insights will appear after your completed practice attempts are analyzed.</p>
+        )}
       </section>
 
       <section className="panel">
