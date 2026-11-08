@@ -46,9 +46,6 @@ export function trainRegisteredDataset(
     }
   }
   const featureNames = schema.map((feature) => feature.name);
-  const encodedNames = schema.flatMap((feature) => feature.type === "numeric"
-    ? [feature.name]
-    : [...(feature.categories ?? []).map((category) => `${feature.name}=${category}`), `${feature.name}=__UNKNOWN__`]);
   const rows = samples.map((sample, index) => {
     const keys = Object.keys(sample.features).sort();
     if (keys.join("\\0") !== [...featureNames].sort().join("\\0")) throw new Error(`Training row ${index + 1} does not match the declared feature schema`);
