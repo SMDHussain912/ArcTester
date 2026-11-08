@@ -449,7 +449,7 @@ export default function AdminPage() {
             {liveSessions.some((session) => session.events.length) ? <details style={{ marginTop: 12 }}>
               <summary>Recent invigilation events</summary>
               {liveSessions.flatMap((session) => session.events.map((event) => ({ ...event, email: session.student.email, exam: session.exam.title }))).slice(0, 30).map((event) => (
-                <p key={event.id} className="mute">{new Date(event.createdAt).toLocaleString()} · {event.email} · {event.exam} · {event.type} — {event.detail}</p>
+                <p key={event.id} className="mute">{new Date(event.createdAt).toLocaleString()} · {event.email} · {event.exam} · {event.type} · by {event.actor?.email ?? "system"} — {event.detail}</p>
               ))}
             </details> : null}
           </section>
