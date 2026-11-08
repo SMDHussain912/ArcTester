@@ -70,6 +70,8 @@ type Test = {
 };
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
 function practiceAnswersKey(attemptId: number | string): string { return `arctester-practice-answers-${attemptId}`; }
+function assignedAnswersKey(assignmentId: string): string { return `arctester-assignment-answers-${assignmentId}`; }
+function assignedAttemptKey(assignmentId: string): string { return `arctester-assigned-attempt-${assignmentId}`; }
 type Result = {
   attemptId: number;
   score: number;
@@ -384,7 +386,16 @@ export default function App() {
         `/exams/assignments/${assignmentId}/session/start`, { method: "POST", body: JSON.stringify({}) },
       );
       setActiveAssignmentPackage(response.package);
-      setAssignmentAnswers({});
+      let restoredAnswers: Record<number, number> = {};
+      try {
+        const cached = JSON.parse(localStorage.getItem(assignedAnswersKey(assignmentId)) ?? "{}") as Record<string, unknown>;
+        const validQuestionIds = new Set(response.package.questions.map((question) => question.id));
+        restoredAnswers = Object.fromEntries(Object.entries(cached).flatMap(([id, value]) => {
+          const questionId = id;
+          return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
+        }));
+      } catch { localStorage.removeItem(assignedAnswersKey(assignmentId)); }
+      setAssignmentAnswers(restoredAnswers);
       setAssignmentStartedAt(sessionResponse.session.startedAt);
       setAssignmentDeadline(sessionResponse.session.deadline);
       setAssignmentServerOffset(new Date(sessionResponse.session.serverTime).getTime() - performance.now());
@@ -395,18 +406,31 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  function selectAssignedAnswer(questionId: string, selectedIndex: number) {
+    if (!activeAssignmentPackage) return;
+    const next = { ...assignmentAnswers, [questionId]: selectedIndex };
+    setAssignmentAnswers(next);
+    try { localStorage.setItem(assignedAnswersKey(activeAssignmentPackage.assignmentId), JSON.stringify(next)); }
+    catch { setError("Your browser could not save the local answer backup. Submit before closing this tab."); }
+  }
+
   async function submitAssignedExam(force = false) {
     if (!activeAssignmentPackage || !assignmentStartedAt) return;
     if (!force && !window.confirm("Submit this exam now? You cannot change answers after submission.")) return;
     setBusy(true);
     setError("");
     try {
-      const attemptUuid = typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
-            const random = Math.floor(Math.random() * 16);
-            return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
-          });
+      const attemptKey = assignedAttemptKey(activeAssignmentPackage.assignmentId);
+      let attemptUuid = localStorage.getItem(attemptKey);
+      if (!attemptUuid) {
+        attemptUuid = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+              const random = Math.floor(Math.random() * 16);
+              return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+            });
+        localStorage.setItem(attemptKey, attemptUuid);
+      }
       await request(`/exams/assignments/${activeAssignmentPackage.assignmentId}/submission`, {
         method: "POST",
         body: JSON.stringify({
@@ -419,6 +443,8 @@ export default function App() {
           })),
         }),
       });
+      localStorage.removeItem(attemptKey);
+      localStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
       setActiveAssignmentPackage(null);
       setAssignmentStartedAt(null);
       setAssignmentDeadline(null);
@@ -1582,7 +1608,7 @@ export default function App() {
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
             <section className="panel exam-question-navigator" aria-label="Question navigator"><div className="exam-progress-heading"><strong>Question progress</strong><span>{Object.keys(assignmentAnswers).length} / {activeAssignmentPackage.questions.length} answered</span></div><div className="exam-progress-track"><span style={{ width: `${activeAssignmentPackage.questions.length ? Object.keys(assignmentAnswers).length / activeAssignmentPackage.questions.length * 100 : 0}%` }} /></div><div className="exam-palette">{activeAssignmentPackage.questions.map((question, index) => <button type="button" key={question.id} disabled={assignmentSessionPaused} aria-label={`Go to question ${index + 1}${assignmentAnswers[question.id] !== undefined ? ", answered" : ", unanswered"}`} className={assignmentAnswers[question.id] !== undefined ? "exam-palette-item answered" : "exam-palette-item"} onClick={() => document.getElementById(`assigned-question-${question.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{index + 1}</button>)}</div></section>
-            <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article id={`assigned-question-${question.id}`} className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} disabled={assignmentSessionPaused} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => setAssignmentAnswers((current) => ({ ...current, [question.id]: optionIndex }))}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
+            <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article id={`assigned-question-${question.id}`} className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} disabled={assignmentSessionPaused} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => selectAssignedAnswer(question.id, optionIndex)}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
             <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><button className="primary" disabled={busy || assignmentSessionPaused} onClick={() => void submitAssignedExam()}>{assignmentSessionPaused ? "Waiting for invigilator" : busy ? "Submitting…" : "Submit final answers"}</button></div>
           </section>
         ) : activePage === "practice" && test ? (
