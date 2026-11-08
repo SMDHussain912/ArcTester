@@ -7,8 +7,8 @@ import { api, ApiError, type AdminModelDataset, type AdminRegisteredModel, type 
 
 const featureSchemaExample = '[{"name":"completed_attempts","type":"numeric"},{"name":"previous_accuracy","type":"numeric"},{"name":"recent_average_accuracy","type":"numeric"},{"name":"overall_average_accuracy","type":"numeric"},{"name":"previous_question_count","type":"numeric"}]';
 const samplesExample = `[
-  {"features":{"completed_attempts":24,"previous_accuracy":0.7,"recent_average_accuracy":0.65,"overall_average_accuracy":0.62,"previous_question_count":20},"target":0.72,"groupId":"<64-character-sha256-pseudonym>"},
-  {"features":{"completed_attempts":31,"previous_accuracy":0.8,"recent_average_accuracy":0.75,"overall_average_accuracy":0.68,"previous_question_count":20},"target":0.76,"groupId":"<64-character-sha256-pseudonym>"}
+  {"features":{"completed_attempts":24,"previous_accuracy":0.7,"recent_average_accuracy":0.65,"overall_average_accuracy":0.62,"previous_question_count":20},"target":0.72,"groupId":"<64-character-HMAC-SHA256-pseudonym>"},
+  {"features":{"completed_attempts":31,"previous_accuracy":0.8,"recent_average_accuracy":0.75,"overall_average_accuracy":0.68,"previous_question_count":20},"target":0.76,"groupId":"<64-character-HMAC-SHA256-pseudonym>"}
 ]`;
 
 export default function AdminModelsPage() {
@@ -134,7 +134,7 @@ export default function AdminModelsPage() {
       <section className="panel stack">
         <div>
           <h2>Register a training dataset</h2>
-          <p className="muted">For the student next-practice population model, use the five default features shown below and set target values to accuracy fractions from 0 to 1 (not percentages). Every sample needs a stable 64-character SHA-256 pseudonymous groupId so one learner never appears in both train and holdout groups.</p>
+          <p className="muted">For the student next-practice population model, use the five default features shown below and set target values to accuracy fractions from 0 to 1 (not percentages). Every sample needs a stable 64-character HMAC-SHA256 pseudonymous groupId so one learner never appears in both train and holdout groups.</p>
         </div>
         <form className="stack" onSubmit={registerDataset}>
           <label>Dataset name<input className="input" value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} /></label>
@@ -148,7 +148,7 @@ export default function AdminModelsPage() {
           <label>Source description<textarea className="input" rows={3} value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} required minLength={10} maxLength={500} /></label>
           <label>Feature schema JSON<textarea className="input" rows={3} value={featureSchemaJson} onChange={(event) => setFeatureSchemaJson(event.target.value)} required /></label>
           <label>Samples JSON<textarea className="input" rows={8} value={samplesJson} onChange={(event) => setSamplesJson(event.target.value)} required placeholder={samplesExample} /></label>
-          <p className="muted">Do not put names, emails, phone numbers or raw student IDs in groupId. Generate a stable SHA-256 pseudonym outside this dataset and use the same pseudonym for all rows from the same learner.</p>
+          <p className="muted">Do not put names, emails, phone numbers or raw student IDs in groupId. Generate a stable HMAC-SHA256 pseudonym outside this dataset using a private secret stored separately; never use a plain hash of a predictable student ID. Use the same pseudonym for all rows from the same learner.</p>
           <label className="checkbox-row">
             <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} required />
             I confirm this dataset is authorized for model training and contains no direct learner identifiers. If marked real anonymized, I confirm the source and anonymization are genuine.
