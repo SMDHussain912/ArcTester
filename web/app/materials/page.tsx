@@ -72,7 +72,7 @@ export default function MaterialsPage() {
           {loading ? "Preparing download…" : "Download offline study pack"}
         </button>
         {downloaded ? (
-          <div className="notice" role="status">
+          <div className="exp" role="status">
             <strong>Study pack downloaded.</strong>
             <p className="muted">
               {downloaded.total.toLocaleString()} questions across {downloaded.subjects.length} subjects.
