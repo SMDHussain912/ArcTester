@@ -799,3 +799,9 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 .exam-instructions{padding:18px}
 .exam-instructions p{white-space:pre-wrap}
 @media(max-width:560px){.assigned-exam-submit{align-items:stretch;flex-direction:column}.assigned-exam-dates{flex-direction:column;gap:6px}}
+
+
+.topic-blueprint{display:grid;gap:10px;margin-top:16px;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--bg)}
+.topic-blueprint>label{display:grid;gap:7px;max-width:360px}
+.topic-blueprint-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-height:220px;overflow:auto;padding:8px}
+.topic-blueprint-options label{display:flex;align-items:center;gap:8px;font-size:13px}
