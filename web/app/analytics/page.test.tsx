@@ -271,7 +271,9 @@ describe("student analytics page", () => {
         );
       }
       if (path.includes("/analytics/history")) {
-        return Promise.resolve(jsonResponse(200, []));
+        return Promise.resolve(jsonResponse(200, {
+          items: [], page: 1, limit: 10, total: 0, totalPages: 0,
+        }));
       }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
     });
