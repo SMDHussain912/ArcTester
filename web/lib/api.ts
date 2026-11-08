@@ -61,6 +61,71 @@ export interface AdminExam {
   versions: { id: string; version: number; durationMinutes: number; publishedAt: string | null;
     _count: { questions: number; assignments: number } }[];
 }
+
+export interface AssignedExam {
+  id: string;
+  status: string;
+  assignedAt: string;
+  availableFrom: string | null;
+  dueAt: string | null;
+  exam: { id: string; title: string; description: string };
+  version: number;
+  durationMinutes: number;
+  questionCount: number;
+  submission: {
+    id: string;
+    status: string;
+    score: number | null;
+    maximumScore: number | null;
+    submittedAt: string;
+  } | null;
+}
+export interface AssignedExamPackage {
+  assignmentId: string;
+  examId: string;
+  title: string;
+  description: string;
+  version: number;
+  instructions: string;
+  durationMinutes: number;
+  availableFrom: string | null;
+  dueAt: string | null;
+  serverTime: string;
+  questions: {
+    id: string;
+    position: number;
+    subject: string;
+    topic: string | null;
+    text: string;
+    options: string[];
+    marks: number;
+    negativeMarks: number;
+  }[];
+}
+export interface AssignedExamResult {
+  submissionId: string;
+  status: string;
+  score: number | null;
+  maximumScore: number | null;
+  submittedAt: string;
+  receivedAt: string;
+  questions: {
+    id: string;
+    position: number;
+    subject: string;
+    topic: string | null;
+    text: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+    marks: number;
+    negativeMarks: number;
+    selectedIndex: number | null;
+    isCorrect: boolean;
+    awardedMarks: number;
+  }[];
+}
+
 export interface AdminOverview {
   totals: { students: number; exams: number; assignments: number; submissions: number;
     submissionRate: number; averagePercentage: number | null };
@@ -123,6 +188,29 @@ export const api = {
     request<AuthSession>("/auth/login", json({ email, password })),
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
   me: () => request<AuthSession>("/auth/me"),
+  assignedExams: () =>
+    request<{ ok: true; assignments: AssignedExam[] }>("/exams/assigned"),
+  assignedExamPackage: (id: string) =>
+    request<{ ok: true; package: AssignedExamPackage; sha256: string }>(
+      `/exams/assignments/${id}/package`,
+    ),
+  submitAssignedExam: (
+    id: string,
+    body: {
+      attemptUuid: string;
+      startedAt: string;
+      submittedAt: string;
+      answers: { examQuestionId: string; selectedIndex: number | null }[];
+    },
+  ) =>
+    request<{ ok: true; duplicate: boolean; submission: { id: string; status: string } }>(
+      `/exams/assignments/${id}/submission`,
+      json(body),
+    ),
+  assignedExamResult: (id: string) =>
+    request<{ ok: true; result: AssignedExamResult }>(
+      `/exams/assignments/${id}/result`,
+    ),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
