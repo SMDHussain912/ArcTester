@@ -179,20 +179,13 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   if (!row) throw new Error("Download this exam before starting it.");
 
   const examPackage = parsePackage(row.payload_json);
-  const adjustedNow = Date.now() + row.server_offset_ms;
-  if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
-    throw new Error("This exam is not available yet.");
-  }
-  if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
-    throw new Error("The exam deadline has passed.");
-  }
-
   const existing = await db.getFirstAsync<AttemptRow>(
     "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
     assignmentId,
   );
   if (existing) {
     if (existing.status === "ACTIVE") {
+      // An already-started attempt must remain resumable even after its assignment deadline.
       return {
         attemptUuid: existing.attemptUuid,
         startedAt: existing.startedAt,
@@ -200,6 +193,14 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
       };
     }
     throw new Error("An attempt for this assignment has already been submitted or synchronized.");
+  }
+
+  const adjustedNow = Date.now() + row.server_offset_ms;
+  if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
+    throw new Error("This exam is not available yet.");
+  }
+  if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
+    throw new Error("The exam deadline has passed.");
   }
 
   const attemptUuid = Crypto.randomUUID();
