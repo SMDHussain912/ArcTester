@@ -7,3 +7,10 @@ coverage
 legacy/
 ecet-mock.html
 README.md
+
+# Compact legacy UI and newly introduced exam modules will be reformatted in their dedicated refactors.
+web/src/App.tsx
+web/src/styles.css
+api/src/examRoutes.ts
+api/tests/exams.test.ts
+api/src/index.ts

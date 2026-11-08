@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
 import { importFromJson } from "../src/importService.js";
-import { postJson, sessionCookie, startTestServer, type TestServer } from "./server.js";
+import {
+  issueTestInvitation,
+  postJson,
+  sessionCookie,
+  startTestServer,
+  type TestServer,
+} from "./server.js";
 
 let server: TestServer;
 
@@ -59,28 +65,34 @@ describe("auth", () => {
     await server.close();
   });
 
-  it("registers a new user", async () => {
+  it("registers a new user with an invitation", async () => {
+    const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
       email: "alice@example.com",
       password: "secret1234",
+      invitationToken,
     });
     expect(res.status).toBe(201);
     expect((res.json as { ok: boolean }).ok).toBe(true);
   });
 
   it("rejects duplicate email", async () => {
+    const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
       email: "alice@example.com",
       password: "secret1234",
+      invitationToken,
     });
     expect(res.status).toBe(409);
     expect((res.json as { error: string }).error).toContain("already exists");
   });
 
   it("rejects weak password", async () => {
+    const invitationToken = await issueTestInvitation(server.db, "bob@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
       email: "bob@example.com",
       password: "short",
+      invitationToken,
     });
     expect(res.status).toBe(400);
     expect((res.json as { error: string }).error).toBe("That request was invalid.");
@@ -175,9 +187,11 @@ describe("auth — bearer token (native/mobile clients)", () => {
   }
 
   it("/auth/token returns a JWT without setting a cookie", async () => {
+    const invitationToken = await issueTestInvitation(server.db, "mobile@example.com");
     await postJson(`${server.baseUrl}/auth/register`, {
       email: "mobile@example.com",
       password: "secret1234",
+      invitationToken,
     });
     const res = await fetch(`${server.baseUrl}/auth/token`, {
       method: "POST",
