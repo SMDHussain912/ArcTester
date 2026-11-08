@@ -18,6 +18,7 @@ export type StudentScorePrediction =
       requiredSamples: number;
       requiredCompletedAttempts: number;
       message: string;
+      populationFeatures?: Record<string, number>;
     }
   | {
       status: "baseline_not_beaten";
@@ -26,6 +27,7 @@ export type StudentScorePrediction =
       modelMae: number;
       baselineMae: number;
       message: string;
+      populationFeatures?: Record<string, number>;
     }
   | {
       status: "ready";
@@ -42,6 +44,7 @@ export type StudentScorePrediction =
       modelMae: number;
       baselineMae: number;
       message: string;
+      populationFeatures?: Record<string, number>;
     };
 
 function nextAttemptFeatures(attempts: CompletedAttemptScore[]): number[] {
