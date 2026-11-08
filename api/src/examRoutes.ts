@@ -29,6 +29,9 @@ const CreateExamSchema = z.object({
 }).refine((input) => input.questions.every((question) => question.negativeMarks <= question.marks), {
   message: "Negative marks cannot exceed the marks awarded for a correct answer.",
   path: ["questions"],
+}).refine((input) => input.questions.some((question) => question.marks > 0), {
+  message: "An exam must award more than zero total marks.",
+  path: ["questions"],
 });
 
 const AssignExamSchema = z.object({

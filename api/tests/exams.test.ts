@@ -131,6 +131,21 @@ describe("versioned exam management", () => {
     expect(student.status).toBe(403);
   });
 
+  it("rejects a paper where every question has zero marks", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const response = await request("/admin/exams", "POST", {
+      title: "Zero Mark Paper",
+      description: "",
+      instructions: "",
+      durationMinutes: 30,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: [{ questionId: question.id, marks: 0, negativeMarks: 0 }],
+    }, adminCookie);
+    expect(response.status).toBe(400);
+    expect(response.json.error).toContain("zero total marks");
+  });
+
   it("rejects a paper where negative marks exceed correct-answer marks", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const response = await request("/admin/exams", "POST", {
