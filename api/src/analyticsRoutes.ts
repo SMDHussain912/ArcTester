@@ -1,5 +1,11 @@
 import { Router } from "express";
-import { getHistory, getWeakTopics, importProgress, exportProgress } from "./analytics.js";
+import {
+  getHistory,
+  getWeakTopics,
+  getStudyRecommendations,
+  importProgress,
+  exportProgress,
+} from "./analytics.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -9,6 +15,15 @@ export function analyticsRouter(db: PrismaClient): Router {
   router.get("/weak-topics", requireAuth, async (req, res, next) => {
     try {
       const report = await getWeakTopics(db, (req as AuthedRequest).user!.id);
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/recommendations", requireAuth, async (req, res, next) => {
+    try {
+      const report = await getStudyRecommendations(db, (req as AuthedRequest).user!.id);
       res.json(report);
     } catch (error) {
       next(error);
