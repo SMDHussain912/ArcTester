@@ -1037,3 +1037,9 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
   .practice-builder-footer .primary { width: 100%; }
   .practice-side-actions { grid-template-columns: minmax(0,1fr); }
 }
+
+
+.practice-quota-preview { display: grid; gap: 8px; margin-top: 13px; padding: 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg); }
+.practice-quota-preview > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.practice-quota-preview > div > span { display: inline-flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 11px; }
+.practice-quota-preview b { color: var(--accent); font-variant-numeric: tabular-nums; }
