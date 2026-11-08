@@ -355,6 +355,22 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
+  it("returns exam attendance and question-level report data", async () => {
+    const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
+    expect(attendance.status).toBe(200);
+    const row = (attendance.json.attendance as Array<{ assignmentId: string; attendanceStatus: string }>).find((item) => item.assignmentId === assignmentId);
+    expect(row?.attendanceStatus).toBe("SUBMITTED");
+
+    const report = await request(`/admin/exams/${examId}/report`, "GET", undefined, adminCookie);
+    expect(report.status).toBe(200);
+    const data = report.json.report as { assigned: number; submitted: number; questions: Array<{ correct: number; responses: number }> };
+    expect(data.assigned).toBe(1);
+    expect(data.submitted).toBe(1);
+    expect(data.questions[0]).toMatchObject({ correct: 1, responses: 1 });
+    const student = await request(`/admin/exams/${examId}/report`, "GET", undefined, studentCookie);
+    expect(student.status).toBe(403);
+  });
+
   it("shows administrator analytics and blocks student access", async () => {
     const question = await server.db.question.findUniqueOrThrow({
       where: { questionHash: "exam-route-question-fifo-unique" },
