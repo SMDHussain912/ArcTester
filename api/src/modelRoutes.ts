@@ -87,7 +87,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             data: { isActive: false },
           });
         }
-        return tx.registeredModel.create({
+        const model = await tx.registeredModel.create({
           data: {
             modelId: input.modelId,
             version,
@@ -103,6 +103,19 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             task: true, dataset: true, isActive: true, createdAt: true, activatedAt: true,
           },
         });
+        await tx.modelRegistryAudit.create({
+          data: {
+            actorId: req.user!.id, modelId: input.modelId, version,
+            action: "REGISTERED",
+            details: JSON.stringify({ dataset: input.dataset, algorithm: input.algorithm, task: input.task }),
+          },
+        });
+        if (isFirstVersion) {
+          await tx.modelRegistryAudit.create({
+            data: { actorId: req.user!.id, modelId: input.modelId, version, action: "ACTIVATED", details: JSON.stringify({ reason: "first-version" }) },
+          });
+        }
+        return model;
       });
       res.status(201).json({ ok: true, model: created });
     } catch (error) {
@@ -112,7 +125,21 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/admin/models/:modelId/:version/activate", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.get("/admin/models/:modelId/audit", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const events = await db.modelRegistryAudit.findMany({
+        where: { modelId }, orderBy: { createdAt: "desc" }, take: 200,
+        select: { id: true, actorId: true, modelId: true, version: true, action: true, details: true, createdAt: true },
+      });
+      res.json({ ok: true, events: events.map((event) => ({ ...event, details: JSON.parse(event.details) })) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      next(error);
+    }
+  });
+
+  router.post("/admin/models/:modelId/:version/activate", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
       const version = VersionSchema.parse(req.params.version);
@@ -123,11 +150,15 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         if (!target) return null;
         validateRegistryArtifact(JSON.parse(target.artifactJson));
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
-        return tx.registeredModel.update({
+        const model = await tx.registeredModel.update({
           where: { id: target.id },
           data: { isActive: true, activatedAt: new Date() },
           select: { modelId: true, version: true, isActive: true, activatedAt: true },
         });
+        await tx.modelRegistryAudit.create({
+          data: { actorId: req.user!.id, modelId, version, action: "ACTIVATED", details: JSON.stringify({ reason: "manual-promotion" }) },
+        });
+        return model;
       });
       if (!activated) return next(notFound("Model version was not found."));
       res.json({ ok: true, model: activated });
@@ -138,7 +169,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/admin/models/:modelId/rollback", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post("/admin/models/:modelId/rollback", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
       const outcome = await db.$transaction(async (tx) => {
@@ -155,6 +186,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           where: { id: previous.id },
           data: { isActive: true, activatedAt: new Date() },
           select: { modelId: true, version: true, isActive: true, activatedAt: true },
+        });
+        await tx.modelRegistryAudit.create({
+          data: { actorId: req.user!.id, modelId, version: previous.version, action: "ROLLED_BACK", details: JSON.stringify({ fromVersion: active.version }) },
         });
         return { model };
       });
