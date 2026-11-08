@@ -1,0 +1,51 @@
+name: Format pull request changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format changed files
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch origin "$BASE_REF"
+          changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          format_files="$(printf '%s\n' "$changed_files" | grep -E '\.(css|html|js|jsx|json|md|mdx|scss|ts|tsx|yaml|yml)$' || true)"
+          if [[ -n "$format_files" ]]; then
+            printf '%s\n' "$format_files" | xargs npx prettier --write
+          fi
+
+      - name: Commit formatting changes
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: format pull request changes"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
