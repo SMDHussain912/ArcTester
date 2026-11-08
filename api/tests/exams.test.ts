@@ -44,6 +44,15 @@ async function createSession(email: string, role: "ADMIN" | "STUDENT"): Promise<
   return sessionCookie(response);
 }
 
+async function loginExistingSession(email: string): Promise<string> {
+  const response = await fetch(`${server.baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: "exam-test-password-123" }),
+  });
+  return sessionCookie(response);
+}
+
 describe("versioned exam management", () => {
   beforeAll(async () => {
     server = await startTestServer(buildApp);
@@ -311,7 +320,7 @@ describe("versioned exam management", () => {
     }, studentCookie);
     expect(saved.status).toBe(200);
     expect(saved.json).toMatchObject({ savedCount: 1, revision: 1 });
-    const secondDeviceCookie = await createSession("exam-student@arctester.test", "STUDENT");
+    const secondDeviceCookie = await loginExistingSession("exam-student@arctester.test");
     const staleSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
       revision: 0,
       answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
