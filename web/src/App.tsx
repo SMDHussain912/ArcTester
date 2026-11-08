@@ -289,6 +289,68 @@ export default function App() {
     );
   }
 
+  if (user.role === "ADMIN") {
+    return (
+      <div className="app-shell">
+        <header className="topbar">
+          <Brand />
+          <nav>
+            <a href="#admin-dashboard">Admin</a>
+            <a href="#invitations">Invitations</a>
+          </nav>
+          <div className="top-actions">
+            <span className="user-email">{user.email}</span>
+            <button className="ghost" onClick={signOut}>Sign out</button>
+          </div>
+        </header>
+        <main className="main-content">
+          <section className="welcome panel" id="admin-dashboard">
+            <div>
+              <p className="eyebrow">ARCTESTER ADMINISTRATION</p>
+              <h1>Manage your students.</h1>
+              <p className="muted">Create invitation codes and control who can join your exam workspace.</p>
+            </div>
+            <div className="welcome-mark">A</div>
+          </section>
+          <section id="invitations">
+            <div className="section-head">
+              <div><p className="eyebrow">STUDENT ACCESS</p><h2>Invite a student</h2></div>
+            </div>
+            <form className="panel admin-form" onSubmit={(event) => void createInvitation(event)}>
+              <label>Email address
+                <input type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="student@example.com" />
+              </label>
+              <button className="primary" disabled={busy}>{busy ? "Creating…" : "Create invitation"}</button>
+            </form>
+            {createdInvitation && (
+              <article className="panel invite-result">
+                <p className="eyebrow">COPY THIS CODE — IT IS SHOWN ONLY ONCE</p>
+                <strong>{createdInvitation.email}</strong>
+                <code>{createdInvitation.token}</code>
+                <button className="ghost" onClick={() => void navigator.clipboard?.writeText(createdInvitation.token)}>Copy invitation code</button>
+                <p className="muted">Expires {new Date(createdInvitation.expiresAt).toLocaleString()}</p>
+              </article>
+            )}
+            <div className="section-head">
+              <div><p className="eyebrow">ACCESS CONTROL</p><h2>Recent invitations</h2></div>
+              <button className="ghost" onClick={() => request<{ invitations: Invitation[] }>("/auth/invitations").then(({ invitations: items }) => setInvitations(items)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+            </div>
+            <div className="panel invitation-list">
+              {invitations.length === 0 ? <p className="muted">No invitations created yet.</p> : invitations.map((invitation) => (
+                <article className="invitation-row" key={invitation.id}>
+                  <div><strong>{invitation.email}</strong><small>Expires {new Date(invitation.expiresAt).toLocaleDateString()}</small></div>
+                  <span className={`status status-${invitation.status.toLowerCase()}`}>{invitation.status}</span>
+                  {invitation.status === "PENDING" && <button className="ghost" disabled={busy} onClick={() => void revokeInvitation(invitation.id)}>Revoke</button>}
+                </article>
+              ))}
+            </div>
+          </section>
+          {error && <p className="error">{error}</p>}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
