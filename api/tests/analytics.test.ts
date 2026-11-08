@@ -347,6 +347,66 @@ describe("analytics", () => {
     expect((overview.json as { practice: { completedAttempts: number } }).practice.completedAttempts).toBe(4);
   });
 
+  it("flags a question only after the minimum answered sample is reached", async () => {
+    const subject = await server.db.subject.create({ data: { name: "Question Sample Subject" } });
+    const question = await server.db.question.create({
+      data: {
+        subjectId: subject.id,
+        text: "Minimum sample question?",
+        options: JSON.stringify(["Correct", "Wrong", "Other", "Last"]),
+        correctIndex: 0,
+        questionHash: "question-minimum-sample-fixture",
+        difficulty: "medium",
+      },
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      const created = await api.post("/tests", {
+        mode: "practice",
+        subject: subject.name,
+        count: 1,
+      });
+      expect(created.status).toBe(201);
+      const attemptId = (created.json as { attemptId: number }).attemptId;
+      await api.post(`/tests/${attemptId}/submit`, {
+        answers: [{ questionId: question.id, selectedIndex: 1 }],
+      });
+    }
+
+    const beforeThreshold = await api.get("/analytics/question-performance");
+    expect(beforeThreshold.status).toBe(200);
+    const earlyReport = beforeThreshold.json as {
+      minimumAnswers: number;
+      questions: { questionId: number; sampleSize: number; sufficientData: boolean; weak: boolean }[];
+    };
+    expect(earlyReport.minimumAnswers).toBe(5);
+    expect(earlyReport.questions.find((row) => row.questionId === question.id)).toMatchObject({
+      sampleSize: 4,
+      sufficientData: false,
+      weak: false,
+    });
+
+    const fifth = await api.post("/tests", {
+      mode: "practice",
+      subject: subject.name,
+      count: 1,
+    });
+    await api.post(`/tests/${(fifth.json as { attemptId: number }).attemptId}/submit`, {
+      answers: [{ questionId: question.id, selectedIndex: 1 }],
+    });
+
+    const afterThreshold = await api.get("/analytics/question-performance");
+    const finalReport = afterThreshold.json as {
+      questions: { questionId: number; sampleSize: number; sufficientData: boolean; weak: boolean; accuracy: number | null }[];
+    };
+    expect(finalReport.questions.find((row) => row.questionId === question.id)).toMatchObject({
+      sampleSize: 5,
+      sufficientData: true,
+      weak: true,
+      accuracy: 0,
+    });
+  });
+
   it("keeps analytics isolated to the authenticated student", async () => {
     const other = await signUp(server.baseUrl, "analytics-isolation@example.com");
     const otherApi = bindSession(server.baseUrl, other.cookie);
