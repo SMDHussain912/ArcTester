@@ -813,3 +813,7 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 .question-bank-preview{grid-column:1/-1;padding-top:8px;color:var(--muted);font-size:13px}
 .question-bank-preview summary{cursor:pointer;color:var(--accent);font-weight:700}
 .question-bank-preview p{margin:8px 0}
+
+
+.exam-countdown,.timer-warning{font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.timer-warning{color:var(--danger)}
