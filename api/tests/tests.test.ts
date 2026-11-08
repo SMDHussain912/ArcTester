@@ -189,6 +189,22 @@ describe("POST /tests", () => {
     expect(body.warnings.some((warning) => warning.includes("Maths"))).toBe(true);
   });
 
+  it("builds a review-mistakes paper across all subjects without requiring a subject", async () => {
+    const maths = await server.db.question.findFirstOrThrow({ where: { subject: { name: "Maths" } } });
+    const physics = await server.db.question.findFirstOrThrow({ where: { subject: { name: "Physics" } } });
+    for (const question of [maths, physics]) {
+      await server.db.stat.upsert({
+        where: { userId_questionId: { userId, questionId: question.id } },
+        update: { seen: 1, wrong: 1 },
+        create: { userId, questionId: question.id, seen: 1, wrong: 1 },
+      });
+    }
+    const { status, json } = await api.post("/tests", { mode: "mistakes", count: 10 });
+    expect(status).toBe(201);
+    const body = json as { questions: { id: number; subject: string }[] };
+    expect(body.questions.map((question) => question.id)).toEqual(expect.arrayContaining([maths.id, physics.id]));
+  });
+
   it("rejects invalid bodies with friendly 400s", async () => {
     const { status, json } = await api.post(`/tests`, { mode: "nope" });
     expect(status).toBe(400);
