@@ -890,7 +890,7 @@ export default function App() {
                     <button className="ghost" disabled={busy} onClick={() => void cloneExam(exam.id)}>Duplicate exam</button>
                     {exam.status !== "ARCHIVED" && <button className="ghost danger-action" disabled={busy} onClick={() => void archiveExam(exam.id)}>Archive</button>}
                     {!published && exam.status !== "ARCHIVED" && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
-                    {published && <button className="ghost" disabled={busy || adminStudents.length === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); }}>Assign to students</button>}
+                    {published && exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy || adminStudents.length === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); }}>Assign to students</button>}
                     {published && <span className="muted">{version?._count.assignments ?? 0} assignments</span>}
                   </div>
                   {assigningExamId === exam.id && <div className="student-picker">
