@@ -188,7 +188,7 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   }
 
   const existing = await db.getFirstAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE assignment_id = ?",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
     assignmentId,
   );
   if (existing) {
@@ -224,7 +224,7 @@ export async function restoreActiveAttempt(assignmentId: string): Promise<{
 } | null> {
   const db = await database();
   const row = await db.getFirstAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!row) return null;
@@ -242,7 +242,7 @@ export async function saveOfflineAnswer(
 ): Promise<void> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) throw new Error("There is no active attempt to save.");
@@ -270,7 +270,7 @@ export async function saveOfflineAnswer(
 export async function getRemainingSeconds(assignmentId: string): Promise<number | null> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) return null;
@@ -285,7 +285,7 @@ export async function queueOfflineSubmission(
 ): Promise<PendingAttempt> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE assignment_id = ?",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
     assignmentId,
   );
   if (!attempt) throw new Error("There is no saved attempt for this assignment.");
@@ -319,7 +319,7 @@ export async function queueOfflineSubmission(
 export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
   const db = await database();
   const rows = await db.getAllAsync<AttemptRow>(
-    "SELECT * FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
