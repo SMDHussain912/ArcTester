@@ -187,7 +187,7 @@ describe("admin model registry API", () => {
   });
 
   it("runs grouped TensorFlow.js training through the registered dataset route without promotion", async () => {
-    const samples = Array.from({ length: 60 }, (_, index) => ({
+    const samples = Array.from({ length: 100 }, (_, index) => ({
       features: { practice_score: index },
       target: index * 0.5 + (index % 4) * 0.1,
       groupId: Math.floor(index / 10).toString(16).padStart(64, "0"),
@@ -215,7 +215,7 @@ describe("admin model registry API", () => {
       ok: true,
       promoted: false,
       productionEligible: false,
-      split: { trainRows: 40, testRows: 20, trainGroups: 4, testGroups: 2 },
+      split: { trainRows: 80, testRows: 20, trainGroups: 8, testGroups: 2 },
     });
     expect(trained.body.candidate).toMatchObject({ rows: 20 });
     expect(trained.body.baseline).toMatchObject({ rows: 20 });
