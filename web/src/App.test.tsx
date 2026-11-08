@@ -15,7 +15,12 @@ describe("live Vite application", () => {
 
   beforeEach(() => {
     fetchMock.mockReset();
-    localStorage.clear();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    });
     vi.stubGlobal("fetch", fetchMock);
   });
 
