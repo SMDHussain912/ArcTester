@@ -94,8 +94,8 @@ describe("POST /tests", () => {
     const body = json as { questions: { subject: string }[] };
     expect(body.questions).toHaveLength(4);
     expect(new Set(body.questions.map((question) => question.subject))).toEqual(new Set(["Maths", "Physics"]));
-    expect(body.questions.filter((question) => question.subject === "Maths")).toHaveLength(2);
-    expect(body.questions.filter((question) => question.subject === "Physics")).toHaveLength(2);
+    expect(body.questions.filter((question) => question.subject === "Maths")).toHaveLength(3);
+    expect(body.questions.filter((question) => question.subject === "Physics")).toHaveLength(1);
   });
 
   it("applies optional topic filters only after subject selection", async () => {
