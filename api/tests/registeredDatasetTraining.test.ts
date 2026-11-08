@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { trainRegisteredDataset, type RegisteredTrainingSample } from "../src/intelligence/registeredDatasetTraining.js";
+import { rankTrainingResults, trainRegisteredDataset, type RegisteredTrainingSample } from "../src/intelligence/registeredDatasetTraining.js";
 
 const classificationSamples: RegisteredTrainingSample[] = Array.from({ length: 60 }, (_, index) => ({
   features: {
@@ -42,6 +42,22 @@ describe("registered dataset training", () => {
     expect(results[0]?.algorithm).toBe("multiple-linear-regression");
     expect(results[0]?.metrics).toHaveProperty("mae");
     expect(results[0]?.metrics).toHaveProperty("rmse");
+  });
+
+  it("ranks classifiers by F1 then accuracy and regression models by error", () => {
+    const classifiers = [
+      { algorithm: "knn" as const, model: {}, metrics: { f1: 0.8, accuracy: 0.9 }, trainRows: 48, testRows: 12 },
+      { algorithm: "logistic-regression" as const, model: {}, metrics: { f1: 0.9, accuracy: 0.85 }, trainRows: 48, testRows: 12 },
+      { algorithm: "decision-tree" as const, model: {}, metrics: { f1: 0.9, accuracy: 0.95 }, trainRows: 48, testRows: 12 },
+    ];
+    expect(rankTrainingResults(classifiers, "binary-classification").map((result) => [result.rank, result.algorithm]))
+      .toEqual([[1, "decision-tree"], [2, "logistic-regression"], [3, "knn"]]);
+
+    const regressors = [
+      { algorithm: "multiple-linear-regression" as const, model: {}, metrics: { rmse: 4, mae: 3 }, trainRows: 48, testRows: 12 },
+      { algorithm: "multiple-linear-regression" as const, model: {}, metrics: { rmse: 2, mae: 5 }, trainRows: 48, testRows: 12 },
+    ];
+    expect(rankTrainingResults(regressors, "regression").map((result) => result.rank)).toEqual([1, 2]);
   });
 
   it("rejects insufficient data, invalid targets and undeclared features", () => {
