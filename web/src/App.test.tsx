@@ -155,6 +155,35 @@ describe("live Vite application", () => {
   });
 
 
+  it("restores an in-progress practice attempt and saved answers after reload", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => key === "arctester-active-practice-attempt" ? "42" : null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    });
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, { user: { id: 4, email: "student@example.com", role: "STUDENT" } }));
+      if (path.endsWith("/tests/42")) return Promise.resolve(response(200, {
+        attemptId: 42,
+        mode: "practice",
+        deadline: "2026-11-08T12:00:00.000Z",
+        serverNow: "2026-11-08T11:00:00.000Z",
+        questions: [{ id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] }],
+        saved: [{ questionId: 7, selectedIndex: 1 }],
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1, topics: [{ topic: "Algebra", count: 1 }] }] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText("Restored question?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "B" })).toHaveClass("selected");
+  });
+
   it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
     let paperPayload: Record<string, unknown> | null = null;
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
