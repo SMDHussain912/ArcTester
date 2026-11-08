@@ -625,7 +625,8 @@ export default function AdminPage() {
             </section> : null}
             <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
               <span className="mute">{selectedQuestions.length} questions · {duration} minutes · {totalMarks} marks</span>
-              <button disabled={busy || !title.trim() || selectedQuestions.length === 0}>{busy ? "Creating…" : "Create draft exam"}</button>
+              <button disabled={busy || !title.trim() || selectedQuestions.length === 0}>{busy ? "Saving…" : editingExamId ? "Save new version" : "Create draft exam"}</button>
+              {editingExamId ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => { setEditingExamId(null); setTitle(""); setDescription(""); setSelectedQuestions([]); setQuestionScoring({}); setTab("exams"); }}>Cancel version edit</button> : null}
             </div>
           </form>
         </section>
