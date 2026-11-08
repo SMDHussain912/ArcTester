@@ -224,8 +224,11 @@ model AttemptAnswer {
   attemptId  Int
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   questionId Int
-  chosen     Int?
-  isCorrect  Boolean
+  chosen            Int?
+  isCorrect         Boolean
+  subjectSnapshot   String   @default("")
+  topicSnapshot     String?
+  difficultySnapshot String  @default("medium")
 
   @@index([attemptId])
   @@index([questionId])
