@@ -27,15 +27,20 @@ describe("admin model registry API", () => {
     { features: [10], label: 1 },
   ]);
 
-  const modelInput = (dataset = "demo-v1") => ({
+  const modelInput = (dataset = "demo-v1", model = trainedModel()) => ({
     modelId: "exam-readiness-demo",
     algorithm: "logistic-regression",
     task: "binary-classification",
     dataset,
     targetColumn: "target_ready",
     featureSchema: [{ name: "practice_score", type: "numeric" }],
-    model: trainedModel(),
+    model,
   });
+
+  const evaluationSamples = Array.from({ length: 12 }, (_, index) => ({
+    features: { practice_score: index },
+    target: index >= 6 ? 1 : 0,
+  }));
 
   async function request(path: string, method = "GET", body?: unknown, cookie = adminCookie) {
     const response = await fetch(`${server.baseUrl}${path}`, {
@@ -69,7 +74,21 @@ describe("admin model registry API", () => {
       .toEqual([[2, false], [1, true]]);
   });
 
-  it("activates a reviewed version and rolls back to the previous version", async () => {
+  it("evaluates candidates against a baseline before activation and records the report", async () => {
+    const evaluation = await request("/admin/models/exam-readiness-demo/2/evaluate", "POST", {
+      baselineVersion: 1,
+      evaluationDataset: "held-out-demo-v1",
+      samples: evaluationSamples,
+    });
+    expect(evaluation.status).toBe(200);
+    expect(evaluation.body.report).toMatchObject({
+      status: "PASSED",
+      candidateVersion: 2,
+      baselineVersion: 1,
+      sampleCount: 12,
+    });
+    expect((evaluation.body.report as { datasetFingerprint: string }).datasetFingerprint).toMatch(/^[a-f0-9]{64}$/);
+
     const activated = await request("/admin/models/exam-readiness-demo/2/activate", "POST", {});
     expect(activated.status).toBe(200);
     expect(activated.body.model).toMatchObject({ version: 2, isActive: true });
@@ -81,9 +100,32 @@ describe("admin model registry API", () => {
     const audit = await request("/admin/models/exam-readiness-demo/audit");
     expect(audit.status).toBe(200);
     const actions = (audit.body.events as Array<{ action: string; actorId: number | null }>).map((event) => event.action);
-    expect(actions).toHaveLength(5);
-    expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED"]));
+    expect(actions).toHaveLength(6);
+    expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED", "EVALUATED"]));
     expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
+  });
+
+  it("rejects a candidate that fails baseline metrics and blocks its activation", async () => {
+    const reversed = fitLogisticRegression([
+      { features: [0], label: 1 },
+      { features: [1], label: 1 },
+      { features: [9], label: 0 },
+      { features: [10], label: 0 },
+    ]);
+    const created = await request("/admin/models", "POST", modelInput("demo-v3", reversed));
+    expect(created.status).toBe(201);
+    expect(created.body.model).toMatchObject({ version: 3, isActive: false });
+
+    const evaluation = await request("/admin/models/exam-readiness-demo/3/evaluate", "POST", {
+      baselineVersion: 1,
+      evaluationDataset: "held-out-demo-v1",
+      samples: evaluationSamples,
+    });
+    expect(evaluation.status).toBe(200);
+    expect(evaluation.body.report).toMatchObject({ status: "REJECTED", candidateVersion: 3 });
+
+    const activation = await request("/admin/models/exam-readiness-demo/3/activate", "POST", {});
+    expect(activation.status).toBe(409);
   });
 
   it("enforces one active version per model at the database level", async () => {
