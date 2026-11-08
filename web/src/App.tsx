@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { xlsxToCsv } from "./xlsx";
 import type { FormEvent } from "react";
 
@@ -155,6 +155,7 @@ export default function App() {
   const [examQuestionSearch, setExamQuestionSearch] = useState("");
   const [examMarks, setExamMarks] = useState(1);
   const [examNegativeMarks, setExamNegativeMarks] = useState(0);
+  const [examQuestionScoring, setExamQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [shuffleExamQuestions, setShuffleExamQuestions] = useState(false);
   const [shuffleExamOptions, setShuffleExamOptions] = useState(false);
   const [questionSubject, setQuestionSubject] = useState("Computer Science");
@@ -194,6 +195,8 @@ export default function App() {
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [practiceClock, setPracticeClock] = useState(Date.now());
+  const practiceAutoSubmitRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "announcements" | "invitations" | "assigned-exams">("dashboard");
@@ -235,6 +238,8 @@ export default function App() {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
         if (!active) return;
         setTest({ ...restored, warnings: restored.warnings ?? [] });
+        practiceAutoSubmitRef.current = null;
+        setPracticeClock(Date.now());
         const serverAnswers = Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const));
         let localAnswers: Record<number, number> = {};
         try {
@@ -264,6 +269,23 @@ export default function App() {
     const interval = window.setInterval(() => { void loadAnnouncements(); }, 60_000);
     return () => { active = false; window.clearInterval(interval); };
   }, [user]);
+
+  useEffect(() => {
+    if (!test?.deadline) return;
+    setPracticeClock(Date.now());
+    const interval = window.setInterval(() => setPracticeClock(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [test?.attemptId, test?.deadline]);
+
+  const practiceRemainingSeconds = test?.deadline && Number.isFinite(Date.parse(test.deadline))
+    ? Math.max(0, Math.ceil((Date.parse(test.deadline) - practiceClock) / 1000))
+    : null;
+
+  useEffect(() => {
+    if (!test || practiceRemainingSeconds === null || practiceRemainingSeconds > 0 || busy || practiceAutoSubmitRef.current === test.attemptId) return;
+    practiceAutoSubmitRef.current = test.attemptId;
+    void submitTest();
+  }, [test, practiceRemainingSeconds, busy]);
 
   useEffect(() => {
     if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused) return;
@@ -847,6 +869,7 @@ export default function App() {
       const firstQuestion = exam.version?.questions[0];
       setExamMarks(firstQuestion?.marks ?? 1);
       setExamNegativeMarks(firstQuestion?.negativeMarks ?? 0);
+      setExamQuestionScoring(Object.fromEntries((exam.version?.questions ?? []).flatMap((question) => question.questionId === null ? [] : [[question.questionId, { marks: question.marks, negativeMarks: question.negativeMarks }]])));
       setActivePage("exams");
       document.getElementById("exam-management")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (cause) { setError((cause as Error).message); }
@@ -863,8 +886,11 @@ export default function App() {
       setError("A formal examination cannot contain more than 500 questions.");
       return;
     }
-    if (examNegativeMarks > examMarks) {
-      setError("Negative marks cannot exceed marks awarded for a correct answer.");
+    if (selectedQuestionIds.some((questionId) => {
+      const scoring = examQuestionScoring[questionId];
+      return (scoring?.negativeMarks ?? examNegativeMarks) > (scoring?.marks ?? examMarks);
+    })) {
+      setError("Negative marks cannot exceed the marks for a correct answer on any selected question.");
       return;
     }
     setBusy(true);
@@ -879,13 +905,14 @@ export default function App() {
           durationMinutes: examDuration,
           shuffleQuestions: shuffleExamQuestions,
           shuffleOptions: shuffleExamOptions,
-          questions: selectedQuestionIds.map((questionId) => ({ questionId, marks: examMarks, negativeMarks: examNegativeMarks })),
+          questions: selectedQuestionIds.map((questionId) => ({ questionId, marks: examQuestionScoring[questionId]?.marks ?? examMarks, negativeMarks: examQuestionScoring[questionId]?.negativeMarks ?? examNegativeMarks })),
         }),
       });
       setExamTitle("");
       setExamDescription("");
       setExamInstructions("");
       setSelectedQuestionIds([]);
+      setExamQuestionScoring({});
       setEditingExamId(null);
       await refreshAdminExams();
     } catch (cause) {
@@ -1048,6 +1075,8 @@ export default function App() {
       const previousAttemptId = localStorage.getItem("arctester-active-practice-attempt");
       if (previousAttemptId) localStorage.removeItem(practiceAnswersKey(previousAttemptId));
       setTest(created);
+      practiceAutoSubmitRef.current = null;
+      setPracticeClock(Date.now());
       localStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
       localStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
       setAnswers({});
@@ -1343,11 +1372,14 @@ export default function App() {
                 <div className="picker-heading"><strong>Choose questions</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} available</span></div>
                 <input className="question-search" type="search" value={examQuestionSearch} onChange={(event) => setExamQuestionSearch(event.target.value)} placeholder="Search by subject, topic or question…" />
                 {adminQuestions.length === 0 ? <p className="muted">No questions yet. Open Question bank to add your first question.</p> : adminQuestions.filter((question) => `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(examQuestionSearch.trim().toLowerCase())).map((question) => (
-                  <label className="pick-row" key={question.id}>
-                    <input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />
+                  <div className="pick-row" key={question.id}>
+                    <input type="checkbox" aria-label={`Include question ${question.id}`} checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />
                     <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><small>{question.text}</small></span>
-                    <small className="muted">{question.difficulty ?? "medium"}</small>
-                  </label>
+                    <div className="exam-question-scoring">
+                      <label>Marks<input type="number" min={0} max={100} step="0.25" aria-label={`Marks for question ${question.id}`} value={examQuestionScoring[question.id]?.marks ?? examMarks} onChange={(event) => setExamQuestionScoring((current) => ({ ...current, [question.id]: { marks: Number(event.target.value), negativeMarks: current[question.id]?.negativeMarks ?? examNegativeMarks } }))} /></label>
+                      <label>Negative<input type="number" min={0} max={100} step="0.25" aria-label={`Negative marks for question ${question.id}`} value={examQuestionScoring[question.id]?.negativeMarks ?? examNegativeMarks} onChange={(event) => setExamQuestionScoring((current) => ({ ...current, [question.id]: { marks: current[question.id]?.marks ?? examMarks, negativeMarks: Number(event.target.value) } }))} /></label>
+                    </div>
+                  </div>
                 ))}
               </div>
               <div className="row-actions"><button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : editingExamId ? `Save new version (${selectedQuestionIds.length} questions)` : `Create draft (${selectedQuestionIds.length} questions)`}</button>{editingExamId && <button type="button" className="ghost" disabled={busy} onClick={() => { setEditingExamId(null); setExamTitle(""); setExamDescription(""); setExamInstructions(""); setSelectedQuestionIds([]); }}>Cancel editing</button>}</div>
@@ -1607,7 +1639,7 @@ export default function App() {
       <main className="main-content">
         {activeAssignmentPackage ? (
           <section className="assigned-exam-session">
-            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentDeadline(null); setAssignmentSessionPaused(false); setAssignmentAnswers({}); setAssignmentAutoSubmitTriggered(false); } }}>Exit exam</button></div>
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Leave this exam? Your answers are saved on this device. You can reopen the exam and continue while time remains.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentDeadline(null); setAssignmentSessionPaused(false); setAssignmentAutoSubmitTriggered(false); } }}>Leave exam</button></div>
             {assignmentSessionPaused && <p className="notice session-paused" role="status">Session paused or awaiting invigilator action. The server-controlled timer is held.</p>}
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
@@ -1622,7 +1654,7 @@ export default function App() {
                 <p className="eyebrow">PRACTICE SESSION</p>
                 <h1>Stay focused.</h1>
                 <p className="muted">
-                  {test.questions.length} questions · {Object.keys(answers).length} answered
+                  {test.questions.length} questions · {Object.keys(answers).length} answered{practiceRemainingSeconds !== null ? ` · ${Math.floor(practiceRemainingSeconds / 60).toString().padStart(2, "0")}:${(practiceRemainingSeconds % 60).toString().padStart(2, "0")} remaining` : ""}
                 </p>
               </div>
               <button className="ghost" onClick={() => setActivePage("dashboard")}>

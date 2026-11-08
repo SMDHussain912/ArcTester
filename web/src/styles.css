@@ -91,6 +91,79 @@
   .nav-button, .nav-active { white-space: nowrap; }
 }
 
+/* Responsive workspace fixes: keep navigation and authoring controls usable on phones. */
+@media (max-width: 800px) {
+  .topbar {
+    height: auto;
+    min-height: 66px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
+  .topbar nav {
+    display: flex;
+    order: 3;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 0 2px;
+    scrollbar-width: thin;
+  }
+  .nav-button, .nav-active { flex: 0 0 auto; white-space: nowrap; }
+  .top-actions { margin-left: auto; gap: 7px; }
+  .main-content { padding: 24px 16px 56px; }
+}
+@media (max-width: 560px) {
+  .topbar { height: auto; min-height: 0; padding: 10px 12px; }
+  .topbar nav { margin: 0 -2px; }
+  .top-actions .user-email { display: none; }
+  .top-actions .ghost { padding: 9px 11px; }
+  .page-heading { align-items: flex-start; flex-direction: column; }
+  .page-heading > button { align-self: flex-start; }
+  .admin-question-row { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .question-row-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .admin-exam-actions, .live-session-actions, .row-actions { flex-wrap: wrap; }
+  .admin-exam-actions button, .live-session-actions button { flex: 1 1 auto; }
+  .exam-question-scoring { grid-column: 2; width: 100%; }
+  .exam-question-scoring label { min-width: 0; }
+  .exam-question-scoring input { min-width: 0; width: 100%; }
+  .announcement-popup { width: 100%; max-height: 86vh; }
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+.exam-question-scoring {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 190px;
+}
+.exam-question-scoring label {
+  display: grid;
+  gap: 4px;
+  min-width: 78px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.exam-question-scoring input {
+  width: 82px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+.exam-question-scoring input:focus { border-color: var(--accent); }
+
 /* Theme token compatibility for the live Vite workspace */
 :root {
   --ink: var(--text);
