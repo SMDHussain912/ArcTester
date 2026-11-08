@@ -85,6 +85,32 @@ describe("versioned exam management", () => {
     expect(student.status).toBe(403);
   });
 
+  it("allows admins to add questions directly to the question bank", async () => {
+    const payload = {
+      subject: "Computer Networks",
+      topic: "OSI Model",
+      text: "Which OSI layer is responsible for routing packets? (admin-created)",
+      options: ["Physical", "Network", "Session", "Presentation"],
+      correctIndex: 1,
+      explanation: "The network layer handles logical addressing and routing.",
+      difficulty: "medium",
+      source: "Admin question editor",
+    };
+    const created = await request("/admin/questions", "POST", payload, adminCookie);
+    expect(created.status).toBe(201);
+    expect((created.json.question as { subject: string }).subject).toBe("Computer Networks");
+
+    const duplicate = await request("/admin/questions", "POST", payload, adminCookie);
+    expect(duplicate.status).toBe(409);
+
+    const student = await request("/admin/questions", "POST", payload, studentCookie);
+    expect(student.status).toBe(403);
+
+    const bank = await request("/admin/question-bank", "GET", undefined, adminCookie);
+    expect(bank.status).toBe(200);
+    expect((bank.json.questions as Array<{ text: string }>).some((item) => item.text === payload.text)).toBe(true);
+  });
+
   it("creates a draft with immutable question snapshots and marking values", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const response = await request(
