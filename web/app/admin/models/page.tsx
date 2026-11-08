@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useSession } from "../../../lib/session";
 import { api, ApiError, type AdminModelDataset, type AdminRegisteredModel, type TensorflowTrainingReport } from "../../../lib/api";
 
-const featureSchemaExample = '[{"name":"practice_score","type":"numeric"}]';
+const featureSchemaExample = '[{"name":"completed_attempts","type":"numeric"},{"name":"previous_accuracy","type":"numeric"},{"name":"recent_average_accuracy","type":"numeric"},{"name":"overall_average_accuracy","type":"numeric"},{"name":"previous_question_count","type":"numeric"}]';
 const samplesExample = `[
-  {"features":{"practice_score":40},"target":45,"groupId":"<64-character-sha256-pseudonym>"},
-  {"features":{"practice_score":55},"target":60,"groupId":"<64-character-sha256-pseudonym>"}
+  {"features":{"completed_attempts":24,"previous_accuracy":0.7,"recent_average_accuracy":0.65,"overall_average_accuracy":0.62,"previous_question_count":20},"target":0.72,"groupId":"<64-character-sha256-pseudonym>"},
+  {"features":{"completed_attempts":31,"previous_accuracy":0.8,"recent_average_accuracy":0.75,"overall_average_accuracy":0.68,"previous_question_count":20},"target":0.76,"groupId":"<64-character-sha256-pseudonym>"}
 ]`;
 
 export default function AdminModelsPage() {
@@ -134,7 +134,7 @@ export default function AdminModelsPage() {
       <section className="panel stack">
         <div>
           <h2>Register a training dataset</h2>
-          <p className="muted">TensorFlow.js currently supports regression with numeric features. Every sample needs a stable 64-character SHA-256 pseudonymous groupId so one learner never appears in both train and holdout groups.</p>
+          <p className="muted">For the student next-practice population model, use the five default features shown below and set target values to accuracy fractions from 0 to 1 (not percentages). Every sample needs a stable 64-character SHA-256 pseudonymous groupId so one learner never appears in both train and holdout groups.</p>
         </div>
         <form className="stack" onSubmit={registerDataset}>
           <label>Dataset name<input className="input" value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} /></label>
