@@ -655,6 +655,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       const version = exam?.versions[0];
       if (!exam || !version) return next(notFound("Exam not found."));
+      if (exam.status === "ARCHIVED") return next(conflict("Archived exams cannot be published."));
       if (version._count.questions === 0) return next(badRequest("Add at least one question before publishing."));
       if (version.publishedAt) return res.json({ ok: true, examId: exam.id, versionId: version.id, publishedAt: version.publishedAt });
       const publishedAt = new Date();
@@ -677,6 +678,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       const version = exam?.versions[0];
       if (!exam || !version) return next(notFound("No published exam version is available to assign."));
+      if (exam.status === "ARCHIVED") return next(conflict("Archived exams cannot receive new assignments."));
 
       const students = await db.user.findMany({
         where: { id: { in: input.studentIds }, role: "STUDENT" },
