@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "../../lib/session";
-import { api, ApiError, type AdminExam, type AdminAttendanceRow, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
+import { api, ApiError, type AdminExam, type AdminAttendanceRow, type AdminExamReport, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [liveSessions, setLiveSessions] = useState<AdminLiveSession[]>([]);
   const [attendance, setAttendance] = useState<AdminAttendanceRow[]>([]);
+  const [selectedReport, setSelectedReport] = useState<AdminExamReport | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
   const [questionScoring, setQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
@@ -213,6 +214,16 @@ export default function AdminPage() {
       setAssignExamId(result.exam.id);
     } catch (e) { showError(e, "Could not create the exam."); }
     finally { setBusy(false); }
+  }
+
+  async function viewExamReport(id: string) {
+    setBusy(true); setError("");
+    try {
+      const result = await api.adminExamReport(id);
+      setSelectedReport(result.report);
+    } catch (cause: unknown) {
+      showError(cause, "Could not load the exam report.");
+    } finally { setBusy(false); }
   }
 
   async function editExam(id: string) {
@@ -472,6 +483,7 @@ export default function AdminPage() {
                 <div className="row">
                   {!version?.publishedAt ? <button disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version {version?.version ?? 1}</button> :
                     <button className="button button-secondary" onClick={() => { setAssignExamId(exam.id); setTab("exams"); document.getElementById("assign-exam")?.scrollIntoView({ behavior: "smooth" }); }}>Assign to students</button>}
+                  <button className="button button-secondary button-small" disabled={busy} onClick={() => void viewExamReport(exam.id)}>Report</button>
                   <button className="button button-secondary button-small" disabled={busy} onClick={() => void editExam(exam.id)}>Create new version</button>
                   <button className="button button-quiet button-small" disabled={busy} onClick={() => void cloneExam(exam.id)}>Clone</button>
                   <span className="mute">{version?._count.assignments ?? 0} assignments</span>
@@ -479,6 +491,24 @@ export default function AdminPage() {
               </article>;
             })}
           </section>
+          {selectedReport ? <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Exam report · {selectedReport.title} {selectedReport.version ? `v${selectedReport.version}` : ""}</h2><button className="button button-quiet button-small" onClick={() => setSelectedReport(null)}>Close report</button></div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-label">Assigned</div><div className="stat-value">{selectedReport.assigned}</div></div>
+              <div className="stat-card"><div className="stat-label">Started</div><div className="stat-value">{selectedReport.started}</div></div>
+              <div className="stat-card"><div className="stat-label">Submitted</div><div className="stat-value">{selectedReport.submitted}</div></div>
+              <div className="stat-card"><div className="stat-label">Average</div><div className="stat-value">{selectedReport.averagePercentage === null ? "—" : `${Math.round(selectedReport.averagePercentage)}%`}</div></div>
+            </div>
+            <h3>Subject performance</h3>
+            <div style={{ overflowX: "auto" }}><table><thead><tr><th>Subject</th><th>Paper questions</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Maximum marks</th></tr></thead>
+              <tbody>{selectedReport.subjects.map((row) => <tr key={row.subject}><td>{row.subject}</td><td>{row.questions}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.marks}</td></tr>)}</tbody>
+            </table></div>
+            <h3>Question-level analysis</h3>
+            <div style={{ overflowX: "auto" }}><table><thead><tr><th>Q.No.</th><th>Subject</th><th>Topic</th><th>Responses</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Accuracy</th></tr></thead>
+              <tbody>{selectedReport.questions.map((row) => <tr key={row.questionId}><td>{row.position}</td><td>{row.subject}</td><td>{row.topic ?? "Unassigned"}</td><td>{row.responses}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td></tr>)}</tbody>
+            </table></div>
+            <p className="mute">{selectedReport.reviewRequired} submissions require invigilator review. Accuracy excludes unanswered questions.</p>
+          </section> : null}
           <section id="assign-exam" className="panel" style={{ marginTop: 18 }}>
             <h2>Assign a published exam</h2>
             <form onSubmit={assignExam}>
