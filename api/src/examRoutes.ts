@@ -306,7 +306,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/analytics/overview", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
-      const [studentCount, examCount, assignments] = await Promise.all([
+      const [studentCount, examCount, assignments, practiceAttempts, gradedSubmissions] = await Promise.all([
         db.user.count({ where: { role: "STUDENT" } }),
         db.exam.count(),
         db.examAssignment.findMany({
@@ -317,11 +317,79 @@ export function examRouter(db: PrismaClient): Router {
             submission: { select: { id: true, score: true, maximumScore: true, submittedAt: true, status: true } },
           },
         }),
+        db.attempt.findMany({
+          where: { finishedAt: { not: null } },
+          select: {
+            answers: {
+              select: {
+                chosen: true,
+                isCorrect: true,
+                subjectSnapshot: true,
+                topicSnapshot: true,
+                question: {
+                  select: {
+                    subject: { select: { name: true } },
+                    topic: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        db.examSubmission.findMany({
+          where: { status: "GRADED" },
+          select: {
+            answers: {
+              select: {
+                selectedIndex: true,
+                isCorrect: true,
+                awardedMarks: true,
+                examQuestion: { select: { subject: true, topic: true, marks: true } },
+              },
+            },
+          },
+        }),
       ]);
       const submitted = assignments.filter((item) => item.submission !== null);
       const scored = submitted.filter((item) =>
-        item.submission?.score !== null && item.submission?.maximumScore !== null && (item.submission?.maximumScore ?? 0) > 0
+        item.submission?.status === "GRADED" && item.submission.score !== null &&
+        item.submission.maximumScore !== null && item.submission.maximumScore > 0
       );
+      let practiceCorrect = 0;
+      let practiceIncorrect = 0;
+      let practiceUnanswered = 0;
+      const practiceBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
+      for (const attempt of practiceAttempts) {
+        for (const answer of attempt.answers) {
+          const hasSnapshot = answer.subjectSnapshot.length > 0;
+          const subject = hasSnapshot ? answer.subjectSnapshot : answer.question.subject.name;
+          if (answer.chosen === null) practiceUnanswered += 1;
+          else if (answer.isCorrect) practiceCorrect += 1;
+          else practiceIncorrect += 1;
+          const row = practiceBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0 };
+          if (answer.chosen === null) row.unanswered += 1;
+          else if (answer.isCorrect) row.correct += 1;
+          else row.incorrect += 1;
+          practiceBySubject.set(subject, row);
+        }
+      }
+      const practiceAnswered = practiceCorrect + practiceIncorrect;
+      const formalBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
+      let formalCorrect = 0;
+      let formalIncorrect = 0;
+      let formalUnanswered = 0;
+      for (const submission of gradedSubmissions) {
+        for (const answer of submission.answers) {
+          const subject = answer.examQuestion.subject;
+          const row = formalBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
+          if (answer.selectedIndex === null) { formalUnanswered += 1; row.unanswered += 1; }
+          else if (answer.isCorrect) { formalCorrect += 1; row.correct += 1; }
+          else { formalIncorrect += 1; row.incorrect += 1; }
+          row.awardedMarks += answer.awardedMarks;
+          row.maximumMarks += answer.examQuestion.marks;
+          formalBySubject.set(subject, row);
+        }
+      }
       const averagePercentage = scored.length
         ? scored.reduce((sum, item) => sum + ((item.submission!.score! / item.submission!.maximumScore!) * 100), 0) / scored.length
         : null;
@@ -332,7 +400,7 @@ export function examRouter(db: PrismaClient): Router {
         row.assigned += 1;
         if (item.submission) {
           row.submitted += 1;
-          if (item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
+          if (item.submission.status === "GRADED" && item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
             row.scoreTotal += (item.submission.score / item.submission.maximumScore) * 100;
             row.scored += 1;
           }
