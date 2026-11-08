@@ -671,3 +671,42 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - `9978d62` — add TypeScript linear regression foundation.
 - `5be2f71` — add regression training and evaluation tests.
 - `1886b0d` — correct regression fixture expectation.
+
+
+### Phase 3 — student score prediction integration and edge-case review — 2026-11-08
+
+**Implemented and connected**
+- Built leakage-safe next-attempt feature rows using only prior completed practice attempts.
+- Added chronological train/holdout evaluation against a training-mean baseline.
+- Added authenticated `GET /analytics/score-prediction`, scoped to the current student and capped to the latest 250 completed practice attempts.
+- Added minimum-data gating (20 prediction samples, requiring 23 completed attempts).
+- The API only returns a score when the regression model beats the mean baseline; otherwise it returns a no-estimate state.
+- Connected the API to the student analytics page with loading, error, insufficient-data, baseline-not-beaten and ready states.
+- UI copy explicitly describes the value as estimated accuracy on the next practice attempt, not a guaranteed formal exam score.
+- Added UI coverage for all three prediction states and API coverage for insufficient history, successful prediction and student isolation.
+
+**Additional edge-case hardening**
+- Regression evaluation now rejects non-finite target values instead of silently returning NaN metrics.
+- Added coverage for invalid evaluation targets.
+- Added constant-score history coverage proving a model with zero error does not falsely claim to beat an equally accurate zero-error baseline.
+- Added an endpoint-level constant-history test to ensure no prediction is exposed for that case.
+
+**Verification**
+- GitHub Actions run [42508698448](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42508698448) passed on commit `bd05b97fb598fa7e2a84e55c5468d699fb1f672e` before the latest edge-case changes.
+- The edge-case hardening and tests are pushed in subsequent commits and are awaiting CI verification.
+- Model evaluation still uses one chronological holdout (currently 7 rows at the minimum supported history). A single small holdout can be noisy; walk-forward evaluation across multiple chronological cutoffs is the next quality improvement.
+- Model artifacts are currently trained per request and are not persisted or managed in a model registry.
+
+**Recent commits**
+- `b60f813` — adjust baseline prediction test matcher.
+- `bd05b97` — correct combined baseline explanation assertion; full CI passed.
+- `d6b5971` — reject invalid regression evaluation targets.
+- `a36b707` — cover invalid evaluation targets.
+- `a56d7a6` — cover constant-score baseline comparison.
+- `6b79f9c` — withhold constant-history API predictions.
+
+**Next**
+1. Verify the edge-case batch with GitHub Actions.
+2. Replace the single holdout quality gate with walk-forward evaluation across multiple chronological cutoffs, and test histories with stable, noisy and improving scores.
+3. Add a dedicated test for the 7-day recommendation cooldown.
+4. Continue student/admin analytics responsive UI acceptance review.
