@@ -41,7 +41,17 @@ export const tensorflowJsArtifactSchema = z.object({
   }).strict(),
   modelTopology: z.record(z.unknown()),
   weightSpecs: z.array(weightSpecSchema).min(1).max(512),
-  weightDataBase64: z.string().min(4).max(16_000_000).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  weightDataBase64: z.string().superRefine((value, context) => {
+    // Check the size before running the regex: huge strings can make regex
+    // validation expensive enough to overflow the JavaScript call stack.
+    if (value.length > 16_000_000) {
+      context.addIssue({ code: z.ZodIssueCode.too_big, maximum: 16_000_000, type: "string", inclusive: true, message: "Model weight payload exceeds 16 MB" });
+      return;
+    }
+    if (value.length < 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Model weight payload must be valid base64" });
+    }
+  }),
   evaluation: evaluationSchema,
   trainedAt: z.string().datetime(),
 }).strict().superRefine((artifact, context) => {
