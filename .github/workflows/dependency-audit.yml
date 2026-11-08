@@ -75,3 +75,18 @@ jobs:
           name: npm-dependency-audit
           path: npm-audit.json
           retention-days: 14
+
+      - name: Fail when critical or high advisories remain
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const report = JSON.parse(fs.readFileSync("npm-audit.json", "utf8"));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const critical = counts.critical ?? 0;
+          const high = counts.high ?? 0;
+          console.log(`Critical: ${critical}; high: ${high}`);
+          if (critical > 0 || high > 0) {
+            console.error("Dependency security gate failed. Remediate critical/high advisories before release.");
+            process.exit(1);
+          }
+          NODE
