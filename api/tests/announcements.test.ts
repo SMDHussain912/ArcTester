@@ -64,7 +64,9 @@ describe("admin announcements", () => {
       adminCookie
     );
     expect(created.status).toBe(201);
-    expect((created.json.announcement as { title: string; expiresAt: string }).title).toBe("Exam schedule updated");
+    expect(
+      (created.json.announcement as { title: string; expiresAt: string }).title
+    ).toBe("Exam schedule updated");
     expect((created.json.announcement as { expiresAt: string }).expiresAt).toBeTruthy();
 
     const feed = await request("/announcements", "GET", undefined, studentCookie);
@@ -84,13 +86,24 @@ describe("admin announcements", () => {
 
     const nextFeed = await request("/announcements", "GET", undefined, studentCookie);
     expect(nextFeed.status).toBe(200);
-    const seenAnnouncements = nextFeed.json.announcements as Array<{ id: string; seenAt: string | null }>;
+    const seenAnnouncements = nextFeed.json.announcements as Array<{
+      id: string;
+      seenAt: string | null;
+    }>;
     expect(seenAnnouncements).toHaveLength(1);
     expect(seenAnnouncements[0].id).toBe(announcementId);
     expect(seenAnnouncements[0].seenAt).toBeTruthy();
 
-    const otherStudentFeed = await request("/announcements", "GET", undefined, secondStudentCookie);
-    const otherStudentAnnouncements = otherStudentFeed.json.announcements as Array<{ id: string; seenAt: string | null }>;
+    const otherStudentFeed = await request(
+      "/announcements",
+      "GET",
+      undefined,
+      secondStudentCookie
+    );
+    const otherStudentAnnouncements = otherStudentFeed.json.announcements as Array<{
+      id: string;
+      seenAt: string | null;
+    }>;
     expect(otherStudentAnnouncements).toHaveLength(1);
     expect(otherStudentAnnouncements[0].id).toBe(announcementId);
     expect(otherStudentAnnouncements[0].seenAt).toBeNull();
@@ -125,10 +138,12 @@ describe("admin announcements", () => {
       data: {
         title: "New message",
         message: "This is newer than the cursor.",
-        createdById: (await server.db.user.findUniqueOrThrow({
-          where: { email: "announcement-admin@arctester.test" },
-          select: { id: true },
-        })).id,
+        createdById: (
+          await server.db.user.findUniqueOrThrow({
+            where: { email: "announcement-admin@arctester.test" },
+            select: { id: true },
+          })
+        ).id,
       },
     });
     await server.db.announcement.create({
