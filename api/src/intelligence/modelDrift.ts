@@ -26,12 +26,7 @@ function numericBoundaries(featureName: string, samples: DriftSample[]): number[
   return [0.2, 0.4, 0.6, 0.8].map((quantile) => values[Math.min(values.length - 1, Math.ceil(values.length * quantile) - 1)]!);
 }
 
-/** Converts a feature value to a coarse training-relative bucket; raw values are never persisted. */
-export function driftBucket(
-  feature: DriftFeature,
-  value: number | string,
-  baselineSamples: DriftSample[],
-): string {
+function bucketWithBoundaries(feature: DriftFeature, value: number | string, boundaries?: number[]): string {
   if (feature.type === "categorical") {
     const categories = feature.categories ?? [];
     if (typeof value !== "string") throw new Error(`Feature ${feature.name} must be categorical`);
@@ -39,10 +34,23 @@ export function driftBucket(
     return index < 0 ? "unknown" : `category_${index}`;
   }
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Feature ${feature.name} must be numeric`);
-  const boundaries = numericBoundaries(feature.name, baselineSamples);
+  if (!boundaries?.length) throw new Error(`Training baseline has no numeric values for ${feature.name}`);
   let index = 0;
   while (index < boundaries.length && value > boundaries[index]!) index += 1;
   return `quantile_${index}`;
+}
+
+/** Converts a feature value to a coarse training-relative bucket; raw values are never persisted. */
+export function driftBucket(
+  feature: DriftFeature,
+  value: number | string,
+  baselineSamples: DriftSample[],
+): string {
+  return bucketWithBoundaries(
+    feature,
+    value,
+    feature.type === "numeric" ? numericBoundaries(feature.name, baselineSamples) : undefined,
+  );
 }
 
 export function expectedDriftCounts(
@@ -56,8 +64,9 @@ export function expectedDriftCounts(
   } else {
     for (let index = 0; index <= 4; index += 1) counts[`quantile_${index}`] = 0;
   }
+  const boundaries = feature.type === "numeric" ? numericBoundaries(feature.name, samples) : undefined;
   for (const sample of samples) {
-    const bucket = driftBucket(feature, sample.features[feature.name]!, samples);
+    const bucket = bucketWithBoundaries(feature, sample.features[feature.name]!, boundaries);
     counts[bucket] = (counts[bucket] ?? 0) + 1;
   }
   return counts;
