@@ -299,6 +299,7 @@ describe("versioned exam management", () => {
       practice: {
         questionPerformance: {
           minimumAnswers: number;
+          minimumStudents: number;
           weakAccuracyThreshold: number;
           insufficientSampleCount: number;
           questions: { questionId: number; sampleSize: number; sufficientData: boolean; weak: boolean }[];
@@ -320,6 +321,7 @@ describe("versioned exam management", () => {
     expect(body.totals.averagePercentage).toBe(100);
     expect(body.practice.questionPerformance).toMatchObject({
       minimumAnswers: 5,
+      minimumStudents: 3,
       weakAccuracyThreshold: 0.6,
       questions: [],
     });
