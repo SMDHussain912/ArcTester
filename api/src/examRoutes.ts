@@ -1272,7 +1272,7 @@ export function examRouter(db: PrismaClient): Router {
         where: { id: session.id },
         data: {
           status, lastActivityAt: now,
-          ...(input.action === "PAUSE" ? { pausedAt: now } : {}),
+          ...(input.action === "PAUSE" && session.status !== "PAUSED" ? { pausedAt: now } : {}),
           ...(input.action === "RESUME" && session.pausedAt ? { pausedDurationMs: { increment: now.getTime() - session.pausedAt.getTime() }, pausedAt: null } : {}),
           ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
         },

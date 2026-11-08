@@ -30,7 +30,7 @@ function localCors(
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
     // "authorization" is needed by native/mobile clients that send a bearer
     // token instead of relying on the cookie.
     res.setHeader("Access-Control-Allow-Headers", "content-type,authorization");

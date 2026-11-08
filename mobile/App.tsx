@@ -157,12 +157,16 @@ export default function App() {
   }
 
   async function startPractice(subject?: string) {
+    if (!subject && !bank?.subjects.length) {
+      setError("No subjects are available for mixed practice yet.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const result = await api<Test>("/tests", {
         method: "POST",
-        body: JSON.stringify({ mode: "practice", subject, count: 10 }),
+        body: JSON.stringify({ mode: "practice", ...(subject ? { subject } : { subjects: (bank?.subjects ?? []).map((item) => item.subject) }), count: 10 }),
       });
       setTest(result);
       setAnswers({});

@@ -114,7 +114,7 @@ export function announcementRouter(db: PrismaClient): Router {
           publishedAt: { lte: now, ...(after ? { gt: after } : {}) },
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
-        orderBy: { publishedAt: "asc" },
+        orderBy: { publishedAt: "desc" },
         take: 200,
         select: {
           id: true,
