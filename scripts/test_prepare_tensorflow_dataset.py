@@ -105,7 +105,7 @@ class DatasetPreparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source, destination = root / "private.csv", root / "samples.json"
-            write_csv(source, learners=4, rows_per_learner=6)
+            write_csv(source, learners=4, rows_per_learner=8)
             result = self.run_converter(source, destination)
             self.assertEqual(result.returncode, 1)
             self.assertIn("at least 5 distinct learners", result.stderr.lower())
