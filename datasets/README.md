@@ -231,3 +231,32 @@ the same dataset and held-out split:
 The Model Lab shows this as an experiment leaderboard. Rank 1 is not an automatic
 promotion: the candidate must still be evaluated against a separately registered
 baseline dataset and pass the model governance gate.
+
+
+## Prediction confidence and drift monitoring
+
+Predictions from registered classifiers now include:
+- `probability`: estimated positive-class probability.
+- `confidence`: maximum of the positive and negative class probabilities.
+- `confidenceLevel`: high (>= 0.80), moderate (>= 0.60), or low.
+
+These are model scores, not calibrated probabilities. Do not interpret a high score as a guarantee.
+
+Regression candidates trained from registered datasets record holdout RMSE as a residual
+scale estimate. Their prediction response includes an approximate prediction interval
+of prediction +/- 1.96 * holdout RMSE. This is a rough diagnostic interval, not a
+statistically calibrated 95% guarantee.
+
+For candidates trained through Model Lab, prediction telemetry records only daily
+coarse buckets per feature and model version. Numeric values are mapped to five
+training-relative quantile buckets; categorical values are mapped to declared category
+indexes or an unknown bucket. Raw feature values and student identifiers are not stored
+in drift telemetry.
+
+- `GET /admin/models/:modelId/:version/drift` returns a 30-day feature drift report.
+- Population Stability Index (PSI) thresholds: below 0.10 LOW, 0.10–0.20 MODERATE,
+  and 0.20 or above HIGH.
+- Models registered manually without a linked training dataset cannot produce a
+  baseline drift report until retrained through Model Lab.
+
+Drift is a monitoring signal, not an automatic retraining or promotion trigger.
