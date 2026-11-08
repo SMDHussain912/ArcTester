@@ -156,6 +156,9 @@ export default function AdminPage() {
   }
 
   async function publishExam(id: string) {
+    const exam = exams.find((item) => item.id === id);
+    const latest = exam?.versions[0];
+    if (!window.confirm("Publish " + (exam?.title ?? "this exam") + " version " + (latest?.version ?? 1) + "? Published versions are used for student assignments. Review the question count, duration, marks and instructions before continuing.")) return;
     setBusy(true); setError(""); setNotice("");
     try {
       await api.publishAdminExam(id);
