@@ -457,7 +457,7 @@ export async function getStudyRecommendations(
   const cooldownMs = RECOMMENDATION_RECENT_PRACTICE_DAYS * 24 * 60 * 60 * 1000;
   const now = Date.now();
   const lastPracticedByTopic = new Map(
-    recentActivity.map((row) => [JSON.stringify([row.subject, row.topic]), new Date(row.lastPracticedAt).getTime()])
+    recentActivity.map((row) => [JSON.stringify([row.subject, row.topic]), new Date(Number(row.lastPracticedAt)).getTime()])
   );
   const evidencedWeakTopics = weakTopics.topics
     .filter((row) =>
