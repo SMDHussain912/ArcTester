@@ -506,6 +506,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - Added case-insensitive content search, subject filtering, bounded result limits, and slug lookup.
 - Exposed authenticated endpoints: `GET /learning/concepts` and `GET /learning/concepts/:slug`.
 - Added unit and API tests for search, filtering, lookup, missing concepts, and invalid query limits.
+- Added a typed web API client and a student-facing Concept Library page with keyword search, definitions, examples, related concepts, and common mistakes; linked it from the analytics dashboard and added page tests.
 - No new database migration or external AI provider is required; concept content remains explicit and reviewable in source.
 
 **Verification**
