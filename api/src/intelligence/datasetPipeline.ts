@@ -230,18 +230,18 @@ export function runTunedClassifierExperiments(
   return algorithms.map((algorithm) => {
     const tuned = tuneClassifierHyperparameters(train, algorithm, options);
     if (algorithm === "logistic-regression") {
-      const model = fitLogisticRegression(train, tuned.bestParameters);
+      const model = fitLogisticRegression(train, { iterations: tuned.bestParameters.iterations, learningRate: tuned.bestParameters.learningRate });
       return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateLogisticRegression(model, test) };
     }
     if (algorithm === "knn") {
-      const model = fitKnn(train, tuned.bestParameters);
+      const model = fitKnn(train, { k: tuned.bestParameters.k });
       return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateKnn(model, test) };
     }
     if (algorithm === "decision-tree") {
-      const model = fitDecisionTree(train, tuned.bestParameters);
+      const model = fitDecisionTree(train, { maxDepth: tuned.bestParameters.maxDepth });
       return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateDecisionTree(model, test) };
     }
-    const model = fitNaiveBayes(train, tuned.bestParameters);
+    const model = fitNaiveBayes(train, { varianceSmoothing: tuned.bestParameters.varianceSmoothing });
     return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateNaiveBayes(model, test) };
   });
 }
