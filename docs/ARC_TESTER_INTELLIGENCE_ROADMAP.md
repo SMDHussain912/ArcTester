@@ -595,3 +595,19 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - The admin analytics test now creates a third STUDENT account to prove the three-distinct-student safeguard. Updated the expected admin student total from two to three.
 
 **Status:** Both test fixtures have been corrected and pushed. The user must rerun `npm test` to confirm. The supplied run showed no lint/build errors, but the two API test failures mean the overall verification run was not green.
+
+### Local verification and admin UI review — 2026-11-08
+
+**User-confirmed verification on commit `7e462b7`:**
+- Web tests: 59/59 passed.
+- API tests: 114/114 passed.
+- Total: 173/173 passed.
+- The supplied terminal output shows both web and API production builds completing; lint commands returned without reported errors.
+- Vite emitted a non-blocking CJS Node API deprecation warning.
+
+**Admin exam-creation review found and fixed:**
+- The create-exam form exposed shuffle-question, shuffle-option, marks-per-question and negative-marks controls, but the submit handler sent hard-coded defaults.
+- Updated the request payload to send the selected shuffle settings and the configured marks values for every selected question.
+- Commit: `48a82cf` — `fix(admin): honor mock exam creation settings`.
+
+**Verification status:** The 173 passing tests apply to commit `7e462b7`, before the admin UI payload fix. The new fix has been pushed but still requires local test, lint and build verification. Desktop/mobile admin UI review remains open; Phase 1 is not closed.
