@@ -67,7 +67,16 @@ export function trainRegisteredDataset(
   if (task === "binary-classification" && new Set(rows.map((row) => row.target)).size !== 2) {
     throw new Error("Classification training data must contain both classes");
   }
-  const split = splitDatasetRows(rows, { testFraction: 0.2, seed });
+  const split = task === "binary-classification"
+    ? (() => {
+      const negative = splitDatasetRows(rows.filter((row) => row.target === 0), { testFraction: 0.2, seed });
+      const positive = splitDatasetRows(rows.filter((row) => row.target === 1), { testFraction: 0.2, seed: (seed + 1) >>> 0 });
+      return {
+        train: [...negative.train, ...positive.train],
+        test: [...negative.test, ...positive.test],
+      };
+    })()
+    : splitDatasetRows(rows, { testFraction: 0.2, seed });
   if (task === "binary-classification") {
     const results = runTunedClassifierExperiments(
       split.train.map(({ features, target }) => ({ features, target })),
