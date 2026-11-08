@@ -520,7 +520,8 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const artifact = validateRegistryArtifact(JSON.parse(active.artifactJson));
       const prediction = predictWithRegistryArtifact(artifact, features);
       if (active.trainingDatasetId) {
-        const baseline = await db.modelDataset.findUnique({
+        try {
+          const baseline = await db.modelDataset.findUnique({
           where: { id: active.trainingDatasetId },
           select: { featureSchemaJson: true, samplesJson: true },
         });
@@ -539,6 +540,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               update: { count: { increment: 1 } },
             });
           }));
+          }
+        } catch (telemetryError) {
+          console.error("Model drift telemetry write failed:", telemetryError);
         }
       }
       res.json({ ok: true, prediction });
