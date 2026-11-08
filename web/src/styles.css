@@ -144,3 +144,32 @@
   .announcement-popup { padding: 23px; border-radius: 17px; }
   .announcement-popup-top { align-items: flex-start; flex-direction: column; margin-bottom: 22px; }
 }
+
+/* Admin question authoring and mock exam builder */
+.question-editor,
+.exam-builder { display: grid; gap: 18px; }
+.question-editor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.question-option-editor { display: grid; gap: 10px; }
+.question-option-row { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; align-items: center; }
+.question-correct-choice { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.question-correct-choice input { accent-color: var(--accent); }
+.question-correct-choice strong { font-size: 13px; }
+.admin-question-list { display: grid; gap: 0; padding: 0 18px; }
+.admin-question-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+.admin-question-row:last-child { border-bottom: 0; }
+.admin-question-row p { margin: 6px 0; line-height: 1.55; }
+.admin-question-row small { text-transform: capitalize; }
+.exam-scoring-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.exam-settings-row { display: flex; flex-wrap: wrap; gap: 18px; }
+.exam-settings-row label { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+.exam-settings-row input { accent-color: var(--accent); }
+.question-search { width: 100%; }
+.exam-question-picker { display: grid; gap: 10px; }
+.exam-question-picker .pick-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.exam-question-picker .pick-row span { min-width: 0; }
+.exam-question-picker .pick-row small { overflow-wrap: anywhere; }
+@media(max-width:720px) {
+  .question-editor-grid { grid-template-columns: 1fr; }
+  .exam-question-picker .pick-row { grid-template-columns: auto minmax(0, 1fr); }
+  .exam-question-picker .pick-row > small { grid-column: 2; }
+}
