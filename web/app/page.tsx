@@ -179,6 +179,13 @@ export default function HomePage() {
                 <span className="action-title">Analytics</span>
                 <span className="action-description">Review accuracy and weak subjects</span>
               </a>
+              {status === "authenticated" ? (
+                <a className="action-card" href="/materials">
+                  <span className="action-icon">⇩</span>
+                  <span className="action-title">Study materials</span>
+                  <span className="action-description">Download questions and explanations</span>
+                </a>
+              ) : null}
             </div>
           </section>
 
