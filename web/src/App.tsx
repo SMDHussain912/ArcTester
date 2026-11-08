@@ -329,6 +329,16 @@ export default function App() {
             <a href="#invitations">Invitations</a>
           </nav>
           <div className="top-actions">
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              aria-pressed={theme === "dark"}
+              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            >
+              {theme === "light" ? "☾" : "☀"}
+            </button>
             <span className="user-email">{user.email}</span>
             <button className="ghost" onClick={signOut}>Sign out</button>
           </div>
