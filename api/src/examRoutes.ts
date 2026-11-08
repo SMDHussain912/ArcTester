@@ -801,7 +801,7 @@ export function examRouter(db: PrismaClient): Router {
     try {
       const exam = await db.exam.findUnique({
         where: { id: req.params.id },
-        include: { versions: { orderBy: { version: "desc" }, take: 1, include: {
+        include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: "desc" }, take: 1, include: {
           questions: { orderBy: { position: "asc" }, include: { submissionAnswers: { include: { submission: { select: { status: true } } } } } },
           assignments: { include: { submission: true, session: { select: { status: true, startedAt: true, lastHeartbeatAt: true, focusLossCount: true, disconnectCount: true } } } },
         } } },
