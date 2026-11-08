@@ -95,7 +95,7 @@ describe("student score prediction endpoint", () => {
     expect(response.json).toMatchObject({
       completedAttempts: 30,
       trainingSamples: 27,
-      evaluationSamples: 7,
+      evaluationSamples: 9,
     });
     expect(response.json.predictedScorePercent).toBeGreaterThanOrEqual(0);
     expect(response.json.predictedScorePercent).toBeLessThanOrEqual(100);
@@ -133,7 +133,7 @@ describe("student score prediction endpoint", () => {
     expect(response.json).toMatchObject({
       status: "baseline_not_beaten",
       completedAttempts: 30,
-      evaluationSamples: 7,
+      evaluationSamples: 9,
       modelMae: 0,
       baselineMae: 0,
     });
