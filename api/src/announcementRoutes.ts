@@ -113,7 +113,6 @@ export function announcementRouter(db: PrismaClient): Router {
         where: {
           publishedAt: { lte: now, ...(after ? { gt: after } : {}) },
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          reads: { none: { studentId: req.user!.id } },
         },
         orderBy: { publishedAt: "asc" },
         take: 200,
@@ -124,9 +123,21 @@ export function announcementRouter(db: PrismaClient): Router {
           createdAt: true,
           publishedAt: true,
           expiresAt: true,
+          reads: {
+            where: { studentId: req.user!.id },
+            select: { seenAt: true },
+            take: 1,
+          },
         },
       });
-      res.json({ ok: true, announcements, serverTime: now.toISOString() });
+      res.json({
+        ok: true,
+        announcements: announcements.map(({ reads, ...announcement }) => ({
+          ...announcement,
+          seenAt: reads[0]?.seenAt ?? null,
+        })),
+        serverTime: now.toISOString(),
+      });
     } catch (error) {
       next(error);
     }
