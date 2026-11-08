@@ -43,7 +43,6 @@ const PredictionSchema = z.object({
 
 const TrainingSchema = z.object({
   modelId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,55}$/),
-  targetColumn: z.string().trim().min(1).max(120),
   seed: z.number().int().min(0).max(0xffffffff).default(42),
 }).strict();
 
@@ -60,6 +59,7 @@ const DatasetSampleSchema = z.object({
 const DatasetRegistrationSchema = z.object({
   name: z.string().trim().min(1).max(120),
   task: z.enum(["regression", "binary-classification"]),
+  targetColumn: z.string().trim().min(1).max(120),
   featureSchema: z.array(FeatureSchema).min(1).max(100),
   samples: z.array(DatasetSampleSchema).min(10).max(5000),
   sourceDescription: z.string().trim().min(10).max(500),
@@ -87,7 +87,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         orderBy: { createdAt: "desc" },
         take: 200,
         select: {
-          id: true, name: true, task: true, featureSchemaJson: true,
+          id: true, name: true, task: true, targetColumn: true, featureSchemaJson: true,
           rowCount: true, sourceDescription: true, sourceAttested: true,
           fingerprint: true, createdById: true, createdAt: true,
         },
@@ -104,6 +104,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const payload = {
         name: input.name,
         task: input.task,
+        targetColumn: input.targetColumn,
         featureSchema: input.featureSchema,
         samples: input.samples,
       };
@@ -141,6 +142,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           createdById: req.user!.id,
           name: input.name,
           task: input.task,
+          targetColumn: input.targetColumn,
           featureSchemaJson: JSON.stringify(input.featureSchema),
           samplesJson: JSON.stringify(input.samples),
           rowCount: input.samples.length,
@@ -186,7 +188,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             algorithm: result.algorithm,
             task: dataset.task,
             dataset: dataset.name,
-            targetColumn: input.targetColumn,
+            targetColumn: dataset.targetColumn,
             featureSchema,
             model: result.model,
             createdAt: new Date().toISOString(),
@@ -403,7 +405,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         });
         if (!target) return null;
         validateRegistryArtifact(JSON.parse(target.artifactJson));
-        if (version > 1) {
+        if (!target.isActive) {
           const evaluation = await tx.modelEvaluation.findFirst({
             where: { modelId, candidateVersion: version },
             orderBy: { evaluatedAt: "desc" },
