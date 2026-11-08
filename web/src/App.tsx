@@ -1071,7 +1071,15 @@ export default function App() {
       localStorage.removeItem(practiceAnswersKey(test.attemptId));
       setTest(null);
     } catch (cause) {
-      setError((cause as Error).message);
+      try {
+        const recovered = await request<Result>(`/tests/${test.attemptId}/result`);
+        setResult(recovered);
+        localStorage.removeItem("arctester-active-practice-attempt");
+        localStorage.removeItem(practiceAnswersKey(test.attemptId));
+        setTest(null);
+      } catch {
+        setError((cause as Error).message);
+      }
     } finally {
       setBusy(false);
     }
