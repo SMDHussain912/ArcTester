@@ -21,7 +21,10 @@ function createWindow() {
   if (devUrl) {
     window.loadURL(devUrl);
   } else {
-    window.loadFile(path.join(__dirname, "../web/dist/index.html"));
+    const entry = app.isPackaged
+      ? path.join(process.resourcesPath, "web-dist", "index.html")
+      : path.join(__dirname, "../web/dist/index.html");
+    window.loadFile(entry);
   }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
