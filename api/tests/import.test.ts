@@ -104,9 +104,20 @@ describe("previewImport", () => {
       VALID_JSON[0],
       ["Maths", "What is 5 + 5?", ["9", "10", "11", "12"], 1, "Addition."],
       ["Maths", "Invalid options?", ["a", "b"], 0, ""],
-      ["Maths", "What is 5 + 5?", ["9", "10", "11", "12"], 1, "Duplicate in this file."],
+      [
+        "Maths",
+        "What is 5 + 5?",
+        ["9", "10", "11", "12"],
+        1,
+        "Duplicate in this file.",
+      ],
     ]);
-    expect(preview).toMatchObject({ valid: 1, duplicates: 2, total: 4 });
+
+    expect(preview).toMatchObject({
+      valid: 1,
+      duplicates: 2,
+      total: 4,
+    });
     expect(preview.invalid).toHaveLength(1);
     expect(preview.invalid[0].row).toBe(3);
     expect(await db.question.count()).toBe(1);
@@ -114,7 +125,8 @@ describe("previewImport", () => {
 
   it("validates CSV before import and reports missing columns", async () => {
     const db = await testDb();
-    const preview = await previewImport(db, "csv", "subject,text\\nMaths,hello");
+    const preview = await previewImport(db, "csv", "subject,text\nMaths,hello");
+
     expect(preview.valid).toBe(0);
     expect(preview.invalid[0].reason).toContain("Missing columns");
     expect(await db.question.count()).toBe(0);
