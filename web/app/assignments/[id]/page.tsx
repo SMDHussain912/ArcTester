@@ -10,6 +10,7 @@ type SavedAttempt = {
   attemptUuid: string;
   startedAt: string;
   answers: Record<string, number | null>;
+  marked?: string[];
 };
 
 function storageKey(id: string): string {
@@ -31,6 +32,7 @@ function AssignedExamRunner() {
   const [exam, setExam] = useState<AssignedExamPackage | null>(null);
   const [attempt, setAttempt] = useState<SavedAttempt | null>(null);
   const [index, setIndex] = useState(0);
+  const [marked, setMarked] = useState<string[]>([]);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +48,10 @@ function AssignedExamRunner() {
           const raw = window.localStorage.getItem(storageKey(assignmentId));
           if (raw) {
             const saved = JSON.parse(raw) as SavedAttempt;
-            if (saved.attemptUuid && saved.startedAt && saved.answers) setAttempt(saved);
+            if (saved.attemptUuid && saved.startedAt && saved.answers) {
+              setAttempt(saved);
+              setMarked(saved.marked ?? []);
+            }
           }
         } catch {
           window.localStorage.removeItem(storageKey(assignmentId));
@@ -90,6 +95,7 @@ function AssignedExamRunner() {
       attemptUuid: window.crypto.randomUUID(),
       startedAt: new Date().toISOString(),
       answers: {},
+      marked: [],
     };
     persist(next);
   }
@@ -97,6 +103,20 @@ function AssignedExamRunner() {
   function choose(questionId: string, selectedIndex: number) {
     if (!attempt) return;
     persist({ ...attempt, answers: { ...attempt.answers, [questionId]: selectedIndex } });
+  }
+
+  function clearAnswer(questionId: string) {
+    if (!attempt) return;
+    persist({ ...attempt, answers: { ...attempt.answers, [questionId]: null } });
+  }
+
+  function toggleMarked(questionId: string) {
+    if (!attempt) return;
+    const nextMarked = marked.includes(questionId)
+      ? marked.filter((id) => id !== questionId)
+      : [...marked, questionId];
+    setMarked(nextMarked);
+    persist({ ...attempt, marked: nextMarked });
   }
 
   const submit = useCallback(async () => {
@@ -231,6 +251,9 @@ function AssignedExamRunner() {
         </div>
         <span className="mute">{Math.round(((index + 1) / exam.questions.length) * 100)}%</span>
       </div>
+      {remaining <= 60_000 ? <p className="error" role="alert">One minute remaining. Review your answers and submit immediately.</p>
+        : remaining <= 5 * 60_000 ? <p className="warn" role="status">Five minutes remaining. Finish your review and prepare to submit.</p>
+        : remaining <= 15 * 60_000 ? <p className="warn" role="status">Fifteen minutes remaining.</p> : null}
       {error ? (
         <p className="error" role="alert">
           {error}
@@ -247,6 +270,12 @@ function AssignedExamRunner() {
               {question.marks} marks
               {question.negativeMarks ? " · -" + question.negativeMarks + " wrong" : ""}
             </span>
+          </div>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+            <span className="mute">{marked.length} questions marked for review</span>
+            <button type="button" className="button button-quiet button-small" onClick={() => toggleMarked(question.id)}>
+              {marked.includes(question.id) ? "Remove review mark" : "Mark for review"}
+            </button>
           </div>
           <fieldset className="exam-options" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="exam-question-text">{question.text}</legend>
@@ -274,6 +303,7 @@ function AssignedExamRunner() {
             >
               ← Previous
             </button>
+            <button className="button button-quiet" onClick={() => clearAnswer(question.id)} disabled={attempt.answers[question.id] === undefined || attempt.answers[question.id] === null}>Clear answer</button>
             <button
               className="button button-primary"
               onClick={() => setIndex((value) => Math.min(exam.questions.length - 1, value + 1))}
