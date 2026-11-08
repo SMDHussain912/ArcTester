@@ -8,6 +8,8 @@ import { api, ApiError, type AdminExam, type AdminOverview, type AdminQuestion, 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
   totals: { students: 0, exams: 0, assignments: 0, submissions: 0, submissionRate: 0, averagePercentage: null },
+  practice: { completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null, subjects: [] },
+  formalExams: { graded: 0, reviewRequired: 0, correct: 0, incorrect: 0, unanswered: 0, subjects: [] },
   exams: [], recentSubmissions: [],
 };
 
@@ -147,6 +149,34 @@ export default function AdminPage() {
             <div className="stat-card"><div className="stat-label">Assignments</div><div className="stat-value">{overview.totals.assignments}</div></div>
             <div className="stat-card"><div className="stat-label">Submissions</div><div className="stat-value">{overview.totals.submissions}</div></div>
           </div>
+          <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Practice performance</h2><span className="pill">{overview.practice.completedAttempts} completed attempts</span></div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-label">Answered accuracy</div><div className="stat-value">{overview.practice.accuracy === null ? "—" : `${Math.round(overview.practice.accuracy * 100)}%`}</div></div>
+              <div className="stat-card"><div className="stat-label">Correct</div><div className="stat-value">{overview.practice.correct}</div></div>
+              <div className="stat-card"><div className="stat-label">Incorrect</div><div className="stat-value">{overview.practice.incorrect}</div></div>
+              <div className="stat-card"><div className="stat-label">Unanswered</div><div className="stat-value">{overview.practice.unanswered}</div></div>
+            </div>
+            {overview.practice.subjects.length === 0 ? <p className="mute">No completed practice attempts yet.</p> : <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <table><thead><tr><th>Subject</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Accuracy</th></tr></thead>
+                <tbody>{overview.practice.subjects.map((row) => <tr key={row.subject}><td>{row.subject}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td></tr>)}</tbody>
+              </table>
+            </div>}
+          </section>
+          <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Verified formal exam analytics</h2><span className="pill">{overview.formalExams.graded} graded · {overview.formalExams.reviewRequired} awaiting review</span></div>
+            <p className="mute">Only graded submissions are included in verified question-level metrics. Review-required submissions are counted separately.</p>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-label">Correct</div><div className="stat-value">{overview.formalExams.correct}</div></div>
+              <div className="stat-card"><div className="stat-label">Incorrect</div><div className="stat-value">{overview.formalExams.incorrect}</div></div>
+              <div className="stat-card"><div className="stat-label">Unanswered</div><div className="stat-value">{overview.formalExams.unanswered}</div></div>
+            </div>
+            {overview.formalExams.subjects.length === 0 ? <p className="mute">No graded exam answers yet.</p> : <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <table><thead><tr><th>Subject</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Accuracy</th><th>Marks</th></tr></thead>
+                <tbody>{overview.formalExams.subjects.map((row) => <tr key={row.subject}><td>{row.subject}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>{row.awardedMarks} / {row.maximumMarks}</td></tr>)}</tbody>
+              </table>
+            </div>}
+          </section>
           <section className="panel" style={{ marginTop: 18 }}>
             <div className="panel-header"><h2>Exam performance</h2><span className="pill">{overview.exams.length} exams</span></div>
             {overview.exams.length === 0 ? <p className="mute">No exam assignments yet.</p> : <div style={{ overflowX: "auto" }}>
