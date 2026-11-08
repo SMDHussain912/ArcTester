@@ -10,6 +10,7 @@ import {
   type RegisterModelInput,
 } from "./intelligence/modelRegistry.js";
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
+import { trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("numeric") }).strict(),
@@ -38,6 +39,12 @@ const RegisterSchema = z.object({
 
 const PredictionSchema = z.object({
   features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+}).strict();
+
+const TrainingSchema = z.object({
+  modelId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,55}$/),
+  targetColumn: z.string().trim().min(1).max(120),
+  seed: z.number().int().min(0).max(0xffffffff).default(42),
 }).strict();
 
 const EvaluationSchema = z.object({
@@ -152,6 +159,77 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (error instanceof Error && "code" in error && error.code === "P2002") {
         return next(conflict("This exact dataset version has already been registered."));
       }
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
+  router.post("/admin/model-datasets/:datasetId/train", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
+      const input = TrainingSchema.parse(req.body);
+      const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
+      if (!dataset) return next(notFound("Registered training dataset was not found."));
+      const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
+      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+      const trained = trainRegisteredDataset(samples, featureSchema, dataset.task as "regression" | "binary-classification", input.seed);
+      const created = await db.$transaction(async (tx) => {
+        const models = [];
+        for (const result of trained) {
+          const modelId = `${input.modelId}-${result.algorithm}`;
+          const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
+          const version = (latest._max.version ?? 0) + 1;
+          const artifact = validateRegistryArtifact({
+            registrySchemaVersion: 1,
+            modelId,
+            version,
+            algorithm: result.algorithm,
+            task: dataset.task,
+            dataset: dataset.name,
+            targetColumn: input.targetColumn,
+            featureSchema,
+            model: result.model,
+            createdAt: new Date().toISOString(),
+          });
+          const model = await tx.registeredModel.create({
+            data: {
+              modelId, version, algorithm: result.algorithm, task: dataset.task,
+              dataset: dataset.name, artifactJson: JSON.stringify(artifact),
+              isActive: false, activatedAt: null,
+            },
+            select: { modelId: true, version: true, algorithm: true, task: true, dataset: true, isActive: true, createdAt: true },
+          });
+          await tx.modelRegistryAudit.create({
+            data: {
+              actorId: req.user!.id, modelId, version, action: "TRAINED",
+              details: JSON.stringify({
+                datasetId, datasetFingerprint: dataset.fingerprint,
+                trainRows: result.trainRows, testRows: result.testRows,
+                heldOutMetrics: result.metrics, crossValidation: result.crossValidation ?? null,
+                parameters: result.parameters ?? null, seed: input.seed,
+              }),
+            },
+          });
+          models.push({
+            ...model,
+            trainRows: result.trainRows,
+            testRows: result.testRows,
+            heldOutMetrics: result.metrics,
+            crossValidation: result.crossValidation ?? null,
+            parameters: result.parameters ?? null,
+          });
+        }
+        return models;
+      });
+      res.status(201).json({
+        ok: true,
+        dataset: { id: dataset.id, name: dataset.name, fingerprint: dataset.fingerprint, rowCount: dataset.rowCount },
+        models: created,
+        promoted: false,
+        message: "Training completed. Candidates remain inactive until they pass evaluation against an existing baseline.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
       if (error instanceof Error) return next(badRequest(error.message));
       next(error);
     }
