@@ -22,3 +22,4 @@ api/src/importService.ts
 api/tests/import.test.ts
 api/tests/announcements.test.ts
 api/tests/setup.ts
+web/src/AssignedExams.tsx
