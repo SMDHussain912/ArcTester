@@ -78,6 +78,13 @@ describe("multiple linear regression", () => {
     );
   });
 
+  it("rejects non-finite targets during evaluation", () => {
+    const model = fitLinearRegression(samples);
+    expect(() => evaluateLinearRegression(model, [
+      { features: [1, 2], target: Number.NaN },
+    ])).toThrow("Evaluation sample 0 contains a non-finite target");
+  });
+
   it("splits chronological data without putting newer rows in training", () => {
     const split = splitChronological(samples, 0.25);
     expect(split.train).toEqual(samples.slice(0, 6));
