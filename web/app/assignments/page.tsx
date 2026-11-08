@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, ApiError, type AssignedExam } from "../../lib/api";
+import { api, ApiError, type AssignedExam, type PublishedExamCatalogItem } from "../../lib/api";
 import { RequireSession } from "../../lib/session";
 
 function dateLabel(value: string | null): string {
@@ -11,15 +11,18 @@ function dateLabel(value: string | null): string {
 
 function AssignmentList() {
   const [assignments, setAssignments] = useState<AssignedExam[]>([]);
+  const [catalog, setCatalog] = useState<PublishedExamCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .assignedExams()
-      .then((response) => setAssignments(response.assignments))
+    Promise.all([api.assignedExams(), api.publishedExamCatalog()])
+      .then(([assigned, published]) => {
+        setAssignments(assigned.assignments);
+        setCatalog(published.catalog);
+      })
       .catch((cause: unknown) => {
-        setError(cause instanceof ApiError ? cause.message : "Could not load your assigned exams.");
+        setError(cause instanceof ApiError ? cause.message : "Could not load your exams.");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -119,6 +122,29 @@ function AssignmentList() {
           );
         })}
       </div>
+      <section className="panel" style={{ marginTop: 24 }}>
+        <div className="panel-header"><h2>Published examination catalogue</h2><span className="pill">{catalog.length} papers</span></div>
+        <p className="muted">Approved papers published by the examination administrator. A paper must be assigned to your account before you can start it.</p>
+        {catalog.length === 0 ? <p className="mute">No published papers are available at the moment.</p> : <div className="stack">
+          {catalog.map((paper) => {
+            const assignment = paper.assignment;
+            const submitted = Boolean(assignment?.submission);
+            const notOpen = Boolean(assignment?.availableFrom && new Date(assignment.availableFrom).getTime() > now);
+            const expired = Boolean(assignment?.dueAt && new Date(assignment.dueAt).getTime() < now);
+            return <article key={paper.examId + ":" + paper.version} className="card">
+              <div className="panel-header"><div><p className="eyebrow">Published version {paper.version}</p><h3>{paper.title}</h3></div><span className="pill">{assignment ? submitted ? "Submitted" : notOpen ? "Scheduled" : expired ? "Expired" : "Assigned" : "Published"}</span></div>
+              {paper.description ? <p className="muted">{paper.description}</p> : null}
+              <p className="muted">{paper.questionCount} questions · {paper.durationMinutes} minutes · Published {paper.publishedAt ? new Date(paper.publishedAt).toLocaleDateString() : "—"}</p>
+              <div className="row" style={{ justifyContent: "flex-end" }}>
+                {assignment && submitted ? <Link className="button button-secondary" href={"/assignments/" + assignment.id + "/result"}>View result</Link>
+                  : assignment && !notOpen && !expired ? <Link className="button button-primary" href={"/assignments/" + assignment.id}>Open exam →</Link>
+                  : assignment ? <button className="button button-secondary" disabled>{notOpen ? "Not available yet" : "Assignment expired"}</button>
+                  : <span className="mute">Ask your administrator to assign this paper.</span>}
+              </div>
+            </article>;
+          })}
+        </div>}
+      </section>
     </div>
   );
 }
