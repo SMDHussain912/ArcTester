@@ -18,15 +18,12 @@ export default function HomePage() {
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
-    api
-      .bank()
-      .then((info) => {
-        setBank(info);
-        setSubject((current) => current || info.subjects[0]?.subject || "");
-      })
-      .catch((e: unknown) =>
-        setError(e instanceof ApiError ? e.message : "Could not load the question bank.")
-      );
+    api.bank().then((info) => {
+      setBank(info);
+      setSubject((current) => current || info.subjects[0]?.subject || "");
+    }).catch((e: unknown) => {
+      setError(e instanceof ApiError ? e.message : "Could not load the question bank.");
+    });
   }, []);
 
   async function start() {
@@ -41,7 +38,6 @@ export default function HomePage() {
       const created = await api.createTest(body);
       router.push(`/test/${created.attemptId}`);
     } catch (e: unknown) {
-      // The session may have expired between the page load and this click.
       if (isAuthError(e)) {
         await refresh();
         setError("Your session expired. Please sign in again to start a test.");
@@ -54,119 +50,158 @@ export default function HomePage() {
 
   return (
     <>
-      <h1>AP ECET CSE Mock Test</h1>
-      <p className="mute">
-        Works offline. Unseen questions come first, then your mistakes, then the oldest.
-      </p>
+      <section className="page-intro">
+        <p className="eyebrow">Your study workspace</p>
+        <h1>Make every practice session count.</h1>
+        <p className="muted">
+          Prepare with timed mock tests, focused practice and question review — all in one place.
+        </p>
+      </section>
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error" role="alert">{error}</p> : null}
 
-      <div className="card">
-        {bank ? (
-          <>
-            <b>{bank.total}</b> questions across <b>{bank.subjects.length}</b> subjects
-          </>
-        ) : (
-          <span className="mute">Loading question bank…</span>
-        )}
-      </div>
-
-      <RequireSession>
-        {status === "authenticated" && user ? (
-          <div className="card">
-            <p className="mute">
-              Signed in as <b>{user.email}</b> — your attempts and statistics are saved to this
-              account.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="card">
-          <h2>Start a test</h2>
-
-          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-            <legend className="mute">Mode</legend>
-            {(
-              [
-                ["mock", "Full mock — official pattern (200 Q, 180 min)"],
-                ["practice", "Practice one subject"],
-                ["mistakes", "Revise my mistakes"],
-              ] as [Mode, string][]
-            ).map(([value, label]) => (
-              <label key={value} style={{ border: 0, padding: "2px 0" }}>
-                <input
-                  type="radio"
-                  name="mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => setMode(value)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
-          </fieldset>
-
-          {mode !== "mock" ? (
-            <div className="row" style={{ marginTop: 12 }}>
-              <label style={{ border: 0, padding: 0 }}>
-                <span className="mute">Subject</span>
-                <select value={subject} onChange={(e) => setSubject(e.target.value)}>
-                  {(bank?.subjects ?? []).map((s) => (
-                    <option key={s.subject} value={s.subject}>
-                      {s.subject} ({s.count})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label style={{ border: 0, padding: 0 }}>
-                <span className="mute">Questions</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={count}
-                  onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
-                  style={{ width: 90 }}
-                />
-              </label>
+      <div className="dashboard-grid">
+        <div className="stack">
+          <section className="panel hero-panel">
+            <div className="panel-header">
+              <span className="pill pill-accent">Study dashboard</span>
+              {status === "authenticated" && user ? <span className="pill">Personal workspace</span> : null}
             </div>
-          ) : (
-            <p className="warn">
-              The full mock uses Maths 50, Physics 25, Chemistry 25 and 100 CSE questions in the
-              official unit split. Missing questions are skipped with a warning.
+            <h1>{status === "authenticated" && user ? "Welcome back." : "Ready when you are."}</h1>
+            <p className="muted">
+              {status === "authenticated" && user
+                ? `Signed in as ${user.email}. Your test attempts and progress are saved to this account.`
+                : "Sign in to save your attempts and keep your study progress together."}
             </p>
-          )}
+            <div className="hero-actions">
+              <a className="button button-primary" href="#practice">Start practicing <span aria-hidden="true">→</span></a>
+              {status !== "authenticated" ? <a className="button button-secondary" href="/login">Sign in</a> : null}
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card">
+                <div className="stat-label">Questions available</div>
+                <div className="stat-value">{bank ? bank.total.toLocaleString() : "—"}</div>
+                <div className="stat-caption">Across the shared bank</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Subjects</div>
+                <div className="stat-value">{bank ? bank.subjects.length : "—"}</div>
+                <div className="stat-caption">Available to practice</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Account</div>
+                <div className="stat-value" style={{ fontSize: 18 }}>{status === "authenticated" ? "Active" : status === "loading" ? "…" : "Guest"}</div>
+                <div className="stat-caption">{status === "authenticated" ? "Progress is saved" : "Sign in to save progress"}</div>
+              </div>
+            </div>
+          </section>
 
-          <button onClick={start} disabled={starting || !bank}>
-            {starting ? "Starting…" : "Start test"}
-          </button>
-        </div>
-      </RequireSession>
+          <section id="practice">
+            <div className="section-heading">
+              <div>
+                <h2>Choose how to study</h2>
+                <p>Pick a session that matches your goal.</p>
+              </div>
+            </div>
+            <RequireSession>
+              <div className="panel">
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
+                  <strong>Practice setup</strong>
+                  <span className="pill pill-accent">Personal session</span>
+                </div>
+                <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend className="mute">Session type</legend>
+                  <div className="action-grid">
+                    <label className={mode === "mock" ? "sel" : ""}>
+                      <input type="radio" name="mode" value="mock" checked={mode === "mock"} onChange={() => setMode("mock")} />
+                      <span><strong>Full mock test</strong><br /><span className="mute">Timed exam simulation</span></span>
+                    </label>
+                    <label className={mode === "practice" ? "sel" : ""}>
+                      <input type="radio" name="mode" value="practice" checked={mode === "practice"} onChange={() => setMode("practice")} />
+                      <span><strong>Subject practice</strong><br /><span className="mute">Focus on one subject</span></span>
+                    </label>
+                    <label className={mode === "mistakes" ? "sel" : ""}>
+                      <input type="radio" name="mode" value="mistakes" checked={mode === "mistakes"} onChange={() => setMode("mistakes")} />
+                      <span><strong>Revise mistakes</strong><br /><span className="mute">Revisit questions you missed</span></span>
+                    </label>
+                  </div>
+                </fieldset>
 
-      {bank && bank.subjects.length > 0 ? (
-        <div className="card">
-          <h2>Question bank by subject</h2>
-          <table>
-            <caption className="mute" style={{ textAlign: "left" }}>
-              Questions available per subject
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Subject</th>
-                <th scope="col">Questions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bank.subjects.map((s) => (
-                <tr key={s.subject}>
-                  <td>{s.subject}</td>
-                  <td>{s.count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                {mode !== "mock" ? (
+                  <div className="row" style={{ alignItems: "end", marginTop: 14 }}>
+                    <label style={{ flex: "1 1 220px", display: "block" }}>
+                      <span className="mute">Subject</span>
+                      <select value={subject} onChange={(e) => setSubject(e.target.value)}>
+                        {(bank?.subjects ?? []).map((s) => <option key={s.subject} value={s.subject}>{s.subject} ({s.count})</option>)}
+                      </select>
+                    </label>
+                    <label style={{ width: 130, display: "block" }}>
+                      <span className="mute">Questions</span>
+                      <input type="number" min={1} max={200} value={count} onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))} />
+                    </label>
+                  </div>
+                ) : (
+                  <p className="warn">The current full mock follows the AP ECET CSE pattern: 200 questions in 180 minutes. Exam selection and custom exam patterns are part of the upcoming exam-management upgrade.</p>
+                )}
+                <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
+                  <span className="mute">{bank ? `${bank.total} questions ready` : "Loading question bank…"}</span>
+                  <button className="button button-primary" onClick={start} disabled={starting || !bank || (mode !== "mock" && !subject)}>
+                    {starting ? "Preparing…" : "Start test →"}
+                  </button>
+                </div>
+              </div>
+            </RequireSession>
+          </section>
         </div>
-      ) : null}
+
+        <aside className="stack">
+          <section className="panel">
+            <div className="panel-header"><h2>Quick access</h2></div>
+            <div className="action-grid">
+              <a className="action-card" href="#practice">
+                <span className="action-icon">◷</span>
+                <span className="action-title">Mock test</span>
+                <span className="action-description">Simulate a timed exam</span>
+              </a>
+              <a className="action-card" href="#practice" onClick={() => setMode("practice")}>
+                <span className="action-icon">◎</span>
+                <span className="action-title">Practice</span>
+                <span className="action-description">Study by subject</span>
+              </a>
+              <a className="action-card" href="#question-bank">
+                <span className="action-icon">▤</span>
+                <span className="action-title">Question bank</span>
+                <span className="action-description">Browse available subjects</span>
+              </a>
+              <div className="action-card" aria-disabled="true">
+                <span className="action-icon">↗</span>
+                <span className="action-title">Analytics</span>
+                <span className="action-description">Performance dashboard coming next</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="question-bank" className="panel">
+            <div className="panel-header">
+              <h2>Question bank by subject</h2>
+              <span className="pill">{bank ? bank.subjects.length : "…"}</span>
+            </div>
+            {bank ? (
+              <>
+                <p className="muted">Questions currently available in the shared library.</p>
+                <div>
+                  {bank.subjects.map((s) => (
+                    <div className="row" key={s.subject} style={{ justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--line)" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{s.subject}</span>
+                      <span className="pill">{s.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : <p className="muted">Loading question bank…</p>}
+          </section>
+        </aside>
+      </div>
     </>
   );
 }
