@@ -21,7 +21,8 @@ export interface TopicRow {
 
 export interface WeakTopicsReport {
   subjects: TopicRow[];
-  /** Weakest subject first (lowest accuracy, ties by wrong desc). */
+  topics: TopicRow[];
+  /** Weakest subject or topic first (lowest accuracy, ties by wrong desc). */
   weakest: TopicRow | null;
 }
 
@@ -128,11 +129,11 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
   const subjects = sortWeakest(
     [...bySubject.entries()].map(([name, counts]) => toRow(name, null, counts))
   );
-  const topics = [...byTopic.values()].map((entry) =>
+  const topics = sortWeakest([...byTopic.values()].map((entry) =>
     toRow(entry.subject, entry.topic, entry.counts)
-  );
+  ));
   const candidates = sortWeakest([...subjects, ...topics].filter((row) => row.accuracy !== null));
-  return { subjects, weakest: candidates[0] ?? null };
+  return { subjects, topics, weakest: candidates[0] ?? null };
 }
 
 export interface PerformanceOverview {
