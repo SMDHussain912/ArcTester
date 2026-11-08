@@ -80,6 +80,7 @@ model User {
   assignments        ExamAssignment[] @relation("StudentAssignments")
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
+  announcementReads   AnnouncementRead[]
 }
 
 model Invitation {
@@ -254,7 +255,20 @@ model Announcement {
   expiresAt   DateTime?
   createdBy   User     @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict)
   createdById Int
+  reads       AnnouncementRead[]
 
   @@index([publishedAt, expiresAt])
   @@index([createdById])
+}
+
+
+model AnnouncementRead {
+  announcementId String
+  studentId      Int
+  seenAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, studentId])
+  @@index([studentId, seenAt])
 }
