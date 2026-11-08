@@ -8,9 +8,7 @@ function columnIndex(reference: string): number {
 }
 
 function csvCell(value: string): string {
-  return /[",\r\n]/.test(value)
-    ? `"${value.replace(/"/g, '""')}"`
-    : value;
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 /** Read the first worksheet from a normal .xlsx workbook and convert it to CSV. */
@@ -103,9 +101,7 @@ export async function xlsxToCsv(file: File): Promise<string> {
     throw new Error("The first worksheet XML is invalid.");
   }
 
-  const shared = sharedXml
-    ? parser.parseFromString(sharedXml, "application/xml")
-    : null;
+  const shared = sharedXml ? parser.parseFromString(sharedXml, "application/xml") : null;
   const sharedStrings = shared
     ? Array.from(shared.getElementsByTagName("si")).map((item) =>
         Array.from(item.getElementsByTagName("t"))
@@ -114,9 +110,7 @@ export async function xlsxToCsv(file: File): Promise<string> {
       )
     : [];
   const rows = Array.from(
-    sheet
-      .getElementsByTagName("sheetData")[0]
-      ?.getElementsByTagName("row") ?? []
+    sheet.getElementsByTagName("sheetData")[0]?.getElementsByTagName("row") ?? []
   );
 
   const csvRows = rows.map((row) => {
