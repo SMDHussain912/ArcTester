@@ -180,7 +180,9 @@ function setSessionCookie(res: Response, token: string): void {
   const secure = process.env.NODE_ENV === "production";
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${secure ? "; Secure" : ""}`
+    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${
+      secure ? "; Secure" : ""
+    }`
   );
 }
 
