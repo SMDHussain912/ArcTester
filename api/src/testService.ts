@@ -24,6 +24,11 @@ export const CreateTestSchema = z
     subject: z.string().trim().min(1).optional(),
     subjects: z.array(z.string().trim().min(1)).min(1).max(30).optional(),
     topics: z.array(z.string().trim().min(1)).max(100).optional(),
+    topicFilters: z.array(z.object({
+      subject: z.string().trim().min(1).max(80),
+      topic: z.string().trim().min(1).max(80),
+    })).max(300).optional(),
+    difficulty: z.enum(["any", "easy", "medium", "hard"]).default("any"),
     count: z.number().int().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
@@ -172,14 +177,22 @@ export async function createTest(
   } else if (input.mode === "practice") {
     const chosenSubjects = input.subjects ?? (input.subject ? [input.subject] : []);
     const topicFilter = new Set(input.topics ?? []);
+    const topicPairs = new Set((input.topicFilters ?? []).map((item) => JSON.stringify([item.subject, item.topic])));
+    const hasScopedTopicFilter = topicPairs.size > 0;
     const pool = candidates.filter((question) =>
       chosenSubjects.includes(question.subject) &&
-      (topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic)))
+      (input.difficulty === "any" || question.difficulty === input.difficulty) &&
+      (hasScopedTopicFilter
+        ? question.topic !== null && topicPairs.has(JSON.stringify([question.subject, question.topic]))
+        : topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic)))
     );
     const requested = input.count ?? 20;
     const selectedById = new Set<number>();
     selected = [];
     const subjectPools = chosenSubjects.map((name) => ({ name, pool: pool.filter((question) => question.subject === name) }));
+    const baseQuota = Math.floor(requested / chosenSubjects.length);
+    const remainderQuota = requested % chosenSubjects.length;
+    const requestedBySubject = new Map(chosenSubjects.map((name, index) => [name, baseQuota + (index < remainderQuota ? 1 : 0)]));
     let remaining = requested;
     let active = subjectPools.filter((entry) => entry.pool.length > 0);
     while (remaining > 0 && active.length > 0) {
@@ -195,8 +208,15 @@ export async function createTest(
       remaining -= added;
       active = active.filter((entry) => entry.pool.some((question) => !selectedById.has(question.id)));
     }
+    warnings = subjectPools.flatMap((entry) => {
+      const target = requestedBySubject.get(entry.name) ?? 0;
+      const selectedCount = selected.filter((question) => question.subject === entry.name).length;
+      return selectedCount < target
+        ? [`${entry.name}: requested ${target} questions, but only ${selectedCount} matched the selected topic and difficulty filters.`]
+        : [];
+    });
     if (selected.length < requested) {
-      warnings = [`Requested ${requested} questions, but only ${selected.length} match the selected subjects: ${chosenSubjects.join(", ")}${topicFilter.size ? " and selected topics" : ""}.`];
+      warnings.push(`Requested ${requested} questions overall, but only ${selected.length} are available across the selected subjects and filters.`);
     }
   } else {
     // "mistakes" only surfaces questions THIS user has got wrong before.
