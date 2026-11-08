@@ -527,6 +527,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - `web/lib/api.ts`
 - `web/app/admin/page.tsx`
 - `web/app/analytics/page.tsx`
+- `web/app/analytics/page.test.tsx`
 - `README.md` (removed obsolete GitHub Actions references)
 - `.github/workflows/ci.yml` (deleted)
 
