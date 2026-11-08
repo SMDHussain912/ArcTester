@@ -24,6 +24,11 @@ type AdminExam = {
   status: string;
   versions: { id: string; version: number; publishedAt: string | null; durationMinutes: number; _count: { questions: number; assignments: number } }[];
 };
+type AdminAnalytics = {
+  totals: { students: number; exams: number; assignments: number; submissions: number; submissionRate: number; averagePercentage: number | null };
+  exams: { examId: string; title: string; assigned: number; submitted: number; submissionRate: number; averagePercentage: number | null }[];
+  recentSubmissions: { studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
+};
 type Question = {
   id: number;
   subject: string;
@@ -86,6 +91,7 @@ export default function App() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
+  const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
   const [adminQuestions, setAdminQuestions] = useState<AdminQuestion[]>([]);
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
   const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
@@ -151,6 +157,9 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
     request<{ exams: AdminExam[] }>("/admin/exams")
       .then(({ exams }) => setAdminExams(exams))
+      .catch((cause) => setError((cause as Error).message));
+    request<AdminAnalytics>("/admin/analytics/overview")
+      .then(setAdminAnalytics)
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
@@ -451,6 +460,35 @@ export default function App() {
               <p className="muted">Create invitation codes and control who can join your exam workspace.</p>
             </div>
             <div className="welcome-mark">A</div>
+          </section>
+          <section id="results-analytics">
+            <div className="section-head">
+              <div><p className="eyebrow">RESULTS & PERFORMANCE</p><h2>Exam analytics</h2></div>
+              <button className="ghost" disabled={busy} onClick={() => request<AdminAnalytics>("/admin/analytics/overview").then(setAdminAnalytics).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+            </div>
+            <div className="stats-row admin-analytics-stats">
+              <article className="panel stat"><span className="muted">Students</span><strong>{adminAnalytics?.totals.students ?? "—"}</strong><span className="muted">Registered accounts</span></article>
+              <article className="panel stat"><span className="muted">Exams</span><strong>{adminAnalytics?.totals.exams ?? "—"}</strong><span className="muted">Created exams</span></article>
+              <article className="panel stat"><span className="muted">Assignments</span><strong>{adminAnalytics?.totals.assignments ?? "—"}</strong><span className="muted">Student exam assignments</span></article>
+              <article className="panel stat"><span className="muted">Submissions</span><strong>{adminAnalytics?.totals.submissions ?? "—"}</strong><span className="muted">{Math.round((adminAnalytics?.totals.submissionRate ?? 0) * 100)}% submission rate</span></article>
+              <article className="panel stat"><span className="muted">Average score</span><strong>{adminAnalytics?.totals.averagePercentage === null || adminAnalytics?.totals.averagePercentage === undefined ? "—" : `${adminAnalytics.totals.averagePercentage.toFixed(1)}%`}</strong><span className="muted">Across scored submissions</span></article>
+            </div>
+            <div className="section-head"><div><p className="eyebrow">EXAM BREAKDOWN</p><h2>Performance by exam</h2></div></div>
+            <div className="panel analytics-table-wrap">
+              <table className="analytics-table">
+                <thead><tr><th>Exam</th><th>Assigned</th><th>Submitted</th><th>Completion</th><th>Average</th></tr></thead>
+                <tbody>{adminAnalytics?.exams.map((exam) => <tr key={exam.examId}><td>{exam.title}</td><td>{exam.assigned}</td><td>{exam.submitted}</td><td>{Math.round(exam.submissionRate * 100)}%</td><td>{exam.averagePercentage === null ? "—" : `${exam.averagePercentage.toFixed(1)}%`}</td></tr>)}
+                {adminAnalytics && adminAnalytics.exams.length === 0 && <tr><td colSpan={5} className="muted">No exam assignments yet.</td></tr>}</tbody>
+              </table>
+            </div>
+            <div className="section-head"><div><p className="eyebrow">LATEST ACTIVITY</p><h2>Recent submissions</h2></div></div>
+            <div className="panel analytics-table-wrap">
+              <table className="analytics-table">
+                <thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Score</th></tr></thead>
+                <tbody>{adminAnalytics?.recentSubmissions.map((item, index) => <tr key={`${item.studentEmail}-${item.examTitle}-${index}`}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending" : `${item.score} / ${item.maximumScore}`}</td></tr>)}
+                {adminAnalytics && adminAnalytics.recentSubmissions.length === 0 && <tr><td colSpan={4} className="muted">No submissions received yet.</td></tr>}</tbody>
+              </table>
+            </div>
           </section>
           <section id="exam-management">
             <div className="section-head">
