@@ -588,7 +588,7 @@ export default function App() {
             <div className="panel announcement-list">
               {announcements.length === 0 ? <p className="muted">No announcements published yet.</p> : announcements.map((item) => (
                 <article className="announcement-row" key={item.id}>
-                  <strong>{item.title}</strong>
+                  <div className="announcement-admin-title"><strong>{item.title}</strong><span className={item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now() ? "status status-expired" : "status status-used"}>{item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now() ? "EXPIRED" : "ACTIVE"}</span></div>
                   <p>{item.message}</p>
                   <small>Published {new Date(item.publishedAt).toLocaleString()} · {item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleString()}` : "No expiry"}</small>
                 </article>
@@ -772,7 +772,7 @@ export default function App() {
             </div>
             {announcements.length === 0 ? <div className="panel empty-state"><h2>No announcements yet</h2><p className="muted">New notices from your administrator will appear here automatically.</p></div> : announcements.map((item) => (
               <article className="panel announcement-row" key={item.id}>
-                <div className="announcement-meta"><span className="status status-used">NEW NOTICE</span><small>{new Date(item.publishedAt).toLocaleString()}</small></div>
+                <div className="announcement-meta"><span className={item.seenAt ? "status status-used" : "status status-pending"}>{item.seenAt ? "SEEN" : "UNREAD"}</span><small>{new Date(item.publishedAt).toLocaleString()}</small></div>
                 <h2>{item.title}</h2><p>{item.message}</p>
                 {item.expiresAt ? <small className="muted">Expires {new Date(item.expiresAt).toLocaleString()}</small> : null}
               </article>
