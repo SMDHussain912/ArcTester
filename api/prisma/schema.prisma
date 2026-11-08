@@ -400,6 +400,7 @@ model ModelDataset {
   createdById        Int?
   name               String
   task               String
+  targetColumn       String   @default("target")
   featureSchemaJson  String
   samplesJson        String
   rowCount           Int
