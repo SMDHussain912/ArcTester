@@ -15,7 +15,8 @@ import {
   type RegressionSample,
 } from "./linearRegression.js";
 import type { BinaryTrainingSample } from "./classificationValidation.js";
-import type { DatasetDefinition, DatasetRow } from "./datasetQuality.js";
+import type { DatasetRow } from "./datasetFactory.js";
+import type { DatasetDefinition } from "./datasetQuality.js";
 
 export interface CsvTable {
   headers: string[];
