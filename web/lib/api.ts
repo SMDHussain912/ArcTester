@@ -186,8 +186,45 @@ export interface WeakTopicRow {
   subject: string;
   topic: string | null;
   seen: number;
+  correct: number;
   wrong: number;
-  accuracy: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+}
+
+export interface PerformanceOverview {
+  generatedAt: string;
+  practice: {
+    completedAttempts: number;
+    questions: number;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    accuracy: number | null;
+    subjects: WeakTopicRow[];
+    trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
+  };
+  formalExams: {
+    submissions: number;
+    graded: number;
+    reviewRequired: number;
+    score: number;
+    maximumScore: number;
+    scorePercentage: number | null;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    subjects: {
+      subject: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+      awardedMarks: number;
+      maximumMarks: number;
+    }[];
+  };
 }
 
 export interface WeakTopicsReport {
@@ -357,6 +394,7 @@ export const api = {
     ),
   assignedExamResult: (id: string) =>
     request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
+  performanceOverview: () => request<PerformanceOverview>("/analytics/overview"),
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
   studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
   studyRecommendations: () =>
