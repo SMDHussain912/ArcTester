@@ -114,3 +114,25 @@ jobs:
 
       - name: Typecheck mobile app
         run: npm run typecheck
+
+  mobile-typecheck:
+    name: Mobile offline foundation typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck
