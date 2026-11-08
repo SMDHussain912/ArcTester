@@ -206,12 +206,7 @@ export async function previewImport(
       return {
         valid: 0,
         duplicates: 0,
-        invalid: [
-          invalidRow(
-            1,
-            error instanceof Error ? error.message : "Invalid CSV"
-          ),
-        ],
+        invalid: [invalidRow(1, error instanceof Error ? error.message : "Invalid CSV")],
         total: 0,
       };
     }
@@ -231,9 +226,7 @@ export async function previewImport(
       return {
         valid: 0,
         duplicates: 0,
-        invalid: [
-          invalidRow(1, `Missing columns: ${missing.join(", ")}`),
-        ],
+        invalid: [invalidRow(1, `Missing columns: ${missing.join(", ")}`)],
         total: 0,
       };
     }
@@ -248,15 +241,8 @@ export async function previewImport(
         subject: get("subject"),
         topic: get("topic") || "General",
         text: get("text"),
-        options: [
-          get("optiona"),
-          get("optionb"),
-          get("optionc"),
-          get("optiond"),
-        ],
-        correctIndex: Number.isInteger(correctIndex)
-          ? correctIndex
-          : correctRaw,
+        options: [get("optiona"), get("optionb"), get("optionc"), get("optiond")],
+        correctIndex: Number.isInteger(correctIndex) ? correctIndex : correctRaw,
         explanation: get("explanation"),
         source: get("source") || "csv",
         difficulty: get("difficulty") || "medium",
