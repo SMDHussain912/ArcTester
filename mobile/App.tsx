@@ -519,3 +519,5 @@ const styles = StyleSheet.create({
   error: { color: "#b42318", marginTop: 16, lineHeight: 21 },
   footer: { textAlign: "center", color: "#9aa3b2", fontSize: 12, marginTop: 30 },
 });
+
+
