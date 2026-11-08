@@ -94,7 +94,7 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | `npm run test`         | Vitest in both workspaces    |
 | `npm run lint`         | ESLint in both workspaces    |
 | `npm run format`       | Prettier write               |
-| `npm run format:check` | Prettier check (CI-friendly) |
+| `npm run format:check` | Check Prettier formatting |
 | `npm run dev:mobile`   | Expo development server |
 | `npm run dev:desktop`  | Electron desktop shell |
 | `npm run build:mobile` | Export Expo app bundles |
@@ -117,8 +117,8 @@ Question bank (run from the repo root):
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
-- [ ] **7 (in progress).** Docker Compose deployment, GitHub Actions CI,
-  LAN CORS support; native mobile client remains.
+- [ ] **7 (in progress).** Docker Compose deployment and LAN CORS support;
+  native mobile client remains. GitHub Actions automation is not used.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
