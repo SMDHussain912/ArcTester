@@ -100,3 +100,13 @@ The mobile offline persistence foundation now lives in `mobile/src/offline/examS
 - Pending submissions can be retried with the same attempt UUID; successful sync and sync errors have explicit persisted states.
 
 The mobile app now exposes assigned exams from the student dashboard and includes an offline exam runner with a persisted countdown, answer restoration, and local answer autosave. On reconnect, it uploads pending submissions first, then refreshes assignments and downloads available exam packages. Cached packages remain visible when the device is offline. The current reconnect flow does not yet download admin announcements; that requires the announcements API and will be added separately. Background push delivery remains separate.
+
+
+## Announcements and reconnect messages
+
+- Admins can publish a title and message from the web administration workspace.
+- Students retrieve active announcements from `GET /announcements`; expired messages are excluded.
+- The student feed supports an optional ISO timestamp cursor for incremental retrieval.
+- Mobile clients persist announcements in SQLite so messages remain readable offline.
+- Reconnect synchronization now follows this order: report connection, upload pending submissions/analytics, refresh assigned exams and download packages, then fetch announcements and display the messages.
+- Publishing is restricted to administrators. Student access is read-only.
