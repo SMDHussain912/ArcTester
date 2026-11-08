@@ -3,6 +3,7 @@ import {
   getHistory,
   getPerformanceOverview,
   getWeakTopics,
+  getQuestionPerformance,
   getStudyRecommendations,
   importProgress,
   exportProgress,
@@ -25,6 +26,15 @@ export function analyticsRouter(db: PrismaClient): Router {
   router.get("/weak-topics", requireAuth, async (req, res, next) => {
     try {
       const report = await getWeakTopics(db, (req as AuthedRequest).user!.id);
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/question-performance", requireAuth, async (req, res, next) => {
+    try {
+      const report = await getQuestionPerformance(db, (req as AuthedRequest).user!.id);
       res.json(report);
     } catch (error) {
       next(error);
