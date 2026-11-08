@@ -48,6 +48,15 @@ type ModelAuditEvent = {
   id: string; actorId: number | null; modelId: string; version: number;
   action: string; details: Record<string, unknown>; createdAt: string;
 };
+type ModelDriftReport = {
+  modelId: string; version: number; baselineDataset: string; windowDays: number;
+  overall: "NO_DATA" | "LOW" | "MODERATE" | "HIGH";
+  features: Array<{
+    featureName: string; sampleCount: number; psi: number | null;
+    status: "NO_DATA" | "LOW" | "MODERATE" | "HIGH";
+    expected: Record<string, number>; observed: Record<string, number>;
+  }>;
+};
 type TrainedCandidate = {
   modelId: string; version: number; algorithm: string; isActive: boolean; rank: number;
   trainRows: number; testRows: number; heldOutMetrics: object;
@@ -266,6 +275,8 @@ export default function App() {
   const [modelAuditId, setModelAuditId] = useState("");
   const [modelAuditEvents, setModelAuditEvents] = useState<ModelAuditEvent[]>([]);
   const [modelAuditLoading, setModelAuditLoading] = useState(false);
+  const [modelDriftReport, setModelDriftReport] = useState<ModelDriftReport | null>(null);
+  const [modelDriftLoading, setModelDriftLoading] = useState(false);
   const [modelLabLoading, setModelLabLoading] = useState(false);
   const [modelLabNotice, setModelLabNotice] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(
@@ -524,6 +535,21 @@ export default function App() {
       setError((cause as Error).message);
     } finally {
       setModelAuditLoading(false);
+    }
+  }
+
+  async function loadModelDrift(modelId: string, version: number) {
+    setModelDriftLoading(true);
+    setError("");
+    try {
+      const response = await request<ModelDriftReport>(
+        `/admin/models/${encodeURIComponent(modelId)}/${version}/drift`,
+      );
+      setModelDriftReport(response);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setModelDriftLoading(false);
     }
   }
 
@@ -1640,8 +1666,13 @@ export default function App() {
             </div>
             <div className="panel">
               <div className="section-head"><div><p className="eyebrow">VERSION REGISTRY</p><h2>Registered models</h2></div></div>
-              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td><div className="inline-actions"><button className="ghost" disabled={busy} onClick={() => void loadModelAudit(model.modelId)}>History</button>{!model.isActive && <button className="ghost" disabled={busy} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</div></td></tr>)}</tbody></table></div>}
+              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td><div className="inline-actions"><button className="ghost" disabled={busy} onClick={() => void loadModelAudit(model.modelId)}>History</button><button className="ghost" disabled={busy || modelDriftLoading} onClick={() => void loadModelDrift(model.modelId, model.version)}>Drift</button>{!model.isActive && <button className="ghost" disabled={busy} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</div></td></tr>)}</tbody></table></div>}
             </div>
+            {modelDriftReport && <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">FEATURE DRIFT · LAST {modelDriftReport.windowDays} DAYS</p><h2>{modelDriftReport.modelId} v{modelDriftReport.version} · {modelDriftReport.overall}</h2><p className="muted">Baseline: {modelDriftReport.baselineDataset}. PSI is a monitoring signal, not proof of model failure.</p></div><button className="ghost" disabled={modelDriftLoading} onClick={() => void loadModelDrift(modelDriftReport.modelId, modelDriftReport.version)}>Refresh</button></div>
+              {modelDriftLoading ? <p className="muted">Loading drift report…</p> : <div className="table-wrap"><table><thead><tr><th>Feature</th><th>Observed rows</th><th>PSI</th><th>Status</th></tr></thead><tbody>{modelDriftReport.features.map((feature) => <tr key={feature.featureName}><td>{feature.featureName}</td><td>{feature.sampleCount}</td><td>{feature.psi === null ? "—" : feature.psi.toFixed(4)}</td><td>{feature.status}</td></tr>)}</tbody></table></div>}
+              <p className="muted">Only coarse numeric quantile and categorical index buckets are stored. Raw prediction feature values are not retained. Drift reports use the previous 30 days.</p>
+            </div>}
             {trainedCandidates.length > 0 && <div className="panel">
               <div className="section-head"><div><p className="eyebrow">TRAINING REPORT</p><h2>Latest trained candidates</h2></div></div>
               <div className="table-wrap"><table><thead><tr><th>Rank</th><th>Model</th><th>Version</th><th>Algorithm</th><th>Train / holdout</th><th>Holdout metrics</th></tr></thead><tbody>{trainedCandidates.map((candidate) => <tr key={`${candidate.modelId}-${candidate.version}`}><td><strong>#{candidate.rank}</strong>{candidate.rank === 1 ? " · Top" : ""}</td><td>{candidate.modelId}</td><td>{candidate.version}</td><td>{candidate.algorithm}</td><td>{candidate.trainRows} / {candidate.testRows}</td><td><pre>{JSON.stringify(candidate.heldOutMetrics, null, 2)}</pre></td></tr>)}</tbody></table></div>
