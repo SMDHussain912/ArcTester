@@ -489,9 +489,15 @@ export async function importProgress(
   ]);
   const existing = await db.question.findMany({
     where: { id: { in: [...questionIds] } },
-    select: { id: true },
+    select: {
+      id: true,
+      difficulty: true,
+      subject: { select: { name: true } },
+      topic: { select: { name: true } },
+    },
   });
-  const missing = [...questionIds].filter((id) => !existing.some((q) => q.id === id));
+  const questionById = new Map(existing.map((question) => [question.id, question]));
+  const missing = [...questionIds].filter((id) => !questionById.has(id));
   if (missing.length > 0) {
     throw badRequest(`Backup references unknown questions: ${missing.join(", ")}`);
   }
@@ -584,6 +590,9 @@ export async function importProgress(
         questionId: ans.questionId,
         chosen: ans.chosen,
         isCorrect: ans.isCorrect,
+        subjectSnapshot: questionById.get(ans.questionId)!.subject.name,
+        topicSnapshot: questionById.get(ans.questionId)!.topic?.name ?? null,
+        difficultySnapshot: questionById.get(ans.questionId)!.difficulty,
       },
     });
   }
