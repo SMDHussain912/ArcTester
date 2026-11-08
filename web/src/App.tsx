@@ -779,13 +779,26 @@ export default function App() {
               <div><p className="eyebrow">REUSABLE CONTENT</p><h2>Question bank <span className="muted">({adminQuestions.length})</span></h2></div>
               <button className="ghost" disabled={busy} onClick={() => request<{ questions: AdminQuestion[] }>("/admin/question-bank").then(({ questions }) => setAdminQuestions(questions)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
             </div>
+            <div className="bank-filter-toolbar">
+              <label>Subject
+                <select value={bankSubjectFilter} onChange={(event) => setBankSubjectFilter(event.target.value)}>
+                  <option value="all">All subjects</option>
+                  {[...new Set(adminQuestions.map((question) => question.subject))].sort((a, b) => a.localeCompare(b)).map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+                </select>
+              </label>
+              <label>Search questions
+                <input type="search" value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder="Search question, topic or subject…" />
+              </label>
+              <span className="muted">{adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length} matching</span>
+            </div>
             <div className="panel admin-question-list">
-              {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.map((question) => (
+              {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => (
                 <article className="admin-question-row" key={question.id}>
                   <div><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><p>{question.text}</p><small className="muted">{question.difficulty ?? "medium"} · {question.options.length} options</small></div>
                   <span className="status status-used">#{question.id}</span>
                 </article>
               ))}
+              {adminQuestions.length > 0 && adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length === 0 && <p className="muted">No questions match these filters.</p>}
             </div>
           </section>
           <section hidden={activePage !== "announcements"} id="announcements">
