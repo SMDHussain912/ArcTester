@@ -7,7 +7,7 @@ function readOption(name: string, fallback: string): string {
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
 }
 
-const rowsPerDataset = Number(readOption("--rows", "1000"));
+async function main(): Promise<void> {\nconst rowsPerDataset = Number(readOption("--rows", "1000"));
 const seed = Number(readOption("--seed", "42"));
 const outputDirectory = path.resolve(readOption("--out", "../datasets/synthetic"));
 const datasets = generateSyntheticDatasets({ rowsPerDataset, seed });
