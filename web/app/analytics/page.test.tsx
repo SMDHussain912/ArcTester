@@ -109,7 +109,7 @@ describe("student analytics page", () => {
         generatedAt: "2026-11-09T08:00:00.000Z", minimumAnswers: 5, weakAccuracyThreshold: 0.6,
         insufficientSampleCount: 0, questions: [],
       }));
-      if (path.endsWith("/analytics/history")) return Promise.resolve(jsonResponse(200, {
+      if (path.includes("/analytics/history")) return Promise.resolve(jsonResponse(200, {
         items: [], page: 1, limit: 10, total: 0, totalPages: 0,
       }));
       if (path.endsWith("/analytics/recommendations")) return Promise.resolve(jsonResponse(200, {
