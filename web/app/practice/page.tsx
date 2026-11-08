@@ -66,20 +66,20 @@ function PracticePaperChooser() {
 
       {stage === "select" ? (
         <div className="stack">
-          <div className="grid-cards">
-            <button type="button" className={mode === "mock" ? "panel sel" : "panel"} onClick={() => setMode("mock")}>
+          <div className="action-grid">
+            <button type="button" className={mode === "mock" ? "action-card sel" : "action-card"} onClick={() => setMode("mock")}>
               <span className="eyebrow">Exam simulation</span>
               <h2>Full AP ECET CSE Mock</h2>
               <p className="muted">A complete timed practice session following the current 200-question, 180-minute pattern.</p>
               <strong>200 questions · 180 minutes</strong>
             </button>
-            <button type="button" className={mode === "practice" ? "panel sel" : "panel"} onClick={() => setMode("practice")}>
+            <button type="button" className={mode === "practice" ? "action-card sel" : "action-card"} onClick={() => setMode("practice")}>
               <span className="eyebrow">Focused learning</span>
               <h2>Subject Practice</h2>
               <p className="muted">Build a focused paper from one subject and choose how many questions to attempt.</p>
               <strong>Choose subject and question count</strong>
             </button>
-            <button type="button" className={mode === "mistakes" ? "panel sel" : "panel"} onClick={() => setMode("mistakes")}>
+            <button type="button" className={mode === "mistakes" ? "action-card sel" : "action-card"} onClick={() => setMode("mistakes")}>
               <span className="eyebrow">Revision</span>
               <h2>Revise Mistakes</h2>
               <p className="muted">Revisit questions you previously answered incorrectly.</p>
