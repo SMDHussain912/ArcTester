@@ -9,7 +9,7 @@ export interface RegisteredTrainingSample {
 export interface RegisteredTrainingResult {
   algorithm: "logistic-regression" | "knn" | "decision-tree" | "gaussian-naive-bayes" | "multiple-linear-regression";
   model: unknown;
-  metrics: Record<string, number | null>;
+  metrics: object;
   crossValidation?: unknown;
   parameters?: Record<string, number>;
   trainRows: number;
@@ -81,7 +81,7 @@ export function trainRegisteredDataset(
       { folds: 5, seed },
     );
     return results.map((result) => ({
-      algorithm: result.algorithm,
+      algorithm: result.algorithm as RegisteredTrainingResult["algorithm"],
       model: result.model,
       metrics: result.metrics,
       crossValidation: result.crossValidation,
