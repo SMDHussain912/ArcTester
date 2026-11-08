@@ -1,7 +1,9 @@
-import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SessionProvider } from "../lib/session";
 import { SessionBar } from "../lib/session-bar";
+
+type Metadata = { title: string; description: string };
+type Viewport = { width: string; initialScale: number; themeColor: string };
 
 export const metadata: Metadata = {
   title: "ArcTester — Your study workspace",
