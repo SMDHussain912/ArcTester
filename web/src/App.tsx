@@ -1664,11 +1664,11 @@ export default function App() {
       <header className="topbar">
         <Brand />
         <nav aria-label="Student navigation">
-          <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
-          <button className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
-          <button className={activePage === "assigned-exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("assigned-exams")}>Assigned exams{assignedExams.filter((item) => !item.submission).length ? ` (${assignedExams.filter((item) => !item.submission).length})` : ""}</button>
-          <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
-          <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.filter((item) => !item.seenAt).length > 0 ? ` (${announcements.filter((item) => !item.seenAt).length})` : ""}</button>
+          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
+          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
+          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "assigned-exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("assigned-exams")}>Assigned exams{assignedExams.filter((item) => !item.submission).length ? ` (${assignedExams.filter((item) => !item.submission).length})` : ""}</button>
+          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
+          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.filter((item) => !item.seenAt).length > 0 ? ` (${announcements.filter((item) => !item.seenAt).length})` : ""}</button>
         </nav>
         <div className="top-actions">
           <button
