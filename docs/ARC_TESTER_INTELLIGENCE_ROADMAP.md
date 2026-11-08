@@ -854,3 +854,26 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 **Verification**
 - CI run #617 passed the TensorFlow trainer type fix and tests.
 - The dataset-route, artifact-delivery, promotion-gate and browser-inference changes are pushed; the latest CI run is pending/in progress and must pass before this batch is considered verified.
+
+
+### Phase 7 — explicit dataset provenance and end-to-end training route verification — 2026-11-09
+
+**Implemented**
+- Added persisted `ModelDataset.datasetKind` with values `synthetic` and `real-anonymized`; existing datasets migrate safely to `synthetic`.
+- Dataset registration defaults to synthetic unless an administrator explicitly attests `real-anonymized`. The selected provenance is included in the immutable dataset fingerprint and returned in admin dataset metadata.
+- TensorFlow.js training now reads provenance from the stored dataset record rather than hard-coding synthetic.
+- Updated TensorFlow activation lifecycle: the model's own grouped holdout evaluation and production eligibility gate authorize activation; the legacy statistical registry evaluator is explicitly unavailable for TensorFlow artifacts. Rollback validates TensorFlow artifacts through their own schema and production gate.
+- Added route-level integration coverage that registers a grouped dataset and executes actual TensorFlow.js training through the admin endpoint, plus provenance persistence and lifecycle safeguards.
+
+**Verification**
+- GitHub Actions run #630 passed on commit `2a00a0178ea86500b90995f32769211ccd66470c`.
+- Web: 67/67 tests passed.
+- API: 278/278 tests passed.
+- Prisma clean-database migration verification passed, lint passed, web/API builds passed, and mobile typecheck passed.
+- The TensorFlow route integration test completed a real CPU training/evaluation request with the grouped holdout (80 train rows, 20 held-out rows, 8/2 learner groups). The synthetic fixture correctly remained ineligible for production.
+
+**Still not release-complete**
+- Browser inference adapter is built and type-checked, but is not yet wired into the student score-prediction screen. That screen continues using the existing statistical prediction path.
+- Add focused browser inference tests for model load, prediction, schema mismatch, fallback and disposal.
+- Add an admin UI for provenance selection and TensorFlow training controls; current workflow is API-level.
+- Validate real-anonymized datasets and actual model performance before activating any population model. A provenance label is an administrator attestation, not independent proof of consent or data quality.
