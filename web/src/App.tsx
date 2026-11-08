@@ -49,7 +49,7 @@ type ModelAuditEvent = {
   action: string; details: Record<string, unknown>; createdAt: string;
 };
 type TrainedCandidate = {
-  modelId: string; version: number; algorithm: string; isActive: boolean;
+  modelId: string; version: number; algorithm: string; isActive: boolean; rank: number;
   trainRows: number; testRows: number; heldOutMetrics: object;
   crossValidation: object | null; parameters: Record<string, number> | null;
 };
@@ -1644,8 +1644,8 @@ export default function App() {
             </div>
             {trainedCandidates.length > 0 && <div className="panel">
               <div className="section-head"><div><p className="eyebrow">TRAINING REPORT</p><h2>Latest trained candidates</h2></div></div>
-              <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Train / holdout</th><th>Holdout metrics</th></tr></thead><tbody>{trainedCandidates.map((candidate) => <tr key={`${candidate.modelId}-${candidate.version}`}><td>{candidate.modelId}</td><td>{candidate.version}</td><td>{candidate.algorithm}</td><td>{candidate.trainRows} / {candidate.testRows}</td><td><pre>{JSON.stringify(candidate.heldOutMetrics, null, 2)}</pre></td></tr>)}</tbody></table></div>
-              <p className="muted">These are held-out experiment metrics, not a promotion approval. Evaluate against a registered baseline before activation.</p>
+              <div className="table-wrap"><table><thead><tr><th>Rank</th><th>Model</th><th>Version</th><th>Algorithm</th><th>Train / holdout</th><th>Holdout metrics</th></tr></thead><tbody>{trainedCandidates.map((candidate) => <tr key={`${candidate.modelId}-${candidate.version}`}><td><strong>#{candidate.rank}</strong>{candidate.rank === 1 ? " · Top" : ""}</td><td>{candidate.modelId}</td><td>{candidate.version}</td><td>{candidate.algorithm}</td><td>{candidate.trainRows} / {candidate.testRows}</td><td><pre>{JSON.stringify(candidate.heldOutMetrics, null, 2)}</pre></td></tr>)}</tbody></table></div>
+              <p className="muted">Candidates are ranked on the same held-out split (classification: F1 then accuracy; regression: RMSE then MAE). This is an experiment leaderboard, not production approval. Evaluate against a registered baseline before activation.</p>
             </div>}
             {modelAuditId && <div className="panel">
               <div className="section-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h2>{modelAuditId}</h2></div><button className="ghost" disabled={modelAuditLoading} onClick={() => void loadModelAudit(modelAuditId)}>Refresh history</button></div>
