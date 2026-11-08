@@ -111,6 +111,7 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "exams" | "announcements" | "invitations">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -139,6 +140,17 @@ export default function App() {
     request<Bank>("/bank")
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== "STUDENT") return;
+    let active = true;
+    const loadAnnouncements = () => request<{ announcements: Announcement[] }>("/announcements")
+      .then(({ announcements: items }) => { if (active) setAnnouncements(items); })
+      .catch((cause) => { if (active) setError((cause as Error).message); });
+    void loadAnnouncements();
+    const interval = window.setInterval(() => { void loadAnnouncements(); }, 60_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, [user]);
 
   useEffect(() => {
@@ -433,9 +445,11 @@ export default function App() {
       <div className="app-shell">
         <header className="topbar">
           <Brand />
-          <nav>
-            <a href="#admin-dashboard">Admin</a>
-            <a href="#invitations">Invitations</a>
+          <nav aria-label="Admin navigation">
+            <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Overview</button>
+            <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
+            <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
+            <button className={activePage === "invitations" ? "nav-active" : "nav-button"} onClick={() => setActivePage("invitations")}>Invitations</button>
           </nav>
           <div className="top-actions">
             <button
@@ -453,7 +467,7 @@ export default function App() {
           </div>
         </header>
         <main className="main-content">
-          <section className="welcome panel" id="admin-dashboard">
+          <section hidden={activePage !== "dashboard"} className="welcome panel" id="admin-dashboard">
             <div>
               <p className="eyebrow">ARCTESTER ADMINISTRATION</p>
               <h1>Manage your students.</h1>
@@ -461,7 +475,7 @@ export default function App() {
             </div>
             <div className="welcome-mark">A</div>
           </section>
-          <section id="results-analytics">
+          <section hidden={activePage !== "dashboard"} id="results-analytics">
             <div className="section-head">
               <div><p className="eyebrow">RESULTS & PERFORMANCE</p><h2>Exam analytics</h2></div>
               <button className="ghost" disabled={busy} onClick={() => request<AdminAnalytics>("/admin/analytics/overview").then(setAdminAnalytics).catch((cause) => setError((cause as Error).message))}>Refresh</button>
@@ -490,7 +504,7 @@ export default function App() {
               </table>
             </div>
           </section>
-          <section id="exam-management">
+          <section hidden={activePage !== "exams"} id="exam-management">
             <div className="section-head">
               <div><p className="eyebrow">EXAM DELIVERY</p><h2>Create and publish an exam</h2></div>
             </div>
@@ -539,7 +553,7 @@ export default function App() {
               })}
             </div>
           </section>
-          <section id="announcements">
+          <section hidden={activePage !== "announcements"} id="announcements">
             <div className="section-head">
               <div><p className="eyebrow">STUDENT COMMUNICATION</p><h2>Send an announcement</h2></div>
             </div>
@@ -562,7 +576,7 @@ export default function App() {
               ))}
             </div>
           </section>
-          <section id="invitations">
+          <section hidden={activePage !== "invitations"} id="invitations">
             <div className="section-head">
               <div><p className="eyebrow">STUDENT ACCESS</p><h2>Invite a student</h2></div>
             </div>
@@ -605,9 +619,11 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <Brand />
-        <nav>
-          <a href="#dashboard">Dashboard</a>
-          <a href="#practice">Practice</a>
+        <nav aria-label="Student navigation">
+          <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
+          <button className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
+          <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
+          <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.length > 0 ? ` (${announcements.length})` : ""}</button>
         </nav>
         <div className="top-actions">
           <button
@@ -713,9 +729,23 @@ export default function App() {
               </article>
             ))}
           </section>
+        ) : activePage === "announcements" ? (
+          <section className="student-announcements">
+            <div className="page-heading">
+              <div><p className="eyebrow">STUDENT COMMUNICATION</p><h1>Announcements</h1><p className="muted">Notices published by your ArcTester administrator.</p></div>
+              <button className="ghost" onClick={() => request<{ announcements: Announcement[] }>("/announcements").then(({ announcements: items }) => setAnnouncements(items)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+            </div>
+            {announcements.length === 0 ? <div className="panel empty-state"><h2>No announcements yet</h2><p className="muted">New notices from your administrator will appear here automatically.</p></div> : announcements.map((item) => (
+              <article className="panel announcement-row" key={item.id}>
+                <div className="announcement-meta"><span className="status status-used">NEW NOTICE</span><small>{new Date(item.publishedAt).toLocaleString()}</small></div>
+                <h2>{item.title}</h2><p>{item.message}</p>
+                {item.expiresAt ? <small className="muted">Expires {new Date(item.expiresAt).toLocaleString()}</small> : null}
+              </article>
+            ))}
+          </section>
         ) : (
           <>
-            <section className="welcome panel" id="dashboard">
+            <section hidden={activePage !== "dashboard"} className="welcome panel" id="dashboard">
               <div>
                 <p className="eyebrow">YOUR LEARNING DASHBOARD</p>
                 <h1>Make every practice count.</h1>
@@ -725,7 +755,13 @@ export default function App() {
               </div>
               <div className="welcome-mark">A</div>
             </section>
-            <div className="stats-row">
+            {activePage === "dashboard" && announcements.length > 0 ? (
+              <section className="panel student-notice-preview">
+                <div className="section-head"><div><p className="eyebrow">IMPORTANT UPDATES</p><h2>Latest announcement</h2></div><button className="ghost" onClick={() => setActivePage("announcements")}>View all ({announcements.length}) →</button></div>
+                <strong>{announcements[0].title}</strong><p>{announcements[0].message}</p><small className="muted">{new Date(announcements[0].publishedAt).toLocaleString()}</small>
+              </section>
+            ) : null}
+            <div hidden={activePage !== "dashboard"} className="stats-row">
               <article className="panel stat">
                 <span className="muted">Question bank</span>
                 <strong>{bank?.total ?? "—"}</strong>
@@ -737,7 +773,7 @@ export default function App() {
                 <span className="muted">In your question bank</span>
               </article>
             </div>
-            <section id="practice">
+            <section hidden={activePage !== "practice"} id="practice">
               <div className="section-head">
                 <div>
                   <p className="eyebrow">GET STARTED</p>
@@ -785,7 +821,7 @@ export default function App() {
                 </article>
               </div>
             </section>
-            <section>
+            <section hidden={activePage !== "question-bank"}>
               <div className="section-head">
                 <div>
                   <p className="eyebrow">QUESTION BANK</p>
@@ -809,7 +845,7 @@ export default function App() {
                 ))}
               </div>
             </section>
-            <p className="footnote">
+            <p hidden={activePage !== "dashboard"} className="footnote">
               Mock test structure currently follows the existing configured AP ECET pattern. Generic
               exam management is a separate upcoming phase.
             </p>
