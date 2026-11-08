@@ -292,6 +292,37 @@ describe("versioned exam management", () => {
   });
 
   it("shows administrator analytics and blocks student access", async () => {
+    const question = await server.db.question.findUniqueOrThrow({
+      where: { questionHash: "exam-route-question-fifo-unique" },
+    });
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const thirdStudent = await server.db.user.create({
+      data: { email: "third-student@arctester.test", passwordHash: "test-only", role: "STUDENT" },
+    });
+    const cohortIds = [studentId, studentId, secondStudent.id, secondStudent.id, thirdStudent.id];
+    for (const userId of cohortIds) {
+      await server.db.attempt.create({
+        data: {
+          userId,
+          mode: "practice",
+          startedAt: new Date(Date.now() - 60_000),
+          finishedAt: new Date(),
+          answers: {
+            create: {
+              questionId: question.id,
+              chosen: 0,
+              isCorrect: false,
+              subjectSnapshot: "Computer Science",
+              topicSnapshot: "Data Structures",
+              difficultySnapshot: "easy",
+            },
+          },
+        },
+      });
+    }
     const admin = await request("/admin/analytics/overview", "GET", undefined, adminCookie);
     expect(admin.status).toBe(200);
     const body = admin.json as {
@@ -323,7 +354,13 @@ describe("versioned exam management", () => {
       minimumAnswers: 5,
       minimumStudents: 3,
       weakAccuracyThreshold: 0.6,
-      questions: [],
+      questions: [{
+        questionId: question.id,
+        sampleSize: 5,
+        uniqueStudents: 3,
+        sufficientData: true,
+        weak: true,
+      }],
     });
     expect(body.exams[0].title).toBe("Offline Systems Test");
     expect(body.exams[0].submitted).toBe(1);
