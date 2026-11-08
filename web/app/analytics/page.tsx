@@ -10,6 +10,7 @@ import {
   type WeakTopicsReport,
   type PerformanceOverview,
   type QuestionPerformanceReport,
+  type StudentScorePrediction,
 } from "../../lib/api";
 import { useSession } from "../../lib/session";
 
@@ -23,6 +24,9 @@ function AnalyticsDashboard() {
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
+  const [scorePrediction, setScorePrediction] = useState<StudentScorePrediction | null>(null);
+  const [predictionLoading, setPredictionLoading] = useState(true);
+  const [predictionError, setPredictionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -62,6 +66,16 @@ function AnalyticsDashboard() {
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError((current) => current ?? (cause instanceof ApiError ? cause.message : "Could not load question-level analytics."));
+      });
+    api.studentScorePrediction()
+      .then((report) => {
+        if (!cancelled) setScorePrediction(report);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setPredictionError(cause instanceof ApiError ? cause.message : "Could not load your score estimate.");
+      })
+      .finally(() => {
+        if (!cancelled) setPredictionLoading(false);
       });
     return () => {
       cancelled = true;
@@ -135,6 +149,35 @@ function AnalyticsDashboard() {
           <div className="stat-value">{loading ? "—" : averageAccuracy === null ? "—" : averageAccuracy + "%"}</div>
           <div className="stat-caption">Correct answers / answered questions</div>
         </div>
+      </section>
+
+      <section className="panel" aria-labelledby="score-prediction-title">
+        <div className="panel-header">
+          <h2 id="score-prediction-title">Next practice score estimate</h2>
+          <span className="pill">Personal estimate</span>
+        </div>
+        {predictionLoading ? <p className="mute">Analyzing your completed practice history…</p> : null}
+        {predictionError ? <p className="mute" role="status">{predictionError}</p> : null}
+        {!predictionLoading && !predictionError && scorePrediction?.status === "ready" ? (
+          <div>
+            <div className="big">{scorePrediction.predictedScorePercent}%</div>
+            <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
+            <p className="mute">{scorePrediction.completedAttempts} completed attempts · {scorePrediction.trainingSamples} samples used · validation MAE {scorePrediction.modelMae.toFixed(3)} vs baseline {scorePrediction.baselineMae.toFixed(3)}.</p>
+          </div>
+        ) : null}
+        {!predictionLoading && !predictionError && scorePrediction?.status === "insufficient_data" ? (
+          <div>
+            <p className="muted">{scorePrediction.message}</p>
+            <p><strong>{scorePrediction.completedAttempts} / {scorePrediction.requiredCompletedAttempts}</strong> completed practice attempts</p>
+            <p className="mute">{scorePrediction.availableSamples} of {scorePrediction.requiredSamples} required prediction samples available.</p>
+          </div>
+        ) : null}
+        {!predictionLoading && !predictionError && scorePrediction?.status === "baseline_not_beaten" ? (
+          <div>
+            <p className="muted">{scorePrediction.message}</p>
+            <p className="mute">{scorePrediction.completedAttempts} attempts analyzed · validation MAE {scorePrediction.modelMae.toFixed(3)} vs baseline {scorePrediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
+          </div>
+        ) : null}
       </section>
 
       {overview ? (
