@@ -42,8 +42,12 @@ describe("analytics", () => {
       count: 1,
     })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
     expect(c1.status).toBe(201);
+    const firstQuestion = await server.db.question.findUniqueOrThrow({
+      where: { id: c1.json.questions[0].id },
+      select: { correctIndex: true },
+    });
     await api.post(`/tests/${c1.json.attemptId}/submit`, {
-      answers: [{ questionId: c1.json.questions[0].id, selectedIndex: 0 }],
+      answers: [{ questionId: c1.json.questions[0].id, selectedIndex: firstQuestion.correctIndex }],
     });
 
     const c2 = (await api.post(`/tests`, {
@@ -52,8 +56,15 @@ describe("analytics", () => {
       count: 1,
     })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
     expect(c2.status).toBe(201);
+    const secondQuestion = await server.db.question.findUniqueOrThrow({
+      where: { id: c2.json.questions[0].id },
+      select: { correctIndex: true },
+    });
     await api.post(`/tests/${c2.json.attemptId}/submit`, {
-      answers: [{ questionId: c2.json.questions[0].id, selectedIndex: 0 }],
+      answers: [{
+        questionId: c2.json.questions[0].id,
+        selectedIndex: secondQuestion.correctIndex === 0 ? 1 : 0,
+      }],
     });
   });
 
