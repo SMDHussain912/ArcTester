@@ -682,4 +682,25 @@ describe("analytics", () => {
     const body = second.json as { skippedDuplicates: number };
     expect(body.skippedDuplicates).toBeGreaterThan(0);
   });
+
+  it("does not repeat a weak-topic recommendation immediately after the student practiced it", async () => {
+    await server.db.attempt.updateMany({
+      where: { userId: studentId, finishedAt: { not: null } },
+      data: { finishedAt: new Date(Date.now() - (RECOMMENDATION_RECENT_PRACTICE_DAYS + 1) * 24 * 60 * 60 * 1000) },
+    });
+    const before = await api.get("/analytics/recommendations");
+    const report = before.json as { recommendations: { id: string; subject: string | null; topic: string | null }[] };
+    const target = report.recommendations.find((item) => item.id.startsWith("revise-topic-"));
+    expect(target).toBeDefined();
+    const answer = await server.db.attemptAnswer.findFirst({
+      where: { subjectSnapshot: target!.subject ?? '', topicSnapshot: target!.topic },
+      select: { attemptId: true },
+    });
+    expect(answer).not.toBeNull();
+    await server.db.attempt.update({ where: { id: answer!.attemptId }, data: { finishedAt: new Date() } });
+    const after = await api.get("/analytics/recommendations");
+    const updated = after.json as { recommendations: { id: string; reason: string }[] };
+    expect(updated.recommendations.some((item) => item.id === target!.id)).toBe(false);
+    expect(updated.recommendations.some((item) => item.reason.includes('last ' + RECOMMENDATION_RECENT_PRACTICE_DAYS + ' days'))).toBe(true);
+  });
 });
