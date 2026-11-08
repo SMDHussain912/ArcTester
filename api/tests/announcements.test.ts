@@ -80,7 +80,10 @@ describe("admin announcements", () => {
 
     const nextFeed = await request("/announcements", "GET", undefined, studentCookie);
     expect(nextFeed.status).toBe(200);
-    expect(nextFeed.json.announcements).toEqual([]);
+    const seenAnnouncements = nextFeed.json.announcements as Array<{ id: string; seenAt: string | null }>;
+    expect(seenAnnouncements).toHaveLength(1);
+    expect(seenAnnouncements[0].id).toBe(announcementId);
+    expect(seenAnnouncements[0].seenAt).toBeTruthy();
   });
 
   it("rejects student publishing and invalid expiry dates", async () => {
