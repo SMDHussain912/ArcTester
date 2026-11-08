@@ -173,3 +173,4 @@
   .exam-question-picker .pick-row { grid-template-columns: auto minmax(0, 1fr); }
   .exam-question-picker .pick-row > small { grid-column: 2; }
 }
+.success-message { margin: 0; color: var(--success, #16804a); font-size: 13px; font-weight: 650; }
