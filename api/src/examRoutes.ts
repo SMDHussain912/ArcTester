@@ -397,10 +397,13 @@ export function examRouter(db: PrismaClient): Router {
             unanswered: 0,
             studentIds: new Set<number>(),
           };
-          questionRow.studentIds.add(attempt.userId);
-          if (answer.chosen === null) questionRow.unanswered += 1;
-          else if (answer.isCorrect) questionRow.correct += 1;
-          else questionRow.incorrect += 1;
+          if (answer.chosen === null) {
+            questionRow.unanswered += 1;
+          } else {
+            questionRow.studentIds.add(attempt.userId);
+            if (answer.isCorrect) questionRow.correct += 1;
+            else questionRow.incorrect += 1;
+          }
           practiceByQuestion.set(answer.questionId, questionRow);
         }
       }
