@@ -40,7 +40,7 @@ export type StudentScorePrediction =
 
 function nextAttemptFeatures(attempts: CompletedAttemptScore[]): number[] {
   const history = attempts.slice().sort((a, b) =>
-    new Date(a.finishedAt).getTime() - new Date(b.finishedAt).getTime()
+    (a.finishedAt instanceof Date ? a.finishedAt.getTime() : new Date(a.finishedAt).getTime()) - (b.finishedAt instanceof Date ? b.finishedAt.getTime() : new Date(b.finishedAt).getTime())
   );
   const recent = history.slice(-SCORE_PREDICTION_HISTORY_WINDOW);
   const previous = history[history.length - 1];
