@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { datasetToCsv, generateSyntheticDatasets } from "./datasetFactory.js";
+import { analyzeDatasetQuality, SYNTHETIC_DATASET_DEFINITIONS } from "./datasetQuality.js";
 
 function readOption(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);
@@ -26,15 +27,23 @@ async function main(): Promise<void> {
     await writeFile(path.join(outputDirectory, filename), datasetToCsv(rows), "utf8");
   }
 
+  const datasetKeys = ["studentPerformance", "topicMastery", "examReadiness", "learningBehaviour", "scorePrediction"] as const;
+  const qualityReports = Object.fromEntries(datasetKeys.map((key, index) => [
+    files[index][0],
+    analyzeDatasetQuality(datasets[key], SYNTHETIC_DATASET_DEFINITIONS[key]),
+  ]));
+
   await writeFile(
     path.join(outputDirectory, "manifest.json"),
     `${JSON.stringify({
       generator: "ArcTester Dataset Factory",
-      generatorVersion: 1,
+      generatorVersion: 2,
       synthetic: true,
       seed,
       rowsPerDataset,
       datasets: files.map(([filename]) => filename),
+      definitions: SYNTHETIC_DATASET_DEFINITIONS,
+      qualityReports,
       warning: "Simulated data only. Do not use synthetic evaluation metrics as evidence of real-world model performance.",
     }, null, 2)}\n`,
     "utf8",
