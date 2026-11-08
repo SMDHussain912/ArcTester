@@ -312,6 +312,14 @@ export interface AdminOverview {
       unanswered: number;
       accuracy: number | null;
     }[];
+    topics: {
+      subject: string;
+      topic: string | null;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+    }[];
   };
   formalExams: {
     graded: number;
@@ -321,6 +329,16 @@ export interface AdminOverview {
     unanswered: number;
     subjects: {
       subject: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      awardedMarks: number;
+      maximumMarks: number;
+      accuracy: number | null;
+    }[];
+    topics: {
+      subject: string;
+      topic: string | null;
       correct: number;
       incorrect: number;
       unanswered: number;
