@@ -18,6 +18,7 @@ export interface RegisteredTrainingResult {
   uncertainty?: { residualStdDev: number; method: "holdout-rmse" };
   trainRows: number;
   testRows: number;
+  groupSplit?: { trainGroups: number; testGroups: number };
 }
 
 function validateSchema(schema: DatasetFeatureEncoder[]): void {
@@ -107,6 +108,12 @@ export function trainRegisteredDataset(
       parameters: result.parameters,
       trainRows: split.train.length,
       testRows: split.test.length,
+      ...(hasGroupIds ? {
+        groupSplit: {
+          trainGroups: new Set(split.train.map((row) => row.groupId)).size,
+          testGroups: new Set(split.test.map((row) => row.groupId)).size,
+        },
+      } : {}),
     }));
   }
   const result = runRegressionExperiment(
@@ -122,6 +129,12 @@ export function trainRegisteredDataset(
     uncertainty: { residualStdDev, method: "holdout-rmse" },
     trainRows: split.train.length,
     testRows: split.test.length,
+    ...(hasGroupIds ? {
+      groupSplit: {
+        trainGroups: new Set(split.train.map((row) => row.groupId)).size,
+        testGroups: new Set(split.test.map((row) => row.groupId)).size,
+      },
+    } : {}),
   }];
 }
 
