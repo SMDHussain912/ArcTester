@@ -235,7 +235,7 @@ export default function App() {
 
   useEffect(() => {
     if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused) return;
-    const interval = window.setInterval(() => setAssignmentClock(Date.now()), 1000);
+    const interval = window.setInterval(() => setAssignmentClock(performance.now()), 1000);
     return () => window.clearInterval(interval);
   }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused]);
 
@@ -256,10 +256,10 @@ export default function App() {
           { method: "POST", body: JSON.stringify({ event }) },
         );
         if (disposed) return;
-        setAssignmentServerOffset(new Date(response.serverTime).getTime() - Date.now());
+        setAssignmentServerOffset(new Date(response.serverTime).getTime() - performance.now());
         if (response.deadline) setAssignmentDeadline(response.deadline);
         setAssignmentSessionPaused(response.sessionStatus !== "ACTIVE");
-        setError("");
+        if (response.sessionStatus === "ACTIVE") setError((current) => current.includes("paused or locked by the invigilator") ? "" : current);
       } catch (cause) {
         if (disposed) return;
         const message = (cause as Error).message;
@@ -359,9 +359,9 @@ export default function App() {
       setAssignmentAnswers({});
       setAssignmentStartedAt(sessionResponse.session.startedAt);
       setAssignmentDeadline(sessionResponse.session.deadline);
-      setAssignmentServerOffset(new Date(sessionResponse.session.serverTime).getTime() - Date.now());
+      setAssignmentServerOffset(new Date(sessionResponse.session.serverTime).getTime() - performance.now());
       setAssignmentSessionPaused(false);
-      setAssignmentClock(Date.now());
+      setAssignmentClock(performance.now());
       setAssignmentAutoSubmitTriggered(false);
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -430,13 +430,17 @@ export default function App() {
   }
 
   async function refreshLiveSessions() {
-    const response = await request<{ sessions: LiveSession[] }>("/admin/exams/live-sessions");
-    setLiveSessions(response.sessions ?? []);
+    try {
+      const response = await request<{ sessions: LiveSession[] }>("/admin/exams/live-sessions");
+      setLiveSessions(response.sessions ?? []);
+    } catch (cause) { setError((cause as Error).message); }
   }
 
   async function refreshExamAttendance() {
-    const response = await request<{ attendance: ExamAttendance[] }>("/admin/exams/attendance");
-    setExamAttendance(response.attendance ?? []);
+    try {
+      const response = await request<{ attendance: ExamAttendance[] }>("/admin/exams/attendance");
+      setExamAttendance(response.attendance ?? []);
+    } catch (cause) { setError((cause as Error).message); }
   }
 
   async function controlExamSession(sessionId: string, action: "PAUSE" | "RESUME" | "TERMINATE") {
@@ -1412,7 +1416,7 @@ export default function App() {
       <main className="main-content">
         {activeAssignmentPackage ? (
           <section className="assigned-exam-session">
-            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); setAssignmentAutoSubmitTriggered(false); } }}>Exit exam</button></div>
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentDeadline(null); setAssignmentSessionPaused(false); setAssignmentAnswers({}); setAssignmentAutoSubmitTriggered(false); } }}>Exit exam</button></div>
             {assignmentSessionPaused && <p className="notice session-paused" role="status">Session paused or awaiting invigilator action. The server-controlled timer is held.</p>}
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
