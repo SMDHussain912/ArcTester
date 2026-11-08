@@ -45,7 +45,7 @@ export interface TestResult {
 export interface BankInfo { subjects: { subject: string; count: number }[]; total: number; serverNow: string }
 export interface AuthUser { id: number; email: string; role: "ADMIN" | "STUDENT" }
 export interface AuthSession { ok: boolean; user: AuthUser }
-export interface AdminQuestion extends PublicQuestion {}
+export type AdminQuestion = PublicQuestion;
 export interface AdminStudent { id: number; email: string }
 export interface AdminExam {
   id: string; title: string; description: string; status: string; updatedAt: string;
