@@ -17,6 +17,7 @@ export function SessionBar() {
       <nav className="primary-nav" aria-label="Main navigation">
         <Link href="/" className="nav-link">Dashboard</Link>
         <a href="/#practice" className="nav-link">Practice</a>
+        {user?.role === "STUDENT" ? <Link href="/assignments" className="nav-link">My exams</Link> : null}
         <a href="/#question-bank" className="nav-link">Question bank</a>
         {user?.role === "ADMIN" ? <Link href="/admin" className="nav-link">Admin workspace</Link> : null}
       </nav>
