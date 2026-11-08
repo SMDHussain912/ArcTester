@@ -110,3 +110,17 @@ const result = await registry.predict("exam-readiness-logistic-regression", feat
 The registry validates model artifacts on save and load, checks model/preprocessing feature counts, rejects unsafe model IDs, writes JSON through temporary files followed by atomic rename, caches loaded active versions, and supports explicit rollback. Predictions reject missing, extra, or incorrectly typed features. Unknown categorical values use the training-time unknown bucket.
 
 **Storage limitation:** this version uses a filesystem-backed registry. Point it at a persistent mounted directory before using it in a deployed service; ephemeral container filesystems can lose model versions during redeploy/restart. It is not yet wired to a student-facing prediction endpoint. Synthetic models remain for pipeline verification only and must not be promoted as real ECET learner models.
+
+
+### Durable API registry (admin)
+
+The API now stores reviewed model versions in the SQLite `RegisteredModel` table instead of relying on the experiment runner's local filesystem registry. The database migration creates a unique `(modelId, version)` key and an active-version index. This storage survives service restarts and redeploys when the deployed database volume is persistent and backed up.
+
+Admin-only endpoints (session cookie or bearer token):
+- `GET /admin/models` — list registered versions and active status.
+- `POST /admin/models` — register a validated artifact. The first version becomes active; later versions remain inactive.
+- `POST /admin/models/:modelId/:version/activate` — explicitly promote a version.
+- `POST /admin/models/:modelId/rollback` — activate the nearest earlier version.
+- `POST /admin/models/:modelId/predict` — run inference against the active validated artifact using `{ "features": { ... } }`.
+
+Model registration and promotion revalidate the artifact and its preprocessing schema. The API does not expose filesystem paths or raw artifact JSON in list responses. These endpoints are administrator-only while the model lifecycle is being validated; no student-facing readiness predictions are enabled. A real learner model still requires appropriately consented, de-identified training data and chronological/grouped evaluation.
