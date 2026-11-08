@@ -207,89 +207,79 @@ function TestRunner() {
   const counts = paletteCounts(answerList, marked);
 
   return (
-    <>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <span
-          className={`timer${timer.remainingMs < 5 * 60 * 1000 ? " low" : ""}`}
-          role="timer"
-          aria-live="polite"
-        >
-          {formatMs(timer.remainingMs)}
-        </span>
-        <span className="mute">
-          {index + 1} of {questions.length} · {question.subject}
-        </span>
-      </div>
-
-      <div className="card">
-        <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend>
-            <b>
-              {index + 1}. {question.text}
-            </b>
-          </legend>
-          {question.options.map((option, optionIndex) => (
-            <label key={optionIndex} className={answers[question.id] === optionIndex ? "sel" : ""}>
-              <input
-                type="radio"
-                name={`q-${question.id}`}
-                checked={answers[question.id] === optionIndex}
-                onChange={() => choose(question.id, optionIndex)}
-              />
-              <span>{option}</span>
-            </label>
-          ))}
-        </fieldset>
-
-        <button
-          className="alt"
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          disabled={index === 0}
-        >
-          Previous
-        </button>
-        <button
-          onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}
-          disabled={index === questions.length - 1}
-        >
-          Next
-        </button>
-        <button className="alt" onClick={() => clearAnswer(question.id)}>
-          Clear answer
-        </button>
-        <button
-          className="alt"
-          onClick={() => toggleMark(question.id)}
-          aria-pressed={marked.has(question.id)}
-        >
-          {marked.has(question.id) ? "Unmark review" : "Mark for review"}
-        </button>
-      </div>
-
-      <div className="card">
-        <p className="mute">
-          {counts.answered} answered · {counts.unanswered} unanswered · {counts.marked} marked
-        </p>
-        <div className="pal" role="group" aria-label="Question palette">
-          {statuses.map((status, i) => (
-            <button
-              key={i}
-              className={status}
-              onClick={() => setIndex(i)}
-              aria-label={`Question ${i + 1}, ${status}`}
-              aria-current={i === index}
-            >
-              {i + 1}
-            </button>
-          ))}
+    <div className="exam-layout">
+      <div className="exam-heading">
+        <div>
+          <p className="eyebrow">Exam session</p>
+          <h1>Test in progress</h1>
+          <p className="muted">{question.subject} · Question {index + 1} of {questions.length}</p>
+        </div>
+        <div className={`exam-clock${timer.remainingMs < 5 * 60 * 1000 ? " low" : ""}`} role="timer" aria-live="polite">
+          <span className="mute">Time remaining</span>
+          <strong>{formatMs(timer.remainingMs)}</strong>
         </div>
       </div>
 
-      <p>
-        <button onClick={confirmSubmit} disabled={submitting}>
-          {submitting ? "Submitting…" : "Submit test"}
-        </button>
-      </p>
-    </>
+      <div className="exam-progress" aria-label={`Question ${index + 1} of ${questions.length}`}>
+        <div><span style={{ width: `${((index + 1) / questions.length) * 100}%` }} /></div>
+        <span className="mute">{Math.round(((index + 1) / questions.length) * 100)}% through paper</span>
+      </div>
+
+      <div className="exam-content">
+        <section className="panel exam-question-panel">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <span className="pill pill-accent">Question {index + 1}</span>
+            <button className="button button-quiet button-small" onClick={() => toggleMark(question.id)} aria-pressed={marked.has(question.id)}>
+              {marked.has(question.id) ? "★ Marked for review" : "☆ Mark for review"}
+            </button>
+          </div>
+          <fieldset className="exam-options" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="exam-question-text">{question.text}</legend>
+            {question.options.map((option, optionIndex) => (
+              <label key={optionIndex} className={answers[question.id] === optionIndex ? "sel" : ""}>
+                <input
+                  type="radio"
+                  name={`q-${question.id}`}
+                  checked={answers[question.id] === optionIndex}
+                  onChange={() => choose(question.id, optionIndex)}
+                />
+                <span className="exam-option-letter">{String.fromCharCode(65 + optionIndex)}</span>
+                <span>{option}</span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="exam-controls">
+            <button className="button button-secondary" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0}>← Previous</button>
+            <button className="button button-quiet" onClick={() => clearAnswer(question.id)}>Clear answer</button>
+            <button className="button button-primary" onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={index === questions.length - 1}>Next →</button>
+          </div>
+        </section>
+
+        <aside className="panel exam-sidebar">
+          <div className="panel-header">
+            <h2>Question overview</h2>
+            <span className="pill">{questions.length} total</span>
+          </div>
+          <div className="exam-counts">
+            <span><i className="dot dot-answered" /> {counts.answered} answered</span>
+            <span><i className="dot dot-marked" /> {counts.marked} marked</span>
+            <span><i className="dot dot-empty" /> {counts.unanswered} unanswered</span>
+          </div>
+          <div className="pal" role="group" aria-label="Question palette">
+            {statuses.map((status, i) => (
+              <button key={i} className={status} onClick={() => setIndex(i)} aria-label={`Question ${i + 1}, ${status}`} aria-current={i === index}>
+                {i + 1}
+              </button>
+            ))}
+          </div>
+          <div className="exam-submit">
+            <p className="mute">You can review unanswered questions before submitting.</p>
+            <button className="button button-primary" onClick={confirmSubmit} disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit test"}
+            </button>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }
