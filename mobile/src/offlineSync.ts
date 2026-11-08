@@ -1,8 +1,4 @@
-import {
-  getPendingSubmissions,
-  keepSubmissionPending,
-  markSubmissionSynced,
-} from "./offlineStore";
+import { getPendingSubmissions, keepSubmissionPending, markSubmissionSynced } from "./offlineStore";
 
 type SubmissionApiResponse = {
   ok?: boolean;
@@ -22,7 +18,7 @@ export type OfflineSyncResult = {
 
 export async function syncPendingSubmissions(
   apiUrl: string,
-  token: string,
+  token: string
 ): Promise<OfflineSyncResult> {
   const pending = await getPendingSubmissions();
   let uploaded = 0;
@@ -44,7 +40,7 @@ export async function syncPendingSubmissions(
             submittedAt: attempt.submittedAt,
             answers: attempt.answers,
           }),
-        },
+        }
       );
 
       const body = (await response.json().catch(() => ({}))) as SubmissionApiResponse;
@@ -63,7 +59,7 @@ export async function syncPendingSubmissions(
       if (body.submission.attemptUuid && body.submission.attemptUuid !== attempt.attemptUuid) {
         await keepSubmissionPending(
           attempt.assignmentId,
-          "The server returned a different attempt identifier. Manual review is required.",
+          "The server returned a different attempt identifier. Manual review is required."
         );
         failed += 1;
         continue;
@@ -74,7 +70,7 @@ export async function syncPendingSubmissions(
     } catch (error) {
       await keepSubmissionPending(
         attempt.assignmentId,
-        error instanceof Error ? error.message : "Network unavailable.",
+        error instanceof Error ? error.message : "Network unavailable."
       );
       failed += 1;
       break;
