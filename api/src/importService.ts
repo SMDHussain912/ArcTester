@@ -41,26 +41,21 @@ function describeIssue(error: unknown): string {
 
 /** Import BASE/JSON rows: [subject, text, [A,B,C,D], correctIndex, explanation?]. Row numbers are 1-based. */
 export async function importFromJson(db: PrismaClient, payload: unknown): Promise<ImportReport> {
-  const parsed = BaseRowSchema.array().safeParse(payload);
   const report: ImportReport = {
     added: 0,
     duplicates: 0,
     invalid: [],
     total: Array.isArray(payload) ? payload.length : 0,
   };
-  if (!parsed.success) {
-    // Whole file is not a list: report every row as invalid generically.
-    if (!Array.isArray(payload)) {
-      report.invalid.push(invalidRow(0, "JSON must be a list of questions"));
-      return report;
-    }
-    // Fall through to per-row validation below for a precise report.
+  if (!Array.isArray(payload)) {
+    report.invalid.push(invalidRow(0, "JSON must be a list of questions"));
+    return report;
   }
-  const rows = Array.isArray(payload) ? payload : [];
-  if (rows.length > MAX_QUESTION_IMPORT_ROWS) {
+  if (payload.length > MAX_QUESTION_IMPORT_ROWS) {
     report.invalid.push(invalidRow(0, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`));
     return report;
   }
+  const rows = payload;
   const valid: { index: number; input: QuestionInput }[] = [];
   rows.forEach((raw, i) => {
     const rowNumber = i + 1;
