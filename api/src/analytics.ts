@@ -129,6 +129,94 @@ export async function getHistory(db: PrismaClient, userId: number): Promise<Hist
   });
 }
 
+export interface StudyRecommendation {
+  id: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  reason: string;
+  subject: string | null;
+  topic: string | null;
+  mode: "practice" | "mistakes" | "mock";
+  questionCount: number;
+}
+
+export interface StudyRecommendationsReport {
+  generatedAt: string;
+  basedOnAttempts: number;
+  recommendations: StudyRecommendation[];
+}
+
+/**
+ * Turns a learner's own attempt statistics into transparent next steps.
+ * This is deterministic guidance, not an AI-generated diagnosis.
+ */
+export async function getStudyRecommendations(
+  db: PrismaClient,
+  userId: number
+): Promise<StudyRecommendationsReport> {
+  const [weakTopics, history] = await Promise.all([
+    getWeakTopics(db, userId),
+    getHistory(db, userId),
+  ]);
+  const recommendations: StudyRecommendation[] = [];
+  const weakestSubject = weakTopics.subjects[0];
+
+  if (weakestSubject) {
+    const accuracy = Math.round(weakestSubject.accuracy * 100);
+    recommendations.push({
+      id: "strengthen-weakest-subject",
+      priority: accuracy < 55 ? "high" : "medium",
+      title: `Strengthen ${weakestSubject.subject}`,
+      reason: `${accuracy}% accuracy across ${weakestSubject.seen} answered questions. Focused practice will help close this gap.`,
+      subject: weakestSubject.subject,
+      topic: null,
+      mode: "practice",
+      questionCount: 15,
+    });
+
+    if (weakestSubject.wrong > 0) {
+      recommendations.push({
+        id: "review-mistakes",
+        priority: "medium",
+        title: "Revisit incorrect answers",
+        reason: `You have ${weakestSubject.wrong} incorrect answers in ${weakestSubject.subject}. Review mistakes before taking another timed mock.`,
+        subject: weakestSubject.subject,
+        topic: null,
+        mode: "mistakes",
+        questionCount: 10,
+      });
+    }
+  } else if (history.length > 0) {
+    recommendations.push({
+      id: "build-subject-baseline",
+      priority: "medium",
+      title: "Build a subject performance baseline",
+      reason: "Complete a focused subject session so your next study plan can target the areas that need attention.",
+      subject: null,
+      topic: null,
+      mode: "practice",
+      questionCount: 15,
+    });
+  } else {
+    recommendations.push({
+      id: "start-diagnostic-practice",
+      priority: "low",
+      title: "Start with a diagnostic practice session",
+      reason: "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
+      subject: null,
+      topic: null,
+      mode: "practice",
+      questionCount: 10,
+    });
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    basedOnAttempts: history.length,
+    recommendations,
+  };
+}
+
 export async function exportProgress(
   db: PrismaClient,
   userId: number
