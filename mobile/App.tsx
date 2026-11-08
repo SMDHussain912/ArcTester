@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
+import OfflineExamWorkspace from "./src/offline/OfflineExamWorkspace";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string };
@@ -34,6 +35,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
   const [test, setTest] = useState<Test | null>(null);
+  const [showExams, setShowExams] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -176,6 +178,7 @@ export default function App() {
     setUser(null);
     setBank(null);
     setTest(null);
+    setShowExams(false);
   }
 
   return (
@@ -240,6 +243,8 @@ export default function App() {
               </Text>
             </TouchableOpacity>
           </View>
+        ) : showExams ? (
+          <OfflineExamWorkspace token={token!} onExit={() => setShowExams(false)} />
         ) : test ? (
           <View style={styles.card}>
             <Text style={styles.heading}>Practice session</Text>
@@ -293,6 +298,12 @@ export default function App() {
                 <Text style={styles.muted}>Subjects</Text>
               </View>
             </View>
+            <TouchableOpacity
+              onPress={() => setShowExams(true)}
+              style={[styles.primary, { marginTop: 20 }]}
+            >
+              <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
+            </TouchableOpacity>
             <Text style={styles.sectionTitle}>Practice by subject</Text>
             {bank?.subjects.map((item) => (
               <TouchableOpacity
