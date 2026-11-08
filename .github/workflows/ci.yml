@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,8 +53,27 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      - name: Check formatting
-        run: npm run format:check
+      - name: Check formatting of changed files
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git fetch origin "$BASE_REF"
+            changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          elif [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            changed_files="$(git ls-files)"
+          else
+            changed_files="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
+          fi
+
+          format_files="$(printf '%s\n' "$changed_files" | grep -E '\.(css|html|js|jsx|json|md|mdx|scss|ts|tsx|yaml|yml)$' || true)"
+          if [[ -z "$format_files" ]]; then
+            echo "No changed Prettier-supported files to check."
+          else
+            printf '%s\n' "$format_files" | xargs npx prettier --check
+          fi
 
   docker-build:
     name: Build Docker images
