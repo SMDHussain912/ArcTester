@@ -82,7 +82,7 @@ export default function LearningPage() {
       ) : null}
       <div className="stack">
         {concepts.map((concept) => (
-          <article className="panel" key={concept.slug}>
+          <article className="panel" id={concept.slug} key={concept.slug}>
             <div className="panel-header">
               <div>
                 <h2>{concept.title}</h2>
