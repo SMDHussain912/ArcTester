@@ -102,11 +102,15 @@ export default function AdminPage() {
     setSessionActionId(session.id);
     try {
       await api.adminSessionAction(session.id, action, reason ?? "");
-      const [refreshed, register] = await Promise.all([api.adminLiveSessions(), api.adminExamAttendance()]);
-      setLiveSessions(refreshed.sessions);
-      setAttendance(register.attendance);
       setNotice(`Session ${action.toLowerCase()} action recorded.`);
       setError("");
+      try {
+        const [refreshed, register] = await Promise.all([api.adminLiveSessions(), api.adminExamAttendance()]);
+        setLiveSessions(refreshed.sessions);
+        setAttendance(register.attendance);
+      } catch {
+        setError("The session action succeeded, but refreshing live session data failed. Use Refresh to reload the workspace.");
+      }
     } catch (cause: unknown) {
       showError(cause, "Could not update the candidate session.");
     } finally {
@@ -186,6 +190,17 @@ export default function AdminPage() {
     setNotice("");
   }
 
+  async function refreshWorkspaceAfterMutation(successMessage: string) {
+    try {
+      await load();
+      setNotice(successMessage);
+      setError("");
+    } catch {
+      setNotice(successMessage);
+      setError("The action succeeded, but refreshing workspace data failed. Use Refresh to reload the latest state.");
+    }
+  }
+
   async function createExam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) { setError("Enter an exam title."); return; }
@@ -221,12 +236,13 @@ export default function AdminPage() {
       const result = editingExamId
         ? await api.updateAdminExam(editingExamId, payload)
         : await api.createAdminExam(payload);
-      setNotice(editingExamId
+      const successMessage = editingExamId
         ? "A new immutable exam version was saved. Existing assignments remain on their original version."
-        : "Draft exam created. Publish it from the Exams tab when it is ready.");
+        : "Draft exam created. Publish it from the Exams tab when it is ready.";
       setEditingExamId(null);
       setTitle(""); setDescription(""); setSelectedQuestions([]); setQuestionScoring({});
-      await load(); setTab("exams");
+      await refreshWorkspaceAfterMutation(successMessage);
+      setTab("exams");
       setAssignExamId(result.exam.id);
     } catch (e) { showError(e, "Could not create the exam."); }
     finally { setBusy(false); }
@@ -285,8 +301,7 @@ export default function AdminPage() {
     setBusy(true); setError(""); setNotice("");
     try {
       const result = await api.cloneAdminExam(id);
-      setNotice(`Created ${result.exam.title} as a new draft. Edit it before publishing.`);
-      await load();
+      await refreshWorkspaceAfterMutation(`Created ${result.exam.title} as a new draft. Edit it before publishing.`);
     } catch (cause: unknown) {
       showError(cause, "Could not clone this exam.");
     } finally { setBusy(false); }
@@ -299,8 +314,7 @@ export default function AdminPage() {
     setBusy(true); setError(""); setNotice("");
     try {
       await api.publishAdminExam(id);
-      setNotice("Exam published. You can now assign it to students.");
-      await load();
+      await refreshWorkspaceAfterMutation("Exam published. You can now assign it to students.");
     } catch (e) { showError(e, "Could not publish the exam."); }
     finally { setBusy(false); }
   }
@@ -320,9 +334,8 @@ export default function AdminPage() {
         ...(availableFrom ? { availableFrom: new Date(availableFrom).toISOString() } : {}),
         ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}),
       });
-      setNotice("Exam assignment completed. Existing assignments were left unchanged.");
       setSelectedStudents([]); setAvailableFrom(""); setDueAt("");
-      await load();
+      await refreshWorkspaceAfterMutation("Exam assignment completed. Existing assignments were left unchanged.");
     } catch (e) { showError(e, "Could not assign the exam."); }
     finally { setBusy(false); }
   }
