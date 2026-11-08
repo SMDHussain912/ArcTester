@@ -179,3 +179,39 @@
 .question-editor textarea { resize:vertical; }
 .question-correct-choice input { width:auto; flex:0 0 auto; }
 .question-option-row > input { min-width:0; }
+
+
+/* Question import workspace, subject filters and examiner blueprint */
+.import-workspace { padding: 24px; margin-bottom: 28px; display: grid; gap: 18px; }
+.import-workspace .section-head { margin: 0; }
+.import-toolbar { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: stretch; }
+.import-dropzone { min-height: 116px; border: 1.5px dashed var(--border); border-radius: 14px; display: grid; place-content: center; text-align: center; gap: 7px; background: var(--surface-soft); cursor: pointer; position: relative; }
+.import-dropzone strong { font-size: 14px; }
+.import-dropzone span { color: var(--muted); font-size: 12px; }
+.import-dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.import-template-actions { display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+.import-mode-row { display: flex; align-items: end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.import-mode-row label,.quota-actions label,.bank-filter-bar label { display: grid; gap: 7px; font-size: 13px; font-weight: 650; }
+.import-mode-row select,.quota-actions select,.bank-filter-bar select,.bank-filter-bar input { min-width: 190px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--ink); font: inherit; }
+.import-workspace textarea { width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--ink); font: 12px/1.6 ui-monospace,monospace; resize: vertical; }
+.import-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.import-report { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; padding: 15px; border-radius: 12px; background: var(--surface-soft); }
+.import-report > div { display: grid; gap: 4px; }
+.import-report strong { font-size: 23px; }
+.import-report span { color: var(--muted); font-size: 11px; }
+.import-report details { grid-column: 1/-1; font-size: 13px; }
+.import-report details p { margin: 8px 0; color: var(--muted); }
+.bank-filter-bar { display: grid; grid-template-columns: minmax(180px,.7fr) minmax(220px,1.3fr) auto; align-items: end; gap: 14px; margin: 0 0 12px; }
+.bank-filter-bar > span { padding-bottom: 12px; font-size: 12px; }
+.subject-quota-builder { padding: 17px; border: 1px solid var(--line); border-radius: 13px; display: grid; gap: 14px; background: var(--surface-soft); }
+.quota-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 10px; }
+.quota-grid label { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font-size: 13px; font-weight: 650; }
+.quota-grid label span { font-size: 11px; font-weight: 400; }
+.quota-grid input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.quota-actions { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+@media(max-width:720px) {
+  .import-toolbar,.bank-filter-bar { grid-template-columns: 1fr; }
+  .import-template-actions { flex-direction: row; flex-wrap: wrap; }
+  .import-report { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .import-footer { align-items: stretch; flex-direction: column; }
+}
