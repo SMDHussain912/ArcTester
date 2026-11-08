@@ -19,7 +19,7 @@ function localCors(_req: express.Request, res: express.Response, next: express.N
       .map((value) => value.trim())
       .filter(Boolean)
   );
-  const isLocalOrigin = /^https?:\\/\\/(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$/.test(origin);
+  const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
@@ -60,7 +60,7 @@ const app = buildApp();
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
-    console.log(`ecet-api listening on http://localhost:${PORT}`);
+    console.log(\`ecet-api listening on http://localhost:\${PORT}\`);
   });
 }
 
