@@ -7,13 +7,20 @@ import { authRouter } from "./auth.js";
 const db = new PrismaClient();
 
 /**
- * Minimal CORS for the local Next.js dev server (localhost:3000 -> :4000).
- * Hand-rolled instead of the `cors` package: 8 lines, no new dependency.
- * Allow every localhost port so the API also works on a phone via LAN.
+ * Minimal CORS without another dependency. Localhost is allowed by default;
+ * additional exact origins (for example a phone's LAN URL) must be listed in
+ * CORS_ORIGINS as a comma-separated environment variable.
  */
 function localCors(_req: express.Request, res: express.Response, next: express.NextFunction): void {
   const origin = _req.headers.origin ?? "";
-  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)) {
+  const configuredOrigins = new Set(
+    (process.env.CORS_ORIGINS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+  const isLocalOrigin = /^https?:\\/\\/(localhost|127\\.0\\.0\\.1|\\[::1\\])(:\\d+)?$/.test(origin);
+  if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
