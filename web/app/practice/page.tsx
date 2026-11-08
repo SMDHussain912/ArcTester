@@ -31,7 +31,7 @@ function PracticePaperChooser() {
 
   const selectedSubject = bank?.subjects.find((item) => item.subject === subject);
   const questionCount = mode === "mock" ? 200 : Math.min(count, selectedSubject?.count ?? count);
-  const durationMinutes = mode === "mock" ? 180 : Math.max(5, Math.ceil(questionCount * 1.5));
+  const durationMinutes = mode === "mock" ? 180 : Math.max(5, Math.round(questionCount * 0.9));
 
   async function startExam() {
     setStarting(true);
