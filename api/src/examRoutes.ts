@@ -320,6 +320,7 @@ export function examRouter(db: PrismaClient): Router {
         db.attempt.findMany({
           where: { finishedAt: { not: null }, user: { role: "STUDENT" } },
           select: {
+            userId: true,
             answers: {
               select: {
                 questionId: true,
@@ -365,7 +366,7 @@ export function examRouter(db: PrismaClient): Router {
       const practiceByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>();
       const practiceByQuestion = new Map<number, {
         questionId: number; subject: string; topic: string | null; difficulty: string;
-        correct: number; incorrect: number; unanswered: number;
+        correct: number; incorrect: number; unanswered: number; studentIds: Set<number>;
       }>();
       for (const attempt of practiceAttempts) {
         for (const answer of attempt.answers) {
@@ -394,7 +395,9 @@ export function examRouter(db: PrismaClient): Router {
             correct: 0,
             incorrect: 0,
             unanswered: 0,
+            studentIds: new Set<number>(),
           };
+          questionRow.studentIds.add(attempt.userId);
           if (answer.chosen === null) questionRow.unanswered += 1;
           else if (answer.isCorrect) questionRow.correct += 1;
           else questionRow.incorrect += 1;
@@ -403,14 +406,18 @@ export function examRouter(db: PrismaClient): Router {
       }
       const practiceAnswered = practiceCorrect + practiceIncorrect;
       const minimumQuestionAnswers = 5;
+      const minimumQuestionStudents = 3;
       const weakQuestionAccuracy = 0.6;
       const questionPerformance = [...practiceByQuestion.values()].map((row) => {
         const sampleSize = row.correct + row.incorrect;
         const accuracy = sampleSize > 0 ? row.correct / sampleSize : null;
-        const sufficientData = sampleSize >= minimumQuestionAnswers;
+        const uniqueStudents = row.studentIds.size;
+        const sufficientData = sampleSize >= minimumQuestionAnswers && uniqueStudents >= minimumQuestionStudents;
+        const { studentIds: _studentIds, ...publicRow } = row;
         return {
-          ...row,
+          ...publicRow,
           sampleSize,
+          uniqueStudents,
           accuracy,
           sufficientData,
           weak: sufficientData && accuracy !== null && accuracy < weakQuestionAccuracy,
@@ -492,6 +499,7 @@ export function examRouter(db: PrismaClient): Router {
           })),
           questionPerformance: {
             minimumAnswers: minimumQuestionAnswers,
+            minimumStudents: minimumQuestionStudents,
             weakAccuracyThreshold: weakQuestionAccuracy,
             insufficientSampleCount: questionPerformance.filter((row) => !row.sufficientData).length,
             questions: questionPerformance,
