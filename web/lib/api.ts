@@ -49,6 +49,8 @@ export interface TestResult {
   questions: {
     questionId: number;
     subject: string;
+    topic: string | null;
+    relatedConcepts: { slug: string; title: string }[];
     text: string;
     options: string[];
     selectedIndex: number | null;
@@ -83,6 +85,7 @@ export interface OfflineLearningPackage {
     id: number;
     subject: string;
     topic: string | null;
+    relatedConcepts: { slug: string; title: string }[];
     text: string;
     options: string[];
     correctIndex: number;
