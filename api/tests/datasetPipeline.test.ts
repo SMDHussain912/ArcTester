@@ -9,6 +9,7 @@ import {
   runRegressionExperiment,
   serializeExperimentArtifact,
   splitDatasetRows,
+  splitDatasetRowsByGroup,
 } from "../src/intelligence/datasetPipeline.js";
 
 describe("dataset-to-model pipeline", () => {
@@ -32,6 +33,62 @@ describe("dataset-to-model pipeline", () => {
     expect(first.train).toHaveLength(40);
     expect(first.test).toHaveLength(10);
     expect(first.train.some((row) => first.test.includes(row))).toBe(false);
+  });
+
+  it("holds out complete students without leaking their attempts across splits", () => {
+    const rows = Array.from({ length: 10 }, (_, student) =>
+      Array.from({ length: 3 }, (_, attempt) => ({
+        student_id: `student-${student}`,
+        attempt_number: attempt + 1,
+        accuracy: (student + attempt) / 12,
+        target: (student + attempt + 1) / 12,
+      }))
+    ).flat();
+
+    const first = splitDatasetRowsByGroup(rows, "student_id", { seed: 2026, testFraction: 0.2 });
+    const second = splitDatasetRowsByGroup(rows, "student_id", { seed: 2026, testFraction: 0.2 });
+    const trainStudents = new Set(first.train.map((row) => row.student_id));
+    const testStudents = new Set(first.test.map((row) => row.student_id));
+
+    expect(first).toEqual(second);
+    expect(trainStudents.size).toBe(8);
+    expect(testStudents.size).toBe(2);
+    expect([...trainStudents].some((student) => testStudents.has(student))).toBe(false);
+    expect(first.train).toHaveLength(24);
+    expect(first.test).toHaveLength(6);
+  });
+
+  it("supports grouped student histories in dataset preparation", () => {
+    const rows = Array.from({ length: 10 }, (_, student) =>
+      Array.from({ length: 3 }, (_, attempt) => ({
+        student_id: `student-${student}`,
+        recent_accuracy: 0.4 + student * 0.03 + attempt * 0.01,
+        attempt_count: attempt + 1,
+        next_accuracy: 0.45 + student * 0.03 + attempt * 0.01,
+      }))
+    ).flat();
+    const prepared = prepareDataset(rows, {
+      description: "Grouped student next-attempt regression fixture",
+      idColumn: "student_id",
+      featureColumns: ["recent_accuracy", "attempt_count"],
+      targetColumn: "next_accuracy",
+      task: "regression",
+    }, { seed: 5, groupColumn: "student_id" });
+
+    expect(prepared.trainRows + prepared.testRows).toBe(30);
+    expect(prepared.trainRows).toBe(24);
+    expect(prepared.testRows).toBe(6);
+  });
+
+  it("rejects grouped holdouts with missing IDs or too few students", () => {
+    expect(() => splitDatasetRowsByGroup(
+      [{ student_id: "a" }, { student_id: "b" }, { student_id: "c" }, { student_id: "d" }],
+      "student_id",
+    )).toThrow("At least five unique groups");
+    expect(() => splitDatasetRowsByGroup(
+      Array.from({ length: 5 }, (_, index) => ({ student_id: index === 4 ? "" : `student-${index}` })),
+      "student_id",
+    )).toThrow("non-empty string group");
   });
 
   it("fits categorical encoding on training rows and excludes IDs and targets", () => {
