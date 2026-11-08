@@ -271,7 +271,13 @@ describe("versioned exam management", () => {
     const body = admin.json as {
       totals: { students: number; exams: number; assignments: number; submissions: number; averagePercentage: number | null };
       exams: { title: string; assigned: number; submitted: number; averagePercentage: number | null }[];
-      recentSubmissions: { studentEmail: string; examTitle: string; score: number | null }[];
+      recentSubmissions: {
+        submissionId: string;
+        studentId: number;
+        studentEmail: string;
+        examTitle: string;
+        score: number | null;
+      }[];
     };
     expect(body.totals.students).toBe(2);
     expect(body.totals.exams).toBe(1);
@@ -282,8 +288,28 @@ describe("versioned exam management", () => {
     expect(body.exams[0].submitted).toBe(1);
     expect(body.recentSubmissions[0].studentEmail).toBe("exam-student@arctester.test");
 
+    const submissionId = body.recentSubmissions[0].submissionId;
+    const detail = await request(
+      `/admin/submissions/${submissionId}`,
+      "GET",
+      undefined,
+      adminCookie
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.json.submission.student.email).toBe("exam-student@arctester.test");
+    expect(detail.json.submission.questions[0].correctIndex).toBe(1);
+    expect(detail.json.submission.questions[0].selectedIndex).toBe(1);
+    expect(detail.json.submission.questions[0].isCorrect).toBe(true);
+
     const student = await request("/admin/analytics/overview", "GET", undefined, studentCookie);
     expect(student.status).toBe(403);
+    const forbiddenDetail = await request(
+      `/admin/submissions/${submissionId}`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(forbiddenDetail.status).toBe(403);
   });
 
   it("prevents another student from reading a submission result", async () => {
