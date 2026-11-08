@@ -162,7 +162,7 @@ function AnalyticsDashboard() {
           <div>
             <div className="big">{scorePrediction.predictedScorePercent}%</div>
             <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
-            <p className="muted">Approximate prediction range: <strong>{scorePrediction.predictionInterval.lowerPercent}%–{scorePrediction.predictionInterval.upperPercent}%</strong> (about ±{scorePrediction.predictionInterval.estimatedErrorPercent} percentage points).</p>
+            <p className="muted">Approximate prediction range: <strong>{scorePrediction.predictionInterval.lowerPercent}%–{scorePrediction.predictionInterval.upperPercent}%</strong>. This diagnostic range uses a walk-forward RMSE of {scorePrediction.predictionInterval.estimatedErrorPercent} percentage points; it is not a calibrated confidence interval.</p>
             <p className="mute">{scorePrediction.completedAttempts} completed attempts · {scorePrediction.trainingSamples} samples used · validation MAE {scorePrediction.modelMae.toFixed(3)} vs baseline {scorePrediction.baselineMae.toFixed(3)}.</p>
           </div>
         ) : null}
