@@ -247,7 +247,25 @@ describe("versioned exam management", () => {
 
   it("scores offline submissions on the server and safely handles retries", async () => {
     const question = await server.db.examVersionQuestion.findFirstOrThrow();
-    const startedAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const started = await request(
+      `/exams/assignments/${assignmentId}/session/start`,
+      "POST",
+      {},
+      studentCookie
+    );
+    expect(started.status).toBe(200);
+    const sessionInfo = started.json.session as { startedAt: string };
+    const heartbeat = await request(
+      `/exams/assignments/${assignmentId}/session/heartbeat`,
+      "POST",
+      { event: "HEARTBEAT" },
+      studentCookie
+    );
+    expect(heartbeat.status).toBe(200);
+    const live = await request("/admin/exams/live-sessions", "GET", undefined, adminCookie);
+    expect(live.status).toBe(200);
+    expect((live.json.sessions as Array<{ assignmentId: string }>).some((item) => item.assignmentId === assignmentId)).toBe(true);
+    const startedAt = sessionInfo.startedAt;
     const submittedAt = new Date().toISOString();
     const body = {
       attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
