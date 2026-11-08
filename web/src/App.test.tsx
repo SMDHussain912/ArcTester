@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -39,6 +39,9 @@ describe("live Vite application", () => {
       if (path.endsWith("/bank")) {
         return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1 }] }));
       }
+      if (path.endsWith("/announcements/notice-1/read")) {
+        return Promise.resolve(response(200, { ok: true, seenAt: "2026-11-08T09:00:00.000Z" }));
+      }
       if (path.endsWith("/announcements")) {
         return Promise.resolve(response(200, {
           announcements: [{
@@ -56,8 +59,12 @@ describe("live Vite application", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("ECET mock exam schedule")).toBeInTheDocument();
-    expect(screen.getByText("The mock exam starts tomorrow at 10 AM.")).toBeInTheDocument();
+    const popup = await screen.findByRole("dialog", { name: "ECET mock exam schedule" });
+    expect(within(popup).getByText("The mock exam starts tomorrow at 10 AM.")).toBeInTheDocument();
+
+    fireEvent.click(within(popup).getByRole("button", { name: /Got it/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/read"))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /Announcements/ }));
     await waitFor(() => {
