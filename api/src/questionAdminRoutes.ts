@@ -254,6 +254,20 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.post("/admin/questions/import/preview", async (req, res, next) => {
+    try {
+      const body = z.object({ format: z.enum(["csv", "json"]), content: z.string().min(1).max(8_000_000) }).parse(req.body);
+      let report;
+      if (body.format === "csv") report = await importFromCsv(db, body.content, { dryRun: true });
+      else {
+        let parsed: unknown;
+        try { parsed = JSON.parse(body.content); } catch { return next(badRequest("The JSON file is not valid JSON.")); }
+        report = await importFromJson(db, parsed, { dryRun: true });
+      }
+      res.json({ ok: true, report });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/questions/import", async (req, res, next) => {
     try {
       const body = z.object({ format: z.enum(["csv", "json"]), content: z.string().min(1).max(8_000_000) }).parse(req.body);
