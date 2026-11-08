@@ -1032,7 +1032,7 @@ export default function App() {
   }
 
   async function signOut() {
-    await request("/auth/logout", { method: "POST" }).catch(() => undefined);
+    void request("/auth/logout", { method: "POST" }).catch(() => undefined);
     setUser(null);
     setBank(null);
     localStorage.removeItem("arctester-active-practice-attempt");
@@ -1059,8 +1059,32 @@ export default function App() {
     setSessionAudit(null);
     setPracticeSubjects([]);
     setPracticeTopicKeys([]);
+    setPracticeQuestionCount(20);
+    setPracticeDifficulty("any");
     setSelectedQuestionIds([]);
     setSelectedStudentIds([]);
+    setSelectedTopics([]);
+    setSubjectQuotas({});
+    setTopicSelectionMode("all");
+    setDifficultyMix("any");
+    setCreatedInvitation(null);
+    setInviteEmail("");
+    setNewSubjectName("");
+    setNewTopicName("");
+    setQuestionText("");
+    setQuestionOptions(["", "", "", ""]);
+    setQuestionExplanation("");
+    setEditingQuestionId(null);
+    setQuestionSaved(false);
+    setExamTitle("");
+    setExamDescription("");
+    setExamInstructions("");
+    setEditingExamId(null);
+    setImportText("");
+    setImportReport(null);
+    setImportPreviewReady(false);
+    setImportPreviewDetails(null);
+    setImportPreviewError("");
     setError("");
     setActivePage("dashboard");
   }
