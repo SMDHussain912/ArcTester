@@ -53,15 +53,6 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      - name: Preview mobile Prettier changes
-        run: |
-          npx prettier mobile/App.tsx > /tmp/App.tsx
-          diff -u mobile/App.tsx /tmp/App.tsx || true
-          npx prettier mobile/src/OfflineExams.tsx > /tmp/OfflineExams.tsx
-          diff -u mobile/src/OfflineExams.tsx /tmp/OfflineExams.tsx || true
-          npx prettier mobile/src/offlineSync.ts > /tmp/offlineSync.ts
-          diff -u mobile/src/offlineSync.ts /tmp/offlineSync.ts || true
-
       - name: Check formatting of changed files
         shell: bash
         env:
