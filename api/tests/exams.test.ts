@@ -143,7 +143,7 @@ describe("versioned exam management", () => {
       questions: [{ questionId: question.id, marks: 0, negativeMarks: 0 }],
     }, adminCookie);
     expect(response.status).toBe(400);
-    expect(response.json.error).toContain("zero total marks");
+    expect((response.json.reasons as string[]).join(" ")).toContain("An exam must award more than zero total marks.");
   });
 
   it("rejects a paper where negative marks exceed correct-answer marks", async () => {
