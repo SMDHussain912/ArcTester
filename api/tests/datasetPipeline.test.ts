@@ -85,11 +85,13 @@ describe("dataset-to-model pipeline", () => {
     const artifact = JSON.parse(serializeExperimentArtifact({
       dataset: "score-prediction",
       featureNames: prepared.featureNames,
+      featureSchema: prepared.featureSchema,
       targetColumn: definition.targetColumn,
       task: definition.task,
       model: result.model,
     }));
     expect(artifact.featureNames).toEqual(prepared.featureNames);
+    expect(artifact.featureSchema).toEqual(prepared.featureSchema);
     expect(artifact.targetColumn).toBe(definition.targetColumn);
     expect(artifact.model.algorithm).toBe("multiple-linear-regression");
   });
