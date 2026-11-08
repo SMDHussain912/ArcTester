@@ -15,6 +15,15 @@ type Invitation = {
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null };
+type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[] };
+type AdminStudent = { id: number; email: string };
+type AdminExam = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  versions: { id: string; version: number; publishedAt: string | null; durationMinutes: number; _count: { questions: number; assignments: number } }[];
+};
 type Question = {
   id: number;
   subject: string;
@@ -77,6 +86,16 @@ export default function App() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
+  const [adminQuestions, setAdminQuestions] = useState<AdminQuestion[]>([]);
+  const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
+  const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
+  const [examTitle, setExamTitle] = useState("");
+  const [examDescription, setExamDescription] = useState("");
+  const [examInstructions, setExamInstructions] = useState("");
+  const [examDuration, setExamDuration] = useState(180);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [assigningExamId, setAssigningExamId] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
@@ -124,6 +143,15 @@ export default function App() {
     request<{ announcements: Announcement[] }>("/admin/announcements")
       .then(({ announcements: items }) => setAnnouncements(items))
       .catch((cause) => setError((cause as Error).message));
+    request<{ questions: AdminQuestion[] }>("/admin/question-bank")
+      .then(({ questions }) => setAdminQuestions(questions))
+      .catch((cause) => setError((cause as Error).message));
+    request<{ students: AdminStudent[] }>("/admin/students")
+      .then(({ students }) => setAdminStudents(students))
+      .catch((cause) => setError((cause as Error).message));
+    request<{ exams: AdminExam[] }>("/admin/exams")
+      .then(({ exams }) => setAdminExams(exams))
+      .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
@@ -140,6 +168,78 @@ export default function App() {
       setInviteEmail("");
       const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
       setInvitations(refreshed.invitations);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshAdminExams() {
+    const refreshed = await request<{ exams: AdminExam[] }>("/admin/exams");
+    setAdminExams(refreshed.exams);
+  }
+
+  async function createExam(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (selectedQuestionIds.length === 0) {
+      setError("Select at least one question for the exam.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await request("/admin/exams", {
+        method: "POST",
+        body: JSON.stringify({
+          title: examTitle.trim(),
+          description: examDescription.trim(),
+          instructions: examInstructions.trim(),
+          durationMinutes: examDuration,
+          questions: selectedQuestionIds.map((questionId) => ({ questionId, marks: 1, negativeMarks: 0 })),
+        }),
+      });
+      setExamTitle("");
+      setExamDescription("");
+      setExamInstructions("");
+      setSelectedQuestionIds([]);
+      await refreshAdminExams();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishExam(examId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/exams/${examId}/publish`, { method: "POST" });
+      await refreshAdminExams();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignExam(examId: string) {
+    if (selectedStudentIds.length === 0) {
+      setError("Select at least one student before assigning this exam.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await request<{ created: number }>(`/admin/exams/${examId}/assign`, {
+        method: "POST",
+        body: JSON.stringify({ studentIds: selectedStudentIds }),
+      });
+      setAssigningExamId("");
+      setSelectedStudentIds([]);
+      setError(`Exam assigned to ${result.created} student(s).`);
+      await refreshAdminExams();
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -351,6 +451,55 @@ export default function App() {
               <p className="muted">Create invitation codes and control who can join your exam workspace.</p>
             </div>
             <div className="welcome-mark">A</div>
+          </section>
+          <section id="exam-management">
+            <div className="section-head">
+              <div><p className="eyebrow">EXAM DELIVERY</p><h2>Create and publish an exam</h2></div>
+            </div>
+            <form className="panel admin-form exam-builder" onSubmit={(event) => void createExam(event)}>
+              <label>Exam title
+                <input required minLength={2} maxLength={120} value={examTitle} onChange={(event) => setExamTitle(event.target.value)} placeholder="CSE Unit Test 01" />
+              </label>
+              <label>Description
+                <input maxLength={2000} value={examDescription} onChange={(event) => setExamDescription(event.target.value)} placeholder="Optional exam description" />
+              </label>
+              <label>Instructions
+                <textarea rows={2} maxLength={5000} value={examInstructions} onChange={(event) => setExamInstructions(event.target.value)} placeholder="Instructions shown before the exam" />
+              </label>
+              <label>Duration (minutes)
+                <input type="number" min={1} max={600} required value={examDuration} onChange={(event) => setExamDuration(Number(event.target.value))} />
+              </label>
+              <div className="exam-question-picker">
+                <div className="picker-heading"><strong>Question bank</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} loaded</span></div>
+                {adminQuestions.length === 0 ? <p className="muted">No questions found. Import questions into the bank first.</p> : adminQuestions.map((question) => (
+                  <label className="pick-row" key={question.id}>
+                    <input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />
+                    <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><small>{question.text}</small></span>
+                  </label>
+                ))}
+              </div>
+              <button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : `Create draft (${selectedQuestionIds.length} questions)`}</button>
+            </form>
+            <div className="section-head"><div><p className="eyebrow">EXAM LIBRARY</p><h2>Drafts and published exams</h2></div></div>
+            <div className="admin-exam-list">
+              {adminExams.length === 0 ? <div className="panel empty-state">No exams created yet.</div> : adminExams.map((exam) => {
+                const version = exam.versions[0];
+                const published = Boolean(version?.publishedAt);
+                return <article className="panel admin-exam-card" key={exam.id}>
+                  <div className="admin-exam-meta"><div><strong>{exam.title}</strong><p className="muted">{exam.description || "No description"} · {version?._count.questions ?? 0} questions · {version?.durationMinutes ?? 0} min</p></div><span className={published ? "status status-used" : "status status-pending"}>{published ? "PUBLISHED" : "DRAFT"}</span></div>
+                  <div className="admin-exam-actions">
+                    {!published && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
+                    {published && <button className="ghost" disabled={busy || adminStudents.length === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); }}>Assign to students</button>}
+                    {published && <span className="muted">{version?._count.assignments ?? 0} assignments</span>}
+                  </div>
+                  {assigningExamId === exam.id && <div className="student-picker">
+                    <strong>Select students</strong>
+                    {adminStudents.length === 0 ? <p className="muted">No student accounts are registered yet.</p> : adminStudents.map((student) => <label className="student-pick" key={student.id}><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} />{student.email}</label>)}
+                    <button className="primary" disabled={busy || selectedStudentIds.length === 0} onClick={() => void assignExam(exam.id)}>Assign to {selectedStudentIds.length} student(s)</button>
+                  </div>}
+                </article>;
+              })}
+            </div>
           </section>
           <section id="announcements">
             <div className="section-head">

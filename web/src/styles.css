@@ -26,3 +26,29 @@
 .announcement-row strong{color:var(--text)}
 .announcement-row p{margin:0;color:var(--muted);line-height:1.6;white-space:pre-wrap}
 .announcement-row small{color:var(--muted);font-size:11px}
+
+
+/* Admin exam authoring */
+.exam-builder{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.exam-builder>label{display:grid;gap:8px;font-size:13px;font-weight:700}
+.exam-builder input:not([type="checkbox"]),.exam-builder textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}
+.exam-builder>label:nth-child(3),.exam-question-picker,.exam-builder>.primary{grid-column:1/-1}
+.exam-builder textarea{resize:vertical}
+.exam-question-picker{max-height:430px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:14px}
+.picker-heading{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}
+.picker-heading span{font-size:12px;color:var(--muted)}
+.pick-row{display:flex!important;align-items:flex-start;gap:11px;padding:11px 2px;border-top:1px solid var(--border);font-weight:400!important}
+.pick-row input[type="checkbox"],.student-pick input[type="checkbox"]{width:17px;height:17px;flex:0 0 auto;margin-top:2px;accent-color:var(--accent)}
+.pick-row span{display:grid;gap:4px;min-width:0}
+.pick-row strong{font-size:12px;color:var(--accent)}
+.pick-row small{font-size:13px;line-height:1.5;color:var(--text)}
+.admin-exam-list{display:grid;gap:12px}
+.admin-exam-card{padding:18px}
+.admin-exam-meta,.admin-exam-actions{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.admin-exam-meta>div{min-width:0}
+.admin-exam-meta p{margin:6px 0 0;font-size:12px}
+.admin-exam-actions{justify-content:flex-start;margin-top:16px;flex-wrap:wrap}
+.student-picker{display:grid;gap:10px;margin-top:16px;padding-top:15px;border-top:1px solid var(--border)}
+.student-pick{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text)}
+.empty-state{padding:22px;color:var(--muted)}
+@media(max-width:650px){.exam-builder{grid-template-columns:1fr}.exam-builder>label:nth-child(3),.exam-question-picker,.exam-builder>.primary{grid-column:auto}.admin-exam-meta{align-items:flex-start;flex-direction:column}}
