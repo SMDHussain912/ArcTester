@@ -245,7 +245,10 @@ export default function App() {
     try {
       const attemptUuid = typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
-        : `arc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+            const random = Math.floor(Math.random() * 16);
+            return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+          });
       await request(`/exams/assignments/${activeAssignmentPackage.assignmentId}/submission`, {
         method: "POST",
         body: JSON.stringify({
