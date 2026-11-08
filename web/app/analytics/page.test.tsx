@@ -315,4 +315,74 @@ describe("student analytics page", () => {
     expect(screen.getByText("Formal exam performance")).toBeInTheDocument();
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
+
+  it.each([
+    {
+      status: "insufficient_data",
+      payload: {
+        status: "insufficient_data", completedAttempts: 8, availableSamples: 5,
+        requiredSamples: 20, requiredCompletedAttempts: 23,
+        message: "Complete more practice attempts to build a reliable personal score history.",
+      },
+      expected: "8 / 23",
+      detail: "5 of 20 required prediction samples available.",
+    },
+    {
+      status: "baseline_not_beaten",
+      payload: {
+        status: "baseline_not_beaten", completedAttempts: 30, evaluationSamples: 7,
+        modelMae: 0.18, baselineMae: 0.12,
+        message: "There is not enough predictive improvement over a simple baseline to show a score estimate yet.",
+      },
+      expected: "30 attempts analyzed",
+      detail: "No score estimate is shown until the model demonstrates useful predictive value.",
+    },
+  ])("handles the $status score prediction state without showing a number", async ({ payload, expected, detail }) => {
+    fetchMock.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(jsonResponse(200, {
+          ok: true, user: { id: 7, email: "learner@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/analytics/score-prediction")) {
+        return Promise.resolve(jsonResponse(200, payload));
+      }
+      if (path.endsWith("/analytics/weak-topics")) {
+        return Promise.resolve(jsonResponse(200, { subjects: [], topics: [], weakest: null }));
+      }
+      if (path.endsWith("/analytics/overview")) {
+        return Promise.resolve(jsonResponse(200, overviewResponse(null, 0, 0)));
+      }
+      if (path.endsWith("/analytics/question-performance")) {
+        return Promise.resolve(jsonResponse(200, {
+          generatedAt: "2026-11-08T08:30:00.000Z", minimumAnswers: 5,
+          weakAccuracyThreshold: 0.6, questions: [], insufficientSampleCount: 0,
+        }));
+      }
+      if (path.endsWith("/analytics/recommendations")) {
+        return Promise.resolve(jsonResponse(200, {
+          generatedAt: "2026-11-08T08:30:00.000Z", basedOnAttempts: 0,
+          minimumAnswers: 5, weakAccuracyThreshold: 0.6, recommendations: [],
+        }));
+      }
+      if (path.includes("/analytics/history")) {
+        return Promise.resolve(jsonResponse(200, {
+          items: [], page: 1, limit: 10, total: 0, totalPages: 0,
+        }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
+    });
+
+    render(
+      <SessionProvider>
+        <AnalyticsPage />
+      </SessionProvider>
+    );
+
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.getByText(detail)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
+  });
+
 });
