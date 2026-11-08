@@ -8,8 +8,8 @@ import { api, ApiError, type AdminExam, type AdminOverview, type AdminQuestion, 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
   totals: { students: 0, exams: 0, assignments: 0, submissions: 0, submissionRate: 0, averagePercentage: null },
-  practice: { completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null, subjects: [] },
-  formalExams: { graded: 0, reviewRequired: 0, correct: 0, incorrect: 0, unanswered: 0, subjects: [] },
+  practice: { completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null, subjects: [], topics: [] },
+  formalExams: { graded: 0, reviewRequired: 0, correct: 0, incorrect: 0, unanswered: 0, subjects: [], topics: [] },
   exams: [], recentSubmissions: [],
 };
 
@@ -162,6 +162,12 @@ export default function AdminPage() {
                 <tbody>{overview.practice.subjects.map((row) => <tr key={row.subject}><td>{row.subject}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td></tr>)}</tbody>
               </table>
             </div>}
+            {overview.practice.topics.length > 0 ? <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <h3>Practice by topic</h3>
+              <table><thead><tr><th>Subject</th><th>Topic</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Accuracy</th></tr></thead>
+                <tbody>{overview.practice.topics.map((row) => <tr key={row.subject + ":" + (row.topic ?? "unassigned")}><td>{row.subject}</td><td>{row.topic ?? "Unassigned"}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td></tr>)}</tbody>
+              </table>
+            </div> : null}
           </section>
           <section className="panel" style={{ marginTop: 18 }}>
             <div className="panel-header"><h2>Verified formal exam analytics</h2><span className="pill">{overview.formalExams.graded} graded · {overview.formalExams.reviewRequired} awaiting review</span></div>
@@ -176,6 +182,12 @@ export default function AdminPage() {
                 <tbody>{overview.formalExams.subjects.map((row) => <tr key={row.subject}><td>{row.subject}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>{row.awardedMarks} / {row.maximumMarks}</td></tr>)}</tbody>
               </table>
             </div>}
+            {overview.formalExams.topics.length > 0 ? <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <h3>Verified results by topic</h3>
+              <table><thead><tr><th>Subject</th><th>Topic</th><th>Correct</th><th>Incorrect</th><th>Unanswered</th><th>Accuracy</th><th>Marks</th></tr></thead>
+                <tbody>{overview.formalExams.topics.map((row) => <tr key={row.subject + ":" + (row.topic ?? "unassigned")}><td>{row.subject}</td><td>{row.topic ?? "Unassigned"}</td><td>{row.correct}</td><td>{row.incorrect}</td><td>{row.unanswered}</td><td>{row.accuracy === null ? "—" : `${Math.round(row.accuracy * 100)}%`}</td><td>{row.awardedMarks} / {row.maximumMarks}</td></tr>)}</tbody>
+              </table>
+            </div> : null}
           </section>
           <section className="panel" style={{ marginTop: 18 }}>
             <div className="panel-header"><h2>Exam performance</h2><span className="pill">{overview.exams.length} exams</span></div>
