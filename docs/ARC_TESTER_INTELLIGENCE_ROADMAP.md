@@ -541,3 +541,14 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 2. Run API analytics tests and resolve any schema/fixture issues.
 3. Add question-level aggregates and minimum-sample safeguards.
 4. Review the admin analytics page on desktop/mobile and finish Phase 1 acceptance coverage.
+
+
+### Verification fixes — 2026-11-08
+
+The user's local run exposed issues after the Phase 1 analytics batch. Fixes pushed:
+- Made the analytics API test fixtures deterministic by looking up each selected question's correct answer instead of assuming the first option is correct. The question selector can return either Maths question.
+- Removed an unused unanswered counter from the practice trend calculation; unanswered items remain excluded from the accuracy denominator and are still included in total question counts.
+- Updated student analytics page test mocks to provide the new `/analytics/overview` response and the `topics` collection.
+- Updated the empty-state analytics mock to return an empty topic collection.
+
+**Verification:** fixes are pushed, but they have not been executed in this environment. The user's next local run is required to confirm all tests and lint pass.
