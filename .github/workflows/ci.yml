@@ -53,6 +53,11 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Preview dashboard test formatting
+        run: |
+          npx prettier "web/app/assignments/page.test.tsx" > /tmp/dashboard-test.tsx
+          diff -u "web/app/assignments/page.test.tsx" /tmp/dashboard-test.tsx || true
+
       - name: Check formatting of changed files
         shell: bash
         env:
