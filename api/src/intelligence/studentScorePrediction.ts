@@ -63,6 +63,20 @@ function nextAttemptFeatures(attempts: CompletedAttemptScore[]): number[] {
   ];
 }
 
+const POPULATION_FEATURE_NAMES = [
+  "completed_attempts",
+  "previous_accuracy",
+  "recent_average_accuracy",
+  "overall_average_accuracy",
+  "previous_question_count",
+] as const;
+
+function populationFeatureRecord(attempts: CompletedAttemptScore[]): Record<string, number> | undefined {
+  if (attempts.length < SCORE_PREDICTION_HISTORY_WINDOW) return undefined;
+  const values = nextAttemptFeatures(attempts);
+  return Object.fromEntries(POPULATION_FEATURE_NAMES.map((name, index) => [name, values[index]!]));
+}
+
 /**
  * Predicts only from the authenticated student's completed practice attempts.
  * The model is exposed only when a chronological holdout beats the training-mean baseline.
