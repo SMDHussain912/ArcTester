@@ -68,6 +68,21 @@ describe("analytics", () => {
     });
   });
 
+  it("does not label a low-sample subject as weak or recommend it as a confirmed gap", async () => {
+    const response = await api.get("/analytics/recommendations");
+    expect(response.status).toBe(200);
+    const report = response.json as {
+      minimumAnswers: number;
+      recommendations: { id: string; priority: string; evidence: unknown }[];
+    };
+    expect(report.minimumAnswers).toBe(5);
+    expect(report.recommendations).toEqual([expect.objectContaining({
+      id: "build-subject-baseline",
+      priority: "low",
+      evidence: null,
+    })]);
+  });
+
   it("ranks weakest subject first", async () => {
     const { status, json } = await api.get(`/analytics/weak-topics`);
     expect(status).toBe(200);
