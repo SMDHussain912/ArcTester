@@ -14,6 +14,7 @@ type Invitation = {
   status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
+type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null };
 type Question = {
   id: number;
   subject: string;
@@ -76,6 +77,9 @@ export default function App() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementMessage, setAnnouncementMessage] = useState("");
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -117,6 +121,9 @@ export default function App() {
     request<{ invitations: Invitation[] }>("/auth/invitations")
       .then(({ invitations: items }) => setInvitations(items))
       .catch((cause) => setError((cause as Error).message));
+    request<{ announcements: Announcement[] }>("/admin/announcements")
+      .then(({ announcements: items }) => setAnnouncements(items))
+      .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
@@ -133,6 +140,29 @@ export default function App() {
       setInviteEmail("");
       const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
       setInvitations(refreshed.invitations);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createAnnouncement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await request("/admin/announcements", {
+        method: "POST",
+        body: JSON.stringify({
+          title: announcementTitle.trim(),
+          message: announcementMessage.trim(),
+        }),
+      });
+      setAnnouncementTitle("");
+      setAnnouncementMessage("");
+      const refreshed = await request<{ announcements: Announcement[] }>("/admin/announcements");
+      setAnnouncements(refreshed.announcements);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -311,6 +341,29 @@ export default function App() {
               <p className="muted">Create invitation codes and control who can join your exam workspace.</p>
             </div>
             <div className="welcome-mark">A</div>
+          </section>
+          <section id="announcements">
+            <div className="section-head">
+              <div><p className="eyebrow">STUDENT COMMUNICATION</p><h2>Send an announcement</h2></div>
+            </div>
+            <form className="panel admin-form announcement-form" onSubmit={(event) => void createAnnouncement(event)}>
+              <label>Title
+                <input required minLength={2} maxLength={120} value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} placeholder="Exam schedule update" />
+              </label>
+              <label>Message
+                <textarea required maxLength={4000} rows={3} value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} placeholder="Write a message for your students…" />
+              </label>
+              <button className="primary" disabled={busy}>{busy ? "Publishing…" : "Publish announcement"}</button>
+            </form>
+            <div className="panel announcement-list">
+              {announcements.length === 0 ? <p className="muted">No announcements published yet.</p> : announcements.map((item) => (
+                <article className="announcement-row" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <p>{item.message}</p>
+                  <small>{new Date(item.publishedAt).toLocaleString()}</small>
+                </article>
+              ))}
+            </div>
           </section>
           <section id="invitations">
             <div className="section-head">
