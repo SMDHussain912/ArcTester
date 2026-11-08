@@ -13,6 +13,7 @@ import {
   type StudentScorePrediction,
 } from "../../lib/api";
 import { useSession } from "../../lib/session";
+import { createTensorflowBrowserPredictor } from "../../lib/tensorflowInference";
 
 function AnalyticsDashboard() {
   const { status, user } = useSession();
@@ -25,6 +26,7 @@ function AnalyticsDashboard() {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
   const [scorePrediction, setScorePrediction] = useState<StudentScorePrediction | null>(null);
+  const [populationPrediction, setPopulationPrediction] = useState<{ score: number; version: number } | null>(null);
   const [predictionLoading, setPredictionLoading] = useState(true);
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,9 +69,30 @@ function AnalyticsDashboard() {
       .catch((cause: unknown) => {
         if (!cancelled) setError((current) => current ?? (cause instanceof ApiError ? cause.message : "Could not load question-level analytics."));
       });
+    setPopulationPrediction(null);
     api.studentScorePrediction()
       .then((report) => {
-        if (!cancelled) setScorePrediction(report);
+        if (cancelled) return;
+        setScorePrediction(report);
+        if (!report.populationFeatures) return;
+        return api.activeTensorflowModel("student-score-population")
+          .then(async ({ artifact }) => {
+            const predictor = await createTensorflowBrowserPredictor(artifact);
+            try {
+              const prediction = await predictor.predict(report.populationFeatures!);
+              if (!cancelled && Number.isFinite(prediction)) {
+                setPopulationPrediction({
+                  score: Math.round(Math.max(0, Math.min(1, prediction)) * 100),
+                  version: predictor.version,
+                });
+              }
+            } finally {
+              predictor.dispose();
+            }
+          })
+          .catch(() => {
+            // Missing, stale or invalid population artifacts leave the personal statistical model as fallback.
+          });
       })
       .catch((cause: unknown) => {
         if (!cancelled) setPredictionError(cause instanceof ApiError ? cause.message : "Could not load your score estimate.");
@@ -154,11 +177,18 @@ function AnalyticsDashboard() {
       <section className="panel" aria-labelledby="score-prediction-title">
         <div className="panel-header">
           <h2 id="score-prediction-title">Next practice score estimate</h2>
-          <span className="pill">Personal estimate</span>
+          <span className="pill">{populationPrediction ? `TensorFlow.js · v${populationPrediction.version}` : "Personal estimate"}</span>
         </div>
         {predictionLoading ? <p className="mute">Analyzing your completed practice history…</p> : null}
         {predictionError ? <p className="mute" role="status">{predictionError}</p> : null}
-        {!predictionLoading && !predictionError && scorePrediction?.status === "ready" ? (
+        {!predictionLoading && !predictionError && populationPrediction ? (
+          <div>
+            <div className="big">{populationPrediction.score}%</div>
+            <p className="muted">Estimated accuracy on your next practice attempt using the approved population TensorFlow.js model.</p>
+            <p className="mute">Model version {populationPrediction.version}. Inputs are derived from your own completed practice history; other learners' raw attempts are never sent to your browser. The personal statistical model remains the fallback when this model is unavailable.</p>
+          </div>
+        ) : null}
+        {!predictionLoading && !predictionError && !populationPrediction && scorePrediction?.status === "ready" ? (
           <div>
             <div className="big">{scorePrediction.predictedScorePercent}%</div>
             <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
@@ -166,14 +196,14 @@ function AnalyticsDashboard() {
             <p className="mute">{scorePrediction.completedAttempts} completed attempts · {scorePrediction.trainingSamples} samples used · validation MAE {scorePrediction.modelMae.toFixed(3)} vs baseline {scorePrediction.baselineMae.toFixed(3)}.</p>
           </div>
         ) : null}
-        {!predictionLoading && !predictionError && scorePrediction?.status === "insufficient_data" ? (
+        {!predictionLoading && !predictionError && !populationPrediction && scorePrediction?.status === "insufficient_data" ? (
           <div>
             <p className="muted">{scorePrediction.message}</p>
             <p><strong>{scorePrediction.completedAttempts} / {scorePrediction.requiredCompletedAttempts}</strong> completed practice attempts</p>
             <p className="mute">{scorePrediction.availableSamples} of {scorePrediction.requiredSamples} required prediction samples available.</p>
           </div>
         ) : null}
-        {!predictionLoading && !predictionError && scorePrediction?.status === "baseline_not_beaten" ? (
+        {!predictionLoading && !predictionError && !populationPrediction && scorePrediction?.status === "baseline_not_beaten" ? (
           <div>
             <p className="muted">{scorePrediction.message}</p>
             <p className="mute">{scorePrediction.completedAttempts} attempts analyzed · validation MAE {scorePrediction.modelMae.toFixed(3)} vs baseline {scorePrediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
