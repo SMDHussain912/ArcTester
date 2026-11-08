@@ -121,6 +121,44 @@ describe("POST /tests", () => {
     expect(body.warnings[0]).toContain("only 1");
   });
 
+  it("filters topic selections by both subject and topic name", async () => {
+    const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
+    const topic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: physics.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: physics.id, name: "Algebra" },
+    });
+    const physicsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: physics.id } });
+    await server.db.question.update({ where: { id: physicsQuestion.id }, data: { topicId: topic.id } });
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topicFilters: [{ subject: "Maths", topic: "Algebra" }],
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string; topic: string | null }[] };
+    expect(body.questions.length).toBeGreaterThan(0);
+    expect(body.questions.every((question) => question.subject === "Maths" && question.topic === "Algebra")).toBe(true);
+  });
+
+  it("applies difficulty filters after subject and optional topic selection", async () => {
+    const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
+    await server.db.question.updateMany({ where: { subjectId: physics.id }, data: { difficulty: "easy" } });
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      difficulty: "easy",
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string }[]; warnings: string[] };
+    expect(body.questions.length).toBeGreaterThan(0);
+    expect(body.questions.every((question) => question.subject === "Physics")).toBe(true);
+    expect(body.warnings.some((warning) => warning.includes("Maths"))).toBe(true);
+  });
+
   it("rejects invalid bodies with friendly 400s", async () => {
     const { status, json } = await api.post(`/tests`, { mode: "nope" });
     expect(status).toBe(400);
