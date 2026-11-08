@@ -47,27 +47,34 @@ export default function AdminPage() {
   const [defaultMarks, setDefaultMarks] = useState(1);
   const [negativeMarks, setNegativeMarks] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const [stats, examData, studentData, firstQuestionPage, liveData, attendanceData] = await Promise.all([
-      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200), api.adminLiveSessions(), api.adminExamAttendance(),
-    ]);
-    setLiveSessions(liveData.sessions);
-    setAttendance(attendanceData.attendance);
-    const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(0, firstQuestionPage.pages - 1) }, (_, index) =>
-        api.adminQuestions(index + 2, 200)
-      )
-    );
-    setOverview(stats);
-    setExams(examData.exams);
-    setStudents(studentData.students);
-    setQuestions([
-      ...firstQuestionPage.questions,
-      ...remainingPages.flatMap((page) => page.questions),
-    ]);
+    setWorkspaceLoading(true);
+    try {
+      const [stats, examData, studentData, firstQuestionPage, liveData, attendanceData] = await Promise.all([        api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200), api.adminLiveSessions(), api.adminExamAttendance(),
+      ]);
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(0, firstQuestionPage.pages - 1) }, (_, index) =>
+          api.adminQuestions(index + 2, 200)
+        )
+      );
+      setOverview(stats);
+      setExams(examData.exams);
+      setStudents(studentData.students);
+      setQuestions([
+        ...firstQuestionPage.questions,
+        ...remainingPages.flatMap((page) => page.questions),
+      ]);
+      setLiveSessions(liveData.sessions);
+      setAttendance(attendanceData.attendance);
+      setWorkspaceLoaded(true);
+    } finally {
+      setWorkspaceLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -330,6 +337,13 @@ export default function AdminPage() {
       {error ? <p className="error" role="alert">{error}</p> : null}
       {notice ? <p className="warn" role="status">{notice}</p> : null}
 
+      {!workspaceLoaded ? (
+        <section className="panel" aria-live="polite">
+          <p className="muted">{workspaceLoading ? "Loading administrator workspace…" : "Workspace data could not be loaded. Check the error above and refresh to retry."}</p>
+          {!workspaceLoading ? <button className="button button-secondary" onClick={() => { setError(""); load().catch((e: unknown) => showError(e, "Refresh failed.")); }}>Retry loading workspace</button> : null}
+        </section>
+      ) : (
+      <>
       <div className="row" style={{ marginBottom: 20 }}>
         {(["overview", "exams", "create"] as const).map((value) => (
           <button key={value} className={tab === value ? "button" : "button button-secondary"} onClick={() => setTab(value)}>
@@ -656,6 +670,8 @@ export default function AdminPage() {
           </form>
         </section>
       ) : null}
+      </>
+      )}
     </>
   );
 }
