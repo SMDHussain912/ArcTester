@@ -1,7 +1,7 @@
-import { evaluateDecisionTree, fitDecisionTree } from "./decisionTree.js";
-import { evaluateKnn, fitKnn } from "./knn.js";
-import { evaluateLogisticRegression, fitLogisticRegression } from "./logisticRegression.js";
-import { evaluateNaiveBayes, fitNaiveBayes } from "./naiveBayes.js";
+import { fitDecisionTree, predictDecisionTreeClass } from "./decisionTree.js";
+import { fitKnn, predictKnnClass } from "./knn.js";
+import { fitLogisticRegression, predictLogisticClass } from "./logisticRegression.js";
+import { fitNaiveBayes, predictNaiveBayesClass } from "./naiveBayes.js";
 import type { BinaryTrainingSample } from "./classificationValidation.js";
 
 export interface CrossValidationOptions {
@@ -100,34 +100,22 @@ const adapters: ModelAdapter[] = [
   {
     algorithm: "logistic-regression",
     fit: (samples, p) => fitLogisticRegression(samples, { iterations: p.iterations, learningRate: p.learningRate }),
-    predict: (model, features) => {
-      const metrics = evaluateLogisticRegression(model, [{ features, label: 0 }]);
-      return metrics.trueNegative === 1 ? 0 : 1;
-    },
+    predict: (model, features) => predictLogisticClass(model, features),
   },
   {
     algorithm: "knn",
     fit: (samples, p) => fitKnn(samples, { k: p.k }),
-    predict: (model, features, p) => {
-      const result = evaluateKnn(model, [{ features, label: 0 }], 0.5, p.k);
-      return result.trueNegative === 1 ? 0 : 1;
-    },
+    predict: (model, features, p) => predictKnnClass(model, features, 0.5, p.k),
   },
   {
     algorithm: "decision-tree",
     fit: (samples, p) => fitDecisionTree(samples, { maxDepth: p.maxDepth }),
-    predict: (model, features) => {
-      const result = evaluateDecisionTree(model, [{ features, label: 0 }]);
-      return result.trueNegative === 1 ? 0 : 1;
-    },
+    predict: (model, features) => predictDecisionTreeClass(model, features),
   },
   {
     algorithm: "gaussian-naive-bayes",
     fit: (samples, p) => fitNaiveBayes(samples, { varianceSmoothing: p.varianceSmoothing }),
-    predict: (model, features) => {
-      const result = evaluateNaiveBayes(model, [{ features, label: 0 }]);
-      return result.trueNegative === 1 ? 0 : 1;
-    },
+    predict: (model, features) => predictNaiveBayesClass(model, features),
   },
 ];
 
