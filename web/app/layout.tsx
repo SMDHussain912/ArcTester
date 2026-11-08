@@ -4,22 +4,21 @@ import { SessionProvider } from "../lib/session";
 import { SessionBar } from "../lib/session-bar";
 
 export const metadata: Metadata = {
-  title: "AP ECET CSE Mock Test (Offline)",
-  description: "Offline AP ECET CSE mock-test platform for personal study.",
+  title: "ArcTester — Your study workspace",
+  description: "Prepare with mock tests, focused practice and question review.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#f7f8fa",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <a className="skip" href="#main">
-          Skip to content
-        </a>
+        <a className="skip" href="#main">Skip to content</a>
         <SessionProvider>
           <SessionBar />
           <main id="main">{children}</main>
