@@ -18,6 +18,8 @@ type Announcement = { id: string; title: string; message: string; createdAt: str
 type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[]; correctIndex?: number; explanation?: string; source?: string; difficulty?: string };
 type AdminSubject = { id: number; name: string; questionCount: number; topics: { id: number; name: string }[] };
 type AdminStudent = { id: number; email: string };
+type AssignedExam = { id: string; status: string; assignedAt: string; availableFrom: string | null; dueAt: string | null; exam: { id: string; title: string; description: string }; version: number; durationMinutes: number; questionCount: number; submission: { id: string; status: string; score: number | null; maximumScore: number | null; submittedAt: string } | null };
+type AssignedExamPackage = { assignmentId: string; title: string; description: string; version: number; instructions: string; durationMinutes: number; availableFrom: string | null; dueAt: string | null; serverTime: string; questions: { id: string; position: number; subject: string; topic: string | null; text: string; options: string[]; marks: number; negativeMarks: number }[] };
 type AdminExam = {
   id: string;
   title: string;
@@ -103,6 +105,10 @@ export default function App() {
   const [assignmentDueAt, setAssignmentDueAt] = useState("");
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
   const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
+  const [assignedExams, setAssignedExams] = useState<AssignedExam[]>([]);
+  const [activeAssignmentPackage, setActiveAssignmentPackage] = useState<AssignedExamPackage | null>(null);
+  const [assignmentAnswers, setAssignmentAnswers] = useState<Record<string, number>>({});
+  const [assignmentStartedAt, setAssignmentStartedAt] = useState<string | null>(null);
   const [examTitle, setExamTitle] = useState("");
   const [examDescription, setExamDescription] = useState("");
   const [examInstructions, setExamInstructions] = useState("");
@@ -144,7 +150,7 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "announcements" | "invitations">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -177,6 +183,9 @@ export default function App() {
 
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
+    request<{ assignments: AssignedExam[] }>("/exams/assigned")
+      .then(({ assignments }) => setAssignedExams(assignments))
+      .catch((cause) => setError((cause as Error).message));
     let active = true;
     const loadAnnouncements = () => request<{ announcements: Announcement[] }>("/announcements")
       .then(({ announcements: items }) => { if (active) setAnnouncements(items); })
@@ -210,6 +219,53 @@ export default function App() {
       .then(setAdminAnalytics)
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
+
+  async function refreshAssignedExams() {
+    const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
+    setAssignedExams(response.assignments);
+  }
+
+  async function startAssignedExam(assignmentId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request<{ package: AssignedExamPackage }>(`/exams/assignments/${assignmentId}/package`);
+      setActiveAssignmentPackage(response.package);
+      setAssignmentAnswers({});
+      setAssignmentStartedAt(new Date().toISOString());
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function submitAssignedExam() {
+    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    if (!window.confirm("Submit this exam now? You cannot change answers after submission.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      const attemptUuid = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `arc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      await request(`/exams/assignments/${activeAssignmentPackage.assignmentId}/submission`, {
+        method: "POST",
+        body: JSON.stringify({
+          attemptUuid,
+          startedAt: assignmentStartedAt,
+          submittedAt: new Date().toISOString(),
+          answers: activeAssignmentPackage.questions.map((question) => ({
+            examQuestionId: question.id,
+            selectedIndex: assignmentAnswers[question.id] ?? null,
+          })),
+        }),
+      });
+      setActiveAssignmentPackage(null);
+      setAssignmentStartedAt(null);
+      setAssignmentAnswers({});
+      await refreshAssignedExams();
+      setActivePage("assigned-exams");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -982,6 +1038,7 @@ export default function App() {
         <nav aria-label="Student navigation">
           <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
           <button className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
+          <button className={activePage === "assigned-exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("assigned-exams")}>Assigned exams{assignedExams.filter((item) => !item.submission).length ? ` (${assignedExams.filter((item) => !item.submission).length})` : ""}</button>
           <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
           <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.filter((item) => !item.seenAt).length > 0 ? ` (${announcements.filter((item) => !item.seenAt).length})` : ""}</button>
         </nav>
@@ -1017,7 +1074,15 @@ export default function App() {
         );
       })() : null}
       <main className="main-content">
-        {test ? (
+        {activeAssignmentPackage ? (
+          <section className="assigned-exam-session">
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes</p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); } }}>Exit exam</button></div>
+            {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
+            {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
+            <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => setAssignmentAnswers((current) => ({ ...current, [question.id]: optionIndex }))}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
+            <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><button className="primary" disabled={busy} onClick={() => void submitAssignedExam()}>{busy ? "Submitting…" : "Submit final answers"}</button></div>
+          </section>
+        ) : test ? (
           <section>
             <div className="page-heading">
               <div>
@@ -1104,6 +1169,19 @@ export default function App() {
                 <p className="muted">{question.explanation}</p>
               </article>
             ))}
+          </section>
+        ) : activePage === "assigned-exams" ? (
+          <section className="assigned-exams-page">
+            <div className="page-heading"><div><p className="eyebrow">EXAM CENTRE</p><h1>Assigned exams</h1><p className="muted">Exams assigned to your account by the administrator.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshAssignedExams()}>Refresh</button></div>
+            {assignedExams.length === 0 ? <div className="panel empty-state"><h2>No assigned exams</h2><p className="muted">When an administrator assigns an exam, it will appear here.</p></div> : assignedExams.map((item) => {
+              const unavailable = item.availableFrom && new Date(item.availableFrom).getTime() > Date.now();
+              const expired = item.dueAt && new Date(item.dueAt).getTime() < Date.now();
+              return <article className="panel assigned-exam-card" key={item.id}>
+                <div className="admin-exam-meta"><div><strong>{item.exam.title}</strong><p className="muted">{item.exam.description || "No description"} · Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div><span className={item.submission ? "status status-used" : expired ? "status status-expired" : "status status-pending"}>{item.submission ? "SUBMITTED" : expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span></div>
+                <div className="assigned-exam-dates"><small>Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</small><small>Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</small></div>
+                {item.submission ? <p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · Score: {item.submission.score ?? "Pending"} / {item.submission.maximumScore ?? "—"} · {item.submission.status}</p> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
+              </article>;
+            })}
           </section>
         ) : activePage === "announcements" ? (
           <section className="student-announcements">
