@@ -456,6 +456,30 @@ describe("analytics", () => {
     expect(res.status).toBe(400);
   });
 
+  it("exposes cohort analytics to admins without counting review-required answers as verified", async () => {
+    const adminSession = await signUp(server.baseUrl, "cohort-analytics-admin@example.com");
+    await server.db.user.update({
+      where: { id: adminSession.userId },
+      data: { role: "ADMIN" },
+    });
+    const adminApi = bindSession(server.baseUrl, adminSession.cookie);
+    const response = await adminApi.get("/admin/analytics/overview");
+    expect(response.status).toBe(200);
+    const report = response.json as {
+      practice: { completedAttempts: number; correct: number; incorrect: number; unanswered: number };
+      formalExams: { graded: number; reviewRequired: number; correct: number; incorrect: number; unanswered: number };
+    };
+    expect(report.practice.completedAttempts).toBeGreaterThanOrEqual(4);
+    expect(report.practice.correct + report.practice.incorrect + report.practice.unanswered).toBeGreaterThan(0);
+    expect(report.formalExams).toMatchObject({
+      graded: 1,
+      reviewRequired: 1,
+      correct: 1,
+      incorrect: 0,
+      unanswered: 0,
+    });
+  });
+
   it("POST /analytics/import is idempotent on duplicate attempt ids", async () => {
     const exportRes = await api.get(`/analytics/export`);
     const payload = exportRes.json as {
