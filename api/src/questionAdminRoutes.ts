@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema } from "./questions.js";
+import { QuestionInputSchema, hashQuestion, encodeOptions } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 
 const ListSchema = z.object({
@@ -65,7 +65,7 @@ export function questionAdminRouter(db: PrismaClient): Router {
       const input = QuestionInputSchema.parse(req.body);
       const result = await insertQuestion(db, input);
       if (result === "duplicate") return next(badRequest("A question with the same text already exists in the bank."));
-      const created = await db.question.findFirst({ where: { questionHash: (await import("./questions.js")).hashQuestion(input.text), },
+      const created = await db.question.findFirst({ where: { questionHash: hashQuestion(input.text), },
         include: { subject: true, topic: true } });
       res.status(201).json({ ok: true, question: created });
     } catch (error) { next(error); }
@@ -91,7 +91,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
       const subject = await db.subject.upsert({ where: { name: merged.subject }, create: { name: merged.subject }, update: {} });
       const topic = await db.topic.upsert({ where: { subjectId_name: { subjectId: subject.id, name: merged.topic } },
         create: { subjectId: subject.id, name: merged.topic }, update: {} });
-      const { hashQuestion, encodeOptions } = await import("./questions.js");
       const updated = await db.question.update({ where: { id }, data: {
         subjectId: subject.id, topicId: topic.id, text: merged.text, options: encodeOptions(merged.options),
         correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source,
