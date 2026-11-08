@@ -2,13 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, ApiError, type StudyHistoryItem, type WeakTopicsReport } from "../../lib/api";
+import {
+  api,
+  ApiError,
+  type StudyHistoryItem,
+  type StudyRecommendationsReport,
+  type WeakTopicsReport,
+} from "../../lib/api";
 import { useSession } from "../../lib/session";
 
 function AnalyticsDashboard() {
   const { status, user } = useSession();
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [history, setHistory] = useState<StudyHistoryItem[]>([]);
+  const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +36,11 @@ function AnalyticsDashboard() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    api.studyRecommendations()
+      .then((report) => {
+        if (!cancelled) setRecommendations(report);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -77,6 +89,31 @@ function AnalyticsDashboard() {
           <div className="stat-caption">Correct answers / answered questions</div>
         </div>
       </section>
+
+      {recommendations ? (
+        <section className="panel" aria-labelledby="study-recommendations-title">
+          <div className="panel-header">
+            <h2 id="study-recommendations-title">Your next study steps</h2>
+            <span className="pill">{recommendations.basedOnAttempts} attempts analyzed</span>
+          </div>
+          <div className="stack">
+            {recommendations.recommendations.map((item) => (
+              <article key={item.id}>
+                <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <strong>{item.title}</strong>
+                  <span className="pill">{item.priority} priority</span>
+                </div>
+                <p className="muted">{item.reason}</p>
+                <p className="mute">
+                  Suggested session: {item.questionCount} {item.mode === "mistakes" ? "mistake review" : item.mode === "mock" ? "mock test" : "practice"} questions
+                  {item.subject ? ` in ${item.subject}` : ""}.
+                </p>
+                <Link className="button button-secondary" href="/#practice">Open practice setup</Link>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="panel-header">
