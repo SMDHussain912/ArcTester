@@ -295,7 +295,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
         return next(badRequest("TensorFlow.js training requires a SHA-256 pseudonymous groupId on every sample."));
       }
-      const modelId = `${input.modelId}-tensorflow-js`;
+      const modelId = input.modelId;
       const latest = await db.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
       const version = (latest._max.version ?? 0) + 1;
       const trained = await trainTensorflowRegressionCandidate(
