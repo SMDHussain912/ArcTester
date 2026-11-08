@@ -212,11 +212,9 @@ export async function getPerformanceOverview(
   const trend = attempts.slice(-12).map((attempt) => {
     let correct = 0;
     let incorrect = 0;
-    let unanswered = 0;
     for (const answer of attempt.answers) {
-      if (answer.chosen === null) unanswered += 1;
-      else if (answer.isCorrect) correct += 1;
-      else incorrect += 1;
+      if (answer.chosen !== null && answer.isCorrect) correct += 1;
+      else if (answer.chosen !== null) incorrect += 1;
     }
     const answered = correct + incorrect;
     return {
