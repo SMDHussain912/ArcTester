@@ -503,6 +503,54 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/admin/exams/:id/clone", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const source = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1, include: { questions: { orderBy: { position: "asc" } } } } },
+      });
+      const version = source?.versions[0];
+      if (!source || !version) return next(notFound("Exam or exam version not found."));
+      const copy = await db.$transaction(async (tx) => {
+        const exam = await tx.exam.create({
+          data: { title: `Copy of ${source.title}`.slice(0, 120), description: source.description, createdById: req.user!.id },
+        });
+        const nextVersion = await tx.examVersion.create({
+          data: {
+            examId: exam.id, version: 1, instructions: version.instructions,
+            durationMinutes: version.durationMinutes, shuffleQuestions: version.shuffleQuestions,
+            shuffleOptions: version.shuffleOptions,
+          },
+        });
+        if (version.questions.length) {
+          await tx.examVersionQuestion.createMany({
+            data: version.questions.map((question) => ({
+              examVersionId: nextVersion.id, sourceQuestionId: question.sourceQuestionId,
+              position: question.position, subject: question.subject, topic: question.topic,
+              text: question.text, options: question.options, correctIndex: question.correctIndex,
+              explanation: question.explanation, marks: question.marks, negativeMarks: question.negativeMarks,
+            })),
+          });
+        }
+        return tx.exam.findUniqueOrThrow({
+          where: { id: exam.id },
+          include: { versions: { include: { _count: { select: { questions: true, assignments: true } } } } },
+        });
+      });
+      res.status(201).json({ ok: true, exam: copy });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/exams/:id/archive", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const exam = await db.exam.findUnique({ where: { id: req.params.id }, select: { id: true, status: true } });
+      if (!exam) return next(notFound("Exam not found."));
+      if (exam.status === "ARCHIVED") return res.json({ ok: true, examId: exam.id, status: exam.status });
+      await db.exam.update({ where: { id: exam.id }, data: { status: "ARCHIVED" } });
+      res.json({ ok: true, examId: exam.id, status: "ARCHIVED" });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/exams/:id/publish", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const exam = await db.exam.findUnique({
