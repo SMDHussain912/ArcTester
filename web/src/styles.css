@@ -562,3 +562,212 @@ label { color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* New ArcTester palette: deep ocean, teal and warm amber */
+:root {
+  --bg: #f3f7f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --text: #142b35;
+  --muted: #647985;
+  --border: #dce7e8;
+  --accent: #087f8c;
+  --accent-strong: #066674;
+  --accent-soft: #e5f5f4;
+  --success: #16845b;
+  --danger: #c2413b;
+  --shadow: 0 10px 32px rgba(14, 48, 57, .06);
+  --shadow-hover: 0 17px 42px rgba(14, 48, 57, .12);
+  --ink: var(--text);
+  --line: var(--border);
+  --surface-soft: var(--accent-soft);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0b1720;
+  --surface: #12232d;
+  --surface-raised: #192e39;
+  --text: #eaf4f5;
+  --muted: #9bb0b8;
+  --border: #29434d;
+  --accent: #4ac3c4;
+  --accent-strong: #78d8d5;
+  --accent-soft: #173b40;
+  --success: #68d6a5;
+  --danger: #ff958c;
+  --shadow: 0 12px 34px rgba(0,0,0,.24);
+  --shadow-hover: 0 18px 46px rgba(0,0,0,.34);
+  --ink: var(--text);
+  --line: var(--border);
+  --surface-soft: var(--accent-soft);
+  color-scheme: dark;
+}
+body {
+  background:
+    radial-gradient(ellipse at 8% -12%, rgba(8,127,140,.11), transparent 34rem),
+    radial-gradient(ellipse at 100% 5%, rgba(230,168,74,.07), transparent 28rem),
+    var(--bg);
+}
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse at 8% -12%, rgba(74,195,196,.10), transparent 34rem),
+    radial-gradient(ellipse at 100% 5%, rgba(230,168,74,.035), transparent 28rem),
+    var(--bg);
+}
+.brand-mark {
+  background: linear-gradient(145deg, #0e9aa3, #075b69);
+  box-shadow: 0 7px 17px rgba(8,127,140,.25);
+}
+.nav-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.welcome {
+  background: linear-gradient(115deg, #102f3a 0%, #086d78 57%, #11a3a0 100%);
+  box-shadow: 0 18px 42px rgba(8,94,105,.20);
+}
+.welcome::before {
+  content: "";
+  position: absolute;
+  width: 180px; height: 180px;
+  right: 25%; bottom: -125px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 50%;
+  box-shadow: 0 0 0 25px rgba(255,255,255,.035), 0 0 0 52px rgba(255,255,255,.025);
+}
+.primary {
+  background: linear-gradient(135deg, #0b8993, #066674);
+  box-shadow: 0 5px 13px rgba(8,127,140,.22);
+}
+.primary:hover:not(:disabled) { box-shadow: 0 8px 18px rgba(8,127,140,.30); }
+.eyebrow { color: var(--accent); }
+.import-dropzone {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
+}
+.auth-shell {
+  background:
+    radial-gradient(ellipse at 18% 18%, rgba(8,127,140,.18), transparent 32rem),
+    radial-gradient(ellipse at 88% 84%, rgba(230,168,74,.10), transparent 28rem),
+    var(--bg);
+}
+
+/* Consistent, accessible custom checkbox and radio controls */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  position: relative;
+  display: inline-grid !important;
+  place-content: center;
+  flex: 0 0 20px !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  margin: 0 2px 0 0 !important;
+  padding: 0 !important;
+  border: 1.7px solid #9aadb3 !important;
+  border-radius: 6px !important;
+  background: var(--surface) !important;
+  color: #fff;
+  box-shadow: none !important;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+input[type="radio"] { border-radius: 50% !important; }
+input[type="checkbox"]::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-right: 0;
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  margin-top: -2px;
+  transition: transform .13s ease;
+}
+input[type="radio"]::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: scale(0);
+  transition: transform .13s ease;
+}
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent) !important;
+}
+input[type="checkbox"]:checked::after { transform: rotate(-45deg) scale(1); }
+input[type="radio"]:checked::after { transform: scale(1); }
+input[type="checkbox"]:hover,
+input[type="radio"]:hover {
+  border-color: var(--accent) !important;
+}
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent) !important;
+  outline-offset: 2px;
+}
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
+.exam-settings-row label,
+.pick-row,
+.student-pick,
+.question-correct-choice {
+  cursor: pointer;
+}
+.exam-settings-row label {
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  transition: border-color .15s ease, background .15s ease;
+}
+.exam-settings-row label:hover,
+.question-correct-choice:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+}
+.pick-row {
+  border: 1px solid transparent;
+  margin: 2px 0;
+}
+.pick-row:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: var(--accent-soft);
+}
+.student-pick {
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+.student-pick:hover { background: var(--accent-soft); }
+.question-correct-choice {
+  min-height: 46px;
+  border-radius: 11px;
+  background: var(--surface);
+}
+.question-correct-choice:has(input:checked) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.option.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"], input[type="radio"] { transition: none; }
+}
