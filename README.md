@@ -2,7 +2,9 @@
 
 Offline-first mock-test platform for AP ECET CSE personal study. Portfolio-quality monorepo.
 
-- `/web` — Next.js (App Router) + React + TypeScript (strict)
+- `/web` — React + TypeScript + Vite (browser application)
+- `/mobile` — Expo + React Native + TypeScript (Android/iOS)
+- `/desktop` — Electron (Windows installer)
 - `/api` — Node.js + TypeScript + Express + Prisma + SQLite + Zod
 - Tests: Vitest · Lint/format: ESLint + Prettier
 - Runs on `localhost` with **no internet after install**. Lightweight for 8 GB RAM.
@@ -93,6 +95,10 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | `npm run lint`         | ESLint in both workspaces    |
 | `npm run format`       | Prettier write               |
 | `npm run format:check` | Prettier check (CI-friendly) |
+| `npm run dev:mobile`   | Expo development server |
+| `npm run dev:desktop`  | Electron desktop shell |
+| `npm run build:mobile` | Export Expo app bundles |
+| `npm run build:desktop:win` | Package Windows installer (after web build) |
 
 Question bank (run from the repo root):
 
@@ -372,3 +378,18 @@ npm run format:check
 npm run dev:api   # curl http://localhost:4000/health
 npm run dev:web   # open http://localhost:3000
 ```
+
+
+## Multi-platform clients
+
+The React + Vite web client is the default browser app. The Expo app in `/mobile` uses the existing `POST /auth/token` bearer-token flow and stores its token with Expo SecureStore. The Electron shell in `/desktop` packages the web production build for Windows.
+
+Install the client dependencies separately:
+
+```bash
+npm run install:mobile
+npm run install:desktop
+npm run dev:mobile
+```
+
+For a phone on your Wi-Fi, set `EXPO_PUBLIC_API_URL` in `mobile/.env` to your computer's LAN IP (for example `http://192.168.1.5:4000`). Set `VITE_API_URL` for the web build to the same reachable API address.
