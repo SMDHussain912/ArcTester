@@ -234,14 +234,32 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
           }
         );
         await markSubmissionSynced(submission.assignmentId, result.submission.id);
-        await refreshAssignments();
         setMessage("Submission synchronized");
       } else {
         setMessage("Offline submission queued — reconnect to upload");
       }
+
+      // The submission is now safely queued or confirmed by the server.
+      // Exit the exam before refreshing optional workspace data so a refresh
+      // failure cannot make a completed submission look retryable.
       setActivePackage(null);
       setActiveAttempt(null);
-      await refreshLocal();
+      await refreshLocal().catch((refreshCause) => {
+        setError(
+          refreshCause instanceof Error
+            ? `Submission saved, but local status could not refresh: ${refreshCause.message}`
+            : "Submission saved, but local status could not refresh."
+        );
+      });
+      if (online) {
+        await refreshAssignments().catch((refreshCause) => {
+          setError(
+            refreshCause instanceof Error
+              ? `Submission synchronized, but assignments could not refresh: ${refreshCause.message}`
+              : "Submission synchronized, but assignments could not refresh."
+          );
+        });
+      }
     } catch (cause) {
       submittedLock.current = false;
       setError(cause instanceof Error ? cause.message : "Could not save the submission.");
