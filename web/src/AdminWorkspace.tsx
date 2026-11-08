@@ -24,7 +24,7 @@ export default function AdminWorkspace(p:Props){
  const selectedSubject=catalog.find(s=>s.name===subject);
  const filteredTopics=selectedSubject?.topics??[];
  async function loadCatalog(){const r=await api<{subjects:CatalogSubject[]}>("/admin/question-catalog");setCatalog(r.subjects);}
- async function loadQuestions(nextPage=page){const params=new URLSearchParams({page:String(nextPage),limit:"25"});if(query)params.set("q",query);if(subject)params.set("subject",subject);if(topic)params.set("topic",topic);if(difficulty)params.set("difficulty",difficulty);const r=await api<{questions:Question[];total:number}>("/admin/questions?"+params);setQuestions(r.questions);setTotal(r.total);setPage(nextPage);setSelected([]);}
+ async function loadQuestions(nextPage=page){const params=new URLSearchParams({page:String(nextPage),limit:"25"});if(query)params.set("q",query);if(subject)params.set("subject",subject);if(topic)params.set("topic",topic);if(difficulty)params.set("difficulty",difficulty);const r=await api<{questions:Question[];total:number}>("/admin/questions?"+params);setQuestions(r.questions);setTotal(r.total);setPage(nextPage);}
  async function loadExams(){const r=await api<{exams:Exam[]}>("/admin/exams");setExams(r.exams);}
  useEffect(()=>{void Promise.all([loadCatalog(),loadQuestions(1),loadExams()]).catch(e=>setError(e.message));},[]);
  useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty]);
