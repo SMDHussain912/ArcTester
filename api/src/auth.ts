@@ -132,6 +132,48 @@ const DeviceSchema = z.object({
   fingerprint: z.string().trim().min(16).max(128),
 });
 
+// Best-effort per-process throttle shared by browser and bearer sign-in endpoints.
+// It limits guesses against one account without trusting forwarded client IP headers.
+const LOGIN_FAILURE_LIMIT = 8;
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const loginFailures = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
+
+function loginRetryAfter(email: string, now = Date.now()): number {
+  const bucket = loginFailures.get(email);
+  if (!bucket) return 0;
+  if (now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && bucket.blockedUntil <= now) {
+    loginFailures.delete(email);
+    return 0;
+  }
+  return bucket.blockedUntil > now ? Math.ceil((bucket.blockedUntil - now) / 1000) : 0;
+}
+
+function recordLoginFailure(email: string, now = Date.now()): number {
+  let bucket = loginFailures.get(email);
+  if (!bucket || now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS) {
+    bucket = { count: 0, windowStartedAt: now, blockedUntil: 0 };
+  }
+  bucket.count += 1;
+  if (bucket.count >= LOGIN_FAILURE_LIMIT) bucket.blockedUntil = now + LOGIN_FAILURE_WINDOW_MS;
+  loginFailures.set(email, bucket);
+
+  if (loginFailures.size > 5000) {
+    for (const [key, value] of loginFailures) {
+      if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(key);
+    }
+  }
+  return loginRetryAfter(email, now);
+}
+
+function clearLoginFailures(email: string): void {
+  loginFailures.delete(email);
+}
+
+function rejectThrottledLogin(res: Response, retryAfter: number): void {
+  res.setHeader("Retry-After", String(retryAfter));
+  res.status(429).json({ error: "Too many failed sign-in attempts. Try again later." });
+}
+
 export interface AuthedRequest extends Request {
   user?: { id: number; email: string };
 }
@@ -329,10 +371,15 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/login", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
+      const retryAfter = loginRetryAfter(input.email);
+      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !verifyPassword(input.password, user.passwordHash)) {
+        const blockedFor = recordLoginFailure(input.email);
+        if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
+      clearLoginFailures(input.email);
       const token = signJwt({ sub: String(user.id), email: user.email });
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
@@ -344,10 +391,15 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/token", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
+      const retryAfter = loginRetryAfter(input.email);
+      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !verifyPassword(input.password, user.passwordHash)) {
+        const blockedFor = recordLoginFailure(input.email);
+        if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
+      clearLoginFailures(input.email);
       const token = signJwt({ sub: String(user.id), email: user.email });
       res.json({
         ok: true,

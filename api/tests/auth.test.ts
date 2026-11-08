@@ -288,4 +288,24 @@ describe("auth — bearer token (native/mobile clients)", () => {
 
     expect(tokenBody.user.id).toBe(cookieBody.user.id);
   });
+
+  it("throttles repeated failed sign-in attempts across cookie and bearer endpoints", async () => {
+    const email = "rate-limit-probe@example.com";
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const endpoint = attempt < 4 ? "/auth/login" : "/auth/token";
+      const response = await fetch(`${server.baseUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password: "wrong-password" }),
+      });
+      expect(response.status).toBe(attempt === 7 ? 429 : 400);
+    }
+    const blocked = await fetch(`${server.baseUrl}/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password: "correct-horse-battery" }),
+    });
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
 });
