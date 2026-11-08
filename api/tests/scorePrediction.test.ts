@@ -40,6 +40,19 @@ describe("next-attempt score prediction dataset", () => {
     expect(typeof result.beatsMeanBaseline).toBe("boolean");
   });
 
+  it("does not claim to beat the baseline on a constant-score history", () => {
+    const constantHistory: CompletedAttemptScore[] = Array.from({ length: 12 }, (_, index) => ({
+      finishedAt: new Date(Date.UTC(2026, 2, index + 1)),
+      correct: 5,
+      total: 10,
+    }));
+
+    const result = trainAndEvaluateNextAttemptModel(constantHistory);
+    expect(result.regression.mae).toBeCloseTo(0, 8);
+    expect(result.meanBaseline.mae).toBe(0);
+    expect(result.beatsMeanBaseline).toBe(false);
+  });
+
   it("rejects invalid attempt scores and timestamps", () => {
     expect(() => buildNextAttemptScoreSamples([
       ...attempts.slice(0, 3),
