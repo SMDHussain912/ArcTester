@@ -329,13 +329,15 @@ export default function AdminPage() {
     }
     setBusy(true); setError(""); setNotice("");
     try {
-      await api.assignAdminExam(assignExamId, {
+      const result = await api.assignAdminExam(assignExamId, {
         studentIds: selectedStudents,
         ...(availableFrom ? { availableFrom: new Date(availableFrom).toISOString() } : {}),
         ...(dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}),
       });
+      const unchanged = selectedStudents.length - result.created;
+      const summary = `Assignment request completed: ${result.created} new assignment(s) created${unchanged ? `; ${unchanged} existing assignment(s) left unchanged` : ""}.`;
       setSelectedStudents([]); setAvailableFrom(""); setDueAt("");
-      await refreshWorkspaceAfterMutation("Exam assignment completed. Existing assignments were left unchanged.");
+      await refreshWorkspaceAfterMutation(summary);
     } catch (e) { showError(e, "Could not assign the exam."); }
     finally { setBusy(false); }
   }
