@@ -739,8 +739,13 @@ export default function App() {
     for (const subject of subjects) {
       const quota = Math.max(0, subjectQuotas[subject] ?? 0);
       let pool = adminQuestions.filter((question) => question.subject === subject && !picked.includes(question.id));
-      if (topicSelectionMode === "include") pool = pool.filter((question) => question.topic && selectedTopics.includes(`${subject}::${question.topic}`));
-      if (topicSelectionMode === "exclude") pool = pool.filter((question) => !question.topic || !selectedTopics.includes(`${subject}::${question.topic}`));
+      const selectedForSubject = selectedTopics.filter((key) => key.startsWith(`${subject}::`));
+      if (topicSelectionMode === "include" && selectedForSubject.length > 0) {
+        pool = pool.filter((question) => question.topic && selectedForSubject.includes(`${subject}::${question.topic}`));
+      }
+      if (topicSelectionMode === "exclude" && selectedForSubject.length > 0) {
+        pool = pool.filter((question) => !question.topic || !selectedForSubject.includes(`${subject}::${question.topic}`));
+      }
       if (difficultyMix === "balanced") {
         const shuffled = (items: AdminQuestion[]) => [...items].sort(() => Math.random() - 0.5);
         const easy = shuffled(pool.filter((question) => question.difficulty === "easy"));
