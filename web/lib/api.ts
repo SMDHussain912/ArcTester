@@ -557,6 +557,43 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
+export interface AdminModelDataset {
+  id: string;
+  name: string;
+  task: "regression" | "binary-classification";
+  targetColumn: string;
+  featureSchema: Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
+  rowCount: number;
+  sourceDescription: string;
+  sourceAttested: boolean;
+  datasetKind: "synthetic" | "real-anonymized";
+  fingerprint: string;
+  createdAt: string;
+}
+
+export interface AdminRegisteredModel {
+  modelId: string;
+  version: number;
+  algorithm: string;
+  task: string;
+  dataset: string;
+  isActive: boolean;
+  createdAt: string;
+  activatedAt?: string | null;
+}
+
+export interface TensorflowTrainingReport {
+  ok: true;
+  model: AdminRegisteredModel | null;
+  promoted: false;
+  productionEligible: boolean;
+  split: { trainRows: number; testRows: number; trainGroups: number; testGroups: number };
+  candidate: { rows: number; mae: number; rmse: number; rSquared: number | null };
+  baseline: { rows: number; mae: number; rmse: number; rSquared: number | null };
+  reason: string;
+  message: string;
+}
+
 export const api = {
   bank: () => request<BankInfo>("/bank"),
   offlineLearningPackage: () => request<OfflineLearningPackage>("/learning/package"),
@@ -635,6 +672,20 @@ export const api = {
   adminSubmission: (id: string) =>
     request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
+  adminModelDatasets: () => request<{ ok: true; datasets: AdminModelDataset[] }>("/admin/model-datasets"),
+  adminRegisteredModels: () => request<{ ok: true; models: AdminRegisteredModel[] }>("/admin/models"),
+  registerAdminModelDataset: (body: {
+    name: string;
+    task: "regression";
+    targetColumn: string;
+    featureSchema: Array<{ name: string; type: "numeric" }>;
+    samples: Array<{ features: Record<string, number>; target: number; groupId: string }>;
+    sourceDescription: string;
+    sourceAttested: true;
+    datasetKind: "synthetic" | "real-anonymized";
+  }) => request<{ ok: true; dataset: AdminModelDataset }>("/admin/model-datasets", json(body)),
+  trainAdminTensorflowDataset: (datasetId: string, body: { modelId: string; seed?: number; epochs?: number; batchSize?: number }) =>
+    request<TensorflowTrainingReport>(`/admin/model-datasets/${encodeURIComponent(datasetId)}/train-tensorflow`, json(body)),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
   adminQuestions: (page = 1, pageSize = 200) => request<{ ok: true; questions: AdminQuestion[]; page: number; pages: number; total: number }>(`/admin/question-bank?page=${page}&pageSize=${pageSize}`),
