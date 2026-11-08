@@ -1,5 +1,6 @@
 import { runTunedClassifierExperiments, runRegressionExperiment, splitDatasetRows } from "./datasetPipeline.js";
 import type { DatasetFeatureEncoder } from "./datasetPipeline.js";
+import { predictLinearRegression } from "./linearRegression.js";
 
 export interface RegisteredTrainingSample {
   features: Record<string, number | string>;
@@ -12,6 +13,7 @@ export interface RegisteredTrainingResult {
   metrics: object;
   crossValidation?: unknown;
   parameters?: Record<string, number>;
+  uncertainty?: { residualStdDev: number; method: "holdout-rmse" };
   trainRows: number;
   testRows: number;
 }
@@ -94,10 +96,13 @@ export function trainRegisteredDataset(
     split.train.map(({ features, target }) => ({ features, target })),
     split.test.map(({ features, target }) => ({ features, target })),
   );
+  const residuals = split.test.map((row) => row.target - predictLinearRegression(result.model, row.features));
+  const residualStdDev = Math.sqrt(residuals.reduce((sum, residual) => sum + residual ** 2, 0) / residuals.length);
   return [{
     algorithm: result.algorithm,
     model: result.model,
     metrics: result.metrics,
+    uncertainty: { residualStdDev, method: "holdout-rmse" },
     trainRows: split.train.length,
     testRows: split.test.length,
   }];
