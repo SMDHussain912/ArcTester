@@ -322,7 +322,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/analytics/overview", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
-      const [studentCount, examCount, assignments, practiceAttempts, gradedSubmissions] = await Promise.all([
+      const [studentCount, examCount, assignments, practiceAttempts, gradedSubmissions, examSubmissions] = await Promise.all([
         db.user.count({ where: { role: "STUDENT" } }),
         db.exam.count(),
         db.examAssignment.findMany({
@@ -369,8 +369,25 @@ export function examRouter(db: PrismaClient): Router {
             },
           },
         }),
+        db.examSubmission.findMany({
+          where: { assignment: { student: { role: "STUDENT" } } },
+          orderBy: { submittedAt: "desc" },
+          include: {
+            assignment: {
+              include: {
+                student: { select: { id: true, email: true } },
+                examVersion: { include: { exam: { select: { id: true, title: true } } } },
+              },
+            },
+          },
+        }),
       ]);
-      const submitted = assignments.filter((item) => item.submission !== null);
+      const submitted = examSubmissions.map((submission) => ({
+        submission,
+        studentId: submission.assignment.studentId,
+        student: submission.assignment.student,
+        examVersion: submission.assignment.examVersion,
+      }));
       const scored = submitted.filter((item) =>
         item.submission?.status === "GRADED" && item.submission.score !== null &&
         item.submission.maximumScore !== null && item.submission.maximumScore > 0
@@ -485,14 +502,17 @@ export function examRouter(db: PrismaClient): Router {
         const key = item.examVersion.exam.id;
         const row = byExam.get(key) ?? { examId: key, title: item.examVersion.exam.title, assigned: 0, submitted: 0, scoreTotal: 0, scored: 0 };
         row.assigned += 1;
-        if (item.submission) {
-          row.submitted += 1;
-          if (item.submission.status === "GRADED" && item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
-            row.scoreTotal += (item.submission.score / item.submission.maximumScore) * 100;
-            row.scored += 1;
-          }
-        }
         byExam.set(key, row);
+      }
+      for (const item of submitted) {
+        const key = item.examVersion.exam.id;
+        const row = byExam.get(key);
+        if (!row) continue;
+        row.submitted += 1;
+        if (item.submission.status === "GRADED" && item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
+          row.scoreTotal += (item.submission.score / item.submission.maximumScore) * 100;
+          row.scored += 1;
+        }
       }
       res.json({
         ok: true,
@@ -640,6 +660,53 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const sessions = await db.examSession.findMany({
+        where: { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } },
+        orderBy: { lastHeartbeatAt: "desc" },
+        include: {
+          student: { select: { id: true, email: true } },
+          assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
+          events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
+        },
+      });
+      const now = Date.now();
+      res.json({ ok: true, serverTime: new Date(now), sessions: sessions.map((session) => ({
+        id: session.id, status: session.status, student: session.student,
+        exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
+        startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
+        connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
+        heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
+        disconnectCount: session.disconnectCount, submission: session.assignment.submission,
+        events: session.events,
+      })) });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const assignments = await db.examAssignment.findMany({
+        orderBy: { assignedAt: "desc" },
+        include: {
+          student: { select: { id: true, email: true } },
+          examVersion: { include: { exam: { select: { id: true, title: true } }, _count: { select: { questions: true } } } },
+          session: { select: { id: true, status: true, startedAt: true, lastHeartbeatAt: true, endedAt: true, heartbeatCount: true, focusLossCount: true, disconnectCount: true } },
+          submission: { select: { id: true, status: true, submittedAt: true, score: true, maximumScore: true } },
+        },
+      });
+      const now = Date.now();
+      res.json({ ok: true, serverTime: new Date(now), attendance: assignments.map((item) => ({
+        assignmentId: item.id, candidate: item.student, exam: item.examVersion.exam,
+        version: item.examVersion.version, questionCount: item.examVersion._count.questions,
+        assignedAt: item.assignedAt, availableFrom: item.availableFrom, dueAt: item.dueAt,
+        attendanceStatus: item.submission ? "SUBMITTED" : item.session?.startedAt ? item.session.status : "NOT_STARTED",
+        connectivity: item.session?.status === "ACTIVE" && item.session.lastHeartbeatAt && now - item.session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : item.session?.startedAt ? "STALE_OR_INACTIVE" : "NOT_STARTED",
+        session: item.session, submission: item.submission,
+      })) });
+    } catch (error) { next(error); }
   });
 
   router.get("/admin/exams/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
@@ -1162,30 +1229,6 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (_req, res, next) => {
-    try {
-      const sessions = await db.examSession.findMany({
-        where: { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } },
-        orderBy: { lastHeartbeatAt: "desc" },
-        include: {
-          student: { select: { id: true, email: true } },
-          assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
-          events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
-        },
-      });
-      const now = Date.now();
-      res.json({ ok: true, serverTime: new Date(now), sessions: sessions.map((session) => ({
-        id: session.id, status: session.status, student: session.student,
-        exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
-        startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
-        connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
-        heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
-        disconnectCount: session.disconnectCount, submission: session.assignment.submission,
-        events: session.events,
-      })) });
-    } catch (error) { next(error); }
-  });
-
   router.get("/admin/exams/assignments/:id/audit", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const assignment = await db.examAssignment.findUnique({
@@ -1217,30 +1260,7 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (_req, res, next) => {
-    try {
-      const assignments = await db.examAssignment.findMany({
-        orderBy: { assignedAt: "desc" },
-        include: {
-          student: { select: { id: true, email: true } },
-          examVersion: { include: { exam: { select: { id: true, title: true } }, _count: { select: { questions: true } } } },
-          session: { select: { id: true, status: true, startedAt: true, lastHeartbeatAt: true, endedAt: true, heartbeatCount: true, focusLossCount: true, disconnectCount: true } },
-          submission: { select: { id: true, status: true, submittedAt: true, score: true, maximumScore: true } },
-        },
-      });
-      const now = Date.now();
-      res.json({ ok: true, serverTime: new Date(now), attendance: assignments.map((item) => ({
-        assignmentId: item.id, candidate: item.student, exam: item.examVersion.exam,
-        version: item.examVersion.version, questionCount: item.examVersion._count.questions,
-        assignedAt: item.assignedAt, availableFrom: item.availableFrom, dueAt: item.dueAt,
-        attendanceStatus: item.submission ? "SUBMITTED" : item.session?.startedAt ? item.session.status : "NOT_STARTED",
-        connectivity: item.session?.status === "ACTIVE" && item.session.lastHeartbeatAt && now - item.session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : item.session?.startedAt ? "STALE_OR_INACTIVE" : "NOT_STARTED",
-        session: item.session, submission: item.submission,
-      })) });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().max(300).default("") }).parse(req.body);
       const session = await db.examSession.findUnique({ where: { id: req.params.id } });
