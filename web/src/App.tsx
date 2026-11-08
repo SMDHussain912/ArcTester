@@ -532,6 +532,28 @@ export default function App() {
     }
   }
 
+  async function cloneExam(examId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/exams/${examId}/clone`, { method: "POST" });
+      await refreshAdminExams();
+      setError("Exam copied as a new draft.");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function archiveExam(examId: string) {
+    if (!window.confirm("Archive this exam? It will remain in the exam library but cannot be treated as an active exam.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/exams/${examId}/archive`, { method: "POST" });
+      await refreshAdminExams();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
   async function assignExam(examId: string) {
     if (selectedStudentIds.length === 0) {
       setError("Select at least one student before assigning this exam.");
@@ -863,9 +885,11 @@ export default function App() {
                 const version = exam.versions[0];
                 const published = Boolean(version?.publishedAt);
                 return <article className="panel admin-exam-card" key={exam.id}>
-                  <div className="admin-exam-meta"><div><strong>{exam.title}</strong><p className="muted">{exam.description || "No description"} · {version?._count.questions ?? 0} questions · {version?.durationMinutes ?? 0} min</p></div><span className={published ? "status status-used" : "status status-pending"}>{published ? "PUBLISHED" : "DRAFT"}</span></div>
+                  <div className="admin-exam-meta"><div><strong>{exam.title}</strong><p className="muted">{exam.description || "No description"} · {version?._count.questions ?? 0} questions · {version?.durationMinutes ?? 0} min</p></div><span className={exam.status === "ARCHIVED" ? "status status-expired" : published ? "status status-used" : "status status-pending"}>{exam.status === "ARCHIVED" ? "ARCHIVED" : published ? "PUBLISHED" : "DRAFT"}</span></div>
                   <div className="admin-exam-actions">
-                    {!published && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
+                    <button className="ghost" disabled={busy} onClick={() => void cloneExam(exam.id)}>Duplicate exam</button>
+                    {exam.status !== "ARCHIVED" && <button className="ghost danger-action" disabled={busy} onClick={() => void archiveExam(exam.id)}>Archive</button>}
+                    {!published && exam.status !== "ARCHIVED" && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
                     {published && <button className="ghost" disabled={busy || adminStudents.length === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); }}>Assign to students</button>}
                     {published && <span className="muted">{version?._count.assignments ?? 0} assignments</span>}
                   </div>
