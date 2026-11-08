@@ -99,6 +99,12 @@ describe("student score prediction endpoint", () => {
     });
     expect(response.json.predictedScorePercent).toBeGreaterThanOrEqual(0);
     expect(response.json.predictedScorePercent).toBeLessThanOrEqual(100);
+    expect(response.json.predictionInterval.lowerPercent).toBeGreaterThanOrEqual(0);
+    expect(response.json.predictionInterval.upperPercent).toBeLessThanOrEqual(100);
+    expect(response.json.predictionInterval.lowerPercent).toBeLessThanOrEqual(response.json.predictedScorePercent);
+    expect(response.json.predictionInterval.upperPercent).toBeGreaterThanOrEqual(response.json.predictedScorePercent);
+    expect(response.json.predictionInterval.estimatedErrorPercent).toBeGreaterThan(0);
+    expect(response.json.predictionInterval.method).toBe("walk-forward-rmse");
     expect(response.json.modelMae).toBeLessThan(response.json.baselineMae);
   });
 
