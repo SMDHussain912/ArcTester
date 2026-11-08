@@ -193,6 +193,28 @@ export interface WeakTopicRow {
   accuracy: number | null;
 }
 
+export interface QuestionPerformanceRow {
+  questionId: number;
+  subject: string;
+  topic: string | null;
+  difficulty: string;
+  seen: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  sampleSize: number;
+  sufficientData: boolean;
+  weak: boolean;
+}
+export interface QuestionPerformanceReport {
+  generatedAt: string;
+  minimumAnswers: number;
+  weakAccuracyThreshold: number;
+  questions: QuestionPerformanceRow[];
+  insufficientSampleCount: number;
+}
+
 export interface PerformanceOverview {
   generatedAt: string;
   practice: {
@@ -446,6 +468,7 @@ export const api = {
     request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
   performanceOverview: () => request<PerformanceOverview>("/analytics/overview"),
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
+  questionPerformance: () => request<QuestionPerformanceReport>("/analytics/question-performance"),
   studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
