@@ -209,12 +209,29 @@ function AnalyticsDashboard() {
                 aria-label={item.subject + " accuracy"}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={Math.round(item.accuracy * 100)}
+                aria-valuenow={item.accuracy === null ? 0 : Math.round(item.accuracy * 100)}
                 style={{ height: 9, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 8 }}
               >
-                <div style={{ width: Math.max(0, Math.min(100, item.accuracy * 100)) + "%", height: "100%", background: "var(--accent, #2563eb)", borderRadius: 99 }} />
+                <div style={{ width: (item.accuracy === null ? 0 : Math.max(0, Math.min(100, item.accuracy * 100))) + "%", height: "100%", background: "var(--accent, #2563eb)", borderRadius: 99 }} />
               </div>
               <p className="mute">{item.wrong} incorrect answers</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <h2>Topic performance</h2>
+          <span className="pill">{weakTopics?.topics.length ?? 0} topics</span>
+        </div>
+        {loading ? <p className="mute">Calculating topic performance…</p> : null}
+        {!loading && (weakTopics?.topics.length ?? 0) === 0 ? <p className="muted">Topic-level results will appear when your practice questions have topic classifications.</p> : null}
+        <div className="stack">
+          {(weakTopics?.topics ?? []).slice(0, 12).map((item) => (
+            <div key={item.subject + ":" + (item.topic ?? "unassigned")} className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+              <div><strong>{item.topic ?? "Unassigned topic"}</strong><p className="mute">{item.subject} · {item.seen} answered · {item.incorrect} incorrect</p></div>
+              <span className="pill">{item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "% accuracy"}</span>
             </div>
           ))}
         </div>
