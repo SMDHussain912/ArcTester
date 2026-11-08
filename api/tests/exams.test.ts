@@ -112,6 +112,25 @@ describe("versioned exam management", () => {
     expect((bank.json.questions as Array<{ text: string }>).some((item) => item.text === payload.text)).toBe(true);
   });
 
+  it("validates paper duplicates, subject blueprint and difficulty balance", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const duplicate = await request("/admin/exams/validate-paper", "POST", {
+      durationMinutes: 60,
+      questions: [
+        { questionId: question.id, marks: 1, negativeMarks: 0 },
+        { questionId: question.id, marks: 1, negativeMarks: 0 },
+      ],
+    }, adminCookie);
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.json.valid).toBe(false);
+    expect((duplicate.json.errors as string[]).join(" ")).toContain("Duplicate");
+    const student = await request("/admin/exams/validate-paper", "POST", {
+      durationMinutes: 60,
+      questions: [{ questionId: question.id, marks: 1, negativeMarks: 0 }],
+    }, studentCookie);
+    expect(student.status).toBe(403);
+  });
+
   it("rejects a paper where negative marks exceed correct-answer marks", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const response = await request("/admin/exams", "POST", {
