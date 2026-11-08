@@ -11,7 +11,13 @@ let studentId = 0;
 beforeAll(async () => {
   server = await startTestServer(buildApp);
   await importFromJson(server.db, [
-    ["Prediction", "Prediction fixture question?", ["A", "B", "C", "D"], 0, "Fixture explanation"],
+    ...Array.from({ length: 10 }, (_, index) => [
+      "Prediction",
+      `Prediction fixture question ${index + 1}?`,
+      ["A", "B", "C", "D"],
+      0,
+      "Fixture explanation",
+    ]),
   ]);
   const question = await server.db.question.findFirstOrThrow();
   questionId = question.id;
@@ -53,6 +59,48 @@ describe("student score prediction endpoint", () => {
       requiredSamples: 20,
       requiredCompletedAttempts: 23,
     });
+  });
+
+
+  it("returns a ready prediction when a student's improving history beats the baseline", async () => {
+    const learner = await signUp(server.baseUrl, "prediction-ready@example.com");
+    const questionIds = (await server.db.question.findMany({
+      where: { subject: "Prediction" },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    })).map((question) => question.id);
+
+    for (let index = 0; index < 30; index += 1) {
+      const correctCount = 2 + Math.floor(index * 0.2);
+      await server.db.attempt.create({
+        data: {
+          userId: learner.userId,
+          mode: "practice",
+          startedAt: new Date(Date.UTC(2026, 1, index + 1)),
+          finishedAt: new Date(Date.UTC(2026, 1, index + 1, 1)),
+          answers: {
+            create: questionIds.map((id, questionIndex) => ({
+              questionId: id,
+              chosen: questionIndex < correctCount ? 0 : 1,
+              isCorrect: questionIndex < correctCount,
+            })),
+          },
+        },
+      });
+    }
+
+    const learnerApi = bindSession(server.baseUrl, learner.cookie);
+    const response = await learnerApi.get("/analytics/score-prediction");
+    expect(response.status).toBe(200);
+    expect(response.json.status).toBe("ready");
+    expect(response.json).toMatchObject({
+      completedAttempts: 30,
+      trainingSamples: 20,
+      evaluationSamples: 7,
+    });
+    expect(response.json.predictedScorePercent).toBeGreaterThanOrEqual(0);
+    expect(response.json.predictedScorePercent).toBeLessThanOrEqual(100);
+    expect(response.json.modelMae).toBeLessThan(response.json.baselineMae);
   });
 
   it("keeps prediction history isolated to the authenticated student", async () => {
