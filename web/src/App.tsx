@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
@@ -118,7 +119,7 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
-  async function createInvitation(event: React.FormEvent<HTMLFormElement>) {
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
