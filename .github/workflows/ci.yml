@@ -35,6 +35,9 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
 
+      - name: Verify migrations on a clean SQLite database
+        run: DATABASE_URL="file:./migration-check.db" npx prisma migrate deploy --schema=api/prisma/schema.prisma
+
       - name: Run tests
         run: npm test
 
