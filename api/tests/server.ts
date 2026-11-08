@@ -8,8 +8,9 @@ import type { AddressInfo } from "node:net";
 import type { Express } from "express";
 
 /**
- * Isolated API + SQLite per test FILE: spins a temp DB, pushes the schema,
- * builds the app against it, and serves on a random port. Tests use plain
+ * Isolated API + SQLite per test FILE: spins a temp DB, applies the real
+ * migration history (including raw SQL indexes), builds the app against it,
+ * and serves on a random port. Tests use plain
  * global fetch — no new libraries (no supertest).
  */
 
@@ -33,7 +34,7 @@ export async function startTestServer(
   const url = `file:${join(dir, "test.db")}`;
   execFileSync(
     "npx",
-    ["prisma", "db", "push", "--skip-generate", "--schema", join(apiDir, "prisma/schema.prisma")],
+    ["prisma", "migrate", "deploy", "--schema", join(apiDir, "prisma/schema.prisma")],
     { cwd: apiDir, stdio: "pipe", env: { ...process.env, DATABASE_URL: url } }
   );
   const db = new PrismaClient({ datasources: { db: { url } } });
