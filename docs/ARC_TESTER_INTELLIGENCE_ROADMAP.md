@@ -504,6 +504,10 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - New practice attempts now save classification snapshots when their answer rows are created.
 - Student weak-topic analytics uses snapshots, with a legacy fallback for rows that have no snapshot.
 - Progress imports create snapshots for imported answers using the question metadata available at import time.
+- Progress exports now include snapshot metadata, and imports preserve those values; older backup files remain accepted and use current metadata as a fallback.
+- Student analytics now returns a separate topic-level breakdown, and the dashboard displays subject and topic performance independently.
+- Fixed the subject accuracy progress bar for unanswered-only groups where accuracy is `null`.
+- Added an admin endpoint test covering cohort aggregation and the exclusion of REVIEW_REQUIRED answers from verified question metrics.
 - Added a regression test that edits a question's subject, topic and difficulty after an attempt and checks that its historical subject classification remains unchanged.
 - Expanded admin analytics with student-cohort practice totals and subject accuracy, plus verified graded-exam question metrics. REVIEW_REQUIRED submissions are counted separately and excluded from verified metrics.
 - Updated the admin dashboard to display practice and verified formal-exam cohort analytics.
@@ -518,6 +522,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - `api/tests/analytics.test.ts`
 - `web/lib/api.ts`
 - `web/app/admin/page.tsx`
+- `web/app/analytics/page.tsx`
 - `.github/workflows/ci.yml` (deleted)
 
 **Verification state**
