@@ -95,7 +95,7 @@ describe("student analytics page", () => {
 
     await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
     expect(screen.getByText("Physics")).toBeInTheDocument();
-    expect(screen.getByText(/Focus next on Mechanics/)).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === "P" && element.textContent?.includes("Focus next on Mechanics") === true)).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute("aria-valuenow", "30");
   });
