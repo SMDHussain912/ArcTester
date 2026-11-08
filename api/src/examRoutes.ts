@@ -802,7 +802,7 @@ export function examRouter(db: PrismaClient): Router {
       const exam = await db.exam.findUnique({
         where: { id: req.params.id },
         include: { versions: { orderBy: { version: "desc" }, take: 1, include: {
-          questions: { orderBy: { position: "asc" }, include: { submissionAnswers: { include: { submission: { include: { assignment: { select: { studentId: true } } } } } } } },
+          questions: { orderBy: { position: "asc" }, include: { submissionAnswers: { include: { submission: { select: { status: true } } } } } },
           assignments: { include: { submission: true, session: { select: { status: true, startedAt: true, lastHeartbeatAt: true, focusLossCount: true, disconnectCount: true } } } },
         } } },
       });
@@ -814,7 +814,8 @@ export function examRouter(db: PrismaClient): Router {
       const averagePercentage = graded.length ? graded.reduce((sum, assignment) => sum + (assignment.submission!.score! / assignment.submission!.maximumScore!) * 100, 0) / graded.length : null;
       const subjects = new Map<string, { subject: string; questions: number; correct: number; incorrect: number; unanswered: number; marks: number }>();
       const questionReport = version.questions.map((question) => {
-        const responses = question.submissionAnswers;
+        // Official question statistics include only graded submissions; flagged attempts remain separate for review.
+        const responses = question.submissionAnswers.filter((answer) => answer.submission.status === "GRADED");
         const correct = responses.filter((answer) => answer.isCorrect).length;
         const unanswered = responses.filter((answer) => answer.selectedIndex === null).length;
         const incorrect = responses.length - correct - unanswered;
