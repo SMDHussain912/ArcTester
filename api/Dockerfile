@@ -24,4 +24,4 @@ RUN mkdir -p /app/api/prisma/data && chown -R node:node /app/api
 USER node
 
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=api/prisma/schema.prisma && npm run prisma:seed --workspace=api && node api/dist/index.js"]
+CMD ["sh", "api/docker-entrypoint.sh"]
