@@ -119,6 +119,96 @@ describe("analytics", () => {
     expect(report.practice.accuracy).toBe(2 / 3);
   });
 
+  it("aggregates formal exam results separately using immutable exam snapshots", async () => {
+    const admin = await server.db.user.create({
+      data: {
+        email: "analytics-fixture-admin@example.com",
+        passwordHash: "test-only",
+        role: "ADMIN",
+      },
+    });
+    const exam = await server.db.exam.create({
+      data: { title: "Analytics fixture exam", createdById: admin.id },
+    });
+    const version = await server.db.examVersion.create({
+      data: {
+        examId: exam.id,
+        version: 1,
+        durationMinutes: 30,
+        publishedAt: new Date(),
+        questions: {
+          create: [{
+            position: 0,
+            subject: "Physics",
+            topic: "Mechanics",
+            text: "Fixture question?",
+            options: JSON.stringify(["A", "B", "C", "D"]),
+            correctIndex: 0,
+            explanation: "Fixture explanation",
+            marks: 2,
+            negativeMarks: 0.5,
+          }],
+        },
+      },
+      include: { questions: true },
+    });
+    const assignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: version.id,
+        studentId,
+        assignedById: admin.id,
+      },
+    });
+    await server.db.examSubmission.create({
+      data: {
+        assignmentId: assignment.id,
+        attemptUuid: "analytics-formal-fixture-uuid",
+        startedAt: new Date(Date.now() - 60_000),
+        submittedAt: new Date(),
+        status: "GRADED",
+        score: 2,
+        maximumScore: 2,
+        answers: {
+          create: [{
+            examQuestionId: version.questions[0].id,
+            selectedIndex: 0,
+            isCorrect: true,
+            awardedMarks: 2,
+          }],
+        },
+      },
+    });
+
+    const response = await api.get("/analytics/overview");
+    expect(response.status).toBe(200);
+    const report = response.json as {
+      practice: { completedAttempts: number };
+      formalExams: {
+        submissions: number;
+        graded: number;
+        reviewRequired: number;
+        score: number;
+        maximumScore: number;
+        scorePercentage: number | null;
+        subjects: { subject: string; topic?: string; correct: number; awardedMarks: number }[];
+      };
+    };
+    expect(report.practice.completedAttempts).toBe(3);
+    expect(report.formalExams).toMatchObject({
+      submissions: 1,
+      graded: 1,
+      reviewRequired: 0,
+      score: 2,
+      maximumScore: 2,
+      scorePercentage: 100,
+    });
+    expect(report.formalExams.subjects[0]).toMatchObject({
+      subject: "Physics",
+      correct: 1,
+      awardedMarks: 2,
+    });
+  });
+
   it("does not include unfinished attempts in completed history or analytics", async () => {
     const created = await api.post("/tests", {
       mode: "practice",
