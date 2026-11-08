@@ -710,3 +710,22 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 2. Replace the single holdout quality gate with walk-forward evaluation across multiple chronological cutoffs, and test histories with stable, noisy and improving scores.
 3. Add a dedicated test for the 7-day recommendation cooldown.
 4. Continue student/admin analytics responsive UI acceptance review.
+
+
+### Phase 3 evaluation upgrade — 2026-11-08
+
+**Implemented**
+- Replaced the single chronological holdout with expanding-window walk-forward evaluation.
+- The first two-thirds of samples form the initial training prefix. Each remaining sample is then predicted in its own chronological window using only earlier samples.
+- The regression model and training-mean baseline are both refit for every window; aggregate MAE, RMSE and R-squared are calculated across the same out-of-time predictions.
+- The prediction eligibility gate now compares aggregate walk-forward MAE against the matching walk-forward baseline MAE.
+- Added tests for window counts, chronological prefix sizing, noisy histories and constant-score baseline ties.
+
+**Verification**
+- Code and tests have been pushed. GitHub Actions verification is pending.
+- Walk-forward evaluation reduces dependence on one small holdout, but does not guarantee future accuracy. The model still has no persisted artifact/registry and is trained on request.
+
+**Next**
+1. Verify the walk-forward batch with GitHub Actions and fix any failures.
+2. Add the dedicated 7-day recommendation cooldown suppression test.
+3. Continue student/admin analytics responsive UI acceptance review.
