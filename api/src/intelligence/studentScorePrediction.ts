@@ -102,6 +102,7 @@ export async function getStudentScorePrediction(
       requiredSamples: SCORE_PREDICTION_MINIMUM_SAMPLES,
       requiredCompletedAttempts: SCORE_PREDICTION_MINIMUM_SAMPLES + SCORE_PREDICTION_HISTORY_WINDOW,
       message: "Complete more practice attempts to build a reliable personal score history.",
+      ...(populationFeatureRecord(attempts) ? { populationFeatures: populationFeatureRecord(attempts) } : {}),
     };
   }
 
@@ -114,6 +115,7 @@ export async function getStudentScorePrediction(
       modelMae: evaluation.regression.mae,
       baselineMae: evaluation.meanBaseline.mae,
       message: "There is not enough predictive improvement over a simple baseline to show a score estimate yet.",
+      ...(populationFeatureRecord(attempts) ? { populationFeatures: populationFeatureRecord(attempts) } : {}),
     };
   }
 
@@ -134,5 +136,6 @@ export async function getStudentScorePrediction(
     modelMae: evaluation.regression.mae,
     baselineMae: evaluation.meanBaseline.mae,
     message: "Estimate based on your completed practice history; actual results may differ.",
+    populationFeatures: populationFeatureRecord(attempts),
   };
 }
