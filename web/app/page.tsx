@@ -7,7 +7,7 @@ import { RequireSession, useSession } from "../lib/session";
 
 type Mode = "mock" | "practice" | "mistakes";
 
-export default function HomePage() {
+// prettier-ignore\nexport default function HomePage() {
   const router = useRouter();
   const { status, user, refresh } = useSession();
   const [bank, setBank] = useState<BankInfo | null>(null);
