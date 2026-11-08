@@ -93,12 +93,14 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     setMessage("Internet connected");
     setError("");
     try {
-      setMessage("Uploading analytics");
+      setMessage("Uploading offline submissions");
       const pending = await listPendingSubmissions();
+      let uploaded = 0;
+      let failed = 0;
       for (const attempt of pending) {
         try {
           const result = await request<{
-            submission: { id: string };
+            submission?: { id?: string };
           }>(`/exams/assignments/${attempt.assignmentId}/submission`, {
             method: "POST",
             body: JSON.stringify({
@@ -108,8 +110,13 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
               answers: attempt.answers,
             }),
           });
+          if (!result.submission?.id) {
+            throw new Error("The server response did not include a submission ID.");
+          }
           await markSubmissionSynced(attempt.assignmentId, result.submission.id);
+          uploaded += 1;
         } catch (cause) {
+          failed += 1;
           await markSubmissionSyncError(
             attempt.assignmentId,
             cause instanceof Error ? cause.message : "Submission sync failed."
@@ -135,7 +142,13 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       const feed = await request<{ announcements: CachedAnnouncement[] }>("/announcements");
       await cacheAnnouncements(feed.announcements);
       await refreshLocal();
-      setMessage("Sync complete");
+      const remaining = await listPendingSubmissions();
+      if (remaining.length > 0) {
+        setMessage(`Sync partially complete — ${remaining.length} submission(s) still pending`);
+        setError(`${uploaded} uploaded; ${failed} failed. Saved submissions remain on this device and will retry on the next sync.`);
+      } else {
+        setMessage(pending.length > 0 ? `Sync complete — ${uploaded} submission(s) uploaded` : "Sync complete");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sync failed.");
       setMessage("Sync paused — saved work is still on this device");
