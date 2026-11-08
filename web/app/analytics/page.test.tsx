@@ -202,6 +202,7 @@ describe("student analytics page", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
+    expect(screen.getByText("80% score")).toBeInTheDocument();
     expect(screen.getByText("Your next study steps")).toBeInTheDocument();
     expect(screen.getByText("Revise Mechanics")).toBeInTheDocument();
     expect(screen.getByText(/Evidence: 7\/10 incorrect · 30% accuracy · minimum 5 answered\./)).toBeInTheDocument();
