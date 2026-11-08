@@ -418,6 +418,29 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
+  it("paginates admin student lists and supports email search", async () => {
+    await server.db.user.createMany({
+      data: Array.from({ length: 55 }, (_, index) => ({
+        email: `page-student-${String(index).padStart(2, "0")}@arctester.test`,
+        passwordHash: "test-hash", role: "STUDENT",
+      })),
+    });
+    const first = await request("/admin/students?page=1&limit=25", "GET", undefined, adminCookie);
+    expect(first.status).toBe(200);
+    expect(first.json.students).toHaveLength(25);
+    expect(first.json).toMatchObject({ page: 1, limit: 25, total: 58, totalPages: 3 });
+    const filtered = await request("/admin/students?page=1&limit=25&search=page-student-54", "GET", undefined, adminCookie);
+    expect((filtered.json.students as Array<{ email: string }>).map((student) => student.email)).toEqual(["page-student-54@arctester.test"]);
+  });
+
+  it("returns paginated review-required submissions", async () => {
+    const response = await request("/admin/submissions/review-required?page=1&limit=10", "GET", undefined, adminCookie);
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({ page: 1, limit: 10 });
+    expect((response.json.submissions as unknown[]).length).toBeLessThanOrEqual(10);
+    expect(response.json.total).toBe(await server.db.examSubmission.count({ where: { status: "REVIEW_REQUIRED" } }));
+  });
+
   it("returns exam attendance and question-level report data", async () => {
     const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
     expect(attendance.status).toBe(200);

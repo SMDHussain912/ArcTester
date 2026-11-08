@@ -325,428 +325,331 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
-  router.get("/admin/students", requireAuth, requireAdmin(db), async (_req, res, next) => {
+  router.get("/admin/students", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const students = await db.user.findMany({
-        where: { role: "STUDENT" },
-        orderBy: { email: "asc" },
-        select: { id: true, email: true },
-      });
-      res.json({ ok: true, students });
-    } catch (error) {
-      next(error);
-    }
+      const query = z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+        search: z.string().trim().max(120).optional(),
+      }).parse(req.query);
+      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search } } : {}) };
+      const [students, total] = await Promise.all([
+        db.user.findMany({
+          where, orderBy: { email: "asc" },
+          skip: (query.page - 1) * query.limit, take: query.limit,
+          select: { id: true, email: true },
+        }),
+        db.user.count({ where }),
+      ]);
+      res.json({ ok: true, students, page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) });
+    } catch (error) { next(error); }
   });
 
   router.get("/admin/analytics/overview", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
-      const [studentCount, examCount, assignments, practiceAttempts, gradedSubmissions, examSubmissions] = await Promise.all([
+      const [
+        studentCount, examCount, assignmentCount, submissionCount, reviewRequiredCount,
+        practiceAttemptCount, practiceRows, formalRows, examRows, recentSubmissions, averageRows,
+      ] = await Promise.all([
         db.user.count({ where: { role: "STUDENT" } }),
         db.exam.count(),
-        db.examAssignment.findMany({
-          orderBy: { assignedAt: "desc" },
-          include: {
-            student: { select: { email: true } },
-            examVersion: { include: { exam: { select: { id: true, title: true } } } },
-            submission: { select: { id: true, score: true, maximumScore: true, submittedAt: true, status: true } },
-          },
-        }),
-        db.attempt.findMany({
-          where: { finishedAt: { not: null }, user: { role: "STUDENT" } },
-          select: {
-            userId: true,
-            answers: {
-              select: {
-                questionId: true,
-                chosen: true,
-                isCorrect: true,
-                subjectSnapshot: true,
-                topicSnapshot: true,
-                difficultySnapshot: true,
-                question: {
-                  select: {
-                    difficulty: true,
-                    subject: { select: { name: true } },
-                    topic: { select: { name: true } },
-                  },
-                },
-              },
-            },
-          },
-        }),
-        db.examSubmission.findMany({
-          where: { status: "GRADED", assignment: { student: { role: "STUDENT" } } },
-          select: {
-            answers: {
-              select: {
-                selectedIndex: true,
-                isCorrect: true,
-                awardedMarks: true,
-                examQuestion: { select: { subject: true, topic: true, marks: true } },
-              },
-            },
-          },
-        }),
+        db.examAssignment.count(),
+        db.examSubmission.count({ where: { assignment: { student: { role: "STUDENT" } } } }),
+        db.examSubmission.count({ where: { status: "REVIEW_REQUIRED", assignment: { student: { role: "STUDENT" } } } }),
+        db.attempt.count({ where: { finishedAt: { not: null }, user: { role: "STUDENT" } } }),
+        db.$queryRaw<Array<{
+          questionId: number; subject: string; topic: string | null; difficulty: string;
+          correct: number; incorrect: number; unanswered: number; uniqueStudents: number;
+        }>>`
+          SELECT aa.questionId AS questionId,
+            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.subjectSnapshot ELSE s.name END) AS subject,
+            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END) AS topic,
+            MAX(CASE WHEN aa.difficultySnapshot <> '' THEN aa.difficultySnapshot ELSE q.difficulty END) AS difficulty,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+            SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered,
+            COUNT(DISTINCT CASE WHEN aa.chosen IS NOT NULL THEN a.userId END) AS uniqueStudents
+          FROM AttemptAnswer aa
+          INNER JOIN Attempt a ON a.id = aa.attemptId
+          INNER JOIN User u ON u.id = a.userId
+          INNER JOIN Question q ON q.id = aa.questionId
+          INNER JOIN Subject s ON s.id = q.subjectId
+          LEFT JOIN Topic t ON t.id = q.topicId
+          WHERE a.finishedAt IS NOT NULL AND u.role = 'STUDENT'
+          GROUP BY aa.questionId
+        `,
+        db.$queryRaw<Array<{
+          subject: string; topic: string | null; correct: number; incorrect: number;
+          unanswered: number; awardedMarks: number; maximumMarks: number;
+        }>>`
+          SELECT eq.subject AS subject, eq.topic AS topic,
+            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+            SUM(CASE WHEN ea.selectedIndex IS NULL THEN 1 ELSE 0 END) AS unanswered,
+            SUM(ea.awardedMarks) AS awardedMarks, SUM(eq.marks) AS maximumMarks
+          FROM ExamSubmissionAnswer ea
+          INNER JOIN ExamSubmission es ON es.id = ea.submissionId
+          INNER JOIN ExamAssignment ass ON ass.id = es.assignmentId
+          INNER JOIN User u ON u.id = ass.studentId
+          INNER JOIN ExamVersionQuestion eq ON eq.id = ea.examQuestionId
+          WHERE es.status = 'GRADED' AND u.role = 'STUDENT'
+          GROUP BY eq.subject, eq.topic
+        `,
+        db.$queryRaw<Array<{
+          examId: string; title: string; assigned: number; submitted: number; averagePercentage: number | null;
+        }>>`
+          SELECT ev.examId AS examId, e.title AS title,
+            COUNT(ass.id) AS assigned,
+            SUM(CASE WHEN sub.id IS NOT NULL THEN 1 ELSE 0 END) AS submitted,
+            AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub.maximumScore > 0
+              THEN (sub.score * 100.0) / sub.maximumScore ELSE NULL END) AS averagePercentage
+          FROM ExamAssignment ass
+          INNER JOIN ExamVersion ev ON ev.id = ass.examVersionId
+          INNER JOIN Exam e ON e.id = ev.examId
+          LEFT JOIN ExamSubmission sub ON sub.assignmentId = ass.id
+          GROUP BY ev.examId, e.title
+          ORDER BY assigned DESC
+        `,
         db.examSubmission.findMany({
           where: { assignment: { student: { role: "STUDENT" } } },
-          orderBy: { submittedAt: "desc" },
-          include: {
+          orderBy: { submittedAt: "desc" }, take: 10,
+          select: {
+            id: true, submittedAt: true, score: true, maximumScore: true, status: true,
             assignment: {
-              include: {
-                student: { select: { id: true, email: true } },
-                examVersion: { include: { exam: { select: { id: true, title: true } } } },
+              select: {
+                studentId: true, student: { select: { email: true } },
+                examVersion: { select: { exam: { select: { title: true } } } },
               },
             },
           },
         }),
+        db.$queryRaw<Array<{ averagePercentage: number | null }>>`
+          SELECT AVG((sub.score * 100.0) / sub.maximumScore) AS averagePercentage
+          FROM ExamSubmission sub
+          INNER JOIN ExamAssignment ass ON ass.id = sub.assignmentId
+          INNER JOIN User u ON u.id = ass.studentId
+          WHERE u.role = 'STUDENT' AND sub.status = 'GRADED'
+            AND sub.score IS NOT NULL AND sub.maximumScore > 0
+        `,
       ]);
-      const submitted = examSubmissions.map((submission) => ({
-        submission,
-        studentId: submission.assignment.studentId,
-        student: submission.assignment.student,
-        examVersion: submission.assignment.examVersion,
-      }));
-      const scored = submitted.filter((item) =>
-        item.submission?.status === "GRADED" && item.submission.score !== null &&
-        item.submission.maximumScore !== null && item.submission.maximumScore > 0
-      );
-      let practiceCorrect = 0;
-      let practiceIncorrect = 0;
-      let practiceUnanswered = 0;
+
       const practiceBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
       const practiceByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>();
-      const practiceByQuestion = new Map<number, {
-        questionId: number; subject: string; topic: string | null; difficulty: string;
-        correct: number; incorrect: number; unanswered: number; studentIds: Set<number>;
-      }>();
-      for (const attempt of practiceAttempts) {
-        for (const answer of attempt.answers) {
-          const hasSnapshot = answer.subjectSnapshot.length > 0;
-          const subject = hasSnapshot ? answer.subjectSnapshot : answer.question.subject.name;
-          const topic = hasSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
-          if (answer.chosen === null) practiceUnanswered += 1;
-          else if (answer.isCorrect) practiceCorrect += 1;
-          else practiceIncorrect += 1;
-          const row = practiceBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0 };
-          if (answer.chosen === null) row.unanswered += 1;
-          else if (answer.isCorrect) row.correct += 1;
-          else row.incorrect += 1;
-          practiceBySubject.set(subject, row);
-          const topicKey = JSON.stringify([subject, topic]);
-          const topicRow = practiceByTopic.get(topicKey) ?? { subject, topic, correct: 0, incorrect: 0, unanswered: 0 };
-          if (answer.chosen === null) topicRow.unanswered += 1;
-          else if (answer.isCorrect) topicRow.correct += 1;
-          else topicRow.incorrect += 1;
-          practiceByTopic.set(topicKey, topicRow);
-          const questionRow = practiceByQuestion.get(answer.questionId) ?? {
-            questionId: answer.questionId,
-            subject,
-            topic,
-            difficulty: answer.difficultySnapshot || answer.question.difficulty,
-            correct: 0,
-            incorrect: 0,
-            unanswered: 0,
-            studentIds: new Set<number>(),
-          };
-          if (answer.chosen === null) {
-            questionRow.unanswered += 1;
-          } else {
-            questionRow.studentIds.add(attempt.userId);
-            if (answer.isCorrect) questionRow.correct += 1;
-            else questionRow.incorrect += 1;
-          }
-          practiceByQuestion.set(answer.questionId, questionRow);
-        }
-      }
-      const practiceAnswered = practiceCorrect + practiceIncorrect;
-      const minimumQuestionAnswers = QUESTION_ANALYTICS_MINIMUM_ANSWERS;
-      const minimumQuestionStudents = 3;
-      const weakQuestionAccuracy = QUESTION_ANALYTICS_WEAK_ACCURACY;
-      const questionPerformance = [...practiceByQuestion.values()].map((row) => {
-        const sampleSize = row.correct + row.incorrect;
-        const accuracy = sampleSize > 0 ? row.correct / sampleSize : null;
-        const uniqueStudents = row.studentIds.size;
-        const sufficientData = sampleSize >= minimumQuestionAnswers && uniqueStudents >= minimumQuestionStudents;
-        const publicRow = {
-          questionId: row.questionId,
-          subject: row.subject,
-          topic: row.topic,
-          difficulty: row.difficulty,
-          correct: row.correct,
-          incorrect: row.incorrect,
-          unanswered: row.unanswered,
-        };
+      const questionPerformance = practiceRows.map((row) => {
+        const correct = Number(row.correct ?? 0), incorrect = Number(row.incorrect ?? 0), unanswered = Number(row.unanswered ?? 0);
+        const subject = row.subject, topic = row.topic;
+        const subjectRow = practiceBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0 };
+        subjectRow.correct += correct; subjectRow.incorrect += incorrect; subjectRow.unanswered += unanswered;
+        practiceBySubject.set(subject, subjectRow);
+        const key = JSON.stringify([subject, topic]);
+        const topicRow = practiceByTopic.get(key) ?? { subject, topic, correct: 0, incorrect: 0, unanswered: 0 };
+        topicRow.correct += correct; topicRow.incorrect += incorrect; topicRow.unanswered += unanswered;
+        practiceByTopic.set(key, topicRow);
+        const sampleSize = correct + incorrect;
+        const uniqueStudents = Number(row.uniqueStudents ?? 0);
+        const accuracy = sampleSize > 0 ? correct / sampleSize : null;
+        const sufficientData = sampleSize >= QUESTION_ANALYTICS_MINIMUM_ANSWERS && uniqueStudents >= 3;
         return {
-          ...publicRow,
-          sampleSize,
-          uniqueStudents,
-          accuracy,
-          sufficientData,
-          weak: sufficientData && accuracy !== null && accuracy < weakQuestionAccuracy,
+          questionId: row.questionId, subject, topic, difficulty: row.difficulty,
+          correct, incorrect, unanswered, sampleSize, uniqueStudents, accuracy,
+          sufficientData, weak: sufficientData && accuracy !== null && accuracy < QUESTION_ANALYTICS_WEAK_ACCURACY,
         };
-      }).sort((a, b) => Number(b.weak) - Number(a.weak) ||
-        (a.accuracy ?? 1) - (b.accuracy ?? 1) || b.sampleSize - a.sampleSize);
+      }).sort((a, b) => Number(b.weak) - Number(a.weak) || (a.accuracy ?? 1) - (b.accuracy ?? 1) || b.sampleSize - a.sampleSize);
+      const practiceCorrect = questionPerformance.reduce((sum, row) => sum + row.correct, 0);
+      const practiceIncorrect = questionPerformance.reduce((sum, row) => sum + row.incorrect, 0);
+      const practiceUnanswered = questionPerformance.reduce((sum, row) => sum + row.unanswered, 0);
+      const practiceAnswered = practiceCorrect + practiceIncorrect;
+
       const formalBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
       const formalByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
-      let formalCorrect = 0;
-      let formalIncorrect = 0;
-      let formalUnanswered = 0;
-      for (const submission of gradedSubmissions) {
-        for (const answer of submission.answers) {
-          const subject = answer.examQuestion.subject;
-          const topic = answer.examQuestion.topic;
-          const row = formalBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
-          if (answer.selectedIndex === null) { formalUnanswered += 1; row.unanswered += 1; }
-          else if (answer.isCorrect) { formalCorrect += 1; row.correct += 1; }
-          else { formalIncorrect += 1; row.incorrect += 1; }
-          row.awardedMarks += answer.awardedMarks;
-          row.maximumMarks += answer.examQuestion.marks;
-          formalBySubject.set(subject, row);
-          const topicKey = JSON.stringify([subject, topic]);
-          const topicRow = formalByTopic.get(topicKey) ?? { subject, topic, correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
-          if (answer.selectedIndex === null) topicRow.unanswered += 1;
-          else if (answer.isCorrect) topicRow.correct += 1;
-          else topicRow.incorrect += 1;
-          topicRow.awardedMarks += answer.awardedMarks;
-          topicRow.maximumMarks += answer.examQuestion.marks;
-          formalByTopic.set(topicKey, topicRow);
-        }
+      let formalCorrect = 0, formalIncorrect = 0, formalUnanswered = 0;
+      for (const row of formalRows) {
+        const correct = Number(row.correct ?? 0), incorrect = Number(row.incorrect ?? 0), unanswered = Number(row.unanswered ?? 0);
+        const awardedMarks = Number(row.awardedMarks ?? 0), maximumMarks = Number(row.maximumMarks ?? 0);
+        formalCorrect += correct; formalIncorrect += incorrect; formalUnanswered += unanswered;
+        const subjectRow = formalBySubject.get(row.subject) ?? { correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
+        subjectRow.correct += correct; subjectRow.incorrect += incorrect; subjectRow.unanswered += unanswered;
+        subjectRow.awardedMarks += awardedMarks; subjectRow.maximumMarks += maximumMarks;
+        formalBySubject.set(row.subject, subjectRow);
+        const key = JSON.stringify([row.subject, row.topic]);
+        const topicRow = formalByTopic.get(key) ?? { subject: row.subject, topic: row.topic, correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
+        topicRow.correct += correct; topicRow.incorrect += incorrect; topicRow.unanswered += unanswered;
+        topicRow.awardedMarks += awardedMarks; topicRow.maximumMarks += maximumMarks;
+        formalByTopic.set(key, topicRow);
       }
-      const averagePercentage = scored.length
-        ? scored.reduce((sum, item) => sum + ((item.submission!.score! / item.submission!.maximumScore!) * 100), 0) / scored.length
-        : null;
-      const byExam = new Map<string, { examId: string; title: string; assigned: number; submitted: number; scoreTotal: number; scored: number }>();
-      for (const item of assignments) {
-        const key = item.examVersion.exam.id;
-        const row = byExam.get(key) ?? { examId: key, title: item.examVersion.exam.title, assigned: 0, submitted: 0, scoreTotal: 0, scored: 0 };
-        row.assigned += 1;
-        byExam.set(key, row);
-      }
-      for (const item of submitted) {
-        const key = item.examVersion.exam.id;
-        const row = byExam.get(key);
-        if (!row) continue;
-        row.submitted += 1;
-        if (item.submission.status === "GRADED" && item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
-          row.scoreTotal += (item.submission.score / item.submission.maximumScore) * 100;
-          row.scored += 1;
-        }
-      }
+      const exams = examRows.map((row) => {
+        const assigned = Number(row.assigned ?? 0), submitted = Number(row.submitted ?? 0);
+        return {
+          examId: row.examId, title: row.title, assigned, submitted,
+          submissionRate: assigned ? submitted / assigned : 0,
+          averagePercentage: row.averagePercentage === null ? null : Number(row.averagePercentage),
+        };
+      });
+      const averagePercentage = averageRows[0]?.averagePercentage == null ? null : Number(averageRows[0].averagePercentage);
+      const recent = recentSubmissions.map((item) => ({
+        submissionId: item.id, studentId: item.assignment.studentId,
+        studentEmail: item.assignment.student.email,
+        examTitle: item.assignment.examVersion.exam.title,
+        submittedAt: item.submittedAt, score: item.score,
+        maximumScore: item.maximumScore, status: item.status,
+      }));
+      const gradedCount = await db.examSubmission.count({ where: { status: "GRADED", assignment: { student: { role: "STUDENT" } } } });
       res.json({
         ok: true,
         totals: {
-          students: studentCount,
-          exams: examCount,
-          assignments: assignments.length,
-          submissions: submitted.length,
-          submissionRate: assignments.length ? submitted.length / assignments.length : 0,
+          students: studentCount, exams: examCount, assignments: assignmentCount,
+          submissions: submissionCount, reviewRequired: reviewRequiredCount,
+          submissionRate: assignmentCount ? submissionCount / assignmentCount : 0,
           averagePercentage,
         },
         practice: {
-          completedAttempts: practiceAttempts.length,
+          completedAttempts: practiceAttemptCount,
           questions: practiceCorrect + practiceIncorrect + practiceUnanswered,
-          correct: practiceCorrect,
-          incorrect: practiceIncorrect,
-          unanswered: practiceUnanswered,
+          correct: practiceCorrect, incorrect: practiceIncorrect, unanswered: practiceUnanswered,
           accuracy: practiceAnswered > 0 ? practiceCorrect / practiceAnswered : null,
           subjects: [...practiceBySubject.entries()].map(([subject, row]) => ({
-            subject,
-            ...row,
-            accuracy: row.correct + row.incorrect > 0
-              ? row.correct / (row.correct + row.incorrect)
-              : null,
+            subject, ...row, accuracy: row.correct + row.incorrect > 0 ? row.correct / (row.correct + row.incorrect) : null,
           })),
           topics: [...practiceByTopic.values()].map((row) => ({
-            ...row,
-            accuracy: row.correct + row.incorrect > 0
-              ? row.correct / (row.correct + row.incorrect)
-              : null,
+            ...row, accuracy: row.correct + row.incorrect > 0 ? row.correct / (row.correct + row.incorrect) : null,
           })),
           questionPerformance: {
-            minimumAnswers: minimumQuestionAnswers,
-            minimumStudents: minimumQuestionStudents,
-            weakAccuracyThreshold: weakQuestionAccuracy,
+            minimumAnswers: QUESTION_ANALYTICS_MINIMUM_ANSWERS, minimumStudents: 3,
+            weakAccuracyThreshold: QUESTION_ANALYTICS_WEAK_ACCURACY,
             insufficientSampleCount: questionPerformance.filter((row) => !row.sufficientData).length,
             questions: questionPerformance,
           },
         },
         formalExams: {
-          graded: gradedSubmissions.length,
-          reviewRequired: submitted.filter((item) => item.submission?.status === "REVIEW_REQUIRED").length,
-          correct: formalCorrect,
-          incorrect: formalIncorrect,
-          unanswered: formalUnanswered,
+          graded: gradedCount, reviewRequired: reviewRequiredCount,
+          correct: formalCorrect, incorrect: formalIncorrect, unanswered: formalUnanswered,
           subjects: [...formalBySubject.entries()].map(([subject, row]) => ({
-            subject,
-            ...row,
-            accuracy: row.correct + row.incorrect > 0
-              ? row.correct / (row.correct + row.incorrect)
-              : null,
+            subject, ...row, accuracy: row.correct + row.incorrect > 0 ? row.correct / (row.correct + row.incorrect) : null,
           })),
           topics: [...formalByTopic.values()].map((row) => ({
-            ...row,
-            accuracy: row.correct + row.incorrect > 0
-              ? row.correct / (row.correct + row.incorrect)
-              : null,
+            ...row, accuracy: row.correct + row.incorrect > 0 ? row.correct / (row.correct + row.incorrect) : null,
           })),
         },
-        exams: [...byExam.values()].map((item) => ({
-          examId: item.examId,
-          title: item.title,
-          assigned: item.assigned,
-          submitted: item.submitted,
-          submissionRate: item.assigned ? item.submitted / item.assigned : 0,
-          averagePercentage: item.scored ? item.scoreTotal / item.scored : null,
-        })).sort((a, b) => b.assigned - a.assigned),
-        recentSubmissions: submitted.slice(0, 10).map((item) => ({
-          submissionId: item.submission!.id,
-          studentId: item.studentId,
-          studentEmail: item.student.email,
-          examTitle: item.examVersion.exam.title,
-          submittedAt: item.submission!.submittedAt,
-          score: item.submission!.score,
-          maximumScore: item.submission!.maximumScore,
-          status: item.submission!.status,
-        })),
+        exams, recentSubmissions: recent,
       });
-    } catch (error) {
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
-
-  router.get("/admin/submissions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.get("/admin/submissions/review-required", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const submission = await db.examSubmission.findUnique({
-        where: { id: req.params.id },
-        include: {
-          assignment: {
-            include: {
-              student: { select: { id: true, email: true } },
-              examVersion: {
-                include: {
-                  exam: { select: { id: true, title: true } },
-                  questions: { orderBy: { position: "asc" } },
-                },
+      const query = z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(25),
+      }).parse(req.query);
+      const where = { status: "REVIEW_REQUIRED", assignment: { student: { role: "STUDENT" } } };
+      const [items, total] = await Promise.all([
+        db.examSubmission.findMany({
+          where, orderBy: { receivedAt: "desc" },
+          skip: (query.page - 1) * query.limit, take: query.limit,
+          select: {
+            id: true, submittedAt: true, receivedAt: true, score: true, maximumScore: true,
+            assignment: {
+              select: {
+                id: true, studentId: true, student: { select: { email: true } },
+                examVersion: { select: { exam: { select: { title: true } } } },
               },
             },
           },
-          answers: true,
-        },
-      });
-      if (!submission) return next(notFound("Submission not found."));
-      const answers = new Map(
-        submission.answers.map((answer) => [answer.examQuestionId, answer])
-      );
+        }),
+        db.examSubmission.count({ where }),
+      ]);
       res.json({
         ok: true,
-        submission: {
-          id: submission.id,
-          status: submission.status,
-          score: submission.score,
-          maximumScore: submission.maximumScore,
-          startedAt: submission.startedAt,
-          submittedAt: submission.submittedAt,
-          receivedAt: submission.receivedAt,
-          student: submission.assignment.student,
-          exam: {
-            ...submission.assignment.examVersion.exam,
-            version: submission.assignment.examVersion.version,
-            durationMinutes: submission.assignment.examVersion.durationMinutes,
-          },
-          availableFrom: submission.assignment.availableFrom,
-          dueAt: submission.assignment.dueAt,
-          questions: submission.assignment.examVersion.questions.map((question) => {
-            const answer = answers.get(question.id);
-            return {
-              id: question.id,
-              position: question.position,
-              subject: question.subject,
-              topic: question.topic,
-              text: question.text,
-              options: parseOptions(question.options),
-              correctIndex: question.correctIndex,
-              explanation: question.explanation,
-              marks: question.marks,
-              negativeMarks: question.negativeMarks,
-              selectedIndex: answer?.selectedIndex ?? null,
-              isCorrect: answer?.isCorrect ?? false,
-              awardedMarks: answer?.awardedMarks ?? 0,
-            };
-          }),
-        },
+        submissions: items.map((item) => ({
+          submissionId: item.id, assignmentId: item.assignment.id, studentId: item.assignment.studentId,
+          studentEmail: item.assignment.student.email, examTitle: item.assignment.examVersion.exam.title,
+          submittedAt: item.submittedAt, receivedAt: item.receivedAt,
+          score: item.score, maximumScore: item.maximumScore,
+        })),
+        page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit),
       });
-    } catch (error) {
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
 
   router.post("/admin/submissions/:id/release", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const submission = await db.examSubmission.findUnique({
-        where: { id: req.params.id },
-        select: { id: true, status: true },
+        where: { id: req.params.id }, select: { id: true, status: true },
       });
       if (!submission) return next(notFound("Submission not found."));
       if (submission.status === "GRADED") {
         return res.json({ ok: true, submissionId: submission.id, status: "GRADED", alreadyReleased: true });
       }
-      if (submission.status !== "REVIEW_REQUIRED") {
-        return next(conflict("Only submissions awaiting review can be released."));
-      }
-      await db.examSubmission.update({
-        where: { id: submission.id },
-        data: { status: "GRADED" },
+      const released = await db.examSubmission.updateMany({
+        where: { id: submission.id, status: "REVIEW_REQUIRED" }, data: { status: "GRADED" },
       });
+      if (released.count !== 1) return next(conflict("This submission is no longer awaiting review."));
       res.json({ ok: true, submissionId: submission.id, status: "GRADED" });
     } catch (error) {
       next(error);
     }
   });
 
-  router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (_req, res, next) => {
+  router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const sessions = await db.examSession.findMany({
-        where: { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } },
-        orderBy: { lastHeartbeatAt: "desc" },
-        include: {
-          student: { select: { id: true, email: true } },
-          assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
-          events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
-        },
-      });
+      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).parse(req.query);
+      const where = { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } };
+      const [sessions, total] = await Promise.all([
+        db.examSession.findMany({
+          where, orderBy: { lastHeartbeatAt: "desc" },
+          skip: (query.page - 1) * query.limit, take: query.limit,
+          include: {
+            student: { select: { id: true, email: true } },
+            assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
+            events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
+          },
+        }),
+        db.examSession.count({ where }),
+      ]);
       const now = Date.now();
-      res.json({ ok: true, serverTime: new Date(now), sessions: sessions.map((session) => ({
-        id: session.id, status: session.status, student: session.student,
-        exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
-        startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
-        connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
-        heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
-        disconnectCount: session.disconnectCount, submission: session.assignment.submission,
-        events: session.events,
-      })) });
+      res.json({
+        ok: true, serverTime: new Date(now),
+        sessions: sessions.map((session) => ({
+          id: session.id, status: session.status, student: session.student,
+          exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
+          startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
+          connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
+          heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
+          disconnectCount: session.disconnectCount, submission: session.assignment.submission, events: session.events,
+        })),
+        page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit),
+      });
     } catch (error) { next(error); }
   });
 
-  router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (_req, res, next) => {
+  router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const assignments = await db.examAssignment.findMany({
-        orderBy: { assignedAt: "desc" },
-        include: {
-          student: { select: { id: true, email: true } },
-          examVersion: { include: { exam: { select: { id: true, title: true } }, _count: { select: { questions: true } } } },
-          session: { select: { id: true, status: true, startedAt: true, lastHeartbeatAt: true, endedAt: true, heartbeatCount: true, focusLossCount: true, disconnectCount: true } },
-          submission: { select: { id: true, status: true, submittedAt: true, score: true, maximumScore: true } },
-        },
-      });
+      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).parse(req.query);
+      const [assignments, total] = await Promise.all([
+        db.examAssignment.findMany({
+          orderBy: { assignedAt: "desc" },
+          skip: (query.page - 1) * query.limit, take: query.limit,
+          include: {
+            student: { select: { id: true, email: true } },
+            examVersion: { include: { exam: { select: { id: true, title: true } }, _count: { select: { questions: true } } } },
+            session: { select: { id: true, status: true, startedAt: true, lastHeartbeatAt: true, endedAt: true, heartbeatCount: true, focusLossCount: true, disconnectCount: true } },
+            submission: { select: { id: true, status: true, submittedAt: true, score: true, maximumScore: true } },
+          },
+        }),
+        db.examAssignment.count(),
+      ]);
       const now = Date.now();
-      res.json({ ok: true, serverTime: new Date(now), attendance: assignments.map((item) => ({
-        assignmentId: item.id, candidate: item.student, exam: item.examVersion.exam,
-        version: item.examVersion.version, questionCount: item.examVersion._count.questions,
-        assignedAt: item.assignedAt, availableFrom: item.availableFrom, dueAt: item.dueAt,
-        attendanceStatus: item.submission ? "SUBMITTED" : item.session?.startedAt ? item.session.status : "NOT_STARTED",
-        connectivity: item.session?.status === "ACTIVE" && item.session.lastHeartbeatAt && now - item.session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : item.session?.startedAt ? "STALE_OR_INACTIVE" : "NOT_STARTED",
-        session: item.session, submission: item.submission,
-      })) });
+      res.json({
+        ok: true, serverTime: new Date(now),
+        attendance: assignments.map((item) => ({
+          assignmentId: item.id, candidate: item.student, exam: item.examVersion.exam,
+          version: item.examVersion.version, questionCount: item.examVersion._count.questions,
+          assignedAt: item.assignedAt, availableFrom: item.availableFrom, dueAt: item.dueAt,
+          attendanceStatus: item.submission ? "SUBMITTED" : item.session?.startedAt ? item.session.status : "NOT_STARTED",
+          connectivity: item.session?.status === "ACTIVE" && item.session.lastHeartbeatAt && now - item.session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : item.session?.startedAt ? "STALE_OR_INACTIVE" : "NOT_STARTED",
+          session: item.session, submission: item.submission,
+        })),
+        page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit),
+      });
     } catch (error) { next(error); }
   });
 
