@@ -957,8 +957,19 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment) return next(notFound("Exam assignment not found."));
       const now = Date.now();
       if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
+      if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
+        return next(forbidden("This exam is not available yet."));
+      }
       if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
+      }
+      const paperQuestions = [...assignment.examVersion.questions];
+      if (assignment.examVersion.shuffleQuestions) {
+        paperQuestions.sort((left, right) => {
+          const leftKey = createHash("sha256").update(assignment.id + ":" + left.id).digest("hex");
+          const rightKey = createHash("sha256").update(assignment.id + ":" + right.id).digest("hex");
+          return leftKey.localeCompare(rightKey);
+        });
       }
       const packageBody = {
         assignmentId: assignment.id,
@@ -971,16 +982,27 @@ export function examRouter(db: PrismaClient): Router {
         availableFrom: assignment.availableFrom,
         dueAt: assignment.dueAt,
         serverTime: new Date(now).toISOString(),
-        questions: assignment.examVersion.questions.map((question) => ({
-          id: question.id,
-          position: question.position,
-          subject: question.subject,
-          topic: question.topic,
-          text: question.text,
-          options: parseOptions(question.options),
-          marks: question.marks,
-          negativeMarks: question.negativeMarks,
-        })),
+        questions: paperQuestions.map((question, position) => {
+          const originalOptions = parseOptions(question.options);
+          const optionOrder = originalOptions.map((_, index) => index);
+          if (assignment.examVersion.shuffleOptions) {
+            optionOrder.sort((left, right) => {
+              const leftKey = createHash("sha256").update(assignment.id + ":" + question.id + ":" + left).digest("hex");
+              const rightKey = createHash("sha256").update(assignment.id + ":" + question.id + ":" + right).digest("hex");
+              return leftKey.localeCompare(rightKey);
+            });
+          }
+          return {
+            id: question.id,
+            position,
+            subject: question.subject,
+            topic: question.topic,
+            text: question.text,
+            options: optionOrder.map((index) => originalOptions[index]),
+            marks: question.marks,
+            negativeMarks: question.negativeMarks,
+          };
+        }),
       };
       const digest = createHash("sha256").update(JSON.stringify(packageBody)).digest("hex");
       res.json({ ok: true, package: packageBody, sha256: digest });
@@ -1066,6 +1088,8 @@ export function examRouter(db: PrismaClient): Router {
         submittedAt.getTime() > now + toleranceMs ||
         submittedAt.getTime() < startedAt.getTime() ||
         submittedAt.getTime() - startedAt.getTime() > durationMs + toleranceMs ||
+        now > startedAt.getTime() + durationMs + toleranceMs ||
+        (assignment.dueAt !== null && now > assignment.dueAt.getTime() + toleranceMs) ||
         (assignment.availableFrom !== null &&
           startedAt.getTime() < assignment.availableFrom.getTime() - toleranceMs) ||
         (assignment.dueAt !== null &&
