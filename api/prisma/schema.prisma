@@ -407,6 +407,7 @@ model ModelDataset {
   rowCount           Int
   sourceDescription  String
   sourceAttested     Boolean  @default(false)
+  datasetKind        String   @default("synthetic")
   fingerprint        String   @unique
   createdAt          DateTime @default(now())
 
