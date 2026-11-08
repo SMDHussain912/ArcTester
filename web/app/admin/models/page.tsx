@@ -77,6 +77,21 @@ export default function AdminModelsPage() {
     }
   }
 
+  async function activateModel(model: AdminRegisteredModel) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await api.activateAdminModelVersion(model.modelId, model.version);
+      setNotice(`Activated ${model.modelId} v${model.version}.`);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : cause instanceof Error ? cause.message : "Model activation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function trainDataset(datasetId: string) {
     setBusy(true);
     setError("");
@@ -195,8 +210,17 @@ export default function AdminModelsPage() {
         <h2>Registered model versions</h2>
         {models.length === 0 ? <p className="muted">No model versions registered.</p> : models.map((model) => (
           <div className="row-between" key={model.modelId + ":" + model.version}>
-            <div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.dataset}</p></div>
-            <span className={model.isActive ? "status status-success" : "status"}>{model.isActive ? "Active" : "Inactive"}</span>
+            <div>
+              <strong>{model.modelId} · v{model.version}</strong>
+              <p className="muted">{model.algorithm} · {model.dataset}</p>
+              {model.algorithm === "tensorflow-js-layers" ? <p className="muted">Production eligible: {model.productionEligible ? "Yes" : "No"}</p> : null}
+            </div>
+            <div className="row">
+              <span className={model.isActive ? "status status-success" : "status"}>{model.isActive ? "Active" : "Inactive"}</span>
+              {model.algorithm === "tensorflow-js-layers" && model.productionEligible && !model.isActive ? (
+                <button className="button button-primary" type="button" disabled={busy} onClick={() => activateModel(model)}>Activate</button>
+              ) : null}
+            </div>
           </div>
         ))}
       </section>
