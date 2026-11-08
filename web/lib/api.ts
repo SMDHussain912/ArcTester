@@ -79,6 +79,15 @@ export interface OfflineLearningPackage {
     difficulty: string;
   }[];
 }
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  publishedAt: string;
+  expiresAt: string | null;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -351,6 +360,10 @@ export const api = {
   studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
+  announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),
+  adminAnnouncements: () => request<{ ok: true; announcements: Announcement[] }>("/admin/announcements"),
+  createAnnouncement: (body: { title: string; message: string; expiresAt?: string }) =>
+    request<{ ok: true; announcement: Announcement }>("/admin/announcements", json(body)),
   adminSubmission: (id: string) =>
     request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
