@@ -322,12 +322,15 @@ export function examRouter(db: PrismaClient): Router {
           select: {
             answers: {
               select: {
+                questionId: true,
                 chosen: true,
                 isCorrect: true,
                 subjectSnapshot: true,
                 topicSnapshot: true,
+                difficultySnapshot: true,
                 question: {
                   select: {
+                    difficulty: true,
                     subject: { select: { name: true } },
                     topic: { select: { name: true } },
                   },
@@ -360,6 +363,10 @@ export function examRouter(db: PrismaClient): Router {
       let practiceUnanswered = 0;
       const practiceBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
       const practiceByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>();
+      const practiceByQuestion = new Map<number, {
+        questionId: number; subject: string; topic: string | null; difficulty: string;
+        correct: number; incorrect: number; unanswered: number;
+      }>();
       for (const attempt of practiceAttempts) {
         for (const answer of attempt.answers) {
           const hasSnapshot = answer.subjectSnapshot.length > 0;
@@ -379,9 +386,37 @@ export function examRouter(db: PrismaClient): Router {
           else if (answer.isCorrect) topicRow.correct += 1;
           else topicRow.incorrect += 1;
           practiceByTopic.set(topicKey, topicRow);
+          const questionRow = practiceByQuestion.get(answer.questionId) ?? {
+            questionId: answer.questionId,
+            subject,
+            topic,
+            difficulty: answer.difficultySnapshot || answer.question.difficulty,
+            correct: 0,
+            incorrect: 0,
+            unanswered: 0,
+          };
+          if (answer.chosen === null) questionRow.unanswered += 1;
+          else if (answer.isCorrect) questionRow.correct += 1;
+          else questionRow.incorrect += 1;
+          practiceByQuestion.set(answer.questionId, questionRow);
         }
       }
       const practiceAnswered = practiceCorrect + practiceIncorrect;
+      const minimumQuestionAnswers = 5;
+      const weakQuestionAccuracy = 0.6;
+      const questionPerformance = [...practiceByQuestion.values()].map((row) => {
+        const sampleSize = row.correct + row.incorrect;
+        const accuracy = sampleSize > 0 ? row.correct / sampleSize : null;
+        const sufficientData = sampleSize >= minimumQuestionAnswers;
+        return {
+          ...row,
+          sampleSize,
+          accuracy,
+          sufficientData,
+          weak: sufficientData && accuracy !== null && accuracy < weakQuestionAccuracy,
+        };
+      }).sort((a, b) => Number(b.weak) - Number(a.weak) ||
+        (a.accuracy ?? 1) - (b.accuracy ?? 1) || b.sampleSize - a.sampleSize);
       const formalBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
       const formalByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
       let formalCorrect = 0;
@@ -455,6 +490,12 @@ export function examRouter(db: PrismaClient): Router {
               ? row.correct / (row.correct + row.incorrect)
               : null,
           })),
+          questionPerformance: {
+            minimumAnswers: minimumQuestionAnswers,
+            weakAccuracyThreshold: weakQuestionAccuracy,
+            insufficientSampleCount: questionPerformance.filter((row) => !row.sufficientData).length,
+            questions: questionPerformance,
+          },
         },
         formalExams: {
           graded: gradedSubmissions.length,
