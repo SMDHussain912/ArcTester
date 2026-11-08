@@ -292,6 +292,21 @@ export interface StudyRecommendationsReport {
   recommendations: StudyRecommendation[];
 }
 
+export interface AdminAttendanceRow {
+  assignmentId: string;
+  candidate: { id: number; email: string };
+  exam: { id: string; title: string };
+  version: number;
+  questionCount: number;
+  assignedAt: string;
+  availableFrom: string | null;
+  dueAt: string | null;
+  attendanceStatus: string;
+  connectivity: string;
+  session: { id: string; status: string; startedAt: string | null; lastHeartbeatAt: string | null; endedAt: string | null; heartbeatCount: number; focusLossCount: number; disconnectCount: number } | null;
+  submission: { id: string; status: string; submittedAt: string; score: number | null; maximumScore: number | null } | null;
+}
+
 export interface AdminLiveSession {
   id: string;
   status: string;
@@ -494,6 +509,8 @@ export const api = {
     ),
   adminLiveSessions: () =>
     request<{ ok: true; serverTime: string; sessions: AdminLiveSession[] }>("/admin/exams/live-sessions"),
+  adminExamAttendance: () =>
+    request<{ ok: true; serverTime: string; attendance: AdminAttendanceRow[] }>("/admin/exams/attendance"),
   adminSessionAction: (id: string, action: "PAUSE" | "RESUME" | "TERMINATE", reason = "") =>
     request<{ ok: true; session: { id: string; status: string; endedAt: string | null } }>(
       `/admin/exams/sessions/${id}/action`, json({ action, reason })
