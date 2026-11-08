@@ -106,7 +106,6 @@ describe("admin model registry API", () => {
     const datasetId = (registered.body.dataset as { id: string }).id;
     const trained = await request(`/admin/model-datasets/${datasetId}/train`, "POST", {
       modelId: "training-fixture",
-      targetColumn: "target_ready",
       seed: 42,
     });
     expect(trained.status).toBe(201);
