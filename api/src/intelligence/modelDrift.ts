@@ -23,7 +23,7 @@ function numericBoundaries(featureName: string, samples: DriftSample[]): number[
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
     .sort((left, right) => left - right);
   if (!values.length) throw new Error(`Training baseline has no numeric values for ${featureName}`);
-  return [0.2, 0.4, 0.6, 0.8].map((quantile) => values[Math.min(values.length - 1, Math.floor(values.length * quantile))]!);
+  return [0.2, 0.4, 0.6, 0.8].map((quantile) => values[Math.min(values.length - 1, Math.ceil(values.length * quantile) - 1)]!);
 }
 
 /** Converts a feature value to a coarse training-relative bucket; raw values are never persisted. */
