@@ -220,7 +220,7 @@ export async function createTest(
         ? [`${entry.name}: requested ${target} questions, but only ${selectedCount} matched the selected topic and difficulty filters.`]
         : [];
     });
-    if (selected.length < requested) {
+    if (selected.length < requested && warnings.length === 0) {
       warnings.push(`Requested ${requested} questions overall, but only ${selected.length} are available across the selected subjects and filters.`);
     }
   } else {
