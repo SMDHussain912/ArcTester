@@ -136,6 +136,98 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
   return { subjects, topics, weakest: candidates[0] ?? null };
 }
 
+export const QUESTION_ANALYTICS_MINIMUM_ANSWERS = 5;
+export const QUESTION_ANALYTICS_WEAK_ACCURACY = 0.6;
+
+export interface QuestionPerformanceRow {
+  questionId: number;
+  subject: string;
+  topic: string | null;
+  difficulty: string;
+  seen: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  sampleSize: number;
+  sufficientData: boolean;
+  weak: boolean;
+}
+
+export interface QuestionPerformanceReport {
+  generatedAt: string;
+  minimumAnswers: number;
+  weakAccuracyThreshold: number;
+  questions: QuestionPerformanceRow[];
+  insufficientSampleCount: number;
+}
+
+/** Per-question metrics are private to the authenticated learner. */
+export async function getQuestionPerformance(
+  db: PrismaClient,
+  userId: number
+): Promise<QuestionPerformanceReport> {
+  const answers = await db.attemptAnswer.findMany({
+    where: { attempt: { userId, finishedAt: { not: null } } },
+    select: {
+      questionId: true,
+      chosen: true,
+      isCorrect: true,
+      subjectSnapshot: true,
+      topicSnapshot: true,
+      difficultySnapshot: true,
+      question: {
+        select: {
+          subject: { select: { name: true } },
+          topic: { select: { name: true } },
+          difficulty: true,
+        },
+      },
+    },
+  });
+  const rows = new Map<number, QuestionPerformanceRow>();
+  for (const answer of answers) {
+    const subject = answer.subjectSnapshot || answer.question.subject.name;
+    const topic = answer.subjectSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
+    const row = rows.get(answer.questionId) ?? {
+      questionId: answer.questionId,
+      subject,
+      topic,
+      difficulty: answer.difficultySnapshot || answer.question.difficulty,
+      seen: 0,
+      correct: 0,
+      incorrect: 0,
+      unanswered: 0,
+      accuracy: null,
+      sampleSize: 0,
+      sufficientData: false,
+      weak: false,
+    };
+    if (answer.chosen === null) row.unanswered += 1;
+    else if (answer.isCorrect) row.correct += 1;
+    else row.incorrect += 1;
+    row.seen = row.correct + row.incorrect;
+    row.sampleSize = row.seen;
+    row.accuracy = row.seen > 0 ? row.correct / row.seen : null;
+    row.sufficientData = row.sampleSize >= QUESTION_ANALYTICS_MINIMUM_ANSWERS;
+    row.weak = row.sufficientData && row.accuracy !== null && row.accuracy < QUESTION_ANALYTICS_WEAK_ACCURACY;
+    rows.set(answer.questionId, row);
+  }
+  const questions = [...rows.values()].sort((a, b) => {
+    if (a.weak !== b.weak) return a.weak ? -1 : 1;
+    if (a.accuracy === null && b.accuracy !== null) return 1;
+    if (b.accuracy === null && a.accuracy !== null) return -1;
+    return (a.accuracy ?? 1) - (b.accuracy ?? 1) || b.sampleSize - a.sampleSize;
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    minimumAnswers: QUESTION_ANALYTICS_MINIMUM_ANSWERS,
+    weakAccuracyThreshold: QUESTION_ANALYTICS_WEAK_ACCURACY,
+    insufficientSampleCount: questions.filter((row) => !row.sufficientData).length,
+    questions,
+  };
+}
+
 export interface PerformanceOverview {
   generatedAt: string;
   practice: {
