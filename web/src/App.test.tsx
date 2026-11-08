@@ -225,4 +225,40 @@ describe("live Vite application", () => {
     });
   });
 
+  it("opens a practice paper when a student launches a subject from Question bank", async () => {
+    const createdTest = {
+      attemptId: 712,
+      mode: "practice",
+      deadline: null,
+      questions: [{ id: 41, subject: "Maths", topic: "Algebra", text: "What is 2 + 2?", options: ["2", "3", "4", "5"] }],
+      warnings: [],
+    };
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, { user: { id: 7, email: "learner@example.com", role: "STUDENT" } }));
+      }
+      if (path.endsWith("/bank")) {
+        return Promise.resolve(response(200, { total: 2, subjects: [{ subject: "Maths", count: 2, topics: [{ topic: "Algebra", count: 2 }] }] }));
+      }
+      if (path.endsWith("/tests") && init?.method === "POST") {
+        return Promise.resolve(response(201, createdTest));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Question bank" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Maths/ }));
+
+    expect(await screen.findByText("What is 2 + 2?")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) =>
+      String(input).endsWith("/tests") &&
+      init?.method === "POST" &&
+      JSON.parse(String(init.body)).subject === "Maths"
+    )).toBe(true);
+  });
+
 });
