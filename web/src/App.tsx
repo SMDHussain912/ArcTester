@@ -277,6 +277,24 @@ export default function App() {
     setImportFormat(format);
     setImportText(await file.text());
     setImportReport(null);
+    setImportPreviewReady(false);
+  }
+
+  function previewQuestionImport() {
+    setImportPreviewError("");
+    try {
+      if (importFormat === "json") {
+        const parsed: unknown = JSON.parse(importText);
+        if (!Array.isArray(parsed)) throw new Error("JSON must contain an array of question rows.");
+      } else {
+        const header = importText.toLowerCase().split(/\r?\n/, 1)[0];
+        if (!header.includes("subject") || !header.includes("correctindex")) throw new Error("CSV header must include subject and correctIndex columns.");
+      }
+      setImportPreviewReady(true);
+    } catch (cause) {
+      setImportPreviewError((cause as Error).message);
+      setImportPreviewReady(false);
+    }
   }
 
   function downloadQuestionTemplate(format: "csv" | "json") {
