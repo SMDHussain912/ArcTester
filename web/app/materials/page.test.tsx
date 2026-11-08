@@ -41,10 +41,7 @@ describe("offline study materials page", () => {
     expect(
       await screen.findByRole("heading", { name: "Offline study materials" })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
-      "href",
-      "/login"
-    );
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -86,9 +83,7 @@ describe("offline study materials page", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Download offline study pack" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "2 questions across 2 subjects"
-    );
+    expect(await screen.findByRole("status")).toHaveTextContent("2 questions across 2 subjects");
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/learning/package"),
       expect.objectContaining({ credentials: "include" })
