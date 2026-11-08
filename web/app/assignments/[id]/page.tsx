@@ -91,7 +91,8 @@ function AssignedExamRunner() {
     if (!exam || !attempt) return null;
     const durationDeadline = new Date(attempt.startedAt).getTime() + exam.durationMinutes * 60_000;
     const dueDeadline = exam.dueAt ? new Date(exam.dueAt).getTime() : Number.POSITIVE_INFINITY;
-    return Math.min(durationDeadline, dueDeadline);
+    const officialDeadline = serverDeadline ? new Date(serverDeadline).getTime() : durationDeadline;
+    return Math.min(officialDeadline, dueDeadline);
   }, [exam, attempt, serverDeadline]);
   const remaining = deadline === null ? 0 : Math.max(0, deadline - now);
 
@@ -176,8 +177,7 @@ function AssignedExamRunner() {
   useEffect(() => {
     if (!attempt || !sessionStartedRef.current) return;
     const heartbeat = () => {
-      const event = document.visibilityState === "visible" ? "HEARTBEAT" : "FOCUS_LOST";
-      void api.heartbeatAssignedExamSession(assignmentId, event).then((result) => {
+      void api.heartbeatAssignedExamSession(assignmentId, "HEARTBEAT").then((result) => {
         if (result.deadline) setServerDeadline(result.deadline);
       }).catch(() => {
         setError("Connection to the exam server was interrupted or the session is paused. Your answers remain saved locally; reconnect or contact the invigilator.");
