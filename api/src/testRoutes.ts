@@ -11,6 +11,8 @@ import {
 import type { PrismaClient } from "@prisma/client";
 import { analyticsRouter } from "./analyticsRoutes.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
+import { notFound } from "./errors.js";
+import { getLearningConcept, listLearningConcepts } from "./intelligence/conceptKnowledge.js";
 
 const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -40,6 +42,31 @@ export function testRouter(db: PrismaClient): Router {
         total: subjects.reduce((sum, s) => sum + s.count, 0),
         serverNow: new Date().toISOString(),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/learning/concepts", requireAuth, async (req, res, next) => {
+    try {
+      const query = z.object({
+        q: z.string().trim().max(100).optional(),
+        subject: z.string().trim().min(1).max(80).optional(),
+        limit: z.coerce.number().int().min(1).max(50).default(50),
+      }).parse(req.query);
+      const concepts = listLearningConcepts({ query: query.q, subject: query.subject, limit: query.limit });
+      res.json({ total: concepts.length, concepts });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/learning/concepts/:slug", requireAuth, async (req, res, next) => {
+    try {
+      const params = z.object({ slug: z.string().regex(/^[a-z0-9-]{1,80}$/) }).parse(req.params);
+      const concept = getLearningConcept(params.slug);
+      if (!concept) return next(notFound("That learning concept does not exist."));
+      res.json(concept);
     } catch (error) {
       next(error);
     }
