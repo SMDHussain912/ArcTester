@@ -289,6 +289,13 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
             {busyId ? "Saving…" : "Submit exam"}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          disabled={busyId !== null}
+          onPress={() => setActivePackage(null)}
+          style={styles.secondaryButton}
+        >
+          <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
+        </TouchableOpacity>
       </View>
     );
   }
