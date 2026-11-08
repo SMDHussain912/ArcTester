@@ -108,8 +108,8 @@ export function analyzeDatasetQuality(
     const values = rows.map((row) => row[column]);
     if (values.every((value): value is number => typeof value === "number" && Number.isFinite(value))) {
       numericFeatures[column] = {
-        min: Math.min(...values),
-        max: Math.max(...values),
+        min: values.reduce((minimum, value) => Math.min(minimum, value), Number.POSITIVE_INFINITY),
+        max: values.reduce((maximum, value) => Math.max(maximum, value), Number.NEGATIVE_INFINITY),
         mean: values.reduce((sum, value) => sum + value, 0) / values.length,
       };
     }
