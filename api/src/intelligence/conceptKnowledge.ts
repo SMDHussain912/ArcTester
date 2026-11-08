@@ -141,3 +141,18 @@ export function listLearningConcepts(options: ConceptSearchOptions = {}): Learni
 export function getLearningConcept(slug: string): LearningConcept | null {
   return CONCEPTS.find((concept) => concept.slug === slug) ?? null;
 }
+
+
+export interface RelatedLearningConcept {
+  slug: string;
+  title: string;
+}
+
+/** Match only an exact curated topic label; never guess from question wording. */
+export function getLearningConceptsForTopic(topic: string | null | undefined): RelatedLearningConcept[] {
+  const normalizedTopic = topic?.trim().toLocaleLowerCase();
+  if (!normalizedTopic) return [];
+  return CONCEPTS
+    .filter((concept) => concept.topic.toLocaleLowerCase() === normalizedTopic)
+    .map(({ slug, title }) => ({ slug, title }));
+}
