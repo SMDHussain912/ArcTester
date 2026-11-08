@@ -42,6 +42,19 @@ describe("admin model registry API", () => {
     target: index >= 6 ? 1 : 0,
   }));
 
+  async function registerEvaluationDataset(name = "held-out-demo-v1") {
+    const created = await request("/admin/model-datasets", "POST", {
+      name,
+      task: "binary-classification",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: evaluationSamples,
+      sourceDescription: "Curated held-out test fixture for model governance tests.",
+      sourceAttested: true,
+    });
+    expect(created.status).toBe(201);
+    return (created.body.dataset as { id: string }).id;
+  }
+
   async function request(path: string, method = "GET", body?: unknown, cookie = adminCookie) {
     const response = await fetch(`${server.baseUrl}${path}`, {
       method,
@@ -74,11 +87,38 @@ describe("admin model registry API", () => {
       .toEqual([[2, false], [1, true]]);
   });
 
+  it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
+    const datasetId = await registerEvaluationDataset("dataset-registry-test");
+    const listed = await request("/admin/model-datasets");
+    expect(listed.status).toBe(200);
+    expect((listed.body.datasets as Array<{ id: string; fingerprint: string }>).some((item) => item.id === datasetId && /^[a-f0-9]{64}$/.test(item.fingerprint))).toBe(true);
+
+    const duplicate = await request("/admin/model-datasets", "POST", {
+      name: "dataset-registry-test",
+      task: "binary-classification",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: evaluationSamples,
+      sourceDescription: "Curated held-out test fixture for model governance tests.",
+      sourceAttested: true,
+    });
+    expect(duplicate.status).toBe(409);
+
+    const malformed = await request("/admin/model-datasets", "POST", {
+      name: "bad-dataset",
+      task: "binary-classification",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: [{ features: { unexpected: 3 }, target: 0 }, ...evaluationSamples.slice(1)],
+      sourceDescription: "Malformed fixture for API validation testing.",
+      sourceAttested: true,
+    });
+    expect(malformed.status).toBe(400);
+  });
+
   it("evaluates candidates against a baseline before activation and records the report", async () => {
+    const datasetId = await registerEvaluationDataset();
     const evaluation = await request("/admin/models/exam-readiness-demo/2/evaluate", "POST", {
       baselineVersion: 1,
-      evaluationDataset: "held-out-demo-v1",
-      samples: evaluationSamples,
+      datasetId,
     });
     expect(evaluation.status).toBe(200);
     expect(evaluation.body.report).toMatchObject({
@@ -116,10 +156,10 @@ describe("admin model registry API", () => {
     expect(created.status).toBe(201);
     expect(created.body.model).toMatchObject({ version: 3, isActive: false });
 
+    const datasetId = await registerEvaluationDataset("held-out-reversed-test");
     const evaluation = await request("/admin/models/exam-readiness-demo/3/evaluate", "POST", {
       baselineVersion: 1,
-      evaluationDataset: "held-out-demo-v1",
-      samples: evaluationSamples,
+      datasetId,
     });
     expect(evaluation.status).toBe(200);
     expect(evaluation.body.report).toMatchObject({ status: "REJECTED", candidateVersion: 3 });
