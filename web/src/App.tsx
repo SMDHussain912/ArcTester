@@ -227,9 +227,11 @@ export default function App() {
 
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
+    let active = true;
     const savedAttemptId = localStorage.getItem("arctester-active-practice-attempt");
     if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
+        if (!active) return;
         setTest({ ...restored, warnings: restored.warnings ?? [] });
         const serverAnswers = Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const));
         let localAnswers: Record<number, number> = {};
@@ -243,12 +245,16 @@ export default function App() {
         } catch { localStorage.removeItem(practiceAnswersKey(restored.attemptId)); }
         setAnswers({ ...serverAnswers, ...localAnswers });
         setActivePage("practice");
-      }).catch(() => localStorage.removeItem("arctester-active-practice-attempt"));
+      }).catch(() => {
+        if (active) {
+          localStorage.removeItem(practiceAnswersKey(savedAttemptId));
+          localStorage.removeItem("arctester-active-practice-attempt");
+        }
+      });
     }
     request<{ assignments: AssignedExam[] }>("/exams/assigned")
-      .then(({ assignments }) => setAssignedExams(assignments ?? []))
-      .catch((cause) => setError((cause as Error).message));
-    let active = true;
+      .then(({ assignments }) => { if (active) setAssignedExams(assignments ?? []); })
+      .catch((cause) => { if (active) setError((cause as Error).message); });
     const loadAnnouncements = () => request<{ announcements: Announcement[] }>("/announcements")
       .then(({ announcements: items }) => { if (active) setAnnouncements(items); })
       .catch((cause) => { if (active) setError((cause as Error).message); });
