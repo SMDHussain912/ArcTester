@@ -27,6 +27,14 @@ function overviewResponse(practiceAccuracy: number | null, questions: number, co
       unanswered: 0,
       accuracy: practiceAccuracy,
       subjects: [],
+      difficulty: questions > 0 ? [{
+        difficulty: "medium",
+        correct,
+        incorrect: questions - correct,
+        unanswered: 0,
+        answered: questions,
+        accuracy: practiceAccuracy,
+      }] : [],
       trend: [],
     },
     formalExams: {
@@ -208,6 +216,9 @@ describe("student analytics page", () => {
     expect(screen.getByText(/Evidence: 7\/10 incorrect · 30% accuracy · minimum 5 answered\./)).toBeInTheDocument();
     expect(screen.getByText("high priority")).toBeInTheDocument();
     expect(screen.getByText("Practice question-level performance")).toBeInTheDocument();
+    expect(screen.getByText("Performance by difficulty")).toBeInTheDocument();
+    expect(screen.getByText("Medium")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "medium difficulty accuracy" })).toHaveAttribute("aria-valuenow", "80");
     expect(screen.getByText("Question #41 · Physics")).toBeInTheDocument();
     expect(screen.getByText("20% accuracy")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute(
