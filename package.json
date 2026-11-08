@@ -17,7 +17,13 @@
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev:mobile": "npm --prefix mobile run start",
+    "dev:desktop": "npm --prefix desktop run start",
+    "build:mobile": "npm --prefix mobile exec expo export -- --platform all",
+    "build:desktop:win": "npm --prefix desktop run dist:win",
+    "install:mobile": "npm install --prefix mobile",
+    "install:desktop": "npm install --prefix desktop"
   },
   "devDependencies": {
     "prettier": "^3.3.3"
