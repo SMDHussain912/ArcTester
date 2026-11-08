@@ -9,9 +9,14 @@ import { badRequest } from "./errors.js";
 export interface TopicRow {
   subject: string;
   topic: string | null;
+  /** Answered questions only: correct + incorrect. */
   seen: number;
+  correct: number;
   wrong: number;
-  accuracy: number; // 0..1
+  incorrect: number;
+  unanswered: number;
+  /** Correct / answered. Null when there are no answered questions. */
+  accuracy: number | null;
 }
 
 export interface WeakTopicsReport {
@@ -51,65 +56,83 @@ export interface ImportReport {
 
 function sortWeakest(rows: TopicRow[]): TopicRow[] {
   return [...rows].sort((a, b) => {
+    if (a.accuracy === null) return 1;
+    if (b.accuracy === null) return -1;
     if (a.accuracy !== b.accuracy) return a.accuracy - b.accuracy;
     return b.wrong - a.wrong;
   });
 }
 
+/**
+ * Accuracy is derived from completed answer rows, never from Stat.wrong.
+ * Stat.wrong is a question-selection debt counter and also changes for
+ * unanswered responses, so it is not an observed incorrect-answer total.
+ */
 export async function getWeakTopics(db: PrismaClient, userId: number): Promise<WeakTopicsReport> {
-  const stats = await db.stat.findMany({
-    where: { userId, seen: { gt: 0 } },
+  const attempts = await db.attempt.findMany({
+    where: { userId, finishedAt: { not: null } },
     include: {
-      question: {
-        select: { subject: { select: { name: true } }, topic: { select: { name: true } } },
+      answers: {
+        include: {
+          question: {
+            select: {
+              subject: { select: { name: true } },
+              topic: { select: { name: true } },
+            },
+          },
+        },
       },
     },
   });
 
-  const bySubject = new Map<string, { seen: number; wrong: number }>();
-  const byTopic = new Map<
-    string,
-    { subject: string; topic: string | null; seen: number; wrong: number }
-  >();
+  type Counts = { correct: number; wrong: number; unanswered: number };
+  const bySubject = new Map<string, Counts>();
+  const byTopic = new Map<string, { subject: string; topic: string | null; counts: Counts }>();
+  const empty = (): Counts => ({ correct: 0, wrong: 0, unanswered: 0 });
 
-  for (const row of stats) {
-    const subjName = row.question.subject.name;
-    const topicName = row.question.topic?.name ?? null;
+  for (const attempt of attempts) {
+    for (const answer of attempt.answers) {
+      const subject = answer.question.subject.name;
+      const topic = answer.question.topic?.name ?? null;
+      const outcome = answer.chosen === null ? "unanswered" : answer.isCorrect ? "correct" : "wrong";
+      const subjectCounts = bySubject.get(subject) ?? empty();
+      subjectCounts[outcome] += 1;
+      bySubject.set(subject, subjectCounts);
 
-    const s = bySubject.get(subjName) ?? { seen: 0, wrong: 0 };
-    s.seen += row.seen;
-    s.wrong += row.wrong;
-    bySubject.set(subjName, s);
-
-    const tKey = `${subjName}|||${topicName ?? "General"}`;
-    const t = byTopic.get(tKey) ?? { subject: subjName, topic: topicName, seen: 0, wrong: 0 };
-    t.seen += row.seen;
-    t.wrong += row.wrong;
-    byTopic.set(tKey, t);
+      const key = JSON.stringify([subject, topic]);
+      const topicEntry = byTopic.get(key) ?? { subject, topic, counts: empty() };
+      topicEntry.counts[outcome] += 1;
+      byTopic.set(key, topicEntry);
+    }
   }
 
-  const subjects: TopicRow[] = [...bySubject.entries()].map(([name, v]) => ({
-    subject: name,
-    topic: null,
-    seen: v.seen,
-    wrong: v.wrong,
-    accuracy: v.seen > 0 ? (v.seen - v.wrong) / v.seen : 0,
-  }));
-  const topics: TopicRow[] = [...byTopic.entries()].map(([, v]) => ({
-    subject: v.subject,
-    topic: v.topic,
-    seen: v.seen,
-    wrong: v.wrong,
-    accuracy: v.seen > 0 ? (v.seen - v.wrong) / v.seen : 0,
-  }));
+  const toRow = (subject: string, topic: string | null, counts: Counts): TopicRow => {
+    const seen = counts.correct + counts.wrong;
+    return {
+      subject,
+      topic,
+      seen,
+      correct: counts.correct,
+      wrong: counts.wrong,
+      incorrect: counts.wrong,
+      unanswered: counts.unanswered,
+      accuracy: seen > 0 ? counts.correct / seen : null,
+    };
+  };
 
-  const all = sortWeakest([...subjects, ...topics]);
-  return { subjects: sortWeakest(subjects), weakest: all[0] ?? null };
+  const subjects = sortWeakest(
+    [...bySubject.entries()].map(([name, counts]) => toRow(name, null, counts))
+  );
+  const topics = [...byTopic.values()].map((entry) =>
+    toRow(entry.subject, entry.topic, entry.counts)
+  );
+  const candidates = sortWeakest([...subjects, ...topics].filter((row) => row.accuracy !== null));
+  return { subjects, weakest: candidates[0] ?? null };
 }
 
 export async function getHistory(db: PrismaClient, userId: number): Promise<HistoryItem[]> {
   const attempts = await db.attempt.findMany({
-    where: { userId },
+    where: { userId, finishedAt: { not: null } },
     orderBy: { finishedAt: "desc" },
     include: {
       answers: { select: { isCorrect: true } },
@@ -162,7 +185,7 @@ export async function getStudyRecommendations(
   const weakestSubject = weakTopics.subjects[0];
 
   if (weakestSubject) {
-    const accuracy = Math.round(weakestSubject.accuracy * 100);
+    const accuracy = Math.round((weakestSubject.accuracy ?? 0) * 100);
     recommendations.push({
       id: "strengthen-weakest-subject",
       priority: accuracy < 55 ? "high" : "medium",
