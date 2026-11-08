@@ -33,6 +33,10 @@ const registryArtifactSchema = z.object({
   targetColumn: z.string().min(1).max(120),
   featureSchema: z.array(featureEncoderSchema).min(1),
   model: z.unknown(),
+  uncertainty: z.object({
+    residualStdDev: z.number().finite().nonnegative(),
+    method: z.literal("holdout-rmse"),
+  }).strict().optional(),
   createdAt: z.string().datetime(),
 }).strict().superRefine((artifact, context) => {
   const isRegression = artifact.algorithm === "multiple-linear-regression";
@@ -84,6 +88,14 @@ export interface ModelPrediction {
   task: "regression" | "binary-classification";
   prediction: number | 0 | 1;
   probability?: number;
+  confidence?: number;
+  confidenceLevel?: "high" | "moderate" | "low";
+  predictionInterval?: {
+    lower: number;
+    upper: number;
+    estimatedStdDev: number;
+    method: "holdout-rmse";
+  };
 }
 
 function validateModel(algorithm: RegistryArtifact["algorithm"], input: unknown): unknown {
@@ -318,11 +330,21 @@ export function predictWithRegistryArtifact(
 ): ModelPrediction {
   const features = transformFeatures(artifact.featureSchema, input);
   if (artifact.task === "regression") {
+    const prediction = predictLinearRegression(artifact.model, features);
+    const interval = artifact.uncertainty
+      ? {
+        lower: prediction - 1.96 * artifact.uncertainty.residualStdDev,
+        upper: prediction + 1.96 * artifact.uncertainty.residualStdDev,
+        estimatedStdDev: artifact.uncertainty.residualStdDev,
+        method: artifact.uncertainty.method,
+      }
+      : undefined;
     return {
       modelId: artifact.modelId,
       version: artifact.version,
       task: "regression",
-      prediction: predictLinearRegression(artifact.model, features),
+      prediction,
+      ...(interval ? { predictionInterval: interval } : {}),
     };
   }
   let probability: number;
@@ -339,5 +361,9 @@ export function predictWithRegistryArtifact(
     task: "binary-classification",
     prediction: probability >= 0.5 ? 1 : 0,
     probability,
+    confidence: Math.max(probability, 1 - probability),
+    confidenceLevel: Math.max(probability, 1 - probability) >= 0.8
+      ? "high"
+      : Math.max(probability, 1 - probability) >= 0.6 ? "moderate" : "low",
   };
 }
