@@ -20,10 +20,21 @@ export function testRouter(db: PrismaClient): Router {
   router.get("/bank", async (_req, res, next) => {
     try {
       const rows = await db.subject.findMany({
-        select: { name: true, _count: { select: { questions: true } } },
+        select: {
+          name: true,
+          _count: { select: { questions: true } },
+          topics: {
+            orderBy: { name: "asc" },
+            select: { name: true, _count: { select: { questions: true } } },
+          },
+        },
         orderBy: { name: "asc" },
       });
-      const subjects = rows.map((r) => ({ subject: r.name, count: r._count.questions }));
+      const subjects = rows.map((r) => ({
+        subject: r.name,
+        count: r._count.questions,
+        topics: r.topics.map((topic) => ({ topic: topic.name, count: topic._count.questions })),
+      }));
       res.json({
         subjects,
         total: subjects.reduce((sum, s) => sum + s.count, 0),
