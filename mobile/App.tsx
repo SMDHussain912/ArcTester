@@ -15,10 +15,19 @@ import { StatusBar } from "expo-status-bar";
 import OfflineExamWorkspace from "./src/offline/OfflineExamWorkspace";
 import { OfflineExams } from "./src/OfflineExams";
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(
+  /\/+$/,
+  "",
+);
 type User = { id: number; email: string };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
-type Announcement = { id: string; title: string; message: string; publishedAt: string; expiresAt: string | null };
+type Announcement = {
+  id: string;
+  title: string;
+  message: string;
+  publishedAt: string;
+  expiresAt: string | null;
+};
 type Question = {
   id: number;
   subject: string;
@@ -321,22 +330,26 @@ export default function App() {
             <View style={styles.announcementHeader}>
               <Text style={styles.sectionTitle}>Announcements</Text>
               <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
-                <Text style={styles.refreshText}>{refreshingAnnouncements ? "Refreshing…" : "Refresh"}</Text>
+                <Text style={styles.refreshText}>
+                  {refreshingAnnouncements ? "Refreshing…" : "Refresh"}
+                </Text>
               </TouchableOpacity>
             </View>
             {announcements.length === 0 ? (
               <View style={styles.announcementCard}>
                 <Text style={styles.muted}>No announcements right now.</Text>
               </View>
-            ) : announcements.map((announcement) => (
-              <View key={announcement.id} style={styles.announcementCard}>
-                <Text style={styles.announcementTitle}>{announcement.title}</Text>
-                <Text style={styles.announcementMessage}>{announcement.message}</Text>
-                <Text style={styles.announcementDate}>
-                  {new Date(announcement.publishedAt).toLocaleString()}
-                </Text>
-              </View>
-            ))}
+            ) : (
+              announcements.map((announcement) => (
+                <View key={announcement.id} style={styles.announcementCard}>
+                  <Text style={styles.announcementTitle}>{announcement.title}</Text>
+                  <Text style={styles.announcementMessage}>{announcement.message}</Text>
+                  <Text style={styles.announcementDate}>
+                    {new Date(announcement.publishedAt).toLocaleString()}
+                  </Text>
+                </View>
+              ))
+            )}
             <TouchableOpacity
               onPress={() => setShowExams(true)}
               style={[styles.primary, { marginTop: 20 }]}
@@ -380,7 +393,13 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f4f6fa" },
-  container: { padding: 20, paddingBottom: 48, maxWidth: 680, width: "100%", alignSelf: "center" },
+  container: {
+    padding: 20,
+    paddingBottom: 48,
+    maxWidth: 680,
+    width: "100%",
+    alignSelf: "center",
+  },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 28 },
   logo: {
     width: 42,
@@ -437,11 +456,28 @@ const styles = StyleSheet.create({
     borderColor: "#e4e8ef",
   },
   statValue: { color: "#172033", fontSize: 25, fontWeight: "800" },
-  announcementHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  announcementHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
   refreshText: { color: "#2563eb", fontWeight: "700", fontSize: 13 },
-  announcementCard: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e4e8ef", borderRadius: 14, padding: 15, marginBottom: 9 },
+  announcementCard: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e4e8ef",
+    borderRadius: 14,
+    padding: 15,
+    marginBottom: 9,
+  },
   announcementTitle: { color: "#172033", fontWeight: "800", fontSize: 15 },
-  announcementMessage: { color: "#526078", fontSize: 14, lineHeight: 21, marginTop: 7 },
+  announcementMessage: {
+    color: "#526078",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 7,
+  },
   announcementDate: { color: "#9aa3b2", fontSize: 11, marginTop: 10 },
   sectionTitle: {
     color: "#172033",
@@ -471,7 +507,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 10,
   },
-  option: { borderWidth: 1, borderColor: "#e0e5ed", borderRadius: 11, padding: 13, marginTop: 8 },
+  option: {
+    borderWidth: 1,
+    borderColor: "#e0e5ed",
+    borderRadius: 11,
+    padding: 13,
+    marginTop: 8,
+  },
   optionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
   optionText: { color: "#293449", lineHeight: 21 },
   error: { color: "#b42318", marginTop: 16, lineHeight: 21 },
