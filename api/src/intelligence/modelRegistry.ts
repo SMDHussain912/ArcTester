@@ -96,7 +96,10 @@ function validateModel(algorithm: RegistryArtifact["algorithm"], input: unknown)
 
 function validateArtifact(input: unknown): RegistryArtifact {
   const parsed = registryArtifactSchema.safeParse(input);
-  if (!parsed.success) throw new Error("Invalid model registry artifact");
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((issue) => issue.message).join("; ");
+    throw new Error(`Invalid model registry artifact: ${details}`);
+  }
   const artifact = parsed.data;
   const model = validateModel(artifact.algorithm, artifact.model) as { featureCount?: number };
   if (model.featureCount !== artifact.featureSchema.reduce((count, feature) =>
