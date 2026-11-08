@@ -381,6 +381,7 @@ model ModelEvaluation {
   modelId            String
   candidateVersion   Int
   baselineVersion    Int
+  datasetId          String   @default("")
   evaluationDataset  String
   datasetFingerprint String
   sampleCount        Int
