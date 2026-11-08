@@ -125,8 +125,6 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
   return { subjects, topics, weakest: candidates[0] ?? null };
 }
 
-export const QUESTION_ANALYTICS_MINIMUM_ANSWERS
-
 export const QUESTION_ANALYTICS_MINIMUM_ANSWERS = 5;
 export const QUESTION_ANALYTICS_WEAK_ACCURACY = 0.6;
 
@@ -205,8 +203,6 @@ export async function getQuestionPerformance(
     questions,
   };
 }
-
-export interface PerformanceOverview
 
 export interface PerformanceOverview {
   generatedAt: string;
@@ -356,8 +352,6 @@ export async function getPerformanceOverview(
   };
 }
 
-export async function getHistory
-
 export interface HistoryPage {
   items: HistoryItem[];
   page: number;
@@ -402,8 +396,6 @@ export async function getHistory(
     page: safePage, limit: safeLimit, total, totalPages: Math.ceil(total / safeLimit),
   };
 }
-
-export const RECOMMENDATION_MINIMUM_ANSWERS
 
 export const RECOMMENDATION_MINIMUM_ANSWERS = 5;
 export const RECOMMENDATION_WEAK_ACCURACY = 0.6;

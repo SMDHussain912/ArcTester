@@ -138,10 +138,10 @@ describe("student analytics page", () => {
           }],
         }));
       }
-      if (path.endsWith("/analytics/history")) {
+      if (path.includes("/analytics/history")) {
         return Promise.resolve(
-          jsonResponse(200, [
-            {
+          jsonResponse(200, {
+            items: [{
               attemptId: 22,
               mode: "practice",
               startedAt: "2026-11-08T08:00:00.000Z",
@@ -149,8 +149,9 @@ describe("student analytics page", () => {
               score: 8,
               total: 10,
               expired: false,
-            },
-          ])
+            }],
+            page: 1, limit: 10, total: 1, totalPages: 1,
+          })
         );
       }
       if (path.endsWith("/analytics/recommendations")) {
@@ -228,8 +229,8 @@ describe("student analytics page", () => {
       if (path.endsWith("/analytics/weak-topics")) {
         return Promise.resolve(jsonResponse(200, { subjects: [], topics: [], weakest: null }));
       }
-      if (path.endsWith("/analytics/history")) {
-        return Promise.resolve(jsonResponse(200, []));
+      if (path.includes("/analytics/history")) {
+        return Promise.resolve(jsonResponse(200, { items: [], page: 1, limit: 10, total: 0, totalPages: 0 }));
       }
       if (path.endsWith("/analytics/overview")) {
         return Promise.resolve(jsonResponse(200, overviewResponse(null, 0, 0)));
@@ -269,7 +270,7 @@ describe("student analytics page", () => {
           jsonResponse(500, { error: "Analytics are temporarily unavailable." })
         );
       }
-      if (path.endsWith("/analytics/history")) {
+      if (path.includes("/analytics/history")) {
         return Promise.resolve(jsonResponse(200, []));
       }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
