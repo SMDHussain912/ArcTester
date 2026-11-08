@@ -38,7 +38,7 @@ The application must remain usable on modest hardware (including 8 GB RAM system
 5. Support configurable question count (1–200) and difficulty selection (any, easy, medium, hard). Distribute the requested count as evenly as possible across selected subjects, then report subject-level shortfalls.
 6. Subject quotas must be explicit and validated; the AP ECET blueprint may be offered as a preset, not as a hard-coded restriction on custom papers.
 7. If a subject/topic/difficulty pool cannot satisfy its requested quota, use the available questions and show a warning naming the affected subject and requested/available counts.
-8. Switching application tabs must change the visible workspace. An in-progress practice session may remain in memory when navigating away and should reappear when returning to Practice; navigation must not silently force the test view over every other tab.
+8. Switching application tabs must change the visible workspace. An in-progress practice session may remain in memory when navigating away and should reappear when returning to Practice; navigation must not silently force the test view over every other tab. Practice attempts must restore after a page reload, including locally backed-up answer selections.
 9. Practice scoring and progress updates must be calculated by the server and persisted per user.
 10. A submitted practice attempt must not be scored twice.
 
@@ -128,7 +128,7 @@ The current browser client is a single large `web/src/App.tsx` component with ma
 
 The README and some historical phase notes have described an older Next.js UI. The active browser entry point is Vite (`web/src/main.tsx`, `web/vite.config.ts`) and must be documented as React + Vite.
 
-The formal-exam session endpoints exist in the API. The browser client must use the server session start, heartbeat, and session deadline; client-generated timestamps are not authoritative.
+The formal-exam session endpoints exist in the API. The browser client must use the server session start, heartbeat, and session deadline; client-generated timestamps are not authoritative. Practice-attempt recovery now uses the existing server restore endpoint plus a local browser answer backup. Formal assigned-exam answer autosave and recovery remain a separate outstanding item.
 
 Do not mark a feature complete solely because an endpoint or dashboard card exists. Verify the complete student/admin workflow and its failure states.
 
