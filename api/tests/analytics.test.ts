@@ -5,6 +5,7 @@ import { bindSession, signUp, startTestServer, type TestServer } from "./server.
 
 let server: TestServer;
 let api: ReturnType<typeof bindSession>;
+let studentId: number;
 
 const BANK: unknown[] = [
   ["Maths", "Maths Q1?", ["a1", "b1", "c1", "d1"], 0, "exp-m1"],
@@ -17,6 +18,7 @@ beforeAll(async () => {
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(3);
   const session = await signUp(server.baseUrl, "analyst@example.com");
+  studentId = session.userId;
   api = bindSession(server.baseUrl, session.cookie);
 });
 
@@ -69,6 +71,79 @@ describe("analytics", () => {
     const physics = body.subjects.find((s) => s.subject === "Physics");
     expect(physics?.accuracy).toBe(0);
     expect(physics?.wrong).toBe(1);
+  });
+
+  it("GET /analytics/overview reports accurate completed-practice metrics", async () => {
+    const { status, json } = await api.get("/analytics/overview");
+    expect(status).toBe(200);
+    const body = json as {
+      practice: {
+        completedAttempts: number;
+        correct: number;
+        incorrect: number;
+        unanswered: number;
+        accuracy: number | null;
+      };
+      formalExams: { submissions: number; graded: number; reviewRequired: number };
+    };
+    expect(body.practice.completedAttempts).toBe(2);
+    expect(body.practice.correct).toBe(1);
+    expect(body.practice.incorrect).toBe(1);
+    expect(body.practice.unanswered).toBe(0);
+    expect(body.practice.accuracy).toBe(0.5);
+    expect(body.formalExams).toMatchObject({ submissions: 0, graded: 0, reviewRequired: 0 });
+  });
+
+  it("counts unanswered practice questions separately from accuracy", async () => {
+    const created = await api.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 2,
+    });
+    expect(created.status).toBe(201);
+    const body = created.json as { attemptId: number; questions: { id: number }[] };
+    const question = await server.db.question.findUniqueOrThrow({
+      where: { id: body.questions[0].id },
+      select: { correctIndex: true },
+    });
+    const submitted = await api.post(`/tests/${body.attemptId}/submit`, {
+      answers: [{ questionId: body.questions[0].id, selectedIndex: question.correctIndex }],
+    });
+    expect(submitted.status).toBe(200);
+
+    const overview = await api.get("/analytics/overview");
+    const report = overview.json as {
+      practice: { correct: number; incorrect: number; unanswered: number; accuracy: number | null };
+    };
+    expect(report.practice.unanswered).toBe(1);
+    expect(report.practice.accuracy).toBe(2 / 3);
+  });
+
+  it("does not include unfinished attempts in completed history or analytics", async () => {
+    const created = await api.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 1,
+    });
+    expect(created.status).toBe(201);
+    const attemptId = (created.json as { attemptId: number }).attemptId;
+    const history = await api.get("/analytics/history");
+    expect((history.json as { attemptId: number }[]).some((item) => item.attemptId === attemptId)).toBe(false);
+    const overview = await api.get("/analytics/overview");
+    expect((overview.json as { practice: { completedAttempts: number } }).practice.completedAttempts).toBe(3);
+  });
+
+  it("keeps analytics isolated to the authenticated student", async () => {
+    const other = await signUp(server.baseUrl, "analytics-isolation@example.com");
+    const otherApi = bindSession(server.baseUrl, other.cookie);
+    const response = await otherApi.get("/analytics/overview");
+    expect(response.status).toBe(200);
+    const report = response.json as {
+      practice: { completedAttempts: number; questions: number; accuracy: number | null };
+      formalExams: { submissions: number };
+    };
+    expect(report.practice).toMatchObject({ completedAttempts: 0, questions: 0, accuracy: null });
+    expect(report.formalExams.submissions).toBe(0);
   });
 
   it("GET /analytics/recommendations returns actions based on the learner's results", async () => {
