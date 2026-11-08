@@ -216,11 +216,7 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post(
-    "/invitations/:id/revoke",
-    requireAuth,
-    requireAdmin(db),
-    async (req, res, next) => {
+  router.post("/invitations/:id/revoke", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const result = await db.invitation.updateMany({
         where: { id: req.params.id, usedAt: null, revokedAt: null },
