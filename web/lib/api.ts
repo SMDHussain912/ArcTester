@@ -342,6 +342,12 @@ export interface AdminOverview {
       unanswered: number;
       accuracy: number | null;
     }[];
+    questionPerformance: {
+      minimumAnswers: number;
+      weakAccuracyThreshold: number;
+      insufficientSampleCount: number;
+      questions: (QuestionPerformanceRow & { sampleSize: number })[];
+    };
   };
   formalExams: {
     graded: number;
