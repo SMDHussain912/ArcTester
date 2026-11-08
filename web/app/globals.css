@@ -118,7 +118,7 @@ p { margin-bottom: 12px; }
 .pill { display: inline-flex; align-items: center; border-radius: 99px; padding: 4px 9px; background: var(--surface-soft); color: var(--muted); font-size: 11px; font-weight: 650; }
 .pill-accent { background: var(--accent-soft); color: var(--accent); }
 
-.button, button:not(.pal button):not(.theme-toggle) { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 9px 15px; border: 1px solid transparent; border-radius: 9px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 650; text-decoration: none; transition: background .15s ease, border-color .15s ease; }
+.button, button:not(.pal button):not(.theme-toggle):not(.alt):not(.button-quiet):not(.button-secondary) { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 9px 15px; border: 1px solid transparent; border-radius: 9px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 650; text-decoration: none; transition: background .15s ease, border-color .15s ease; }
 .button:hover, button:not(.pal button):not(.theme-toggle):hover { background: var(--accent-hover); }
 .button-primary { background: var(--accent); color: #fff; }
 .button-secondary, button.alt { border-color: var(--line); background: var(--surface); color: var(--ink); }
