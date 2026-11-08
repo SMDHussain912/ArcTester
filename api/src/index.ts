@@ -4,6 +4,7 @@ import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
+import { questionAdminRouter } from "./questionAdminRoutes.js";
 
 const db = new PrismaClient();
 
@@ -29,7 +30,7 @@ function localCors(
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     // "authorization" is needed by native/mobile clients that send a bearer
     // token instead of relying on the cookie.
     res.setHeader("Access-Control-Allow-Headers", "content-type,authorization");
@@ -46,7 +47,7 @@ function localCors(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
 
   app.get("/health", (_req, res) => {
@@ -56,6 +57,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
   app.use(examRouter(database));
+  app.use(questionAdminRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
