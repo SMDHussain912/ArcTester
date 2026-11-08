@@ -311,6 +311,11 @@ export interface StudyRecommendation {
   } | null;
 }
 
+export type StudentScorePrediction =
+  | { status: "insufficient_data"; completedAttempts: number; availableSamples: number; requiredSamples: number; requiredCompletedAttempts: number; message: string }
+  | { status: "baseline_not_beaten"; completedAttempts: number; evaluationSamples: number; modelMae: number; baselineMae: number; message: string }
+  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; modelMae: number; baselineMae: number; message: string };
+
 export interface StudyRecommendationsReport {
   generatedAt: string;
   basedOnAttempts: number;
@@ -587,6 +592,7 @@ export const api = {
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
   questionPerformance: () => request<QuestionPerformanceReport>("/analytics/question-performance"),
   studyHistory: (page = 1) => request<StudyHistoryPage>(`/analytics/history?page=${page}&limit=10`),
+  studentScorePrediction: () => request<StudentScorePrediction>("/analytics/score-prediction"),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
   announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),
