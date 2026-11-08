@@ -128,7 +128,7 @@ The current browser client is a single large `web/src/App.tsx` component with ma
 
 The README and some historical phase notes have described an older Next.js UI. The active browser entry point is Vite (`web/src/main.tsx`, `web/vite.config.ts`) and must be documented as React + Vite.
 
-The formal-exam session endpoints exist in the API. The browser client must use the server session start, heartbeat, and session deadline; client-generated timestamps are not authoritative. Practice-attempt recovery now uses the existing server restore endpoint plus a local browser answer backup. Formal assigned-exam answer autosave and recovery remain a separate outstanding item.
+The formal-exam session endpoints exist in the API. The browser client must use the server session start, heartbeat, and session deadline; client-generated timestamps are not authoritative. Practice-attempt recovery now uses the existing server restore endpoint plus a local browser answer backup. Assigned-exam answers also have a local browser backup and are restored when the student reopens the assignment; server-side answer autosave remains outstanding.
 
 Do not mark a feature complete solely because an endpoint or dashboard card exists. Verify the complete student/admin workflow and its failure states.
 
