@@ -98,12 +98,13 @@ export async function trainTensorflowRegressionCandidate(
     throw new Error("Every TensorFlow sample must have a group ID and finite, schema-matched numeric values");
   }
 
-  const split = splitDatasetRowsByGroup(samples, "groupId", { testFraction, seed });
-  const train = split.train.map(({ features, target }) => ({ features, target }));
-  const test = split.test.map(({ features, target }) => ({ features, target }));
+  const groupedRows = samples.map((sample) => ({ groupId: sample.groupId, sample }));
+  const split = splitDatasetRowsByGroup(groupedRows, "groupId", { testFraction, seed });
+  const train = split.train.map(({ sample }) => ({ features: sample.features, target: sample.target }));
+  const test = split.test.map(({ sample }) => ({ features: sample.features, target: sample.target }));
   if (test.length < 20) throw new Error("TensorFlow evaluation requires at least 20 held-out rows");
-  const trainGroups = new Set(split.train.map((sample) => sample.groupId));
-  const testGroups = new Set(split.test.map((sample) => sample.groupId));
+  const trainGroups = new Set(split.train.map((row) => row.groupId));
+  const testGroups = new Set(split.test.map((row) => row.groupId));
   if ([...trainGroups].some((group) => testGroups.has(group))) {
     throw new Error("Student group leakage detected between training and evaluation rows");
   }
