@@ -13,7 +13,8 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "import:questions": "tsx prisma/seed.ts",
     "admin:bootstrap": "tsx prisma/bootstrapAdmin.ts",
-    "dataset:generate": "tsx src/intelligence/generateDatasets.ts"
+    "dataset:generate": "tsx src/intelligence/generateDatasets.ts",
+    "dataset:experiment": "tsx src/intelligence/runDatasetExperiments.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",
