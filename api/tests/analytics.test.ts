@@ -479,7 +479,14 @@ describe("analytics", () => {
     expect(response.status).toBe(200);
     const report = response.json as {
       practice: { completedAttempts: number; correct: number; incorrect: number; unanswered: number };
-      formalExams: { graded: number; reviewRequired: number; correct: number; incorrect: number; unanswered: number };
+      formalExams: {
+        graded: number;
+        reviewRequired: number;
+        correct: number;
+        incorrect: number;
+        unanswered: number;
+        topics: { subject: string; topic: string | null; correct: number }[];
+      };
     };
     expect(report.practice.completedAttempts).toBeGreaterThanOrEqual(4);
     expect(report.practice.correct + report.practice.incorrect + report.practice.unanswered).toBeGreaterThan(0);
@@ -490,6 +497,11 @@ describe("analytics", () => {
       incorrect: 0,
       unanswered: 0,
     });
+    expect(report.formalExams.topics).toContainEqual(expect.objectContaining({
+      subject: "Physics",
+      topic: "Mechanics",
+      correct: 1,
+    }));
   });
 
   it("POST /analytics/import is idempotent on duplicate attempt ids", async () => {
