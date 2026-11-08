@@ -12,6 +12,7 @@ import {
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
 import { assessFeatureDrift, driftBucket, expectedDriftCounts } from "./intelligence/modelDrift.js";
 import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
+import { trainTensorflowRegressionCandidate } from "./intelligence/tensorflowJsTraining.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("numeric") }).strict(),
@@ -55,6 +56,8 @@ const EvaluationSchema = z.object({
 const DatasetSampleSchema = z.object({
   features: z.record(z.union([z.number().finite(), z.string().max(500)])),
   target: z.number().finite(),
+  // SHA-256 pseudonym only; never store a learner name, email or database ID here.
+  groupId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
 
 const DatasetRegistrationSchema = z.object({
@@ -239,6 +242,102 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           note: "Experiment ranking only; this does not approve production promotion.",
         },
         message: "Training completed. Candidates remain inactive until they pass evaluation against an existing baseline.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
+  router.post("/admin/model-datasets/:datasetId/train-tensorflow", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
+      const input = TrainingSchema.extend({
+        epochs: z.number().int().min(1).max(500).default(80),
+        batchSize: z.number().int().min(1).max(256).default(32),
+      }).parse(req.body);
+      const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
+      if (!dataset) return next(notFound("Registered training dataset was not found."));
+      if (dataset.task !== "regression") return next(badRequest("TensorFlow.js training currently supports regression datasets only."));
+      const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical" }>;
+      if (featureSchema.some((feature) => feature.type !== "numeric")) {
+        return next(badRequest("TensorFlow.js training requires numeric-only feature schemas."));
+      }
+      const samples = JSON.parse(dataset.samplesJson) as Array<{
+        features: Record<string, number | string>; target: number; groupId?: string;
+      }>;
+      if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
+        return next(badRequest("TensorFlow.js training requires a SHA-256 pseudonymous groupId on every sample."));
+      }
+      const modelId = `${input.modelId}-tensorflow-js`;
+      const latest = await db.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
+      const version = (latest._max.version ?? 0) + 1;
+      const trained = await trainTensorflowRegressionCandidate(
+        samples.map((sample) => ({
+          features: featureSchema.map((feature) => sample.features[feature.name] as number),
+          target: sample.target,
+          groupId: sample.groupId!,
+        })),
+        {
+          modelId,
+          version,
+          featureNames: featureSchema.map((feature) => feature.name),
+          // Dataset provenance is not yet explicitly classified in the dataset schema.
+          // Until that field is added, artifacts remain experiment-only and cannot be production eligible.
+          datasetKind: "synthetic",
+          seed: input.seed,
+          epochs: input.epochs,
+          batchSize: input.batchSize,
+        },
+      );
+      const created = trained.artifact
+        ? await db.$transaction(async (tx) => {
+          const model = await tx.registeredModel.create({
+            data: {
+              modelId, version, algorithm: "tensorflow-js-layers",
+              task: "regression", dataset: dataset.name, trainingDatasetId: dataset.id,
+              artifactJson: JSON.stringify(trained.artifact), isActive: false, activatedAt: null,
+            },
+            select: { modelId: true, version: true, algorithm: true, task: true, dataset: true, isActive: true, createdAt: true },
+          });
+          await tx.modelRegistryAudit.create({
+            data: {
+              actorId: req.user!.id, modelId, version, action: "TRAINED_TENSORFLOW",
+              details: JSON.stringify({
+                datasetId, datasetFingerprint: dataset.fingerprint,
+                trainRows: trained.split.trainRows, testRows: trained.split.testRows,
+                trainGroups: trained.split.trainGroups, testGroups: trained.split.testGroups,
+                candidate: trained.candidate, baseline: trained.baseline,
+                productionEligible: trained.productionEligible, reason: trained.reason,
+                seed: input.seed, epochs: input.epochs, batchSize: input.batchSize,
+              }),
+            },
+          });
+          return model;
+        })
+        : null;
+      if (!created) {
+        await db.modelRegistryAudit.create({
+          data: {
+            actorId: req.user!.id, modelId, version, action: "TENSORFLOW_CANDIDATE_REJECTED",
+            details: JSON.stringify({
+              datasetId, datasetFingerprint: dataset.fingerprint,
+              trainRows: trained.split.trainRows, testRows: trained.split.testRows,
+              trainGroups: trained.split.trainGroups, testGroups: trained.split.testGroups,
+              candidate: trained.candidate, baseline: trained.baseline, reason: trained.reason,
+            }),
+          },
+        });
+      }
+      res.status(201).json({
+        ok: true, model: created, promoted: false,
+        productionEligible: trained.productionEligible,
+        split: trained.split, candidate: trained.candidate, baseline: trained.baseline,
+        reason: trained.reason,
+        message: created
+          ? "TensorFlow.js candidate registered inactive. Synthetic provenance currently prevents production promotion."
+          : "TensorFlow.js candidate did not meet the statistical baseline; no model artifact was registered.",
       });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
