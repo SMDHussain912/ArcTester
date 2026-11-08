@@ -797,6 +797,43 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/exams/:id/report", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const exam = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1, include: {
+          questions: { orderBy: { position: "asc" }, include: { submissionAnswers: { include: { submission: { include: { assignment: { select: { studentId: true } } } } } } } },
+          assignments: { include: { submission: true, session: { select: { status: true, startedAt: true, lastHeartbeatAt: true, focusLossCount: true, disconnectCount: true } } } },
+        } } },
+      });
+      if (!exam) return next(notFound("Exam not found."));
+      const version = exam.versions[0];
+      if (!version) return res.json({ ok: true, report: { title: exam.title, version: null, assigned: 0, started: 0, submitted: 0, averagePercentage: null, subjects: [], questions: [] } });
+      const submitted = version.assignments.filter((assignment) => assignment.submission !== null);
+      const graded = submitted.filter((assignment) => assignment.submission?.status === "GRADED" && assignment.submission.maximumScore && assignment.submission.score !== null);
+      const averagePercentage = graded.length ? graded.reduce((sum, assignment) => sum + (assignment.submission!.score! / assignment.submission!.maximumScore!) * 100, 0) / graded.length : null;
+      const subjects = new Map<string, { subject: string; questions: number; correct: number; incorrect: number; unanswered: number; marks: number }>();
+      const questionReport = version.questions.map((question) => {
+        const responses = question.submissionAnswers;
+        const correct = responses.filter((answer) => answer.isCorrect).length;
+        const unanswered = responses.filter((answer) => answer.selectedIndex === null).length;
+        const incorrect = responses.length - correct - unanswered;
+        const subject = subjects.get(question.subject) ?? { subject: question.subject, questions: 0, correct: 0, incorrect: 0, unanswered: 0, marks: 0 };
+        subject.questions += 1; subject.correct += correct; subject.incorrect += incorrect; subject.unanswered += unanswered; subject.marks += question.marks;
+        subjects.set(question.subject, subject);
+        return { questionId: question.id, position: question.position + 1, subject: question.subject, topic: question.topic, responses: responses.length, correct, incorrect, unanswered, accuracy: responses.length - unanswered > 0 ? correct / (responses.length - unanswered) : null };
+      });
+      const now = Date.now();
+      const active = version.assignments.filter((assignment) => assignment.session?.status === "ACTIVE" && assignment.session.lastHeartbeatAt && now - assignment.session.lastHeartbeatAt.getTime() <= 90000).length;
+      res.json({ ok: true, report: {
+        title: exam.title, version: version.version, assigned: version.assignments.length,
+        started: version.assignments.filter((assignment) => assignment.session?.startedAt).length,
+        active, submitted: submitted.length, reviewRequired: submitted.filter((assignment) => assignment.submission?.status === "REVIEW_REQUIRED").length,
+        averagePercentage, subjects: [...subjects.values()], questions: questionReport,
+      } });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/exams/:id/latest-version", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const exam = await db.exam.findUnique({
