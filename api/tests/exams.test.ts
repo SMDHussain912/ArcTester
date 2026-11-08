@@ -516,7 +516,7 @@ describe("versioned exam management", () => {
     const question = await server.db.examVersionQuestion.findFirstOrThrow({
       where: { examVersionId: version.id },
     });
-    const startedAt = new Date().toISOString();
+    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const submitted = await request(
       `/exams/assignments/${offlineAssignment.id}/submission`,
       "POST",
@@ -529,7 +529,16 @@ describe("versioned exam management", () => {
       secondStudentCookie
     );
     expect(submitted.status).toBe(201);
-    expect((submitted.json.submission as { status: string }).status).toBe("GRADED");
+    const submission = submitted.json.submission as { id: string; status: string };
+    expect(submission.status).toBe("REVIEW_REQUIRED");
+    const heldResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
+    expect(heldResult.status).toBe(200);
+    expect(heldResult.json.result).toMatchObject({ score: null, maximumScore: null, questions: [] });
+    const released = await request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie);
+    expect(released.status).toBe(200);
+    const availableResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
+    expect(availableResult.status).toBe(200);
+    expect((availableResult.json.result as { questions: unknown[] }).questions).toHaveLength(1);
     const session = await server.db.examSession.findUniqueOrThrow({
       where: { assignmentId: offlineAssignment.id },
       include: { events: true },
