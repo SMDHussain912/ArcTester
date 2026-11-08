@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
-import { badRequest, forbidden, notFound } from "./errors.js";
+import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 
 const CreateExamSchema = z.object({
@@ -35,6 +35,27 @@ const AssignExamSchema = z.object({
   message: "Due date must be after the availability date.",
   path: ["dueAt"],
 });
+
+
+const SubmitExamSchema = z
+  .object({
+    attemptUuid: z.string().uuid(),
+    startedAt: z.string().datetime(),
+    submittedAt: z.string().datetime(),
+    answers: z
+      .array(
+        z.object({
+          examQuestionId: z.string().min(1).max(64),
+          selectedIndex: z.number().int().min(0).max(3).nullable(),
+        })
+      )
+      .min(1)
+      .max(500),
+  })
+  .refine((input) => new Set(input.answers.map((answer) => answer.examQuestionId)).size === input.answers.length, {
+    message: "Each exam question may appear only once in a submission.",
+    path: ["answers"],
+  });
 
 function parseOptions(raw: string): string[] {
   const value: unknown = JSON.parse(raw);
@@ -252,9 +273,6 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment) return next(notFound("Exam assignment not found."));
       const now = Date.now();
       if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
-      if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
-        return next(forbidden("This exam is not available yet."));
-      }
       if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
       }
@@ -266,6 +284,9 @@ export function examRouter(db: PrismaClient): Router {
         version: assignment.examVersion.version,
         instructions: assignment.examVersion.instructions,
         durationMinutes: assignment.examVersion.durationMinutes,
+        availableFrom: assignment.availableFrom,
+        dueAt: assignment.dueAt,
+        serverTime: new Date(now).toISOString(),
         questions: assignment.examVersion.questions.map((question) => ({
           id: question.id,
           position: question.position,
@@ -279,6 +300,191 @@ export function examRouter(db: PrismaClient): Router {
       };
       const digest = createHash("sha256").update(JSON.stringify(packageBody)).digest("hex");
       res.json({ ok: true, package: packageBody, sha256: digest });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+
+  router.post("/exams/assignments/:id/submission", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = SubmitExamSchema.parse(req.body);
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: {
+          examVersion: { include: { questions: { orderBy: { position: "asc" } } } },
+          submission: true,
+        },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (!assignment.examVersion.publishedAt) {
+        return next(forbidden("This exam is not published."));
+      }
+
+      if (assignment.submission) {
+        if (assignment.submission.attemptUuid === input.attemptUuid) {
+          return res.json({
+            ok: true,
+            duplicate: true,
+            submission: {
+              id: assignment.submission.id,
+              attemptUuid: assignment.submission.attemptUuid,
+              status: assignment.submission.status,
+              score: assignment.submission.score,
+              maximumScore: assignment.submission.maximumScore,
+              submittedAt: assignment.submission.submittedAt,
+              receivedAt: assignment.submission.receivedAt,
+            },
+          });
+        }
+        return next(conflict("An attempt has already been submitted for this assignment."));
+      }
+
+      const questions = assignment.examVersion.questions;
+      const questionIds = new Set(questions.map((question) => question.id));
+      if (
+        input.answers.length !== questions.length ||
+        input.answers.some((answer) => !questionIds.has(answer.examQuestionId))
+      ) {
+        return next(badRequest("Submit one answer entry for every question in this exam."));
+      }
+
+      const answersByQuestion = new Map(
+        input.answers.map((answer) => [answer.examQuestionId, answer.selectedIndex])
+      );
+      const answerRows = questions.map((question) => {
+        const selectedIndex = answersByQuestion.get(question.id) ?? null;
+        const isCorrect = selectedIndex !== null && selectedIndex === question.correctIndex;
+        const awardedMarks = isCorrect
+          ? question.marks
+          : selectedIndex === null
+            ? 0
+            : -question.negativeMarks;
+        return {
+          examQuestionId: question.id,
+          selectedIndex,
+          isCorrect,
+          awardedMarks,
+        };
+      });
+      const score = answerRows.reduce((total, answer) => total + answer.awardedMarks, 0);
+      const maximumScore = questions.reduce((total, question) => total + question.marks, 0);
+
+      // Offline timestamps are client claims. Suspicious values are retained for review,
+      // not silently trusted as proof of when the exam was conducted.
+      const startedAt = new Date(input.startedAt);
+      const submittedAt = new Date(input.submittedAt);
+      const now = Date.now();
+      const toleranceMs = 5 * 60 * 1000;
+      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000;
+      const suspiciousTiming =
+        startedAt.getTime() > now + toleranceMs ||
+        submittedAt.getTime() > now + toleranceMs ||
+        submittedAt.getTime() < startedAt.getTime() ||
+        submittedAt.getTime() - startedAt.getTime() > durationMs + toleranceMs ||
+        (assignment.availableFrom !== null &&
+          startedAt.getTime() < assignment.availableFrom.getTime() - toleranceMs) ||
+        (assignment.dueAt !== null &&
+          submittedAt.getTime() > assignment.dueAt.getTime() + toleranceMs);
+
+      const submission = await db.$transaction(async (tx) => {
+        const existing = await tx.examSubmission.findUnique({
+          where: { assignmentId: assignment.id },
+        });
+        if (existing) {
+          if (existing.attemptUuid === input.attemptUuid) return existing;
+          throw conflict("An attempt has already been submitted for this assignment.");
+        }
+
+        const duplicateAttempt = await tx.examSubmission.findUnique({
+          where: { attemptUuid: input.attemptUuid },
+        });
+        if (duplicateAttempt) {
+          throw conflict("This attempt identifier has already been used.");
+        }
+
+        const created = await tx.examSubmission.create({
+          data: {
+            assignmentId: assignment.id,
+            attemptUuid: input.attemptUuid,
+            startedAt,
+            submittedAt,
+            status: suspiciousTiming ? "REVIEW_REQUIRED" : "GRADED",
+            score,
+            maximumScore,
+            answers: { create: answerRows },
+          },
+          select: {
+            id: true,
+            attemptUuid: true,
+            status: true,
+            score: true,
+            maximumScore: true,
+            submittedAt: true,
+            receivedAt: true,
+          },
+        });
+        await tx.examAssignment.update({
+          where: { id: assignment.id },
+          data: { status: "SUBMITTED" },
+        });
+        return created;
+      });
+
+      res.status(201).json({ ok: true, duplicate: false, submission });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/exams/assignments/:id/result", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: {
+          examVersion: {
+            include: { questions: { orderBy: { position: "asc" } } },
+          },
+          submission: { include: { answers: true } },
+        },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (!assignment.submission) {
+        return next(notFound("This exam has not been submitted yet."));
+      }
+
+      const answersByQuestion = new Map(
+        assignment.submission.answers.map((answer) => [answer.examQuestionId, answer])
+      );
+      res.json({
+        ok: true,
+        result: {
+          submissionId: assignment.submission.id,
+          status: assignment.submission.status,
+          score: assignment.submission.score,
+          maximumScore: assignment.submission.maximumScore,
+          submittedAt: assignment.submission.submittedAt,
+          receivedAt: assignment.submission.receivedAt,
+          questions: assignment.examVersion.questions.map((question) => {
+            const answer = answersByQuestion.get(question.id);
+            return {
+              id: question.id,
+              position: question.position,
+              subject: question.subject,
+              topic: question.topic,
+              text: question.text,
+              options: parseOptions(question.options),
+              correctIndex: question.correctIndex,
+              explanation: question.explanation,
+              marks: question.marks,
+              negativeMarks: question.negativeMarks,
+              selectedIndex: answer?.selectedIndex ?? null,
+              isCorrect: answer?.isCorrect ?? false,
+              awardedMarks: answer?.awardedMarks ?? 0,
+            };
+          }),
+        },
+      });
     } catch (error) {
       next(error);
     }

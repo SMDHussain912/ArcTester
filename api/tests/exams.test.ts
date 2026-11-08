@@ -171,9 +171,103 @@ describe("versioned exam management", () => {
     expect(packageResponse.json.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("allows downloading a published package before its start window", async () => {
+    const availableFrom = new Date(Date.now() + 60 * 60 * 1000);
+    await server.db.examAssignment.update({
+      where: { id: assignmentId },
+      data: { availableFrom },
+    });
+    const response = await request(
+      `/exams/assignments/${assignmentId}/package`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(response.status).toBe(200);
+    const packageBody = response.json.package as { availableFrom: string };
+    expect(new Date(packageBody.availableFrom).getTime()).toBe(availableFrom.getTime());
+    await server.db.examAssignment.update({
+      where: { id: assignmentId },
+      data: { availableFrom: null },
+    });
+  });
+
   it("prevents students from downloading another student's assignment", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/package`,
+      "GET",
+      undefined,
+      secondStudentCookie
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("scores offline submissions on the server and safely handles retries", async () => {
+    const question = await server.db.examVersionQuestion.findFirstOrThrow();
+    const startedAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const submittedAt = new Date().toISOString();
+    const body = {
+      attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
+      startedAt,
+      submittedAt,
+      answers: [{ examQuestionId: question.id, selectedIndex: 1 }],
+    };
+
+    const first = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      body,
+      studentCookie
+    );
+    expect(first.status).toBe(201);
+    const submission = first.json.submission as {
+      id: string;
+      status: string;
+      score: number;
+      maximumScore: number;
+    };
+    expect(submission.status).toBe("GRADED");
+    expect(submission.score).toBe(2);
+    expect(submission.maximumScore).toBe(2);
+
+    const retry = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      body,
+      studentCookie
+    );
+    expect(retry.status).toBe(200);
+    expect(retry.json.duplicate).toBe(true);
+    expect((retry.json.submission as { id: string }).id).toBe(submission.id);
+
+    const conflictingRetry = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      { ...body, attemptUuid: "d4bd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1" },
+      studentCookie
+    );
+    expect(conflictingRetry.status).toBe(409);
+
+    const result = await request(
+      `/exams/assignments/${assignmentId}/result`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(result.status).toBe(200);
+    const resultBody = result.json.result as {
+      score: number;
+      questions: Array<{ correctIndex: number; explanation: string; isCorrect: boolean }>;
+    };
+    expect(resultBody.score).toBe(2);
+    expect(resultBody.questions[0].correctIndex).toBe(1);
+    expect(resultBody.questions[0].explanation).toContain("first-in");
+    expect(resultBody.questions[0].isCorrect).toBe(true);
+  });
+
+  it("prevents another student from reading a submission result", async () => {
+    const response = await request(
+      `/exams/assignments/${assignmentId}/result`,
       "GET",
       undefined,
       secondStudentCookie

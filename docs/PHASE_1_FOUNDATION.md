@@ -74,3 +74,21 @@ API endpoints:
 - `GET /exams/assignments/:id/package`
 
 Offline attempt submission, server-side scoring, and durable sync outbox processing are still upcoming. The package digest detects accidental corruption; it is not a guarantee against a modified client or a malicious student device.
+
+## Offline submission and scoring
+
+The first offline submission API slice now supports:
+
+- Downloading a published package before its `availableFrom` time. The package includes the availability window and server timestamp so clients can enforce the local start gate while offline.
+- Posting an attempt UUID, claimed start/submit timestamps, and one selected answer per snapshot question.
+- Server-side score calculation from the immutable snapshot answer key and per-question positive/negative marks. The client never supplies its own score.
+- Idempotent retry behavior: the same assignment and attempt UUID return the existing submission; a different attempt UUID cannot replace a submitted attempt.
+- Immediate student result retrieval with answer review and explanations.
+- Suspicious client timing is marked `REVIEW_REQUIRED` rather than treated as trusted evidence. Offline client timestamps are claims, not cryptographic proof.
+
+Endpoints:
+
+- `POST /exams/assignments/:id/submission`
+- `GET /exams/assignments/:id/result`
+
+The local client outbox, persistent autosave, sync retry scheduler, and background notification flow remain upcoming.
