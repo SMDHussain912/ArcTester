@@ -595,11 +595,43 @@ const ImportAnswerSchema = z.object({
   difficultySnapshot: z.enum(["easy", "medium", "hard"]).optional(),
 });
 
+export const MAX_PROGRESS_IMPORT_STATS = 20_000;
+export const MAX_PROGRESS_IMPORT_ATTEMPTS = 5_000;
+export const MAX_PROGRESS_IMPORT_ANSWERS = 50_000;
+
 const ImportPayloadSchema = z.object({
   exportedAt: z.string().datetime().optional(),
-  stats: z.array(ImportStatSchema).optional().default([]),
-  attempts: z.array(ImportAttemptSchema).optional().default([]),
-  answers: z.array(ImportAnswerSchema).optional().default([]),
+  stats: z.array(ImportStatSchema).max(MAX_PROGRESS_IMPORT_STATS).optional().default([]),
+  attempts: z.array(ImportAttemptSchema).max(MAX_PROGRESS_IMPORT_ATTEMPTS).optional().default([]),
+  answers: z.array(ImportAnswerSchema).max(MAX_PROGRESS_IMPORT_ANSWERS).optional().default([]),
+}).superRefine((payload, ctx) => {
+  const statIds = new Set<number>();
+  payload.stats.forEach((stat, index) => {
+    if (statIds.has(stat.questionId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["stats", index, "questionId"], message: "duplicate questionId in stats" });
+    }
+    statIds.add(stat.questionId);
+  });
+
+  const attemptIds = new Set<number>();
+  payload.attempts.forEach((attempt, index) => {
+    if (attemptIds.has(attempt.attemptId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["attempts", index, "attemptId"], message: "duplicate attemptId in attempts" });
+    }
+    attemptIds.add(attempt.attemptId);
+  });
+
+  const answerKeys = new Set<string>();
+  payload.answers.forEach((answer, index) => {
+    const key = JSON.stringify([answer.attemptId, answer.questionId]);
+    if (answerKeys.has(key)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["answers", index], message: "duplicate answer for attempt and question" });
+    }
+    answerKeys.add(key);
+    if (!attemptIds.has(answer.attemptId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["answers", index, "attemptId"], message: "answer references an attempt missing from this backup" });
+    }
+  });
 });
 
 export async function importProgress(
@@ -636,55 +668,70 @@ export async function importProgress(
     throw badRequest(`Backup references unknown questions: ${missing.join(", ")}`);
   }
 
-  // Stats merge into THIS user's rows only.
-  let addedStats = 0;
-  let updatedStats = 0;
-  for (const s of stats) {
-    const prev = await db.stat.findUnique({
-      where: { userId_questionId: { userId, questionId: s.questionId } },
-    });
-    if (!prev) {
-      await db.stat.create({
-        data: {
-          userId,
-          questionId: s.questionId,
-          seen: s.seen,
-          wrong: s.wrong,
-          lastSeen: s.lastSeen ? new Date(s.lastSeen) : null,
-        },
-      });
-      addedStats += 1;
-    } else {
-      await db.stat.update({
+  return db.$transaction(async (tx) => {
+    // Stats merge into THIS user's rows only.
+    let addedStats = 0;
+    let updatedStats = 0;
+    for (const s of stats) {
+      const prev = await tx.stat.findUnique({
         where: { userId_questionId: { userId, questionId: s.questionId } },
-        data: {
-          seen: prev.seen + s.seen,
-          wrong: prev.wrong + s.wrong,
-          lastSeen: s.lastSeen ? new Date(s.lastSeen) : prev.lastSeen,
-        },
       });
-      updatedStats += 1;
+      if (!prev) {
+        await tx.stat.create({
+          data: {
+            userId,
+            questionId: s.questionId,
+            seen: s.seen,
+            wrong: s.wrong,
+            lastSeen: s.lastSeen ? new Date(s.lastSeen) : null,
+          },
+        });
+        addedStats += 1;
+      } else {
+        await tx.stat.update({
+          where: { userId_questionId: { userId, questionId: s.questionId } },
+          data: {
+            seen: prev.seen + s.seen,
+            wrong: prev.wrong + s.wrong,
+            lastSeen: s.lastSeen ? new Date(s.lastSeen) : prev.lastSeen,
+          },
+        });
+        updatedStats += 1;
+      }
     }
-  }
-
-  // Attempts keep their id when it is free (or already ours); otherwise they
-  // get a fresh id so one user's backup can never overwrite another's rows.
-  // `attemptIdMap` translates the backup's ids to the ids actually stored.
-  const attemptIdMap = new Map<number, number>();
-  let addedAttempts = 0;
-  let skippedDuplicates = 0;
-  for (const a of attempts) {
-    const prev = await db.attempt.findUnique({ where: { id: a.attemptId } });
-    if (prev) {
-      if (prev.userId === userId) {
-        // Already imported into this account — keep the original id.
-        attemptIdMap.set(a.attemptId, prev.id);
-        skippedDuplicates += 1;
+  
+    // Attempts keep their id when it is free (or already ours); otherwise they
+    // get a fresh id so one user's backup can never overwrite another's rows.
+    // `attemptIdMap` translates the backup's ids to the ids actually stored.
+    const attemptIdMap = new Map<number, number>();
+    let addedAttempts = 0;
+    let skippedDuplicates = 0;
+    for (const a of attempts) {
+      const prev = await tx.attempt.findUnique({ where: { id: a.attemptId } });
+      if (prev) {
+        if (prev.userId === userId) {
+          // Already imported into this account — keep the original id.
+          attemptIdMap.set(a.attemptId, prev.id);
+          skippedDuplicates += 1;
+          continue;
+        }
+        // Owned by somebody else: re-import under a new id instead of clobbering.
+        const created = await tx.attempt.create({
+          data: {
+            mode: a.mode,
+            userId,
+            startedAt: new Date(a.startedAt),
+            finishedAt: a.finishedAt ? new Date(a.finishedAt) : null,
+            expired: a.expired ?? false,
+          },
+        });
+        attemptIdMap.set(a.attemptId, created.id);
+        addedAttempts += 1;
         continue;
       }
-      // Owned by somebody else: re-import under a new id instead of clobbering.
-      const created = await db.attempt.create({
+      const created = await tx.attempt.create({
         data: {
+          id: a.attemptId,
           mode: a.mode,
           userId,
           startedAt: new Date(a.startedAt),
@@ -694,44 +741,31 @@ export async function importProgress(
       });
       attemptIdMap.set(a.attemptId, created.id);
       addedAttempts += 1;
-      continue;
     }
-    const created = await db.attempt.create({
-      data: {
-        id: a.attemptId,
-        mode: a.mode,
-        userId,
-        startedAt: new Date(a.startedAt),
-        finishedAt: a.finishedAt ? new Date(a.finishedAt) : null,
-        expired: a.expired ?? false,
-      },
-    });
-    attemptIdMap.set(a.attemptId, created.id);
-    addedAttempts += 1;
-  }
-
-  // Answers follow the (possibly remapped) attempt ids.
-  for (const ans of answers) {
-    const attemptId = attemptIdMap.get(ans.attemptId);
-    if (attemptId === undefined) continue;
-    const existing = await db.attemptAnswer.findFirst({
-      where: { attemptId, questionId: ans.questionId },
-    });
-    if (existing) continue;
-    await db.attemptAnswer.create({
-      data: {
-        attemptId,
-        questionId: ans.questionId,
-        chosen: ans.chosen,
-        isCorrect: ans.isCorrect,
-        subjectSnapshot: ans.subjectSnapshot ?? questionById.get(ans.questionId)!.subject.name,
-        topicSnapshot: ans.topicSnapshot !== undefined
-          ? ans.topicSnapshot
-          : questionById.get(ans.questionId)!.topic?.name ?? null,
-        difficultySnapshot: ans.difficultySnapshot ?? questionById.get(ans.questionId)!.difficulty,
-      },
-    });
-  }
-
-  return { addedStats, updatedStats, addedAttempts, skippedDuplicates };
+  
+    // Answers follow the (possibly remapped) attempt ids.
+    for (const ans of answers) {
+      const attemptId = attemptIdMap.get(ans.attemptId);
+      if (attemptId === undefined) continue;
+      const existing = await tx.attemptAnswer.findFirst({
+        where: { attemptId, questionId: ans.questionId },
+      });
+      if (existing) continue;
+      await tx.attemptAnswer.create({
+        data: {
+          attemptId,
+          questionId: ans.questionId,
+          chosen: ans.chosen,
+          isCorrect: ans.isCorrect,
+          subjectSnapshot: ans.subjectSnapshot ?? questionById.get(ans.questionId)!.subject.name,
+          topicSnapshot: ans.topicSnapshot !== undefined
+            ? ans.topicSnapshot
+            : questionById.get(ans.questionId)!.topic?.name ?? null,
+          difficultySnapshot: ans.difficultySnapshot ?? questionById.get(ans.questionId)!.difficulty,
+        },
+      });
+    }
+  
+    return { addedStats, updatedStats, addedAttempts, skippedDuplicates };
+  });
 }

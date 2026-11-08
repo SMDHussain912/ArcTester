@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importFromJson } from "../src/importService.js";
+import { MAX_PROGRESS_IMPORT_ANSWERS } from "../src/analytics.js";
 import { buildApp } from "../src/index.js";
 import { bindSession, signUp, startTestServer, type TestServer } from "./server.js";
 
@@ -586,6 +587,33 @@ describe("analytics", () => {
     });
     expect(res.status).toBe(400);
     expect((res.json as { error: string }).error).toContain("unknown questions");
+  });
+
+  it("POST /analytics/import rejects answers whose attempt is absent before writing stats", async () => {
+    const before = await server.db.stat.count({ where: { userId: studentId } });
+    const res = await api.post("/analytics/import", {
+      stats: [{ questionId: (await server.db.question.findFirstOrThrow()).id, seen: 9, wrong: 2 }],
+      attempts: [],
+      answers: [{ attemptId: 987654, questionId: (await server.db.question.findFirstOrThrow()).id, chosen: 0, isCorrect: true }],
+    });
+    expect(res.status).toBe(400);
+    expect((res.json as { error: string }).error).toContain("missing from this backup");
+    expect(await server.db.stat.count({ where: { userId: studentId } })).toBe(before);
+  });
+
+  it("POST /analytics/import rejects oversized backups before database writes", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const res = await api.post("/analytics/import", {
+      stats: [],
+      attempts: [],
+      answers: Array.from({ length: MAX_PROGRESS_IMPORT_ANSWERS + 1 }, (_, index) => ({
+        attemptId: index + 1,
+        questionId: question.id,
+        chosen: null,
+        isCorrect: false,
+      })),
+    });
+    expect(res.status).toBe(400);
   });
 
   it("POST /analytics/import rejects malformed payload", async () => {
