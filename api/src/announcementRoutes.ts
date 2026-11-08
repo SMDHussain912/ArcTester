@@ -103,7 +103,7 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   });
 
-  router.get("/announcements", requireAuth, async (req, res, next) => {
+  router.get("/announcements", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const parsedAfter = AfterSchema.safeParse(req.query.after);
       if (!parsedAfter.success) return next(badRequest("The announcement cursor is invalid."));
