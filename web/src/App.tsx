@@ -139,6 +139,8 @@ export default function App() {
   const [bankSearch, setBankSearch] = useState("");
   const [subjectQuotas, setSubjectQuotas] = useState<Record<string, number>>({});
   const [difficultyMix, setDifficultyMix] = useState<"any" | "balanced" | "easy" | "medium" | "hard">("any");
+  const [topicSelectionMode, setTopicSelectionMode] = useState<"all" | "include" | "exclude">("all");
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [assigningExamId, setAssigningExamId] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -478,24 +480,59 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function loadEcetBlueprint() {
+    const blueprint: [RegExp, number][] = [
+      [/math|mathematics/i, 50],
+      [/physics/i, 25],
+      [/chemistry/i, 25],
+      [/computer science|\bcse\b/i, 100],
+    ];
+    const quotas: Record<string, number> = {};
+    for (const [pattern, count] of blueprint) {
+      const subject = [...new Set(adminQuestions.map((question) => question.subject))].find((name) => pattern.test(name));
+      if (subject) quotas[subject] = count;
+    }
+    setSubjectQuotas(quotas);
+    setDifficultyMix("any");
+    setTopicSelectionMode("all");
+    setSelectedTopics([]);
+    const matched = Object.keys(quotas).length;
+    setError(matched === 4 ? "Loaded the AP ECET 200-question blueprint." : `Loaded ${matched} of 4 AP ECET subject quotas. Add or rename the missing subjects in Subjects & Topics.`);
+  }
+
   function generateSubjectPaper() {
     const picked: number[] = [];
     const subjects = [...new Set(adminQuestions.map((question) => question.subject))];
     for (const subject of subjects) {
       const quota = Math.max(0, subjectQuotas[subject] ?? 0);
       let pool = adminQuestions.filter((question) => question.subject === subject && !picked.includes(question.id));
-      if (difficultyMix !== "any") {
-        if (difficultyMix === "balanced") {
-          const easy = pool.filter((q) => q.difficulty === "easy").slice(0, Math.ceil(quota / 3));
-          const medium = pool.filter((q) => q.difficulty === "medium").slice(0, Math.ceil(quota / 3));
-          const hard = pool.filter((q) => q.difficulty === "hard").slice(0, Math.floor(quota / 3));
-          pool = [...easy, ...medium, ...hard];
-        } else pool = pool.filter((q) => (q.difficulty ?? "medium") === difficultyMix);
+      if (topicSelectionMode === "include") pool = pool.filter((question) => question.topic && selectedTopics.includes(`${subject}::${question.topic}`));
+      if (topicSelectionMode === "exclude") pool = pool.filter((question) => !question.topic || !selectedTopics.includes(`${subject}::${question.topic}`));
+      if (difficultyMix === "balanced") {
+        const shuffled = (items: AdminQuestion[]) => [...items].sort(() => Math.random() - 0.5);
+        const easy = shuffled(pool.filter((question) => question.difficulty === "easy"));
+        const medium = shuffled(pool.filter((question) => (question.difficulty ?? "medium") === "medium"));
+        const hard = shuffled(pool.filter((question) => question.difficulty === "hard"));
+        const base = Math.floor(quota / 3);
+        const remainder = quota % 3;
+        const selected = [
+          ...easy.slice(0, base + (remainder > 0 ? 1 : 0)),
+          ...medium.slice(0, base + (remainder > 1 ? 1 : 0)),
+          ...hard.slice(0, base),
+        ];
+        const selectedIds = new Set(selected.map((question) => question.id));
+        if (selected.length < quota) {
+          selected.push(...shuffled(pool.filter((question) => !selectedIds.has(question.id))).slice(0, quota - selected.length));
+        }
+        pool = shuffled(selected);
+      } else {
+        if (difficultyMix !== "any") pool = pool.filter((question) => (question.difficulty ?? "medium") === difficultyMix);
+        pool = [...pool].sort(() => Math.random() - 0.5).slice(0, quota);
       }
-      for (const q of pool.sort(() => Math.random() - 0.5).slice(0, quota)) picked.push(q.id);
+      for (const question of pool.slice(0, quota)) picked.push(question.id);
     }
     setSelectedQuestionIds(picked);
-    setError(picked.length ? `Generated a ${picked.length}-question paper from your subject quotas.` : "Set at least one subject quota and make sure the bank has enough matching questions.");
+    setError(picked.length ? `Generated a ${picked.length}-question paper from your subject, topic and difficulty rules.` : "No questions matched the current blueprint. Check subject quotas and topic filters.");
   }
 
   async function createExam(event: FormEvent<HTMLFormElement>) {
@@ -875,7 +912,8 @@ export default function App() {
               <section className="subject-quota-builder">
                 <div className="picker-heading"><strong>Examiner paper blueprint</strong><span>Allocate question counts by subject</span></div>
                 <div className="quota-grid">{[...new Set(adminQuestions.map((question) => question.subject))].map((subject) => <label key={subject}>{subject}<span className="muted">{adminQuestions.filter((q) => q.subject === subject).length} available</span><input type="number" min={0} max={adminQuestions.filter((q) => q.subject === subject).length} value={subjectQuotas[subject] ?? 0} onChange={(event) => setSubjectQuotas((current) => ({ ...current, [subject]: Number(event.target.value) }))} /></label>)}</div>
-                <div className="quota-actions"><label>Difficulty distribution<select value={difficultyMix} onChange={(event) => setDifficultyMix(event.target.value as typeof difficultyMix)}><option value="any">Any difficulty</option><option value="balanced">Balanced easy / medium / hard</option><option value="easy">Easy only</option><option value="medium">Medium only</option><option value="hard">Hard only</option></select></label><button type="button" className="ghost" onClick={generateSubjectPaper}>Generate paper from quotas</button></div>
+                <div className="quota-actions"><label>Difficulty distribution<select value={difficultyMix} onChange={(event) => setDifficultyMix(event.target.value as typeof difficultyMix)}><option value="any">Any difficulty</option><option value="balanced">Balanced easy / medium / hard</option><option value="easy">Easy only</option><option value="medium">Medium only</option><option value="hard">Hard only</option></select></label><button type="button" className="ghost" onClick={loadEcetBlueprint}>Load AP ECET blueprint</button><button type="button" className="ghost" onClick={generateSubjectPaper}>Generate paper from quotas</button></div>
+                <div className="topic-blueprint"><label>Topic selection<select value={topicSelectionMode} onChange={(event) => setTopicSelectionMode(event.target.value as typeof topicSelectionMode)}><option value="all">All topics</option><option value="include">Include selected topics only</option><option value="exclude">Exclude selected topics</option></select></label><div className="topic-blueprint-options">{adminSubjects.flatMap((subject) => subject.topics.map((topic) => ({ key: `${subject.name}::${topic.name}`, label: `${subject.name} · ${topic.name}` }))).map((topic) => <label key={topic.key}><input type="checkbox" checked={selectedTopics.includes(topic.key)} onChange={(event) => setSelectedTopics((current) => event.target.checked ? [...current, topic.key] : current.filter((item) => item !== topic.key))} />{topic.label}</label>)}</div></div>
                 <p className="muted">The generated selection is editable below. Total selected: {selectedQuestionIds.length} questions.</p>
               </section>
               <div className="exam-question-picker">
