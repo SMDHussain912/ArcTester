@@ -60,7 +60,7 @@ describe("registered dataset training", () => {
     })), [
       { name: "score", type: "numeric" },
       { name: "subject", type: "categorical", categories: ["Math", "Science"] },
-    ], "binary-classification")).toThrow("exactly the declared feature schema");
+    ], "binary-classification")).toThrow("does not match the declared feature schema");
   });
 
   it("rejects classification datasets without enough examples of both classes", () => {
