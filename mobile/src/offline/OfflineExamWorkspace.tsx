@@ -59,6 +59,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const [error, setError] = useState("");
   const syncLock = useRef(false);
   const submittedLock = useRef(false);
+  const answerSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     const response = await fetch(`${API_URL}${path}`, {
@@ -211,6 +212,11 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     submittedLock.current = true;
     setBusy(true);
     try {
+      // Flush in-flight writes, then persist the latest full answer map before submission.
+      await answerSaveQueue.current.catch(() => undefined);
+      for (const question of activePackage.questions) {
+        await saveOfflineAnswer(activePackage.assignmentId, question.id, answers[question.id] ?? null);
+      }
       const submission = await queueOfflineSubmission(activePackage.assignmentId);
       setMessage("Attempt saved on this device");
       if (online) {
@@ -237,7 +243,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [activeAttempt, activePackage, online, refreshAssignments, refreshLocal, request]);
+  }, [activeAttempt, activePackage, answers, online, refreshAssignments, refreshLocal, request]);
 
   const startedAt = useMemo(async () => {
     if (!activePackage) return null;
@@ -277,11 +283,13 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const chooseAnswer = async (questionId: string, selectedIndex: number) => {
     if (!activePackage) return;
     setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
-    try {
-      await saveOfflineAnswer(activePackage.assignmentId, questionId, selectedIndex);
-    } catch (cause) {
+    // Serialize SQLite read-modify-write operations so rapid taps cannot overwrite newer answers.
+    answerSaveQueue.current = answerSaveQueue.current
+      .catch(() => undefined)
+      .then(() => saveOfflineAnswer(activePackage.assignmentId, questionId, selectedIndex));
+    void answerSaveQueue.current.catch((cause) => {
       setError(cause instanceof Error ? cause.message : "Answer could not be saved locally.");
-    }
+    });
   };
 
   const displayAssignments = useMemo(() => {
