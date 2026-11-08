@@ -25,21 +25,25 @@ function AnalyticsDashboard() {
   const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
     setLoading(true);
-    Promise.all([api.weakTopics(), api.performanceOverview()])
-      .then(([weak, performance]) => {
+    Promise.allSettled([api.weakTopics(), api.performanceOverview()])
+      .then(([weakResult, performanceResult]) => {
         if (cancelled) return;
-        setWeakTopics(weak);
-        setOverview(performance);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setError(cause instanceof ApiError ? cause.message : "Could not load your study analytics.");
+        if (weakResult.status === "fulfilled") {
+          setWeakTopics(weakResult.value);
+        } else {
+          setError(weakResult.reason instanceof ApiError ? weakResult.reason.message : "Could not load your subject analytics.");
+        }
+        if (performanceResult.status === "fulfilled") {
+          setOverview(performanceResult.value);
+        } else {
+          setError((current) => current ?? (performanceResult.reason instanceof ApiError ? performanceResult.reason.message : "Could not load your performance overview."));
         }
       })
       .finally(() => {
@@ -49,12 +53,16 @@ function AnalyticsDashboard() {
       .then((report) => {
         if (!cancelled) setRecommendations(report);
       })
-      .catch(() => undefined);
+      .catch((cause: unknown) => {
+        if (!cancelled) setError((current) => current ?? (cause instanceof ApiError ? cause.message : "Could not load your study recommendations."));
+      });
     api.questionPerformance()
       .then((report) => {
         if (!cancelled) setQuestionPerformance(report);
       })
-      .catch(() => undefined);
+      .catch((cause: unknown) => {
+        if (!cancelled) setError((current) => current ?? (cause instanceof ApiError ? cause.message : "Could not load question-level analytics."));
+      });
     return () => {
       cancelled = true;
     };
@@ -64,6 +72,7 @@ function AnalyticsDashboard() {
     if (status !== "authenticated") return;
     let cancelled = false;
     setHistoryLoading(true);
+    setHistoryError(null);
     api.studyHistory(historyPage)
       .then((attempts) => {
         if (cancelled) return;
@@ -73,7 +82,7 @@ function AnalyticsDashboard() {
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setError(cause instanceof ApiError ? cause.message : "Could not load your practice history.");
+          setHistoryError(cause instanceof ApiError ? cause.message : "Could not load your practice history.");
         }
       })
       .finally(() => {
@@ -321,7 +330,8 @@ function AnalyticsDashboard() {
           <span className="pill">{historyTotal} attempts</span>
         </div>
         {historyLoading ? <p className="mute">Loading your attempts…</p> : null}
-        {!historyLoading && history.length === 0 ? (
+        {historyError ? <p className="error" role="alert">{historyError}</p> : null}
+        {!historyLoading && !historyError && history.length === 0 ? (
           <div>
             <p className="muted">Your practice history will appear here after your first submitted test.</p>
             <Link className="button button-primary" href="/">Start practicing</Link>
