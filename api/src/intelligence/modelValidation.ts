@@ -157,9 +157,9 @@ export function evaluateClassifierCrossValidation(
 
 const candidateGrid: Record<HyperparameterCandidate["algorithm"], Array<Record<string, number>>> = {
   "logistic-regression": [
+    { iterations: 500, learningRate: 0.03 },
+    { iterations: 1000, learningRate: 0.05 },
     { iterations: 2000, learningRate: 0.03 },
-    { iterations: 4000, learningRate: 0.05 },
-    { iterations: 6000, learningRate: 0.03 },
   ],
   knn: [{ k: 3 }, { k: 5 }, { k: 7 }],
   "decision-tree": [{ maxDepth: 3 }, { maxDepth: 5 }, { maxDepth: 8 }],
