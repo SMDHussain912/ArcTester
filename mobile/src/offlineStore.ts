@@ -1,8 +1,17 @@
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
 
-const DATABASE_NAME = "arctester-offline.db";
-const dbPromise = SQLite.openDatabaseAsync(DATABASE_NAME);
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let configuredUserId: string | null = null;
+
+export function configureOfflineStore(userId: string): void {
+  if (!userId) throw new Error("A signed-in user is required for offline storage.");
+  if (configuredUserId !== userId) {
+    configuredUserId = userId;
+    dbPromise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
+    initialized = false;
+  }
+}
 
 export type OfflineExamQuestion = {
   id: string;
@@ -56,6 +65,9 @@ type AttemptRow = {
 let initialized = false;
 
 async function database() {
+  if (!dbPromise) {
+    throw new Error("Offline storage has not been configured for this account.");
+  }
   const db = await dbPromise;
   if (!initialized) {
     await db.execAsync(`
