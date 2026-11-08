@@ -447,27 +447,44 @@ describe("analytics", () => {
     const body = json as {
       generatedAt: string;
       basedOnAttempts: number;
+      minimumAnswers: number;
+      weakAccuracyThreshold: number;
       recommendations: {
         id: string;
         priority: string;
         title: string;
         subject: string | null;
+        topic: string | null;
         mode: string;
         questionCount: number;
+        evidence: {
+          answeredQuestions: number;
+          incorrectAnswers: number;
+          accuracy: number | null;
+          minimumAnswers: number;
+          weakAccuracyThreshold: number;
+        } | null;
       }[];
     };
     expect(new Date(body.generatedAt).getTime()).toBeGreaterThan(0);
     expect(body.basedOnAttempts).toBeGreaterThanOrEqual(2);
-    const weakReport = await api.get("/analytics/weak-topics");
-    const weakSubjects = (weakReport.json as { subjects: { subject: string }[] }).subjects;
-    expect(body.recommendations[0]).toMatchObject({
-      id: "strengthen-weakest-subject",
+    expect(body.minimumAnswers).toBe(5);
+    expect(body.weakAccuracyThreshold).toBe(0.6);
+    const evidenced = body.recommendations.find((item) => item.evidence !== null);
+    expect(evidenced).toMatchObject({
+      id: expect.stringContaining("revise-topic-"),
       priority: "high",
-      subject: weakSubjects[0].subject,
       mode: "practice",
       questionCount: 15,
+      evidence: {
+        answeredQuestions: 5,
+        incorrectAnswers: 5,
+        accuracy: 0,
+        minimumAnswers: 5,
+        weakAccuracyThreshold: 0.6,
+      },
     });
-    expect(body.recommendations.some((item) => item.id === "review-mistakes")).toBe(true);
+    expect(body.recommendations.some((item) => item.id.startsWith("review-topic-mistakes-"))).toBe(true);
   });
 
   it("GET /analytics/history lists submitted attempts", async () => {
