@@ -258,6 +258,65 @@ describe("analytics", () => {
     });
   });
 
+  it("keeps practice analytics classification stable after question-bank edits", async () => {
+    const originalSubject = await server.db.subject.create({ data: { name: "Snapshot Subject" } });
+    const originalTopic = await server.db.topic.create({
+      data: { name: "Original Topic", subjectId: originalSubject.id },
+    });
+    const replacementSubject = await server.db.subject.create({ data: { name: "Renamed Subject" } });
+    const replacementTopic = await server.db.topic.create({
+      data: { name: "Replacement Topic", subjectId: replacementSubject.id },
+    });
+    const question = await server.db.question.create({
+      data: {
+        subjectId: originalSubject.id,
+        topicId: originalTopic.id,
+        text: "Snapshot classification fixture?",
+        options: JSON.stringify(["A", "B", "C", "D"]),
+        correctIndex: 0,
+        questionHash: "snapshot-classification-fixture",
+        difficulty: "easy",
+      },
+    });
+
+    const created = await api.post("/tests", {
+      mode: "practice",
+      subject: originalSubject.name,
+      count: 1,
+    });
+    expect(created.status).toBe(201);
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    expect(attempt.questions[0].id).toBe(question.id);
+    const submitted = await api.post(`/tests/${attempt.attemptId}/submit`, {
+      answers: [{ questionId: question.id, selectedIndex: 0 }],
+    });
+    expect(submitted.status).toBe(200);
+
+    const snapshot = await server.db.attemptAnswer.findFirstOrThrow({
+      where: { attemptId: attempt.attemptId, questionId: question.id },
+    });
+    expect(snapshot).toMatchObject({
+      subjectSnapshot: "Snapshot Subject",
+      topicSnapshot: "Original Topic",
+      difficultySnapshot: "easy",
+    });
+
+    await server.db.question.update({
+      where: { id: question.id },
+      data: {
+        subjectId: replacementSubject.id,
+        topicId: replacementTopic.id,
+        difficulty: "hard",
+      },
+    });
+
+    const report = await api.get("/analytics/weak-topics");
+    expect(report.status).toBe(200);
+    const subjects = (report.json as { subjects: { subject: string }[] }).subjects;
+    expect(subjects.some((row) => row.subject === "Snapshot Subject")).toBe(true);
+    expect(subjects.some((row) => row.subject === "Renamed Subject")).toBe(false);
+  });
+
   it("does not include unfinished attempts in completed history or analytics", async () => {
     const created = await api.post("/tests", {
       mode: "practice",
