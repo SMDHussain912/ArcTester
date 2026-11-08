@@ -50,6 +50,16 @@ const AssignExamSchema = z.object({
 });
 
 
+const SaveExamAnswersSchema = z.object({
+  answers: z.array(z.object({
+    examQuestionId: z.string().min(1).max(64),
+    selectedIndex: z.number().int().min(0).max(3).nullable(),
+  })).min(1).max(500),
+}).refine((input) => new Set(input.answers.map((answer) => answer.examQuestionId)).size === input.answers.length, {
+  message: "Each exam question may appear only once in an answer save.",
+  path: ["answers"],
+});
+
 const SubmitExamSchema = z
   .object({
     attemptUuid: z.string().uuid(),
@@ -1221,6 +1231,84 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/exams/assignments/:id/answers", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: { session: { include: { answers: { orderBy: { updatedAt: "asc" } } } } },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      res.json({
+        ok: true,
+        answers: assignment.session?.answers.map((answer) => ({
+          examQuestionId: answer.examQuestionId,
+          selectedIndex: answer.selectedIndex,
+          updatedAt: answer.updatedAt,
+        })) ?? [],
+      });
+    } catch (error) { next(error); }
+  });
+
+  router.put("/exams/assignments/:id/answers", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = SaveExamAnswersSchema.parse(req.body);
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: {
+          session: true,
+          submission: { select: { id: true } },
+          examVersion: { include: { questions: { select: { id: true, options: true } } } },
+        },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (assignment.submission) return next(conflict("This exam has already been submitted."));
+      if (!assignment.session || assignment.session.status !== "ACTIVE" || !assignment.session.startedAt) {
+        return next(conflict("There is no active exam session to save answers."));
+      }
+      const now = new Date();
+      const deadline = new Date(
+        assignment.session.startedAt.getTime() +
+        assignment.examVersion.durationMinutes * 60_000 +
+        assignment.session.pausedDurationMs
+      );
+      if (now > deadline || (assignment.dueAt && now > assignment.dueAt)) {
+        return next(forbidden("The examination time has expired."));
+      }
+      const questionById = new Map(assignment.examVersion.questions.map((question) => [question.id, question]));
+      for (const answer of input.answers) {
+        const question = questionById.get(answer.examQuestionId);
+        if (!question) return next(badRequest("An answer is for a question not in this exam."));
+        const optionCount = parseOptions(question.options).length;
+        if (answer.selectedIndex !== null && answer.selectedIndex >= optionCount) {
+          return next(badRequest("The selected option does not exist for this question."));
+        }
+      }
+      await db.$transaction(async (tx) => {
+        for (const answer of input.answers) {
+          await tx.examSessionAnswer.upsert({
+            where: {
+              sessionId_examQuestionId: {
+                sessionId: assignment.session!.id,
+                examQuestionId: answer.examQuestionId,
+              },
+            },
+            create: {
+              sessionId: assignment.session!.id,
+              examQuestionId: answer.examQuestionId,
+              selectedIndex: answer.selectedIndex,
+            },
+            update: { selectedIndex: answer.selectedIndex },
+          });
+        }
+        await tx.examSession.update({
+          where: { id: assignment.session!.id },
+          data: { lastActivityAt: now },
+        });
+      });
+      res.json({ ok: true, savedAt: now, savedCount: input.answers.length });
+    } catch (error) { next(error); }
+  });
+
   router.post("/exams/assignments/:id/session/heartbeat", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ event: z.enum(["HEARTBEAT", "FOCUS_LOST", "FOCUS_RESTORED", "CONNECTION_RESTORED"]).default("HEARTBEAT") }).parse(req.body ?? {});
@@ -1419,6 +1507,7 @@ export function examRouter(db: PrismaClient): Router {
 
       const serverSubmittedAt = new Date();
       let examSession = assignment.session;
+      const offlineSessionReconciled = !examSession;
       if (!examSession) {
         // Offline attempts cannot create a live server session while disconnected.
         // Reconcile the locally recorded start time when the queued submission arrives.
@@ -1498,6 +1587,7 @@ export function examRouter(db: PrismaClient): Router {
       const staleHeartbeat = !examSession.lastHeartbeatAt ||
         serverSubmittedAt.getTime() - examSession.lastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
+        offlineSessionReconciled ||
         serverSubmittedAt.getTime() > startedAt.getTime() + durationMs + 60000 ||
         staleHeartbeat ||
         (assignment.availableFrom !== null && startedAt < assignment.availableFrom) ||

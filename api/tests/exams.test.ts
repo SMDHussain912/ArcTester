@@ -291,6 +291,35 @@ describe("versioned exam management", () => {
     expect(response.status).toBe(404);
   });
 
+  it("saves assigned-exam answers on the server and restores them after a reload", async () => {
+    const assignment = await server.db.examAssignment.findUniqueOrThrow({
+      where: { id: assignmentId },
+      select: { examVersionId: true },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: assignment.examVersionId },
+    });
+    const started = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(started.status).toBe(200);
+    const empty = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
+    expect(empty.status).toBe(200);
+    expect(empty.json.answers).toEqual([]);
+    const saved = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      answers: [{ examQuestionId: question.id, selectedIndex: 2 }],
+    }, studentCookie);
+    expect(saved.status).toBe(200);
+    expect(saved.json.savedCount).toBe(1);
+    const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
+    expect(restored.status).toBe(200);
+    expect(restored.json.answers).toEqual([expect.objectContaining({ examQuestionId: question.id, selectedIndex: 2 })]);
+    const foreign = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, secondStudentCookie);
+    expect(foreign.status).toBe(404);
+    const invalid = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      answers: [{ examQuestionId: "not-in-this-exam", selectedIndex: 0 }],
+    }, studentCookie);
+    expect(invalid.status).toBe(400);
+  });
+
   it("scores offline submissions on the server and safely handles retries", async () => {
     const question = await server.db.examVersionQuestion.findFirstOrThrow();
     const started = await request(
@@ -531,7 +560,7 @@ describe("versioned exam management", () => {
     const question = await server.db.examVersionQuestion.findFirstOrThrow({
       where: { examVersionId: version.id },
     });
-    const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const startedAt = new Date().toISOString();
     const submitted = await request(
       `/exams/assignments/${offlineAssignment.id}/submission`,
       "POST",

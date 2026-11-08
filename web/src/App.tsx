@@ -407,7 +407,9 @@ export default function App() {
       const sessionResponse = await request<{ session: { startedAt: string; serverTime: string; deadline: string | null; status: string } }>(
         `/exams/assignments/${assignmentId}/session/start`, { method: "POST", body: JSON.stringify({}) },
       );
-      setActiveAssignmentPackage(response.package);
+      const serverSaved = await request<{ answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
+        `/exams/assignments/${assignmentId}/answers`,
+      );
       let restoredAnswers: Record<string, number> = {};
       try {
         const cached = JSON.parse(localStorage.getItem(assignedAnswersKey(assignmentId)) ?? "{}") as Record<string, unknown>;
@@ -417,6 +419,11 @@ export default function App() {
           return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
         }));
       } catch { localStorage.removeItem(assignedAnswersKey(assignmentId)); }
+      const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
+        answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
+      ));
+      restoredAnswers = { ...restoredAnswers, ...serverAnswers };
+      setActiveAssignmentPackage(response.package);
       setAssignmentAnswers(restoredAnswers);
       setAssignmentStartedAt(sessionResponse.session.startedAt);
       setAssignmentDeadline(sessionResponse.session.deadline);
@@ -427,6 +434,23 @@ export default function App() {
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
+    const assignmentId = activeAssignmentPackage.assignmentId;
+    const timer = window.setTimeout(() => {
+      void request(`/exams/assignments/${assignmentId}/answers`, {
+        method: "PUT",
+        body: JSON.stringify({
+          answers: activeAssignmentPackage.questions.map((question) => ({
+            examQuestionId: question.id,
+            selectedIndex: assignmentAnswers[question.id] ?? null,
+          })),
+        }),
+      }).catch((cause) => setError(`Server autosave failed: ${(cause as Error).message}. Your local backup is still available.`));
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused, assignmentAnswers]);
 
   function selectAssignedAnswer(questionId: string, selectedIndex: number) {
     if (!activeAssignmentPackage) return;
@@ -1655,7 +1679,7 @@ export default function App() {
       <main className="main-content">
         {activeAssignmentPackage ? (
           <section className="assigned-exam-session">
-            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Leave this exam? Your answers are saved on this device. You can reopen the exam and continue while time remains.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentDeadline(null); setAssignmentSessionPaused(false); setAssignmentAutoSubmitTriggered(false); } }}>Leave exam</button></div>
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Leave this exam? Your answers are saved on this device and synced to the server while online. You can reopen the exam and continue while time remains.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentDeadline(null); setAssignmentSessionPaused(false); setAssignmentAutoSubmitTriggered(false); } }}>Leave exam</button></div>
             {assignmentSessionPaused && <p className="notice session-paused" role="status">Session paused or awaiting invigilator action. The server-controlled timer is held.</p>}
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}

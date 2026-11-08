@@ -169,6 +169,7 @@ model ExamVersionQuestion {
   @@unique([examVersionId, position])
   @@index([sourceQuestionId])
   submissionAnswers ExamSubmissionAnswer[]
+  sessionAnswers   ExamSessionAnswer[]
 }
 
 model ExamAssignment {
@@ -302,6 +303,7 @@ model ExamSession {
   disconnectCount  Int                @default(0)
   createdAt        DateTime           @default(now())
   events           ExamSessionEvent[]
+  answers          ExamSessionAnswer[]
 
   @@index([status, lastHeartbeatAt])
   @@index([studentId, status])
@@ -319,4 +321,17 @@ model ExamSessionEvent {
 
   @@index([sessionId, createdAt])
   @@index([actorId])
+}
+
+model ExamSessionAnswer {
+  id             String               @id @default(cuid())
+  session        ExamSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId      String
+  examQuestion   ExamVersionQuestion  @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  examQuestionId String
+  selectedIndex  Int?
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([sessionId, examQuestionId])
+  @@index([examQuestionId])
 }
