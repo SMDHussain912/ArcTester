@@ -82,8 +82,12 @@ export default function AdminPage() {
     try {
       const result = await api.createAdminExam({
         title, description, instructions, durationMinutes: duration,
-        shuffleQuestions: false, shuffleOptions: false,
-        questions: selectedQuestions.map((questionId) => ({ questionId, marks: 1, negativeMarks: 0 })),
+        shuffleQuestions, shuffleOptions,
+        questions: selectedQuestions.map((questionId) => ({
+          questionId,
+          marks: defaultMarks,
+          negativeMarks,
+        })),
       });
       setNotice("Draft exam created. Publish it from the Exams tab when it is ready.");
       setTitle(""); setDescription(""); setSelectedQuestions([]);
