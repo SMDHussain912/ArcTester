@@ -551,6 +551,11 @@ export const api = {
   importAdminJson: (questions: unknown[]) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/json", json({ questions })),
   validateAdminPaper: (body: { durationMinutes: number; questions: { questionId: number; marks: number; negativeMarks: number }[] }) =>
     request<{ ok: true; valid: boolean; errors: string[]; warnings: string[]; totalQuestions: number; totalMarks: number; averageSecondsPerQuestion: number; subjects: { subject: string; count: number; percentage: number }[]; difficulties: { difficulty: string; count: number; percentage: number }[] }>("/admin/exams/validate-paper", json(body)),
+  adminLatestExamVersion: (id: string) =>
+    request<{ ok: true; exam: { id: string; title: string; description: string; status: string; version: { id: string; version: number; instructions: string; durationMinutes: number; shuffleQuestions: boolean; shuffleOptions: boolean; publishedAt: string | null; questions: { sourceQuestionId: number | null; position: number; subject: string; topic: string | null; text: string; marks: number; negativeMarks: number }[] } | null } }>(`/admin/exams/${id}/latest-version`),
+  cloneAdminExam: (id: string) => request<{ ok: true; exam: AdminExam }>(`/admin/exams/${id}/clone`, json({})),
+  updateAdminExam: (id: string, body: { title: string; description: string; instructions: string; durationMinutes: number; shuffleQuestions: boolean; shuffleOptions: boolean; questions: { questionId: number; marks: number; negativeMarks: number }[] }) =>
+    request<{ ok: true; exam: AdminExam }>(`/admin/exams/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   createAdminExam: (body: {
     title: string;
     description: string;
