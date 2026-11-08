@@ -195,7 +195,7 @@ describe("student analytics page", () => {
     expect(screen.getByText("Your next study steps")).toBeInTheDocument();
     expect(screen.getByText("Strengthen Physics")).toBeInTheDocument();
     expect(screen.getByText("high priority")).toBeInTheDocument();
-    expect(screen.getByText("Question-level performance")).toBeInTheDocument();
+    expect(screen.getByText("Practice question-level performance")).toBeInTheDocument();
     expect(screen.getByText("Question #41 · Physics")).toBeInTheDocument();
     expect(screen.getByText("20% accuracy")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute(
