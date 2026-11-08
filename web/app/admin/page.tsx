@@ -49,6 +49,7 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  const [sessionActionId, setSessionActionId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -98,6 +99,7 @@ export default function AdminPage() {
     const reason = action === "TERMINATE" ? window.prompt("Reason for terminating this candidate session?") : "";
     if (action === "TERMINATE" && reason === null) return;
     if (!window.confirm(`${action} session for ${session.student.email}?`)) return;
+    setSessionActionId(session.id);
     try {
       await api.adminSessionAction(session.id, action, reason ?? "");
       const [refreshed, register] = await Promise.all([api.adminLiveSessions(), api.adminExamAttendance()]);
@@ -107,6 +109,8 @@ export default function AdminPage() {
       setError("");
     } catch (cause: unknown) {
       showError(cause, "Could not update the candidate session.");
+    } finally {
+      setSessionActionId(null);
     }
   }
 
@@ -463,8 +467,8 @@ export default function AdminPage() {
                       <td>{session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "—"}</td>
                       <td>{session.focusLossCount}</td><td>{session.disconnectCount}</td>
                       <td><div className="row" style={{ gap: 6 }}>
-                        {session.status === "ACTIVE" ? <button className="button button-secondary button-small" onClick={() => void controlSession(session, "PAUSE")}>Pause</button> : <button className="button button-secondary button-small" onClick={() => void controlSession(session, "RESUME")}>Resume</button>}
-                        <button className="button button-quiet button-small" onClick={() => void controlSession(session, "TERMINATE")}>Terminate</button>
+                        {session.status === "ACTIVE" ? <button className="button button-secondary button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "PAUSE")}>{sessionActionId === session.id ? "Updating…" : "Pause"}</button> : <button className="button button-secondary button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "RESUME")}>{sessionActionId === session.id ? "Updating…" : "Resume"}</button>}
+                        <button className="button button-quiet button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "TERMINATE")}>Terminate</button>
                       </div></td>
                     </tr>
                   ))}</tbody>
