@@ -110,6 +110,7 @@ export default function App() {
   const [activeAssignmentPackage, setActiveAssignmentPackage] = useState<AssignedExamPackage | null>(null);
   const [assignmentAnswers, setAssignmentAnswers] = useState<Record<string, number>>({});
   const [assignmentStartedAt, setAssignmentStartedAt] = useState<string | null>(null);
+  const [assignmentClock, setAssignmentClock] = useState(Date.now());
   const [examTitle, setExamTitle] = useState("");
   const [examDescription, setExamDescription] = useState("");
   const [examInstructions, setExamInstructions] = useState("");
@@ -201,6 +202,22 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    const interval = window.setInterval(() => setAssignmentClock(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [activeAssignmentPackage, assignmentStartedAt]);
+
+  const assignmentRemainingSeconds = activeAssignmentPackage && assignmentStartedAt
+    ? Math.max(0, activeAssignmentPackage.durationMinutes * 60 - Math.floor((assignmentClock - new Date(assignmentStartedAt).getTime()) / 1000))
+    : 0;
+
+  useEffect(() => {
+    if (activeAssignmentPackage && assignmentStartedAt && assignmentRemainingSeconds === 0 && !busy) {
+      void submitAssignedExam(true);
+    }
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentRemainingSeconds, busy]);
+
+  useEffect(() => {
     if (user?.role !== "ADMIN") return;
     request<{ invitations: Invitation[] }>("/auth/invitations")
       .then(({ invitations: items }) => setInvitations(items))
@@ -237,14 +254,15 @@ export default function App() {
       const response = await request<{ package: AssignedExamPackage }>(`/exams/assignments/${assignmentId}/package`);
       setActiveAssignmentPackage(response.package);
       setAssignmentAnswers({});
-      setAssignmentStartedAt(new Date().toISOString());
+      setAssignmentStartedAt(response.package.serverTime);
+      setAssignmentClock(Date.now());
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
 
-  async function submitAssignedExam() {
+  async function submitAssignedExam(force = false) {
     if (!activeAssignmentPackage || !assignmentStartedAt) return;
-    if (!window.confirm("Submit this exam now? You cannot change answers after submission.")) return;
+    if (!force && !window.confirm("Submit this exam now? You cannot change answers after submission.")) return;
     setBusy(true);
     setError("");
     try {
@@ -1196,7 +1214,7 @@ export default function App() {
       <main className="main-content">
         {activeAssignmentPackage ? (
           <section className="assigned-exam-session">
-            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes</p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); } }}>Exit exam</button></div>
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); } }}>Exit exam</button></div>
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
             <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => setAssignmentAnswers((current) => ({ ...current, [question.id]: optionIndex }))}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
