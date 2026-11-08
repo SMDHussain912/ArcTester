@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLearningConcept, listLearningConcepts } from "./conceptKnowledge.js";
+import { getLearningConcept, getLearningConceptsForTopic, listLearningConcepts } from "./conceptKnowledge.js";
 
 describe("curated concept knowledge", () => {
   it("lists concepts with definitions and learning supports", () => {
@@ -23,5 +23,22 @@ describe("curated concept knowledge", () => {
   it("returns a concept by slug and null for unknown concepts", () => {
     expect(getLearningConcept("stack")?.title).toBe("Stack");
     expect(getLearningConcept("not-a-concept")).toBeNull();
+  });
+});
+
+
+describe("getLearningConceptsForTopic", () => {
+  it("returns curated concepts for an exact topic match", () => {
+    expect(getLearningConceptsForTopic("Data Structures")).toEqual([
+      { slug: "stack", title: "Stack" },
+      { slug: "queue", title: "Queue" },
+      { slug: "linked-list", title: "Linked List" },
+    ]);
+  });
+
+  it("does not guess when topic is missing or only loosely similar", () => {
+    expect(getLearningConceptsForTopic(null)).toEqual([]);
+    expect(getLearningConceptsForTopic("Data Structure")).toEqual([]);
+    expect(getLearningConceptsForTopic("")).toEqual([]);
   });
 });
