@@ -5,6 +5,7 @@ import {
   parseDatasetCsv,
   prepareDataset,
   runClassifierExperiments,
+  runTunedClassifierExperiments,
   runRegressionExperiment,
   serializeExperimentArtifact,
   splitDatasetRows,
@@ -57,6 +58,20 @@ describe("dataset-to-model pipeline", () => {
       expect(result.metrics.accuracy).toBeGreaterThanOrEqual(0);
       expect(result.metrics.accuracy).toBeLessThanOrEqual(1);
       expect(result.model).toBeTruthy();
+    }
+  });
+
+
+  it("tunes classifiers on training rows and evaluates the selected models on the held-out set", () => {
+    const data = generateSyntheticDatasets({ rowsPerDataset: 180, seed: 2027 });
+    const prepared = prepareDataset(data.examReadiness, SYNTHETIC_DATASET_DEFINITIONS.examReadiness, { seed: 29 });
+    const results = runTunedClassifierExperiments(prepared.train, prepared.test, { folds: 4, seed: 29 });
+    expect(results).toHaveLength(4);
+    for (const result of results) {
+      expect(result.crossValidation.rows).toBe(prepared.trainRows);
+      expect(result.crossValidation.folds).toBe(4);
+      expect(result.metrics.rows).toBe(prepared.testRows);
+      expect(Object.keys(result.parameters).length).toBeGreaterThan(0);
     }
   });
 
