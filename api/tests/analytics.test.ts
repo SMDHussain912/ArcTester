@@ -312,9 +312,14 @@ describe("analytics", () => {
 
     const report = await api.get("/analytics/weak-topics");
     expect(report.status).toBe(200);
-    const subjects = (report.json as { subjects: { subject: string }[] }).subjects;
-    expect(subjects.some((row) => row.subject === "Snapshot Subject")).toBe(true);
-    expect(subjects.some((row) => row.subject === "Renamed Subject")).toBe(false);
+    const breakdown = report.json as {
+      subjects: { subject: string }[];
+      topics: { subject: string; topic: string | null }[];
+    };
+    expect(breakdown.subjects.some((row) => row.subject === "Snapshot Subject")).toBe(true);
+    expect(breakdown.subjects.some((row) => row.subject === "Renamed Subject")).toBe(false);
+    expect(breakdown.topics.some((row) => row.topic === "Original Topic")).toBe(true);
+    expect(breakdown.topics.some((row) => row.topic === "Replacement Topic")).toBe(false);
   });
 
   it("does not include unfinished attempts in completed history or analytics", async () => {
