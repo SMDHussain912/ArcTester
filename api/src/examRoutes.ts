@@ -439,6 +439,28 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/exams/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const exam = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1, include: { questions: { orderBy: { position: "asc" } } } } },
+      });
+      if (!exam) return next(notFound("Exam not found."));
+      const version = exam.versions[0];
+      res.json({ ok: true, exam: {
+        id: exam.id, title: exam.title, description: exam.description, status: exam.status,
+        version: version ? {
+          id: version.id, version: version.version, instructions: version.instructions,
+          durationMinutes: version.durationMinutes, shuffleQuestions: version.shuffleQuestions,
+          shuffleOptions: version.shuffleOptions,
+          questions: version.questions.map((question) => ({
+            questionId: question.sourceQuestionId, marks: question.marks, negativeMarks: question.negativeMarks,
+          })),
+        } : null,
+      } });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/exams", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const exams = await db.exam.findMany({
@@ -525,6 +547,56 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.patch("/admin/exams/:id", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const input = CreateExamSchema.parse(req.body);
+      const existing = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+      });
+      if (!existing) return next(notFound("Exam not found."));
+      if (existing.status === "ARCHIVED") return next(conflict("Archived exams cannot be edited. Duplicate the exam to create an active copy."));
+      const questionIds = input.questions.map((question) => question.questionId);
+      if (new Set(questionIds).size !== questionIds.length) return next(badRequest("An exam cannot contain the same question more than once."));
+      const sourceQuestions = await db.question.findMany({
+        where: { id: { in: questionIds } }, include: { subject: true, topic: true },
+      });
+      if (sourceQuestions.length !== questionIds.length) return next(badRequest("One or more selected question IDs do not exist."));
+      const questionById = new Map(sourceQuestions.map((question) => [question.id, question]));
+      const snapshots = input.questions.map((selection, position) => {
+        const question = questionById.get(selection.questionId)!;
+        return {
+          position, sourceQuestionId: question.id, subject: question.subject.name,
+          topic: question.topic?.name ?? null, text: question.text,
+          options: JSON.stringify(parseOptions(question.options)), correctIndex: question.correctIndex,
+          explanation: question.explanation, marks: selection.marks, negativeMarks: selection.negativeMarks,
+        };
+      });
+      const nextVersion = (existing.versions[0]?.version ?? 0) + 1;
+      const exam = await db.$transaction(async (tx) => {
+        await tx.exam.update({
+          where: { id: existing.id },
+          data: { title: input.title, description: input.description, status: "DRAFT" },
+        });
+        const version = await tx.examVersion.create({
+          data: {
+            examId: existing.id, version: nextVersion, instructions: input.instructions,
+            durationMinutes: input.durationMinutes, shuffleQuestions: input.shuffleQuestions,
+            shuffleOptions: input.shuffleOptions,
+          },
+        });
+        await tx.examVersionQuestion.createMany({
+          data: snapshots.map((snapshot) => ({ ...snapshot, examVersionId: version.id })),
+        });
+        return tx.exam.findUniqueOrThrow({
+          where: { id: existing.id },
+          include: { versions: { orderBy: { version: "desc" }, take: 1, include: { _count: { select: { questions: true, assignments: true } } } } },
+        });
+      });
+      res.json({ ok: true, exam });
+    } catch (error) { next(error); }
   });
 
   router.post("/admin/exams/:id/clone", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
