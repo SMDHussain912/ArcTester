@@ -11,7 +11,11 @@ const db = new PrismaClient();
  * additional exact origins (for example a phone's LAN URL) must be listed in
  * CORS_ORIGINS as a comma-separated environment variable.
  */
-function localCors(_req: express.Request, res: express.Response, next: express.NextFunction): void {
+function localCors(
+  _req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void {
   const origin = _req.headers.origin ?? "";
   const configuredOrigins = new Set(
     (process.env.CORS_ORIGINS ?? "")
