@@ -755,7 +755,7 @@ export default function App() {
     const picked: number[] = [];
     const shortfalls: string[] = [];
     for (const subject of subjects) {
-      const quota = Math.max(0, subjectQuotas[subject] ?? 0);
+      const quota = Math.max(0, Math.floor(subjectQuotas[subject] ?? 0));
       let pool = adminQuestions.filter((question) => question.subject === subject && !picked.includes(question.id));
       const selectedForSubject = selectedTopics.filter((key) => key.startsWith(`${subject}::`));
       if (topicSelectionMode === "include" && selectedForSubject.length > 0) {
@@ -1770,7 +1770,7 @@ export default function App() {
                   <div className="practice-builder-section">
                     <strong>3. Configure your paper</strong>
                     <div className="practice-config-grid">
-                      <label>Number of questions<input type="number" min={1} max={200} value={practiceQuestionCount} onChange={(event) => setPracticeQuestionCount(Math.max(1, Math.min(200, Number(event.target.value) || 1)))} /></label>
+                      <label>Number of questions<input type="number" min={1} max={200} value={practiceQuestionCount} onChange={(event) => setPracticeQuestionCount(Math.max(1, Math.min(200, Math.floor(Number(event.target.value) || 1))))} /></label>
                       <label>Difficulty<select value={practiceDifficulty} onChange={(event) => setPracticeDifficulty(event.target.value as typeof practiceDifficulty)}><option value="any">All difficulties</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
                     </div>
                     <p className="practice-helper">Questions are distributed as evenly as possible across selected subjects. If a subject has too few matching questions, ArcTester will tell you.</p>
