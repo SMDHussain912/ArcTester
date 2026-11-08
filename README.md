@@ -111,7 +111,8 @@ Question bank (run from the repo root):
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
-- [ ] **7 (in progress).** Docker Compose deployment, GitHub Actions CI, LAN CORS support; native mobile client remains
+- [ ] **7 (in progress).** Docker Compose deployment, GitHub Actions CI,
+  LAN CORS support; native mobile client remains.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
