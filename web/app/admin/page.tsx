@@ -200,7 +200,7 @@ export default function AdminPage() {
         return;
       }
       if (validation.warnings.length && !window.confirm(
-        "Paper blueprint warnings:\\n\\n" + validation.warnings.map((warning) => "• " + warning).join("\\n") + "\\n\\nContinue and create this draft?"
+        "Paper blueprint warnings:\n\n" + validation.warnings.map((warning) => "• " + warning).join("\n") + "\n\nContinue and create this draft?"
       )) return;
       const payload = {
         title, description, instructions, durationMinutes: duration,
