@@ -164,6 +164,7 @@ model ExamVersionQuestion {
 
   @@unique([examVersionId, position])
   @@index([sourceQuestionId])
+  submissionAnswers ExamSubmissionAnswer[]
 }
 
 model ExamAssignment {
