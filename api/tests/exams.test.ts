@@ -211,6 +211,18 @@ describe("versioned exam management", () => {
     assignmentId = assignment.id;
   });
 
+  it("lists published papers in the student catalogue without exposing answer data", async () => {
+    const catalog = await request("/exams/catalog", "GET", undefined, studentCookie);
+    expect(catalog.status).toBe(200);
+    const papers = catalog.json.catalog as Array<{ examId: string; assignment: { id: string } | null; questionCount: number }>;
+    const paper = papers.find((item) => item.examId === examId);
+    expect(paper).toBeTruthy();
+    expect(paper?.assignment?.id).toBe(assignmentId);
+    expect(paper?.questionCount).toBe(1);
+    const anonymous = await request("/exams/catalog");
+    expect(anonymous.status).toBe(403);
+  });
+
   it("delivers a student package without answer keys or explanations", async () => {
     const list = await request("/exams/assigned", "GET", undefined, studentCookie);
     expect(list.status).toBe(200);
