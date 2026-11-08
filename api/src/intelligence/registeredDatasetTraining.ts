@@ -102,3 +102,33 @@ export function trainRegisteredDataset(
     testRows: split.test.length,
   }];
 }
+
+export interface RankedTrainingResult extends RegisteredTrainingResult {
+  rank: number;
+}
+
+function metricValue(metrics: object, key: string): number {
+  const value = (metrics as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * Ranks candidates trained and evaluated on the same holdout partition.
+ * This is an experiment leaderboard, not a production promotion decision.
+ */
+export function rankTrainingResults(
+  results: RegisteredTrainingResult[],
+  task: "regression" | "binary-classification",
+): RankedTrainingResult[] {
+  const sorted = [...results].sort((left, right) => {
+    const keys = task === "regression"
+      ? [{ key: "rmse", direction: 1 }, { key: "mae", direction: 1 }]
+      : [{ key: "f1", direction: -1 }, { key: "accuracy", direction: -1 }, { key: "precision", direction: -1 }, { key: "recall", direction: -1 }];
+    for (const metric of keys) {
+      const difference = metricValue(left.metrics, metric.key) - metricValue(right.metrics, metric.key);
+      if (difference !== 0) return difference * metric.direction;
+    }
+    return left.algorithm.localeCompare(right.algorithm);
+  });
+  return sorted.map((result, index) => ({ ...result, rank: index + 1 }));
+}
