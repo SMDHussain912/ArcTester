@@ -93,8 +93,9 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
 
   for (const attempt of attempts) {
     for (const answer of attempt.answers) {
-      const subject = answer.question.subject.name;
-      const topic = answer.question.topic?.name ?? null;
+      const hasSnapshot = answer.subjectSnapshot.length > 0;
+      const subject = hasSnapshot ? answer.subjectSnapshot : answer.question.subject.name;
+      const topic = hasSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
       const outcome = answer.chosen === null ? "unanswered" : answer.isCorrect ? "correct" : "wrong";
       const subjectCounts = bySubject.get(subject) ?? empty();
       subjectCounts[outcome] += 1;
