@@ -417,6 +417,35 @@ export function examRouter(db: PrismaClient): Router {
           submissionRate: assignments.length ? submitted.length / assignments.length : 0,
           averagePercentage,
         },
+        practice: {
+          completedAttempts: practiceAttempts.length,
+          questions: practiceCorrect + practiceIncorrect + practiceUnanswered,
+          correct: practiceCorrect,
+          incorrect: practiceIncorrect,
+          unanswered: practiceUnanswered,
+          accuracy: practiceAnswered > 0 ? practiceCorrect / practiceAnswered : null,
+          subjects: [...practiceBySubject.entries()].map(([subject, row]) => ({
+            subject,
+            ...row,
+            accuracy: row.correct + row.incorrect > 0
+              ? row.correct / (row.correct + row.incorrect)
+              : null,
+          })),
+        },
+        formalExams: {
+          graded: gradedSubmissions.length,
+          reviewRequired: submitted.filter((item) => item.submission?.status === "REVIEW_REQUIRED").length,
+          correct: formalCorrect,
+          incorrect: formalIncorrect,
+          unanswered: formalUnanswered,
+          subjects: [...formalBySubject.entries()].map(([subject, row]) => ({
+            subject,
+            ...row,
+            accuracy: row.correct + row.incorrect > 0
+              ? row.correct / (row.correct + row.incorrect)
+              : null,
+          })),
+        },
         exams: [...byExam.values()].map((item) => ({
           examId: item.examId,
           title: item.title,
