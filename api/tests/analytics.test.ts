@@ -179,6 +179,55 @@ describe("analytics", () => {
       },
     });
 
+    const reviewVersion = await server.db.examVersion.create({
+      data: {
+        examId: exam.id,
+        version: 2,
+        durationMinutes: 30,
+        publishedAt: new Date(),
+        questions: {
+          create: [{
+            position: 0,
+            subject: "Maths",
+            topic: "Algebra",
+            text: "Review fixture question?",
+            options: JSON.stringify(["A", "B", "C", "D"]),
+            correctIndex: 1,
+            explanation: "Review fixture explanation",
+            marks: 1,
+            negativeMarks: 0.25,
+          }],
+        },
+      },
+      include: { questions: true },
+    });
+    const reviewAssignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: reviewVersion.id,
+        studentId,
+        assignedById: admin.id,
+      },
+    });
+    await server.db.examSubmission.create({
+      data: {
+        assignmentId: reviewAssignment.id,
+        attemptUuid: "analytics-review-fixture-uuid",
+        startedAt: new Date(Date.now() - 60_000),
+        submittedAt: new Date(),
+        status: "REVIEW_REQUIRED",
+        score: 1,
+        maximumScore: 1,
+        answers: {
+          create: [{
+            examQuestionId: reviewVersion.questions[0].id,
+            selectedIndex: 1,
+            isCorrect: true,
+            awardedMarks: 1,
+          }],
+        },
+      },
+    });
+
     const response = await api.get("/analytics/overview");
     expect(response.status).toBe(200);
     const report = response.json as {
@@ -195,9 +244,9 @@ describe("analytics", () => {
     };
     expect(report.practice.completedAttempts).toBe(3);
     expect(report.formalExams).toMatchObject({
-      submissions: 1,
+      submissions: 2,
       graded: 1,
-      reviewRequired: 0,
+      reviewRequired: 1,
       score: 2,
       maximumScore: 2,
       scorePercentage: 100,
