@@ -1,6 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../lib/tensorflowInference", () => ({
+  createTensorflowBrowserPredictor: vi.fn().mockResolvedValue({
+    version: 2,
+    predict: vi.fn().mockResolvedValue(0.91),
+    dispose: vi.fn(),
+  }),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -87,6 +95,57 @@ describe("student analytics page", () => {
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))).toBe(
       false
     );
+  });
+
+  it("uses the approved TensorFlow population model and keeps the personal model as fallback", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path.endsWith("/auth/me")) return Promise.resolve(jsonResponse(200, {
+        ok: true, user: { id: 8, email: "hybrid@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/analytics/weak-topics")) return Promise.resolve(jsonResponse(200, { topics: [], subjects: [], weakest: null }));
+      if (path.endsWith("/analytics/overview")) return Promise.resolve(jsonResponse(200, overviewResponse(0.7, 30, 21)));
+      if (path.endsWith("/analytics/question-performance")) return Promise.resolve(jsonResponse(200, {
+        generatedAt: "2026-11-09T08:00:00.000Z", minimumAnswers: 5, weakAccuracyThreshold: 0.6,
+        insufficientSampleCount: 0, questions: [],
+      }));
+      if (path.endsWith("/analytics/history")) return Promise.resolve(jsonResponse(200, {
+        items: [], page: 1, limit: 10, total: 0, totalPages: 0,
+      }));
+      if (path.endsWith("/analytics/recommendations")) return Promise.resolve(jsonResponse(200, {
+        generatedAt: "2026-11-09T08:00:00.000Z", basedOnAttempts: 3, minimumAnswers: 5,
+        weakAccuracyThreshold: 0.6,
+        performanceExplanation: {
+          headline: "Build more practice evidence.", details: [], answeredQuestions: 30,
+          incorrectAnswers: 9, evidenceThreshold: 5, weakAccuracyThreshold: 0.6,
+        },
+        recommendations: [],
+      }));
+      if (path.endsWith("/analytics/score-prediction")) return Promise.resolve(jsonResponse(200, {
+        status: "ready", completedAttempts: 30, trainingSamples: 27, evaluationSamples: 9,
+        predictedScorePercent: 84,
+        predictionInterval: { lowerPercent: 76, upperPercent: 92, estimatedErrorPercent: 4.1, method: "walk-forward-rmse" },
+        modelMae: 0.08, baselineMae: 0.15, message: "Personal statistical estimate.",
+        populationFeatures: {
+          completed_attempts: 30, previous_accuracy: 0.7, recent_average_accuracy: 0.68,
+          overall_average_accuracy: 0.65, previous_question_count: 20,
+        },
+      }));
+      if (path.endsWith("/models/student-score-population/active/tensorflow")) {
+        return Promise.resolve(jsonResponse(200, { ok: true, artifact: { modelId: "student-score-population", version: 2 } }));
+      }
+      return Promise.resolve(jsonResponse(200, {}));
+    });
+
+    render(
+      <SessionProvider>
+        <AnalyticsPage />
+      </SessionProvider>
+    );
+
+    expect(await screen.findByText("91%")).toBeInTheDocument();
+    expect(screen.getByText("TensorFlow.js · v2")).toBeInTheDocument();
+    expect(screen.getByText(/other learners' raw attempts are never sent to your browser/i)).toBeInTheDocument();
   });
 
   it("shows accuracy, weak subjects and recent practice history", async () => {
