@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importFromJson } from "../src/importService.js";
-import { MAX_PROGRESS_IMPORT_ANSWERS } from "../src/analytics.js";
+import { MAX_PROGRESS_IMPORT_ANSWERS, RECOMMENDATION_RECENT_PRACTICE_DAYS } from "../src/analytics.js";
 import { buildApp } from "../src/index.js";
 import { bindSession, signUp, startTestServer, type TestServer } from "./server.js";
 
@@ -458,6 +458,10 @@ describe("analytics", () => {
   });
 
   it("GET /analytics/recommendations returns actions based on the learner's results", async () => {
+    await server.db.attempt.updateMany({
+      where: { userId: studentId, finishedAt: { not: null } },
+      data: { finishedAt: new Date(Date.now() - (RECOMMENDATION_RECENT_PRACTICE_DAYS + 1) * 24 * 60 * 60 * 1000) },
+    });
     const { status, json } = await api.get("/analytics/recommendations");
     expect(status).toBe(200);
     const body = json as {
