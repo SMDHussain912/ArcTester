@@ -304,13 +304,21 @@ describe("versioned exam management", () => {
     const empty = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
     expect(empty.status).toBe(200);
     expect(empty.json.answers).toEqual([]);
+    expect(empty.json.revision).toBe(0);
     const saved = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 0,
       answers: [{ examQuestionId: question.id, selectedIndex: 2 }],
     }, studentCookie);
     expect(saved.status).toBe(200);
-    expect(saved.json.savedCount).toBe(1);
+    expect(saved.json).toMatchObject({ savedCount: 1, revision: 1 });
+    const staleSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 0,
+      answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
+    }, studentCookie);
+    expect(staleSave.status).toBe(409);
     const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
     expect(restored.status).toBe(200);
+    expect(restored.json.revision).toBe(1);
     expect(restored.json.answers).toEqual([expect.objectContaining({ examQuestionId: question.id, selectedIndex: 2 })]);
     const foreign = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, secondStudentCookie);
     expect(foreign.status).toBe(404);

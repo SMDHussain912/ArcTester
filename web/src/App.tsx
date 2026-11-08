@@ -214,6 +214,7 @@ export default function App() {
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const assignmentAnswersRevisionRef = useRef(0);
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "review-queue" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
@@ -429,7 +430,7 @@ export default function App() {
       const sessionResponse = await request<{ session: { startedAt: string; serverTime: string; deadline: string | null; status: string } }>(
         `/exams/assignments/${assignmentId}/session/start`, { method: "POST", body: JSON.stringify({}) },
       );
-      const serverSaved = await request<{ answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
+      const serverSaved = await request<{ revision: number; answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
         `/exams/assignments/${assignmentId}/answers`,
       );
       let restoredAnswers: Record<string, number> = {};
@@ -441,6 +442,7 @@ export default function App() {
           return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
         }));
       } catch { localStorage.removeItem(assignedAnswersKey(assignmentId)); }
+      assignmentAnswersRevisionRef.current = serverSaved.revision ?? 0;
       const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
       ));
@@ -466,15 +468,17 @@ export default function App() {
     const timer = window.setTimeout(() => {
       // Serialize saves so an older, slower request cannot overwrite newer answers.
       const save = assignmentSaveQueueRef.current.catch(() => undefined).then(async () => {
-        await request(`/exams/assignments/${assignmentId}/answers`, {
+        const saved = await request<{ revision: number }>(`/exams/assignments/${assignmentId}/answers`, {
           method: "PUT",
           body: JSON.stringify({
+            revision: assignmentAnswersRevisionRef.current,
             answers: activeAssignmentPackage.questions.map((question) => ({
               examQuestionId: question.id,
               selectedIndex: assignmentAnswers[question.id] ?? null,
             })),
           }),
         });
+        assignmentAnswersRevisionRef.current = saved.revision;
         if (assignmentSaveSequenceRef.current === saveVersion) setAssignmentSaveStatus("saved");
       }).catch((cause) => {
         if (assignmentSaveSequenceRef.current === saveVersion) {

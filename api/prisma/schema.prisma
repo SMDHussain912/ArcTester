@@ -297,6 +297,7 @@ model ExamSession {
   lastActivityAt   DateTime?
   pausedAt         DateTime?
   pausedDurationMs Int                @default(0)
+  answersRevision  Int                @default(0)
   endedAt          DateTime?
   heartbeatCount   Int                @default(0)
   focusLossCount   Int                @default(0)

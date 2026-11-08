@@ -1,0 +1,1 @@
+ALTER TABLE "ExamSession" ADD COLUMN "answersRevision" INTEGER NOT NULL DEFAULT 0;

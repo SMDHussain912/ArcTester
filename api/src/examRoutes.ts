@@ -51,6 +51,7 @@ const AssignExamSchema = z.object({
 
 
 const SaveExamAnswersSchema = z.object({
+  revision: z.number().int().nonnegative().optional(),
   answers: z.array(z.object({
     examQuestionId: z.string().min(1).max(64),
     selectedIndex: z.number().int().min(0).max(3).nullable(),
@@ -1143,6 +1144,7 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment) return next(notFound("Exam assignment not found."));
       res.json({
         ok: true,
+        revision: assignment.session?.answersRevision ?? 0,
         answers: assignment.session?.answers.map((answer) => ({
           examQuestionId: answer.examQuestionId,
           selectedIndex: answer.selectedIndex,
@@ -1186,7 +1188,17 @@ export function examRouter(db: PrismaClient): Router {
           return next(badRequest("The selected option does not exist for this question."));
         }
       }
-      await db.$transaction(async (tx) => {
+      const revision = await db.$transaction(async (tx) => {
+        const bumped = await tx.examSession.updateMany({
+          where: {
+            id: assignment.session!.id,
+            ...(input.revision === undefined ? {} : { answersRevision: input.revision }),
+          },
+          data: { answersRevision: { increment: 1 }, lastActivityAt: now },
+        });
+        if (bumped.count !== 1) {
+          throw conflict("These answers were changed in another session. Reload the exam before continuing.");
+        }
         for (const answer of input.answers) {
           await tx.examSessionAnswer.upsert({
             where: {
@@ -1203,12 +1215,13 @@ export function examRouter(db: PrismaClient): Router {
             update: { selectedIndex: answer.selectedIndex },
           });
         }
-        await tx.examSession.update({
+        const updated = await tx.examSession.findUniqueOrThrow({
           where: { id: assignment.session!.id },
-          data: { lastActivityAt: now },
+          select: { answersRevision: true },
         });
+        return updated.answersRevision;
       });
-      res.json({ ok: true, savedAt: now, savedCount: input.answers.length });
+      res.json({ ok: true, savedAt: now, savedCount: input.answers.length, revision });
     } catch (error) { next(error); }
   });
 
