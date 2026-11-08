@@ -718,6 +718,22 @@ export default function App() {
             </div>
           </section>
           <section hidden={activePage !== "question-bank"} id="admin-question-bank">
+            <section className="panel import-workspace">
+              <div className="section-head"><div><p className="eyebrow">BULK QUESTION INGESTION</p><h2>Upload questions</h2><p className="muted">Import AP ECET questions in bulk using CSV or JSON, or paste your dataset.</p></div></div>
+              <div className="import-toolbar">
+                <label className="import-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void loadImportFile(event.dataTransfer.files?.[0]); }}>
+                  <strong>Choose a CSV or JSON file</strong><span>Click to browse or drag a file here · max 8 MB</span>
+                  <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => void loadImportFile(event.target.files?.[0])} />
+                </label>
+                <div className="import-template-actions"><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("csv")}>Download CSV template</button><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("json")}>Download JSON template</button></div>
+              </div>
+              <div className="import-mode-row"><label>Format<select value={importFormat} onChange={(event) => { setImportFormat(event.target.value as "csv" | "json"); setImportPreviewReady(false); }}><option value="csv">CSV with headers</option><option value="json">JSON question array</option></select></label><span className="muted">Correct answer index: 0 = A, 1 = B, 2 = C, 3 = D.</span></div>
+              <label>Paste question data<textarea rows={8} value={importText} onChange={(event) => { setImportText(event.target.value); setImportReport(null); setImportPreviewReady(false); }} placeholder={importFormat === "csv" ? "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty" : '[["Computer Science","Question text",["A","B","C","D"],1,"Explanation"]]'} /></label>
+              <div className="import-footer"><span className="muted">{importText.trim() ? "Data loaded — preview before import" : "No data loaded yet"}</span><div className="import-confirm-actions"><button className="ghost" type="button" disabled={!importText.trim() || importBusy} onClick={previewQuestionImport}>Preview import</button><button className="primary" type="button" disabled={importBusy || !importPreviewReady} onClick={() => void importQuestions()}>{importBusy ? "Importing…" : "Confirm & import"}</button></div></div>
+              {importPreviewError && <p className="error">{importPreviewError}</p>}
+              {importPreviewReady && <div className="import-preview"><strong>Import preview ready</strong><span>Format structure checked. Duplicate detection and row validation will be reported after confirmation.</span><pre>{importText.split(/\r?\n/).slice(0, 6).join("\n")}</pre></div>}
+              {importReport && <div className="import-report" role="status"><div><strong>{importReport.added}</strong><span>Added</span></div><div><strong>{importReport.duplicates}</strong><span>Duplicates skipped</span></div><div><strong>{importReport.invalid.length}</strong><span>Invalid rows</span></div><div><strong>{importReport.total}</strong><span>Rows processed</span></div>{importReport.invalid.length > 0 && <details><summary>Review invalid rows</summary>{importReport.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
+            </section>
             <div className="section-head">
               <div><p className="eyebrow">QUESTION AUTHORING</p><h2>Add a question</h2><p className="muted">Create four-option AP ECET questions and add them directly to your reusable bank.</p></div>
             </div>
