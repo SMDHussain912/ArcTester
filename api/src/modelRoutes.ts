@@ -10,7 +10,7 @@ import {
   type RegisterModelInput,
 } from "./intelligence/modelRegistry.js";
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
-import { trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
+import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("numeric") }).strict(),
@@ -175,9 +175,10 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
       const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
       const trained = trainRegisteredDataset(samples, featureSchema, dataset.task as "regression" | "binary-classification", input.seed);
+      const ranked = rankTrainingResults(trained, dataset.task as "regression" | "binary-classification");
       const created = await db.$transaction(async (tx) => {
         const models = [];
-        for (const result of trained) {
+        for (const result of ranked) {
           const modelId = `${input.modelId}-${result.algorithm}`;
           const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
           const version = (latest._max.version ?? 0) + 1;
@@ -214,6 +215,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           });
           models.push({
             ...model,
+            rank: result.rank,
             trainRows: result.trainRows,
             testRows: result.testRows,
             heldOutMetrics: result.metrics,
@@ -228,6 +230,11 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         dataset: { id: dataset.id, name: dataset.name, fingerprint: dataset.fingerprint, rowCount: dataset.rowCount },
         models: created,
         promoted: false,
+        ranking: {
+          method: dataset.task === "regression" ? "RMSE ascending, then MAE ascending" : "F1 descending, then accuracy, precision and recall descending",
+          scope: "same deterministic held-out split from this training run",
+          note: "Experiment ranking only; this does not approve production promotion.",
+        },
         message: "Training completed. Candidates remain inactive until they pass evaluation against an existing baseline.",
       });
     } catch (error) {
