@@ -119,6 +119,10 @@ describe("admin model registry API", () => {
     const registeredModels = listed.body.models as Array<{ modelId: string; isActive: boolean }>;
     expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-"))).toHaveLength(4);
     expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-")).every((model) => !model.isActive)).toBe(true);
+
+    const audit = await request("/admin/models/training-fixture-logistic-regression/audit");
+    expect(audit.status).toBe(200);
+    expect((audit.body.events as Array<{ action: string }>).map((event) => event.action)).toContain("TRAINED");
   });
 
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
