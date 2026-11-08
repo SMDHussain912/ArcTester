@@ -249,7 +249,6 @@ export default function App() {
   const [modelDatasetAttested, setModelDatasetAttested] = useState(false);
   const [modelCandidateId, setModelCandidateId] = useState("");
   const [trainingModelPrefix, setTrainingModelPrefix] = useState("ecet-readiness");
-  const [trainingDatasetId, setTrainingDatasetId] = useState("");
   const [modelCandidateVersion, setModelCandidateVersion] = useState("2");
   const [modelBaselineVersion, setModelBaselineVersion] = useState("1");
   const [modelEvaluationDatasetId, setModelEvaluationDatasetId] = useState("");
