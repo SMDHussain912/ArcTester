@@ -23,6 +23,7 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [invitationToken, setInvitationToken] = useState("");
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -53,8 +54,12 @@ export default function App() {
     setError("");
     try {
       if (register) {
-        await request("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) });
+        await request("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({ email, password, invitationToken: invitationToken.trim() }),
+        });
         setRegister(false);
+        setInvitationToken("");
       } else {
         const session = await request<{ user: User }>("/auth/login", {
           method: "POST",
@@ -130,9 +135,10 @@ export default function App() {
           <form onSubmit={(event) => { event.preventDefault(); void authenticate(); }}>
             <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
             <label>Password<input type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : 1} required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            {register && <label>Invitation code<input type="text" autoComplete="one-time-code" required value={invitationToken} onChange={(event) => setInvitationToken(event.target.value)} /></label>}
             <button className="primary full" disabled={busy}>{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
           </form>
-          <button className="text-button" onClick={() => setRegister(!register)}>{register ? "Already have an account? Sign in" : "New here? Create an account"}</button>
+          <button className="text-button" onClick={() => setRegister(!register)}>{register ? "Already have an account? Sign in" : "Have an invitation? Create account"}</button>
           {error && <p className="error">{error}</p>}
         </section>
       </main>

@@ -21,6 +21,8 @@ type Test = { attemptId: number; questions: Question[]; warnings: string[] };
 export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [invitationToken, setInvitationToken] = useState("");
+  const [register, setRegister] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
@@ -64,17 +66,30 @@ export default function App() {
     api<Bank>("/bank").then(setBank).catch((cause) => setError((cause as Error).message));
   }, [token, user]);
 
-  async function signIn() {
+  async function authenticate() {
     setBusy(true);
     setError("");
     try {
-      const result = await api<{ token: string; user: User }>("/auth/token", {
-        method: "POST",
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-      await SecureStore.setItemAsync("arctester-token", result.token);
-      setToken(result.token);
-      setUser(result.user);
+      if (register) {
+        await api("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            email: email.trim(),
+            password,
+            invitationToken: invitationToken.trim(),
+          }),
+        });
+        setRegister(false);
+        setInvitationToken("");
+      } else {
+        const result = await api<{ token: string; user: User }>("/auth/token", {
+          method: "POST",
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        await SecureStore.setItemAsync("arctester-token", result.token);
+        setToken(result.token);
+        setUser(result.user);
+      }
       setPassword("");
     } catch (cause) {
       setError((cause as Error).message);
@@ -143,11 +158,13 @@ export default function App() {
 
         {!user ? (
           <View style={styles.card}>
-            <Text style={styles.heading}>Welcome back</Text>
-            <Text style={styles.muted}>Sign in to continue your preparation.</Text>
+            <Text style={styles.heading}>{register ? "Create your account" : "Welcome back"}</Text>
+            <Text style={styles.muted}>{register ? "Enter the invitation code shared by your admin." : "Sign in to continue your preparation."}</Text>
             <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="Email address" placeholderTextColor="#8b95a7" value={email} onChangeText={setEmail} style={styles.input} />
             <TextInput secureTextEntry placeholder="Password" placeholderTextColor="#8b95a7" value={password} onChangeText={setPassword} style={styles.input} />
-            <TouchableOpacity disabled={busy} onPress={signIn} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Signing in…" : "Sign in"}</Text></TouchableOpacity>
+            {register && <TextInput autoCapitalize="none" placeholder="Invitation code" placeholderTextColor="#8b95a7" value={invitationToken} onChangeText={setInvitationToken} style={styles.input} />}
+            <TouchableOpacity disabled={busy} onPress={authenticate} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setRegister(!register)} style={styles.secondary}><Text style={styles.secondaryText}>{register ? "Already have an account? Sign in" : "Have an invitation? Create account"}</Text></TouchableOpacity>
           </View>
         ) : test ? (
           <View style={styles.card}>
