@@ -6,6 +6,7 @@ import {
   prepareDataset, runTunedClassifierExperiments, runRegressionExperiment,
   serializeExperimentArtifact,
 } from "./datasetPipeline.js";
+import { ModelRegistry } from "./modelRegistry.js";
 
 function readOption(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
   const outputDirectory = path.resolve(readOption("--out", "../datasets/experiments"));
   const datasets = generateSyntheticDatasets({ rowsPerDataset, seed });
   await mkdir(path.join(outputDirectory, "models"), { recursive: true });
+  const registry = new ModelRegistry(path.join(outputDirectory, "models", "registry"));
 
   const reports: Record<string, unknown> = {};
   const entries = [
@@ -42,11 +44,21 @@ async function main(): Promise<void> {
         models: results.map(({ algorithm, parameters, crossValidation, metrics }) => ({ algorithm, parameters, crossValidation, heldOutMetrics: metrics })),
       };
       for (const result of results) {
+        const registered = await registry.register({
+          modelId: `${name}-${result.algorithm}`,
+          algorithm: result.algorithm as "logistic-regression" | "knn" | "decision-tree" | "gaussian-naive-bayes",
+          task: "binary-classification",
+          dataset: name,
+          targetColumn: definition.targetColumn,
+          featureSchema: prepared.featureSchema,
+          model: result.model,
+        });
         await writeFile(
           path.join(outputDirectory, "models", `${name}-${result.algorithm}.json`),
           serializeExperimentArtifact({
             dataset: name,
             featureNames: prepared.featureNames,
+            featureSchema: prepared.featureSchema,
             targetColumn: definition.targetColumn,
             task: definition.task,
             model: result.model,
@@ -64,11 +76,21 @@ async function main(): Promise<void> {
         targetColumn: definition.targetColumn,
         models: [{ algorithm: result.algorithm, heldOutMetrics: result.metrics }],
       };
+      await registry.register({
+        modelId: `${name}-${result.algorithm}`,
+        algorithm: result.algorithm,
+        task: "regression",
+        dataset: name,
+        targetColumn: definition.targetColumn,
+        featureSchema: prepared.featureSchema,
+        model: result.model,
+      });
       await writeFile(
         path.join(outputDirectory, "models", `${name}-${result.algorithm}.json`),
         serializeExperimentArtifact({
           dataset: name,
           featureNames: prepared.featureNames,
+          featureSchema: prepared.featureSchema,
           targetColumn: definition.targetColumn,
           task: definition.task,
           model: result.model,
@@ -85,6 +107,7 @@ async function main(): Promise<void> {
     rowsPerDataset,
     split: "deterministic row-level holdout; preprocessing fitted on training rows only; classifier tuning uses stratified cross-validation within training rows",
     warning: "Metrics from synthetic data are for pipeline verification only, not evidence of real-world predictive performance.",
+    modelRegistry: path.join(outputDirectory, "models", "registry"),
     experiments: reports,
   }, null, 2)}\n`, "utf8");
   process.stdout.write(`Completed experiments for ${entries.length} datasets in ${outputDirectory}\n`);
