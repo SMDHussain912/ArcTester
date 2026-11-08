@@ -508,6 +508,8 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
+      // Drain the autosave queue so the final submit carries the latest server revision.
+      await assignmentSaveQueueRef.current.catch(() => undefined);
       const attemptKey = assignedAttemptKey(activeAssignmentPackage.assignmentId);
       let attemptUuid = localStorage.getItem(attemptKey);
       if (!attemptUuid) {
@@ -522,6 +524,7 @@ export default function App() {
       await request(`/exams/assignments/${activeAssignmentPackage.assignmentId}/submission`, {
         method: "POST",
         body: JSON.stringify({
+          revision: assignmentAnswersRevisionRef.current,
           attemptUuid,
           startedAt: assignmentStartedAt,
           submittedAt: new Date().toISOString(),

@@ -66,6 +66,7 @@ const SubmitExamSchema = z
     attemptUuid: z.string().uuid(),
     startedAt: z.string().datetime(),
     submittedAt: z.string().datetime(),
+    revision: z.number().int().nonnegative().optional(),
     answers: z
       .array(
         z.object({
@@ -1574,6 +1575,16 @@ export function examRouter(db: PrismaClient): Router {
         });
         if (duplicateAttempt) {
           throw conflict("This attempt identifier has already been used.");
+        }
+
+        if (!offlineSessionReconciled && input.revision !== undefined) {
+          const currentRevision = await tx.examSession.updateMany({
+            where: { id: examSession.id, answersRevision: input.revision },
+            data: { answersRevision: { increment: 1 } },
+          });
+          if (currentRevision.count !== 1) {
+            throw conflict("These answers were changed in another session. Reload the exam before submitting.");
+          }
         }
 
         const created = await tx.examSubmission.create({

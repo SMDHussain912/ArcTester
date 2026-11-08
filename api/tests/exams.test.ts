@@ -311,15 +311,24 @@ describe("versioned exam management", () => {
     }, studentCookie);
     expect(saved.status).toBe(200);
     expect(saved.json).toMatchObject({ savedCount: 1, revision: 1 });
+    const secondDeviceCookie = await createSession("exam-student@arctester.test", "STUDENT");
     const staleSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
       revision: 0,
       answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
-    }, studentCookie);
+    }, secondDeviceCookie);
     expect(staleSave.status).toBe(409);
     const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
     expect(restored.status).toBe(200);
     expect(restored.json.revision).toBe(1);
     expect(restored.json.answers).toEqual([expect.objectContaining({ examQuestionId: question.id, selectedIndex: 2 })]);
+    const staleSubmission = await request(`/exams/assignments/${assignmentId}/submission`, "POST", {
+      revision: 0,
+      attemptUuid: "b8b5e7f0-4d22-4d71-92f0-9b6b5b8b1202",
+      startedAt: started.json.session.startedAt,
+      submittedAt: new Date().toISOString(),
+      answers: [{ examQuestionId: question.id, selectedIndex: 2 }],
+    }, secondDeviceCookie);
+    expect(staleSubmission.status).toBe(409);
     const foreign = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, secondStudentCookie);
     expect(foreign.status).toBe(404);
     const invalid = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
