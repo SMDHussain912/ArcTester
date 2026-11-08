@@ -162,7 +162,7 @@ describe("identity foundation", () => {
 
     const firstDevice = first.json.device as { id: string };
     const listed = await request("/auth/devices", "GET", undefined, studentCookie);
-    expect((listed.json.devices as unknown[])).toHaveLength(2);
+    expect(listed.json.devices as unknown[]).toHaveLength(2);
 
     const revoked = await request(
       `/auth/devices/${firstDevice.id}`,
@@ -173,7 +173,7 @@ describe("identity foundation", () => {
     expect(revoked.status).toBe(200);
 
     const remaining = await request("/auth/devices", "GET", undefined, studentCookie);
-    expect((remaining.json.devices as unknown[])).toHaveLength(1);
+    expect(remaining.json.devices as unknown[]).toHaveLength(1);
 
     const record = await server.db.device.findFirstOrThrow({
       where: { userId: studentId, id: firstDevice.id },

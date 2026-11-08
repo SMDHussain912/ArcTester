@@ -5,13 +5,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  scryptSync,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -49,7 +43,13 @@ export function signJwt(
 ): string {
   const header = base64Url(Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })));
   const body = base64Url(
-    Buffer.from(JSON.stringify({ ...payload, iat: nowSeconds(), exp: nowSeconds() + ttlSeconds }))
+    Buffer.from(
+      JSON.stringify({
+        ...payload,
+        iat: nowSeconds(),
+        exp: nowSeconds() + ttlSeconds,
+      })
+    )
   );
   const sig = createHmac("sha256", JWT_SECRET)
     .update(`${header}.${body}`)
@@ -216,7 +216,11 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/invitations/:id/revoke", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post(
+    "/invitations/:id/revoke",
+    requireAuth,
+    requireAdmin(db),
+    async (req, res, next) => {
     try {
       const result = await db.invitation.updateMany({
         where: { id: req.params.id, usedAt: null, revokedAt: null },
@@ -264,12 +268,20 @@ export function authRouter(db: PrismaClient): Router {
         }
 
         return tx.user.create({
-          data: { email: input.email, passwordHash: hashPassword(input.password), role: "STUDENT" },
+          data: {
+            email: input.email,
+            passwordHash: hashPassword(input.password),
+            role: "STUDENT",
+          },
           select: { id: true, email: true, role: true },
         });
       });
 
-      res.status(201).json({ ok: true, message: "Account created. Sign in to continue.", user });
+      res.status(201).json({
+        ok: true,
+        message: "Account created. Sign in to continue.",
+        user,
+      });
     } catch (error) {
       next(error);
     }
@@ -335,10 +347,21 @@ export function authRouter(db: PrismaClient): Router {
     try {
       const input = DeviceSchema.parse(req.body);
       const device = await db.device.upsert({
-        where: { userId_fingerprint: { userId: req.user!.id, fingerprint: input.fingerprint } },
+        where: {
+          userId_fingerprint: {
+            userId: req.user!.id,
+            fingerprint: input.fingerprint,
+          },
+        },
         create: { ...input, userId: req.user!.id },
         update: { ...input, revokedAt: null, lastSeenAt: new Date() },
-        select: { id: true, deviceName: true, platform: true, createdAt: true, lastSeenAt: true },
+        select: {
+          id: true,
+          deviceName: true,
+          platform: true,
+          createdAt: true,
+          lastSeenAt: true,
+        },
       });
       res.status(200).json({ ok: true, device });
     } catch (error) {
