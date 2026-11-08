@@ -283,6 +283,15 @@ function AnalyticsDashboard() {
           <p className="mute">
             Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round(recommendations.weakAccuracyThreshold * 100)}%. Formal exam results are not mixed into this practice recommendation score.
           </p>
+          <div className="performance-explanation" aria-label="Performance explanation">
+            <strong>{recommendations.performanceExplanation.headline}</strong>
+            <ul>
+              {recommendations.performanceExplanation.details.map((detail, index) => <li key={index}>{detail}</li>)}
+            </ul>
+            <p className="mute">
+              Based on {recommendations.performanceExplanation.answeredQuestions} answered questions and {recommendations.performanceExplanation.incorrectAnswers} incorrect answers. Minimum evidence: {recommendations.performanceExplanation.evidenceThreshold} answers.
+            </p>
+          </div>
           <div className="stack">
             {recommendations.recommendations.map((item) => (
               <article key={item.id}>
