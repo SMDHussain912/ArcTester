@@ -254,7 +254,7 @@ export default function App() {
       const response = await request<{ package: AssignedExamPackage }>(`/exams/assignments/${assignmentId}/package`);
       setActiveAssignmentPackage(response.package);
       setAssignmentAnswers({});
-      setAssignmentStartedAt(response.package.serverTime);
+      setAssignmentStartedAt(new Date().toISOString());
       setAssignmentClock(Date.now());
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
