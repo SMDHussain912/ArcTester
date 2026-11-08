@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fitLinearRegression } from "./linearRegression.js";
 import { fitLogisticRegression } from "./logisticRegression.js";
-import { ModelRegistry, transformFeatures } from "./modelRegistry.js";
+import { ModelRegistry, predictWithRegistryArtifact, transformFeatures, validateRegistryArtifact } from "./modelRegistry.js";
 
 describe("ModelRegistry", () => {
   let directory: string;
@@ -102,6 +102,35 @@ describe("ModelRegistry", () => {
     expect(prediction.task).toBe("regression");
     expect(typeof prediction.prediction).toBe("number");
     expect(prediction.prediction).toBeCloseTo(10, 0);
+  });
+
+  it("returns a holdout-derived prediction interval for regression artifacts", () => {
+    const model = fitLinearRegression([
+      { features: [0], target: 2 },
+      { features: [1], target: 4 },
+      { features: [2], target: 6 },
+      { features: [3], target: 8 },
+    ]);
+    const artifact = validateRegistryArtifact({
+      registrySchemaVersion: 1,
+      modelId: "score-regressor",
+      version: 1,
+      algorithm: "multiple-linear-regression",
+      task: "regression",
+      dataset: "scores",
+      targetColumn: "target_score",
+      featureSchema: [{ name: "attempts", type: "numeric" }],
+      model,
+      uncertainty: { residualStdDev: 2, method: "holdout-rmse" },
+      createdAt: new Date().toISOString(),
+    });
+    const prediction = predictWithRegistryArtifact(artifact, { attempts: 4 });
+    expect(prediction.predictionInterval).toMatchObject({
+      estimatedStdDev: 2,
+      method: "holdout-rmse",
+    });
+    expect(prediction.predictionInterval?.lower).toBeCloseTo(Number(prediction.prediction) - 3.92);
+    expect(prediction.predictionInterval?.upper).toBeCloseTo(Number(prediction.prediction) + 3.92);
   });
 
   it("encodes unseen categories into the reserved unknown bucket", () => {
