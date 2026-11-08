@@ -132,6 +132,8 @@ function AssignedExamRunner() {
   if (!exam) return null;
 
   if (!attempt) {
+    const availableAt = exam.availableFrom ? new Date(exam.availableFrom).getTime() : 0;
+    const notYetAvailable = availableAt > Date.now();
     return (
       <section className="panel">
         <p className="eyebrow">Assigned exam · Version {exam.version}</p>
@@ -144,10 +146,14 @@ function AssignedExamRunner() {
         </div>
         <h2 style={{ marginTop: 24 }}>Instructions</h2>
         <p style={{ whiteSpace: "pre-wrap" }}>{exam.instructions || "Read each question carefully and select one answer. You can move between questions before submitting."}</p>
-        <p className="warn">The timer starts when you begin. Your answers are saved in this browser while the exam is open. Do not clear browser storage or close this browser before submitting.</p>
+        {notYetAvailable ? (
+          <p className="warn">This exam opens at {new Date(exam.availableFrom!).toLocaleString()}. You can download the exam now, but you cannot start it yet.</p>
+        ) : (
+          <p className="warn">The timer starts when you begin. Your answers are saved in this browser while the exam is open. Do not clear browser storage or close this browser before submitting.</p>
+        )}
         <div className="row" style={{ justifyContent: "space-between" }}>
           <Link className="button button-secondary" href="/assignments">Cancel</Link>
-          <button className="button button-primary" onClick={startExam}>Start exam →</button>
+          <button className="button button-primary" onClick={startExam} disabled={notYetAvailable}>Start exam →</button>
         </div>
       </section>
     );
