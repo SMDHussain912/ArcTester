@@ -549,6 +549,8 @@ export const api = {
   createAdminQuestion: (body: { subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; difficulty: string; source: string }) => request<{ ok: true; question: AdminQuestion }>("/admin/questions", json(body)),
   importAdminCsv: (content: string) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/csv", json({ content })),
   importAdminJson: (questions: unknown[]) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/json", json({ questions })),
+  validateAdminPaper: (body: { durationMinutes: number; questions: { questionId: number; marks: number; negativeMarks: number }[] }) =>
+    request<{ ok: true; valid: boolean; errors: string[]; warnings: string[]; totalQuestions: number; totalMarks: number; averageSecondsPerQuestion: number; subjects: { subject: string; count: number; percentage: number }[]; difficulties: { difficulty: string; count: number; percentage: number }[] }>("/admin/exams/validate-paper", json(body)),
   createAdminExam: (body: {
     title: string;
     description: string;
