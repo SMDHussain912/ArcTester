@@ -130,6 +130,171 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
   return { subjects, weakest: candidates[0] ?? null };
 }
 
+export interface PerformanceOverview {
+  generatedAt: string;
+  practice: {
+    completedAttempts: number;
+    questions: number;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    accuracy: number | null;
+    subjects: TopicRow[];
+    trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
+  };
+  formalExams: {
+    submissions: number;
+    graded: number;
+    reviewRequired: number;
+    score: number;
+    maximumScore: number;
+    scorePercentage: number | null;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    subjects: {
+      subject: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+      awardedMarks: number;
+      maximumMarks: number;
+    }[];
+  };
+}
+
+/** Practice and formal assessments remain separate because their scoring rules differ. */
+export async function getPerformanceOverview(
+  db: PrismaClient,
+  userId: number
+): Promise<PerformanceOverview> {
+  const [attempts, submissions, weakTopics] = await Promise.all([
+    db.attempt.findMany({
+      where: { userId, finishedAt: { not: null } },
+      orderBy: { finishedAt: "asc" },
+      include: {
+        answers: {
+          include: {
+            question: {
+              select: {
+                subject: { select: { name: true } },
+                topic: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    }),
+    db.examSubmission.findMany({
+      where: { assignment: { studentId: userId } },
+      orderBy: { receivedAt: "asc" },
+      include: {
+        answers: {
+          include: {
+            examQuestion: { select: { subject: true, topic: true, marks: true } },
+          },
+        },
+      },
+    }),
+    getWeakTopics(db, userId),
+  ]);
+
+  let practiceCorrect = 0;
+  let practiceIncorrect = 0;
+  let practiceUnanswered = 0;
+  const trend = attempts.slice(-12).map((attempt) => {
+    let correct = 0;
+    let incorrect = 0;
+    let unanswered = 0;
+    for (const answer of attempt.answers) {
+      if (answer.chosen === null) unanswered += 1;
+      else if (answer.isCorrect) correct += 1;
+      else incorrect += 1;
+    }
+    practiceCorrect += correct;
+    practiceIncorrect += incorrect;
+    practiceUnanswered += unanswered;
+    const answered = correct + incorrect;
+    return {
+      attemptId: attempt.id,
+      finishedAt: attempt.finishedAt!.toISOString(),
+      accuracy: answered > 0 ? correct / answered : null,
+      correct,
+      total: attempt.answers.length,
+    };
+  });
+
+  // Totals must include all completed attempts, not only the 12 shown in trend.
+  practiceCorrect = 0;
+  practiceIncorrect = 0;
+  practiceUnanswered = 0;
+  for (const attempt of attempts) {
+    for (const answer of attempt.answers) {
+      if (answer.chosen === null) practiceUnanswered += 1;
+      else if (answer.isCorrect) practiceCorrect += 1;
+      else practiceIncorrect += 1;
+    }
+  }
+  const practiceAnswered = practiceCorrect + practiceIncorrect;
+
+  const graded = submissions.filter((submission) => submission.status === "GRADED");
+  const reviewRequired = submissions.filter((submission) => submission.status === "REVIEW_REQUIRED");
+  const verifiedAnswers = graded.flatMap((submission) => submission.answers);
+  const formalCorrect = verifiedAnswers.filter((answer) => answer.selectedIndex !== null && answer.isCorrect).length;
+  const formalIncorrect = verifiedAnswers.filter((answer) => answer.selectedIndex !== null && !answer.isCorrect).length;
+  const formalUnanswered = verifiedAnswers.filter((answer) => answer.selectedIndex === null).length;
+  const formalScore = graded.reduce((sum, submission) => sum + (submission.score ?? 0), 0);
+  const formalMaximum = graded.reduce((sum, submission) => sum + (submission.maximumScore ?? 0), 0);
+
+  const formalBySubject = new Map<string, {
+    correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number;
+  }>();
+  for (const answer of verifiedAnswers) {
+    const subject = answer.examQuestion.subject;
+    const row = formalBySubject.get(subject) ?? {
+      correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0,
+    };
+    if (answer.selectedIndex === null) row.unanswered += 1;
+    else if (answer.isCorrect) row.correct += 1;
+    else row.incorrect += 1;
+    row.awardedMarks += answer.awardedMarks;
+    row.maximumMarks += answer.examQuestion.marks;
+    formalBySubject.set(subject, row);
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    practice: {
+      completedAttempts: attempts.length,
+      questions: practiceCorrect + practiceIncorrect + practiceUnanswered,
+      correct: practiceCorrect,
+      incorrect: practiceIncorrect,
+      unanswered: practiceUnanswered,
+      accuracy: practiceAnswered > 0 ? practiceCorrect / practiceAnswered : null,
+      subjects: weakTopics.subjects,
+      trend,
+    },
+    formalExams: {
+      submissions: submissions.length,
+      graded: graded.length,
+      reviewRequired: reviewRequired.length,
+      score: formalScore,
+      maximumScore: formalMaximum,
+      scorePercentage: formalMaximum > 0 ? (formalScore / formalMaximum) * 100 : null,
+      correct: formalCorrect,
+      incorrect: formalIncorrect,
+      unanswered: formalUnanswered,
+      subjects: [...formalBySubject.entries()].map(([subject, row]) => ({
+        subject, ...row,
+        accuracy: row.correct + row.incorrect > 0
+          ? row.correct / (row.correct + row.incorrect)
+          : null,
+      })).sort((a, b) => (a.accuracy ?? 2) - (b.accuracy ?? 2)),
+    },
+  };
+}
+
 export async function getHistory(db: PrismaClient, userId: number): Promise<HistoryItem[]> {
   const attempts = await db.attempt.findMany({
     where: { userId, finishedAt: { not: null } },
