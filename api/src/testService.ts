@@ -22,16 +22,20 @@ export const CreateTestSchema = z
   .object({
     mode: z.enum(MODES),
     subject: z.string().trim().min(1).optional(),
+    subjects: z.array(z.string().trim().min(1)).min(1).max(30).optional(),
+    topics: z.array(z.string().trim().min(1)).max(100).optional(),
     count: z.number().int().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
-    if ((value.mode === "practice" || value.mode === "mistakes") && !value.subject) {
+    if (value.mode === "practice" && !(value.subjects?.length || value.subject)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["subject"],
-        message: "subject is required for practice and mistakes modes",
+        path: ["subjects"],
+        message: "Select at least one subject for practice mode.",
       });
     }
+    if (value.mode === "mistakes" && !value.subject) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subject"], message: "subject is required for mistakes mode" });
+    if (value.subjects && new Set(value.subjects).size !== value.subjects.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
   });
 
 export const SubmitTestSchema = z.object({
@@ -166,13 +170,33 @@ export async function createTest(
     selected = questions;
     warnings = shortfallWarning(shortfalls);
   } else if (input.mode === "practice") {
-    const pool = candidates.filter((c) => c.subject === input.subject);
-    const count = input.count ?? 20;
-    selected = selectQuestions(pool, stats, count);
-    if (pool.length < count) {
-      warnings = shortfallWarning([
-        { subject: input.subject as string, requested: count, available: pool.length },
-      ]);
+    const chosenSubjects = input.subjects ?? (input.subject ? [input.subject] : []);
+    const topicFilter = new Set(input.topics ?? []);
+    const pool = candidates.filter((question) =>
+      chosenSubjects.includes(question.subject) &&
+      (topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic)))
+    );
+    const requested = input.count ?? 20;
+    const selectedById = new Set<number>();
+    selected = [];
+    const subjectPools = chosenSubjects.map((name) => ({ name, pool: pool.filter((question) => question.subject === name) }));
+    let remaining = requested;
+    let active = subjectPools.filter((entry) => entry.pool.length > 0);
+    while (remaining > 0 && active.length > 0) {
+      const quota = Math.max(1, Math.floor(remaining / active.length));
+      let added = 0;
+      for (const entry of active) {
+        const available = entry.pool.filter((question) => !selectedById.has(question.id));
+        const picked = selectQuestions(available, stats, Math.min(quota, available.length));
+        for (const question of picked) { selected.push(question); selectedById.add(question.id); }
+        added += picked.length;
+      }
+      if (added === 0) break;
+      remaining -= added;
+      active = active.filter((entry) => entry.pool.some((question) => !selectedById.has(question.id)));
+    }
+    if (selected.length < requested) {
+      warnings = ["Requested " + requested + " questions, but only " + selected.length + " match the selected subjects" + (topicFilter.size ? " and topics." : ".")];
     }
   } else {
     // "mistakes" only surfaces questions THIS user has got wrong before.
