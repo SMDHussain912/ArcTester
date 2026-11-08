@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "ArcTester",
+    "slug": "arctester",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "arctester",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.arctester.app"
+    },
+    "android": {
+      "package": "com.arctester.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#111827"
+      }
+    },
+    "plugins": ["expo-secure-store"],
+    "extra": {
+      "apiUrl": "http://localhost:4000"
+    }
+  }
+}

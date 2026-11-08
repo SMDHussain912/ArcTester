@@ -7,20 +7,17 @@ COPY web/package.json ./web/package.json
 RUN npm ci
 
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-ENV NEXT_TELEMETRY_DISABLED=1
+ARG VITE_API_URL=http://localhost:4000
+ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build:web
 
 FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/web/package.json ./web/package.json
-COPY --from=build --chown=node:node /app/web/next.config.mjs ./web/next.config.mjs
-COPY --from=build --chown=node:node /app/web/.next ./web/.next
+COPY --from=build --chown=node:node /app/web/dist ./web/dist
 
 WORKDIR /app/web
 USER node

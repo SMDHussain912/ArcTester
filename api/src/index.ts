@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
+import { examRouter } from "./examRoutes.js";
 
 const db = new PrismaClient();
 
@@ -23,7 +24,8 @@ function localCors(
       .map((value) => value.trim())
       .filter(Boolean)
   );
-  const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+  const isLocalOrigin =
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
@@ -53,6 +55,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
 
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
+  app.use(examRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);

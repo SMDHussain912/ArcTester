@@ -1,0 +1,287 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { hashPassword } from "../src/auth.js";
+import { buildApp } from "../src/index.js";
+import { sessionCookie, startTestServer, type TestServer } from "./server.js";
+
+let server: TestServer;
+let adminCookie = "";
+let studentCookie = "";
+let secondStudentCookie = "";
+let studentId = 0;
+let examId = "";
+let assignmentId = "";
+
+async function request(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  cookie?: string
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const response = await fetch(`${server.baseUrl}${path}`, {
+    method,
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(cookie ? { cookie } : {}),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  return {
+    status: response.status,
+    json: (await response.json()) as Record<string, unknown>,
+  };
+}
+
+async function createSession(email: string, role: "ADMIN" | "STUDENT"): Promise<string> {
+  await server.db.user.create({
+    data: { email, passwordHash: hashPassword("exam-test-password-123"), role },
+  });
+  const response = await fetch(`${server.baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: "exam-test-password-123" }),
+  });
+  return sessionCookie(response);
+}
+
+describe("versioned exam management", () => {
+  beforeAll(async () => {
+    server = await startTestServer(buildApp);
+    adminCookie = await createSession("exam-admin@arctester.test", "ADMIN");
+    studentCookie = await createSession("exam-student@arctester.test", "STUDENT");
+    secondStudentCookie = await createSession("other-student@arctester.test", "STUDENT");
+    const student = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-student@arctester.test" },
+      select: { id: true },
+    });
+    studentId = student.id;
+
+    const subject = await server.db.subject.create({ data: { name: "Computer Science" } });
+    const topic = await server.db.topic.create({
+      data: { name: "Data Structures", subjectId: subject.id },
+    });
+    await server.db.question.create({
+      data: {
+        subjectId: subject.id,
+        topicId: topic.id,
+        text: "Which structure follows FIFO?",
+        options: JSON.stringify(["Stack", "Queue", "Tree", "Graph"]),
+        correctIndex: 1,
+        explanation: "A queue follows first-in, first-out order.",
+        source: "Exam route test",
+        difficulty: "easy",
+        questionHash: "exam-route-question-fifo-unique",
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("requires authentication and administrator role for exam creation", async () => {
+    const anonymous = await request("/admin/exams", "POST", {});
+    const student = await request("/admin/exams", "POST", {}, studentCookie);
+    expect(anonymous.status).toBe(403);
+    expect(student.status).toBe(403);
+  });
+
+  it("creates a draft with immutable question snapshots and marking values", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const response = await request(
+      "/admin/exams",
+      "POST",
+      {
+        title: "Offline Systems Test",
+        description: "Initial exam package",
+        instructions: "Choose one answer per question.",
+        durationMinutes: 45,
+        shuffleQuestions: true,
+        questions: [{ questionId: question.id, marks: 2, negativeMarks: 0.5 }],
+      },
+      adminCookie
+    );
+    expect(response.status).toBe(201);
+    const exam = response.json.exam as {
+      id: string;
+      status: string;
+      versions: Array<{ version: number; _count: { questions: number } }>;
+    };
+    examId = exam.id;
+    expect(exam.status).toBe("DRAFT");
+    expect(exam.versions[0].version).toBe(1);
+    expect(exam.versions[0]._count.questions).toBe(1);
+
+    const snapshot = await server.db.examVersionQuestion.findFirstOrThrow();
+    expect(snapshot.correctIndex).toBe(1);
+    expect(snapshot.marks).toBe(2);
+    expect(snapshot.negativeMarks).toBe(0.5);
+  });
+
+  it("does not expose a draft exam package or permit assignment before publishing", async () => {
+    const assigned = await request(
+      `/admin/exams/${examId}/assign`,
+      "POST",
+      { studentIds: [studentId] },
+      adminCookie
+    );
+    expect(assigned.status).toBe(404);
+  });
+
+  it("publishes the exam and creates assignments idempotently", async () => {
+    const published = await request(
+      `/admin/exams/${examId}/publish`,
+      "POST",
+      {},
+      adminCookie
+    );
+    expect(published.status).toBe(200);
+
+    const body = { studentIds: [studentId] };
+    const first = await request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie);
+    const second = await request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie);
+    expect(first.status).toBe(201);
+    expect((first.json.assignments as unknown[])).toHaveLength(1);
+    expect(second.status).toBe(201);
+    expect(second.json.created).toBe(0);
+
+    const assignment = await server.db.examAssignment.findFirstOrThrow({
+      where: { studentId },
+    });
+    assignmentId = assignment.id;
+  });
+
+  it("delivers a student package without answer keys or explanations", async () => {
+    const list = await request("/exams/assigned", "GET", undefined, studentCookie);
+    expect(list.status).toBe(200);
+    expect((list.json.assignments as unknown[])).toHaveLength(1);
+
+    const packageResponse = await request(
+      `/exams/assignments/${assignmentId}/package`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(packageResponse.status).toBe(200);
+    const packageBody = packageResponse.json.package as {
+      questions: Array<Record<string, unknown>>;
+    };
+    expect(packageBody.questions).toHaveLength(1);
+    expect(packageBody.questions[0].correctIndex).toBeUndefined();
+    expect(packageBody.questions[0].explanation).toBeUndefined();
+    expect(packageResponse.json.sha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("allows downloading a published package before its start window", async () => {
+    const availableFrom = new Date(Date.now() + 60 * 60 * 1000);
+    await server.db.examAssignment.update({
+      where: { id: assignmentId },
+      data: { availableFrom },
+    });
+    const response = await request(
+      `/exams/assignments/${assignmentId}/package`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(response.status).toBe(200);
+    const packageBody = response.json.package as { availableFrom: string };
+    expect(new Date(packageBody.availableFrom).getTime()).toBe(availableFrom.getTime());
+    await server.db.examAssignment.update({
+      where: { id: assignmentId },
+      data: { availableFrom: null },
+    });
+  });
+
+  it("prevents students from downloading another student's assignment", async () => {
+    const response = await request(
+      `/exams/assignments/${assignmentId}/package`,
+      "GET",
+      undefined,
+      secondStudentCookie
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("scores offline submissions on the server and safely handles retries", async () => {
+    const question = await server.db.examVersionQuestion.findFirstOrThrow();
+    const startedAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const submittedAt = new Date().toISOString();
+    const body = {
+      attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
+      startedAt,
+      submittedAt,
+      answers: [{ examQuestionId: question.id, selectedIndex: 1 }],
+    };
+
+    const first = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      body,
+      studentCookie
+    );
+    expect(first.status).toBe(201);
+    const submission = first.json.submission as {
+      id: string;
+      status: string;
+      score: number;
+      maximumScore: number;
+    };
+    expect(submission.status).toBe("GRADED");
+    expect(submission.score).toBe(2);
+    expect(submission.maximumScore).toBe(2);
+
+    const retry = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      body,
+      studentCookie
+    );
+    expect(retry.status).toBe(200);
+    expect(retry.json.duplicate).toBe(true);
+    expect((retry.json.submission as { id: string }).id).toBe(submission.id);
+
+    const conflictingRetry = await request(
+      `/exams/assignments/${assignmentId}/submission`,
+      "POST",
+      { ...body, attemptUuid: "d4bd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1" },
+      studentCookie
+    );
+    expect(conflictingRetry.status).toBe(409);
+
+    const result = await request(
+      `/exams/assignments/${assignmentId}/result`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(result.status).toBe(200);
+    const resultBody = result.json.result as {
+      score: number;
+      questions: Array<{ correctIndex: number; explanation: string; isCorrect: boolean }>;
+    };
+    expect(resultBody.score).toBe(2);
+    expect(resultBody.questions[0].correctIndex).toBe(1);
+    expect(resultBody.questions[0].explanation).toContain("first-in");
+    expect(resultBody.questions[0].isCorrect).toBe(true);
+  });
+
+  it("prevents another student from reading a submission result", async () => {
+    const response = await request(
+      `/exams/assignments/${assignmentId}/result`,
+      "GET",
+      undefined,
+      secondStudentCookie
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("keeps the published version snapshot unchanged when the source bank question changes", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    await server.db.question.update({
+      where: { id: question.id },
+      data: { text: "Changed source question text" },
+    });
+    const snapshot = await server.db.examVersionQuestion.findFirstOrThrow();
+    expect(snapshot.text).toBe("Which structure follows FIFO?");
+  });
+});
