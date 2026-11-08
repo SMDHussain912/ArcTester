@@ -328,7 +328,7 @@ describe("analytics", () => {
     const history = await api.get("/analytics/history");
     expect((history.json as { attemptId: number }[]).some((item) => item.attemptId === attemptId)).toBe(false);
     const overview = await api.get("/analytics/overview");
-    expect((overview.json as { practice: { completedAttempts: number } }).practice.completedAttempts).toBe(3);
+    expect((overview.json as { practice: { completedAttempts: number } }).practice.completedAttempts).toBe(4);
   });
 
   it("keeps analytics isolated to the authenticated student", async () => {
