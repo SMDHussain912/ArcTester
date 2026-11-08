@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { xlsxToCsv } from "./xlsx";
 import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -424,12 +425,23 @@ export default function App() {
 
   async function loadImportFile(file?: File) {
     if (!file) return;
+    if (file.size > 8_000_000) {
+      setImportPreviewError("The selected file exceeds the 8 MB upload limit.");
+      return;
+    }
     const extension = file.name.toLowerCase().split(".").pop();
-    const format = extension === "json" ? "json" : "csv";
-    setImportFormat(format);
-    setImportText(await file.text());
-    setImportReport(null);
-    setImportPreviewReady(false);
+    try {
+      const isJson = extension === "json";
+      const content = extension === "xlsx" ? await xlsxToCsv(file) : await file.text();
+      setImportFormat(isJson ? "json" : "csv");
+      setImportText(content);
+      setImportReport(null);
+      setImportPreviewReady(false);
+      setImportPreviewDetails(null);
+      setImportPreviewError("");
+    } catch (cause) {
+      setImportPreviewError((cause as Error).message);
+    }
   }
 
   async function previewQuestionImport() {
@@ -913,11 +925,11 @@ export default function App() {
           </section>
           <section hidden={activePage !== "question-bank"} id="admin-question-bank">
             <section className="panel import-workspace">
-              <div className="section-head"><div><p className="eyebrow">BULK QUESTION INGESTION</p><h2>Upload questions</h2><p className="muted">Import AP ECET questions in bulk using CSV or JSON, or paste your dataset.</p></div></div>
+              <div className="section-head"><div><p className="eyebrow">BULK QUESTION INGESTION</p><h2>Upload questions</h2><p className="muted">Import AP ECET questions using CSV, JSON or Excel (.xlsx), or paste your dataset.</p></div></div>
               <div className="import-toolbar">
                 <label className="import-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void loadImportFile(event.dataTransfer.files?.[0]); }}>
-                  <strong>Choose a CSV or JSON file</strong><span>Click to browse or drag a file here · max 8 MB</span>
-                  <input type="file" accept=".csv,.json,text/csv,application/json" onChange={(event) => void loadImportFile(event.target.files?.[0])} />
+                  <strong>Choose a CSV, JSON or Excel file</strong><span>Click to browse or drag a file here · max 8 MB</span>
+                  <input type="file" accept=".csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => void loadImportFile(event.target.files?.[0])} />
                 </label>
                 <div className="import-template-actions"><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("csv")}>Download CSV template</button><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("json")}>Download JSON template</button></div>
               </div>
