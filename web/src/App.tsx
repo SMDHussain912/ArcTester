@@ -199,6 +199,9 @@ export default function App() {
   const practiceAutoSubmitRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const assignmentSaveSequenceRef = useRef(0);
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
@@ -423,6 +426,7 @@ export default function App() {
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
       ));
       restoredAnswers = { ...restoredAnswers, ...serverAnswers };
+      setAssignmentSaveStatus(serverSaved.answers.length > 0 ? "saved" : "idle");
       setActiveAssignmentPackage(response.package);
       setAssignmentAnswers(restoredAnswers);
       setAssignmentStartedAt(sessionResponse.session.startedAt);
@@ -438,18 +442,31 @@ export default function App() {
   useEffect(() => {
     if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
     const assignmentId = activeAssignmentPackage.assignmentId;
-    const timer = window.setTimeout(() => {
-      void request(`/exams/assignments/${assignmentId}/answers`, {
-        method: "PUT",
-        body: JSON.stringify({
-          answers: activeAssignmentPackage.questions.map((question) => ({
-            examQuestionId: question.id,
-            selectedIndex: assignmentAnswers[question.id] ?? null,
-          })),
-        }),
-      }).catch((cause) => setError(`Server autosave failed: ${(cause as Error).message}. Your local backup is still available.`));
+    const saveVersion = ++assignmentSaveSequenceRef.current;
+    setAssignmentSaveStatus("saving");
+    const timer = window.setTimeout(async () => {
+      try {
+        await request(`/exams/assignments/${assignmentId}/answers`, {
+          method: "PUT",
+          body: JSON.stringify({
+            answers: activeAssignmentPackage.questions.map((question) => ({
+              examQuestionId: question.id,
+              selectedIndex: assignmentAnswers[question.id] ?? null,
+            })),
+          }),
+        });
+        if (assignmentSaveSequenceRef.current === saveVersion) setAssignmentSaveStatus("saved");
+      } catch (cause) {
+        if (assignmentSaveSequenceRef.current === saveVersion) {
+          setAssignmentSaveStatus("error");
+          setError(`Server autosave failed: ${(cause as Error).message}. Your local backup is still available.`);
+        }
+      }
     }, 450);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      if (assignmentSaveSequenceRef.current === saveVersion) assignmentSaveSequenceRef.current += 1;
+    };
   }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused, assignmentAnswers]);
 
   function selectAssignedAnswer(questionId: string, selectedIndex: number) {
@@ -496,6 +513,7 @@ export default function App() {
       setAssignmentDeadline(null);
       setAssignmentSessionPaused(false);
       setAssignmentAnswers({});
+      setAssignmentSaveStatus("idle");
       setAssignmentAutoSubmitTriggered(false);
       await refreshAssignedExams();
       setActivePage("assigned-exams");
@@ -542,12 +560,14 @@ export default function App() {
     if (!window.confirm("Approve this submission and release its score and answer review to the student?")) return;
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await request(`/admin/submissions/${submissionId}/release`, { method: "POST", body: JSON.stringify({}) });
       const refreshed = await request<AdminAnalytics>("/admin/analytics/overview");
       setAdminAnalytics(refreshed);
-      setError("Submission approved. The student can now view the result.");
+      setNotice("Submission approved. The student can now view the result.");
     } catch (cause) {
+      setNotice("");
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -1629,6 +1649,7 @@ export default function App() {
             </div>
           </section>
           {error && <p className="error">{error}</p>}
+          {notice && <p className="success-message notice" role="status">{notice}</p>}
         </main>
       </div>
     );
@@ -1685,7 +1706,7 @@ export default function App() {
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
             <section className="panel exam-question-navigator" aria-label="Question navigator"><div className="exam-progress-heading"><strong>Question progress</strong><span>{Object.keys(assignmentAnswers).length} / {activeAssignmentPackage.questions.length} answered</span></div><div className="exam-progress-track"><span style={{ width: `${activeAssignmentPackage.questions.length ? Object.keys(assignmentAnswers).length / activeAssignmentPackage.questions.length * 100 : 0}%` }} /></div><div className="exam-palette">{activeAssignmentPackage.questions.map((question, index) => <button type="button" key={question.id} disabled={assignmentSessionPaused} aria-label={`Go to question ${index + 1}${assignmentAnswers[question.id] !== undefined ? ", answered" : ", unanswered"}`} className={assignmentAnswers[question.id] !== undefined ? "exam-palette-item answered" : "exam-palette-item"} onClick={() => document.getElementById(`assigned-question-${question.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{index + 1}</button>)}</div></section>
             <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article id={`assigned-question-${question.id}`} className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} disabled={assignmentSessionPaused} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => selectAssignedAnswer(question.id, optionIndex)}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
-            <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><button className="primary" disabled={busy || assignmentSessionPaused} onClick={() => void submitAssignedExam()}>{assignmentSessionPaused ? "Waiting for invigilator" : busy ? "Submitting…" : "Submit final answers"}</button></div>
+            <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><small className={`autosave-status autosave-${assignmentSaveStatus}`}>{assignmentSaveStatus === "saving" ? "Saving to server…" : assignmentSaveStatus === "saved" ? "All answers synced" : assignmentSaveStatus === "error" ? "Sync failed · local backup saved" : "Local backup active"}</small><button className="primary" disabled={busy || assignmentSessionPaused} onClick={() => void submitAssignedExam()}>{assignmentSessionPaused ? "Waiting for invigilator" : busy ? "Submitting…" : "Submit final answers"}</button></div>
           </section>
         ) : activePage === "practice" && test ? (
           <section>
@@ -1924,6 +1945,7 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
+        {notice && <p className="success-message notice" role="status">{notice}</p>}
       </main>
     </div>
   );

@@ -162,7 +162,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font: inherit;
   font-size: 12px;
 }
-.exam-question-scoring input:focus { border-color: var(--accent); }
+ .exam-question-scoring input:focus { border-color: var(--accent); }
+.autosave-status { font-size: 12px; font-weight: 650; }
+.autosave-saving { color: var(--muted); }
+.autosave-saved { color: var(--success); }
+.autosave-error { color: var(--danger); }
+.autosave-idle { color: var(--muted); }
 
 /* Theme token compatibility for the live Vite workspace */
 :root {
