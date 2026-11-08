@@ -133,7 +133,9 @@ describe("student analytics page", () => {
       if (path.endsWith("/analytics/score-prediction")) {
         return Promise.resolve(jsonResponse(200, {
           status: "ready", completedAttempts: 30, trainingSamples: 27, evaluationSamples: 7,
-          predictedScorePercent: 84, modelMae: 0.08, baselineMae: 0.15,
+          predictedScorePercent: 84,
+          predictionInterval: { lowerPercent: 76, upperPercent: 92, estimatedErrorPercent: 4.1, method: "walk-forward-rmse" },
+          modelMae: 0.08, baselineMae: 0.15,
           message: "Estimate based on your completed practice history; actual results may differ.",
         }));
       }
@@ -211,6 +213,7 @@ describe("student analytics page", () => {
     expect(await screen.findByText("Next practice score estimate")).toBeInTheDocument();
     expect(screen.getByText("84%")).toBeInTheDocument();
     expect(screen.getByText(/Estimated accuracy on your next practice attempt/)).toBeInTheDocument();
+    expect(screen.getByText(/Approximate prediction range: 76%–92%/)).toBeInTheDocument();
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(
       screen.getByText(
