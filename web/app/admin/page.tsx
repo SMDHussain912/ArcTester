@@ -351,7 +351,7 @@ export default function AdminPage() {
           </button>
         ))}
         <Link className="button button-secondary" href="/admin/questions">Question bank · Upload / Manage</Link>
-        <button className="button button-secondary" disabled={busy} onClick={() => { setError(""); load().catch((e: unknown) => showError(e, "Refresh failed.")); }}>Refresh</button>
+        <button className="button button-secondary" disabled={busy || workspaceLoading} onClick={() => { setError(""); load().catch((e: unknown) => showError(e, "Refresh failed.")); }}>{workspaceLoading ? "Loading…" : "Refresh"}</button>
       </div>
 
       {tab === "overview" ? (
