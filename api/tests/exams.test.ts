@@ -492,6 +492,31 @@ describe("versioned exam management", () => {
     expect(response.status).toBe(404);
   });
 
+  it("supports immutable exam version editing and cloning", async () => {
+    const latest = await request(`/admin/exams/${examId}/latest-version`, "GET", undefined, adminCookie);
+    expect(latest.status).toBe(200);
+    const data = latest.json.exam as { version: { questions: Array<{ sourceQuestionId: number; marks: number; negativeMarks: number }> } };
+    expect(data.version.questions).toHaveLength(1);
+    const edited = await request(`/admin/exams/${examId}`, "PATCH", {
+      title: "Offline Systems Test Revised",
+      description: "Revised paper version",
+      instructions: "Read carefully.",
+      durationMinutes: 50,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: data.version.questions.map((question) => ({
+        questionId: question.sourceQuestionId, marks: question.marks, negativeMarks: question.negativeMarks,
+      })),
+    }, adminCookie);
+    expect(edited.status).toBe(200);
+    expect((edited.json.exam as { versions: Array<{ version: number }> }).versions[0].version).toBe(2);
+
+    const cloned = await request(`/admin/exams/${examId}/clone`, "POST", {}, adminCookie);
+    expect(cloned.status).toBe(201);
+    expect((cloned.json.exam as { title: string; status: string }).title).toContain("Copy of");
+    expect((cloned.json.exam as { status: string }).status).toBe("DRAFT");
+  });
+
   it("keeps the published version snapshot unchanged when the source bank question changes", async () => {
     const question = await server.db.question.findFirstOrThrow();
     await server.db.question.update({
