@@ -1035,8 +1035,11 @@ export function examRouter(db: PrismaClient): Router {
       const now = new Date();
       if (assignment.availableFrom && assignment.availableFrom > now) return next(forbidden("This exam is not available yet."));
       if (assignment.dueAt && assignment.dueAt <= now) return next(forbidden("The exam deadline has passed."));
-      if (assignment.session?.status === "TERMINATED" || assignment.session?.status === "COMPLETED") {
+      if (assignment.session?.status === "TERMINATED" || assignment.session?.status === "COMPLETED" || assignment.session?.status === "EXPIRED") {
         return next(conflict("This exam session has been closed by the invigilator."));
+      }
+      if (assignment.session?.status === "PAUSED") {
+        return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
       }
       if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + 60000) {
         await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
