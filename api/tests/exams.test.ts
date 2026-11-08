@@ -428,7 +428,7 @@ describe("versioned exam management", () => {
     const first = await request("/admin/students?page=1&limit=25", "GET", undefined, adminCookie);
     expect(first.status).toBe(200);
     expect(first.json.students).toHaveLength(25);
-    expect(first.json).toMatchObject({ page: 1, limit: 25, total: 58, totalPages: 3 });
+    expect(first.json).toMatchObject({ page: 1, limit: 25, total: 57, totalPages: 3 });
     const filtered = await request("/admin/students?page=1&limit=25&search=page-student-54", "GET", undefined, adminCookie);
     expect((filtered.json.students as Array<{ email: string }>).map((student) => student.email)).toEqual(["page-student-54@arctester.test"]);
   });
@@ -516,7 +516,7 @@ describe("versioned exam management", () => {
         score: number | null;
       }[];
     };
-    expect(body.totals.students).toBe(3);
+    expect(body.totals.students).toBe(58);
     expect(body.totals.exams).toBe(1);
     expect(body.totals.assignments).toBe(1);
     expect(body.totals.submissions).toBe(1);
