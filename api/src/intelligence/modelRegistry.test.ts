@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -118,9 +118,10 @@ describe("ModelRegistry", () => {
     expect(() => transformFeatures(schema, { attempts: "2" })).toThrow("finite number");
   });
 
-  it("rejects rollback when only one version exists", async () => {
+  it("rejects rollback when no earlier version exists", async () => {
     await registry.register(classifierInput());
-    await expect(registry.rollback("demo-classifier")).rejects.toThrow("No previous model version");
+    await registry.register(classifierInput("dataset-v2"));
+    await expect(registry.rollback("demo-classifier")).rejects.toThrow("No earlier model version");
   });
 
   it("does not expose a missing active model as an empty prediction", async () => {
