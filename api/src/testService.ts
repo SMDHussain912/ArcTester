@@ -39,7 +39,6 @@ export const CreateTestSchema = z
         message: "Select at least one subject for practice mode.",
       });
     }
-    if (value.mode === "mistakes" && !value.subject) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subject"], message: "subject is required for mistakes mode" });
     if (value.subjects && new Set(value.subjects).size !== value.subjects.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
   });
 
