@@ -20,6 +20,7 @@ export function SessionBar() {
         {user?.role === "STUDENT" ? <Link href="/assignments" className="nav-link">My exams</Link> : null}
         <a href="/#question-bank" className="nav-link">Question bank</a>
         {user?.role === "ADMIN" ? <Link href="/admin" className="nav-link">Admin workspace</Link> : null}
+        {user?.role === "ADMIN" ? <Link href="/admin/submissions" className="nav-link">Submission review</Link> : null}
       </nav>
       <div className="header-actions"><ThemeToggle />
         {status === "loading" ? <span className="header-status">Checking session…</span> :
