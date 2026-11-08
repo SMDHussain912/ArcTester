@@ -532,6 +532,7 @@ describe("versioned exam management", () => {
     expect((submitted.json.submission as { status: string }).status).toBe("GRADED");
     const session = await server.db.examSession.findUniqueOrThrow({
       where: { assignmentId: offlineAssignment.id },
+      include: { events: true },
     });
     expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
   });

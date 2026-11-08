@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
-import OfflineExamWorkspace from "./src/offline/OfflineExamWorkspace";
 import { OfflineExams } from "./src/OfflineExams";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -274,7 +273,7 @@ export default function App() {
             </TouchableOpacity>
           </View>
         ) : showExams ? (
-          <OfflineExamWorkspace token={token!} onExit={() => setShowExams(false)} />
+          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => setShowExams(false)} />
         ) : test ? (
           <View style={styles.card}>
             <Text style={styles.heading}>Practice session</Text>
@@ -357,7 +356,6 @@ export default function App() {
             >
               <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
             </TouchableOpacity>
-            <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} />
             <Text style={styles.sectionTitle}>Practice by subject</Text>
             {bank?.subjects.map((item) => (
               <TouchableOpacity

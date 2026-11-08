@@ -44,9 +44,10 @@ type Props = {
   apiUrl: string;
   token: string;
   userId: string;
+  onExit?: () => void;
 };
 
-export function OfflineExams({ api, apiUrl, token, userId }: Props) {
+export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
 
@@ -252,6 +253,7 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
     const seconds = (remainingSeconds ?? 0) % 60;
     return (
       <View style={styles.card}>
+        {onExit && <TouchableOpacity onPress={onExit} style={styles.backButton}><Text style={styles.link}>‹ Back to dashboard</Text></TouchableOpacity>}
         <Text style={styles.heading}>{activePackage.title}</Text>
         <Text style={styles.timer}>
           Time left: {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
@@ -301,11 +303,12 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
   return (
     <View style={styles.section}>
       <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>Assigned exams</Text>
+        {onExit ? <TouchableOpacity onPress={onExit}><Text style={styles.link}>‹ Dashboard</Text></TouchableOpacity> : <Text style={styles.sectionTitle}>Assigned exams</Text>}
         <TouchableOpacity disabled={syncing} onPress={() => void syncOutbox()}>
           <Text style={styles.link}>{syncing ? "Syncing…" : "Sync now"}</Text>
         </TouchableOpacity>
       </View>
+      {onExit && <Text style={styles.sectionTitle}>Assigned exams</Text>}
       <Text style={styles.muted}>
         {online ? "Internet connected" : "Offline mode"} · {pendingCount} pending submission
         {pendingCount === 1 ? "" : "s"}
@@ -384,6 +387,7 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
 const styles = StyleSheet.create({
   section: { marginTop: 24 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  backButton: { alignSelf: "flex-start", marginBottom: 14 },
   sectionTitle: { color: "#172033", fontSize: 17, fontWeight: "800", marginBottom: 8 },
   link: { color: "#2563eb", fontWeight: "700" },
   muted: { color: "#748096", fontSize: 12, marginTop: 4 },
