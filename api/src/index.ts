@@ -47,7 +47,7 @@ function localCors(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
 
   app.get("/health", (_req, res) => {
