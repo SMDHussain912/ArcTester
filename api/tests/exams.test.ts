@@ -418,51 +418,6 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
-  it("retains deadline-crossing submissions for invigilator review", async () => {
-    const sourceAssignment = await server.db.examAssignment.findUniqueOrThrow({ where: { id: assignmentId } });
-    const secondStudent = await server.db.user.findUniqueOrThrow({
-      where: { email: "other-student@arctester.test" }, select: { id: true },
-    });
-    const admin = await server.db.user.findUniqueOrThrow({
-      where: { email: "exam-admin@arctester.test" }, select: { id: true },
-    });
-    const lateAssignment = await server.db.examAssignment.create({
-      data: {
-        examVersionId: sourceAssignment.examVersionId,
-        studentId: secondStudent.id,
-        assignedById: admin.id,
-        dueAt: new Date(Date.now() + 60_000),
-      },
-    });
-    const question = await server.db.examVersionQuestion.findFirstOrThrow({
-      where: { examVersionId: sourceAssignment.examVersionId },
-    });
-    const started = await request(
-      `/exams/assignments/${lateAssignment.id}/session/start`, "POST", {}, secondStudentCookie,
-    );
-    expect(started.status).toBe(200);
-    const session = started.json.session as { startedAt: string };
-    const saved = await request(
-      `/exams/assignments/${lateAssignment.id}/answers`, "PUT",
-      { answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }] }, secondStudentCookie,
-    );
-    expect(saved.status).toBe(200);
-    await server.db.examAssignment.update({
-      where: { id: lateAssignment.id }, data: { dueAt: new Date(Date.now() - 1_000) },
-    });
-    const submitted = await request(
-      `/exams/assignments/${lateAssignment.id}/submission`, "POST",
-      {
-        attemptUuid: "a8b5e7f0-4d22-4d71-92f0-9b6b5b8b1201",
-        startedAt: session.startedAt,
-        submittedAt: new Date().toISOString(),
-        answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
-      }, secondStudentCookie,
-    );
-    expect(submitted.status).toBe(201);
-    expect(submitted.json.submission).toMatchObject({ status: "REVIEW_REQUIRED" });
-  });
-
   it("returns exam attendance and question-level report data", async () => {
     const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
     expect(attendance.status).toBe(200);
@@ -679,4 +634,50 @@ describe("versioned exam management", () => {
     const snapshot = await server.db.examVersionQuestion.findFirstOrThrow();
     expect(snapshot.text).toBe("Which structure follows FIFO?");
   });
+  it("retains deadline-crossing submissions for invigilator review", async () => {
+    const sourceAssignment = await server.db.examAssignment.findUniqueOrThrow({ where: { id: assignmentId } });
+    const lateCandidateCookie = await createSession("late-candidate@arctester.test", "STUDENT");
+    const lateCandidate = await server.db.user.findUniqueOrThrow({
+      where: { email: "late-candidate@arctester.test" }, select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" }, select: { id: true },
+    });
+    const lateAssignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: sourceAssignment.examVersionId,
+        studentId: lateCandidate.id,
+        assignedById: admin.id,
+        dueAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: sourceAssignment.examVersionId },
+    });
+    const started = await request(
+      `/exams/assignments/${lateAssignment.id}/session/start`, "POST", {}, lateCandidateCookie,
+    );
+    expect(started.status).toBe(200);
+    const session = started.json.session as { startedAt: string };
+    const saved = await request(
+      `/exams/assignments/${lateAssignment.id}/answers`, "PUT",
+      { answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }] }, lateCandidateCookie,
+    );
+    expect(saved.status).toBe(200);
+    await server.db.examAssignment.update({
+      where: { id: lateAssignment.id }, data: { dueAt: new Date(Date.now() - 1_000) },
+    });
+    const submitted = await request(
+      `/exams/assignments/${lateAssignment.id}/submission`, "POST",
+      {
+        attemptUuid: "a8b5e7f0-4d22-4d71-92f0-9b6b5b8b1201",
+        startedAt: session.startedAt,
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+      }, lateCandidateCookie,
+    );
+    expect(submitted.status).toBe(201);
+    expect(submitted.json.submission).toMatchObject({ status: "REVIEW_REQUIRED" });
+  });
+
 });
