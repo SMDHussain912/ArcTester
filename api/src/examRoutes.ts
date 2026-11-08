@@ -273,7 +273,12 @@ export function examRouter(db: PrismaClient): Router {
       if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
       const result = await db.question.deleteMany({ where: { id: { in: input.ids } } });
       res.json({ ok: true, deleted: result.count });
-    } catch (error) { next(error); }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2003") {
+        return next(conflict("Some selected questions are already used by attempts or reports and cannot be deleted. Archive or keep those questions instead."));
+      }
+      next(error);
+    }
   });
 
   router.patch("/admin/questions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
