@@ -1,0 +1,59 @@
+name: Prepare Next.js 16 security upgrade
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/prepare-next16-security-upgrade.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: next16-security-upgrade
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Upgrade Next.js in a review branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install the current lockfile
+        run: npm ci
+
+      - name: Upgrade Next.js to the patched release
+        run: npm install next@16.4.5 --workspace=web
+
+      - name: Require the Next.js 16 Node.js minimum
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          pkg.engines = { ...(pkg.engines ?? {}), node: ">=20.9.0" };
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
+          NODE
+
+      - name: Push a review branch
+        run: |
+          branch="security/next16-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add package.json web/package.json package-lock.json
+          git commit -m "chore(deps): upgrade Next.js to patched 16.4.5"
+          git push origin "$branch"
+          echo "Review branch: $branch" >> "$GITHUB_STEP_SUMMARY"
