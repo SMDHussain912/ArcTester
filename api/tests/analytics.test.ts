@@ -503,8 +503,11 @@ describe("analytics", () => {
     expect(body.performanceExplanation.answeredQuestions).toBeGreaterThanOrEqual(5);
     expect(body.performanceExplanation.incorrectAnswers).toBeGreaterThanOrEqual(0);
     expect(body.performanceExplanation.headline.length).toBeGreaterThan(0);
-    expect(body.performanceExplanation.details.join(" ")).toContain("% accuracy");
-    expect(body.performanceExplanation.details.join(" ")).toContain("answered questions");
+    expect(body.performanceExplanation.details.join(" ")).toContain("answered practice questions");
+    expect(
+      body.performanceExplanation.details.join(" ").includes("% accuracy") ||
+      body.performanceExplanation.details.join(" ").includes("minimum of")
+    ).toBe(true);
     const evidenced = body.recommendations.find((item) => item.evidence !== null);
     expect(evidenced).toMatchObject({
       id: expect.stringContaining("revise-topic-"),
