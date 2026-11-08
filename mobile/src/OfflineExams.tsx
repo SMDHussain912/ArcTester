@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
+  configureOfflineStore,
   getPendingSubmissions,
   getRemainingSeconds,
   listCachedExamPackages,
@@ -42,9 +43,10 @@ type Props = {
   api: ApiRequest;
   apiUrl: string;
   token: string;
+  userId: string;
 };
 
-export function OfflineExams({ api, apiUrl, token }: Props) {
+export function OfflineExams({ api, apiUrl, token, userId }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
 
@@ -65,6 +67,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
   const syncLock = useRef(false);
 
   const refreshLocalState = useCallback(async () => {
+    configureOfflineStore(userId);
     const [packages, pending] = await Promise.all([
       listCachedExamPackages(),
       getPendingSubmissions(),
@@ -72,7 +75,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setCachedIds(packages.map((item) => item.assignmentId));
     setCachedPackages(packages);
     setPendingCount(pending.length);
-  }, []);
+  }, [userId]);
 
   const refreshAssignments = useCallback(async () => {
     const result = await apiRef.current<{ assignments: AssignedExam[] }>("/exams/assigned");
@@ -85,6 +88,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setSyncing(true);
     setError("");
     try {
+      configureOfflineStore(userId);
       const pending = await getPendingSubmissions();
       if (pending.length > 0) {
         setSyncMessage("Uploading saved exam submissions…");
@@ -100,7 +104,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
       syncLock.current = false;
       setSyncing(false);
     }
-  }, [apiUrl, refreshAssignments, refreshLocalState, token]);
+  }, [apiUrl, refreshAssignments, refreshLocalState, token, userId]);
 
   useEffect(() => {
     let mounted = true;
@@ -170,6 +174,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setBusyId(assignmentId);
     setError("");
     try {
+      configureOfflineStore(userId);
       const response = await apiRef.current<{
         package: OfflineExamPackage;
         sha256: string;
@@ -188,6 +193,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setError("");
     autoSubmitStarted.current = false;
     try {
+      configureOfflineStore(userId);
       const started = await startOfflineAttempt(assignmentId);
       const restored = await restoreActiveAttempt(assignmentId);
       setActivePackage(started.examPackage);
