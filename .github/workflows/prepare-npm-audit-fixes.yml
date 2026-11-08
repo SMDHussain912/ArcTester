@@ -35,7 +35,13 @@ jobs:
         run: npm ci
 
       - name: Apply semver-compatible npm audit fixes only
-        run: npm audit fix
+        run: |
+          set +e
+          npm audit fix
+          status=$?
+          set -e
+          echo "npm audit fix exit code: $status (remaining advisories are reported in the audit workflow)."
+          exit 0
 
       - name: Push a review branch
         id: branch
