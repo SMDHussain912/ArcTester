@@ -46,6 +46,7 @@ describe("admin model registry API", () => {
     const created = await request("/admin/model-datasets", "POST", {
       name,
       task: "binary-classification",
+      targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
       samples: evaluationSamples,
       sourceDescription: "Curated held-out test fixture for model governance tests.",
@@ -129,6 +130,7 @@ describe("admin model registry API", () => {
     const duplicate = await request("/admin/model-datasets", "POST", {
       name: "dataset-registry-test",
       task: "binary-classification",
+      targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
       samples: evaluationSamples,
       sourceDescription: "Curated held-out test fixture for model governance tests.",
@@ -139,6 +141,7 @@ describe("admin model registry API", () => {
     const malformed = await request("/admin/model-datasets", "POST", {
       name: "bad-dataset",
       task: "binary-classification",
+      targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
       samples: [{ features: { unexpected: 3 }, target: 0 }, ...evaluationSamples.slice(1)],
       sourceDescription: "Malformed fixture for API validation testing.",
