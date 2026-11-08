@@ -580,6 +580,7 @@ export interface AdminRegisteredModel {
   isActive: boolean;
   createdAt: string;
   activatedAt?: string | null;
+  productionEligible?: boolean | null;
 }
 
 export interface TensorflowTrainingReport {
@@ -674,6 +675,10 @@ export const api = {
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
   adminModelDatasets: () => request<{ ok: true; datasets: AdminModelDataset[] }>("/admin/model-datasets"),
   adminRegisteredModels: () => request<{ ok: true; models: AdminRegisteredModel[] }>("/admin/models"),
+  activateAdminModelVersion: (modelId: string, version: number) =>
+    request<{ ok: true; model: { modelId: string; version: number; isActive: boolean; activatedAt: string } }>(
+      `/admin/models/${encodeURIComponent(modelId)}/${version}/activate`, json({})
+    ),
   registerAdminModelDataset: (body: {
     name: string;
     task: "regression";
