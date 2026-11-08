@@ -1186,6 +1186,37 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/exams/assignments/:id/audit", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const assignment = await db.examAssignment.findUnique({
+        where: { id: req.params.id },
+        include: {
+          student: { select: { id: true, email: true } },
+          examVersion: { include: { exam: { select: { title: true } } } },
+          session: {
+            include: {
+              events: { orderBy: { createdAt: "asc" }, include: { actor: { select: { id: true, email: true, role: true } } } },
+            },
+          },
+          submission: { select: { id: true, status: true, submittedAt: true, receivedAt: true, score: true, maximumScore: true } },
+        },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      res.json({ ok: true, audit: {
+        assignmentId: assignment.id, candidate: assignment.student,
+        exam: assignment.examVersion.exam, version: assignment.examVersion.version,
+        session: assignment.session ? {
+          id: assignment.session.id, status: assignment.session.status,
+          startedAt: assignment.session.startedAt, lastHeartbeatAt: assignment.session.lastHeartbeatAt,
+          endedAt: assignment.session.endedAt, heartbeatCount: assignment.session.heartbeatCount,
+          focusLossCount: assignment.session.focusLossCount, disconnectCount: assignment.session.disconnectCount,
+        } : null,
+        submission: assignment.submission,
+        events: assignment.session?.events ?? [],
+      } });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const assignments = await db.examAssignment.findMany({
