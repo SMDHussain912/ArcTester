@@ -48,9 +48,9 @@ describe("student analytics page", () => {
         screen.getByText("Sign in to see your progress, recent attempts and areas to revise.")
       ).toBeInTheDocument()
     );
-    expect(
-      fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))
-    ).toBe(false);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))).toBe(
+      false
+    );
   });
 
   it("shows accuracy, weak subjects and recent practice history", async () => {
@@ -127,9 +127,10 @@ describe("student analytics page", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
-    expect(
-      screen.getByRole("progressbar", { name: "Physics accuracy" })
-    ).toHaveAttribute("aria-valuenow", "30");
+    expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute(
+      "aria-valuenow",
+      "30"
+    );
   });
 
   it("shows an empty-state message when there is no practice history", async () => {
@@ -164,9 +165,7 @@ describe("student analytics page", () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Complete a practice session to unlock your subject performance breakdown."
-      )
+      screen.getByText("Complete a practice session to unlock your subject performance breakdown.")
     ).toBeInTheDocument();
   });
 
@@ -198,8 +197,8 @@ describe("student analytics page", () => {
       </SessionProvider>
     );
 
-    expect(
-      await screen.findByRole("alert")
-    ).toHaveTextContent("Analytics are temporarily unavailable.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Analytics are temporarily unavailable."
+    );
   });
 });
