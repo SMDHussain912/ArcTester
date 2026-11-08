@@ -90,7 +90,7 @@ describe("live Vite application", () => {
           user: { id: 1, email: "admin@example.com", role: "ADMIN" },
         }));
       }
-      if (path.endsWith("/admin/question-bank")) {
+      if (path.includes("/admin/question-bank")) {
         return Promise.resolve(response(200, { questions: [] }));
       }
       if (path.endsWith("/admin/questions")) {
