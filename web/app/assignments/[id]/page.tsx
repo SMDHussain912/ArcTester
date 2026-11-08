@@ -38,6 +38,7 @@ function AssignedExamRunner() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submittingRef = useRef(false);
+  const sessionStartedRef = useRef(false);
 
   useEffect(() => {
     api
@@ -69,6 +70,21 @@ function AssignedExamRunner() {
     return () => window.clearInterval(timer);
   }, [attempt]);
 
+  useEffect(() => {
+    if (!attempt || sessionStartedRef.current) return;
+    sessionStartedRef.current = true;
+    api.startAssignedExamSession(assignmentId).then(({ session }) => {
+      if (session.startedAt !== attempt.startedAt) {
+        const restored = { ...attempt, startedAt: session.startedAt };
+        setAttempt(restored);
+        try { window.localStorage.setItem(storageKey(assignmentId), JSON.stringify(restored)); } catch { /* in-memory attempt remains usable */ }
+      }
+    }).catch((cause: unknown) => {
+      sessionStartedRef.current = false;
+      setError(cause instanceof ApiError ? cause.message : "Could not restore the server exam session.");
+    });
+  }, [attempt, assignmentId]);
+
   const deadline = useMemo(() => {
     if (!exam || !attempt) return null;
     const durationDeadline = new Date(attempt.startedAt).getTime() + exam.durationMinutes * 60_000;
@@ -89,15 +105,22 @@ function AssignedExamRunner() {
     [assignmentId]
   );
 
-  function startExam() {
+  async function startExam() {
     if (!exam) return;
-    const next: SavedAttempt = {
-      attemptUuid: window.crypto.randomUUID(),
-      startedAt: new Date().toISOString(),
-      answers: {},
-      marked: [],
-    };
-    persist(next);
+    setError(null);
+    try {
+      const { session } = await api.startAssignedExamSession(assignmentId);
+      sessionStartedRef.current = true;
+      const next: SavedAttempt = {
+        attemptUuid: window.crypto.randomUUID(),
+        startedAt: session.startedAt,
+        answers: {},
+        marked: [],
+      };
+      persist(next);
+    } catch (cause: unknown) {
+      setError(cause instanceof ApiError ? cause.message : "Could not start the exam session.");
+    }
   }
 
   function choose(questionId: string, selectedIndex: number) {
@@ -146,6 +169,28 @@ function AssignedExamRunner() {
       );
     }
   }, [exam, attempt, assignmentId, router]);
+
+  useEffect(() => {
+    if (!attempt || !sessionStartedRef.current) return;
+    const heartbeat = () => {
+      const event = document.visibilityState === "visible" ? "HEARTBEAT" : "FOCUS_LOST";
+      void api.heartbeatAssignedExamSession(assignmentId, event).catch(() => {
+        setError("Connection to the exam server was interrupted. Your answers remain saved locally; reconnect immediately.");
+      });
+    };
+    const interval = window.setInterval(heartbeat, 15000);
+    const onVisibility = () => {
+      void api.heartbeatAssignedExamSession(assignmentId, document.visibilityState === "visible" ? "FOCUS_RESTORED" : "FOCUS_LOST").catch(() => undefined);
+    };
+    const onOnline = () => { void api.heartbeatAssignedExamSession(assignmentId, "CONNECTION_RESTORED").catch(() => undefined); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [attempt, assignmentId]);
 
   useEffect(() => {
     if (attempt && deadline !== null && remaining === 0 && !submittingRef.current) {
