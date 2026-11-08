@@ -179,7 +179,7 @@ export default function AdminPage() {
               <span className="pill">{overview.practice.questionPerformance.questions.length} questions tracked</span>
             </div>
             <p className="mute">
-              Cohort practice only. A question is flagged after at least {overview.practice.questionPerformance.minimumAnswers} answered attempts
+              Cohort practice only. A question is flagged after at least {overview.practice.questionPerformance.minimumAnswers} answered attempts from {overview.practice.questionPerformance.minimumStudents} students
               and accuracy below {Math.round(overview.practice.questionPerformance.weakAccuracyThreshold * 100)}%.
               {overview.practice.questionPerformance.insufficientSampleCount > 0
                 ? ` ${overview.practice.questionPerformance.insufficientSampleCount} questions have insufficient sample size.`
