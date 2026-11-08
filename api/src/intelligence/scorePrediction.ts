@@ -80,7 +80,25 @@ function evaluateMeanBaseline(
   };
 }
 
-/** Trains on older observations and compares against the training-set mean baseline. */
+function aggregateMetrics(targets: number[], predictions: number[]): RegressionMetrics {
+  const errors = targets.map((target, index) => target - predictions[index]);
+  const mae = errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length;
+  const squared = errors.reduce((sum, error) => sum + error ** 2, 0);
+  const targetMean = targets.reduce((sum, target) => sum + target, 0) / targets.length;
+  const totalSquared = targets.reduce((sum, target) => sum + (target - targetMean) ** 2, 0);
+  return {
+    rows: targets.length,
+    mae,
+    rmse: Math.sqrt(squared / errors.length),
+    rSquared: totalSquared > 0 ? 1 - squared / totalSquared : null,
+  };
+}
+
+/**
+ * Expanding-window walk-forward evaluation. Each prediction is made using only
+ * samples that occurred earlier; both the model and mean baseline are refit
+ * using that fold's training prefix.
+ */
 export function trainAndEvaluateNextAttemptModel(
   attempts: CompletedAttemptScore[],
 ): ScorePredictionEvaluation {
@@ -88,14 +106,34 @@ export function trainAndEvaluateNextAttemptModel(
   if (samples.length < 4) {
     throw new Error("At least four sequential score samples are required for evaluation");
   }
-  const { train, test } = splitChronological(samples, 0.25);
-  const model = fitLinearRegression(train);
-  const regression = evaluateLinearRegression(model, test);
-  const meanBaseline = evaluateMeanBaseline(train, test);
+
+  const initialTrainRows = Math.floor(samples.length * 2 / 3);
+  const targets: number[] = [];
+  const modelPredictions: number[] = [];
+  const baselinePredictions: number[] = [];
+  let finalFoldModel: LinearRegressionArtifact | undefined;
+
+  for (let testIndex = initialTrainRows; testIndex < samples.length; testIndex += 1) {
+    const training = samples.slice(0, testIndex);
+    const testing = samples[testIndex];
+    const model = fitLinearRegression(training);
+    finalFoldModel = model;
+    targets.push(testing.target);
+    modelPredictions.push(model.weights.reduce(
+      (sum, weight, index) => sum + weight * testing.features[index],
+      model.bias,
+    ));
+    baselinePredictions.push(
+      training.reduce((sum, sample) => sum + sample.target, 0) / training.length,
+    );
+  }
+
+  const regression = aggregateMetrics(targets, modelPredictions);
+  const meanBaseline = aggregateMetrics(targets, baselinePredictions);
   return {
-    model,
-    trainRows: train.length,
-    testRows: test.length,
+    model: finalFoldModel!,
+    trainRows: initialTrainRows,
+    testRows: targets.length,
     regression,
     meanBaseline,
     beatsMeanBaseline: regression.mae < meanBaseline.mae,
