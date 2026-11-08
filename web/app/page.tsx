@@ -146,7 +146,7 @@ export default function HomePage() {
                 <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
                   <span className="mute">{bank ? `${bank.total} questions ready` : "Loading question bank…"}</span>
                   <button className="button button-primary" onClick={start} disabled={starting || !bank || (mode !== "mock" && !subject)}>
-                    {starting ? "Preparing…" : "Start test →"}
+                    {starting ? "Preparing…" : "Start test"}
                   </button>
                 </div>
               </div>
