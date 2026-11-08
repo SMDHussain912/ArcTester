@@ -116,6 +116,12 @@ function AssignmentResult() {
               <p>{question.explanation}</p>
             </div>
           ) : null}
+          {question.relatedConcepts.length > 0 ? (
+            <div className="exp">
+              <strong>Revise this concept</strong>
+              <ul>{question.relatedConcepts.map((concept) => <li key={concept.slug}><Link href={`/learning#${concept.slug}`}>{concept.title}</Link></li>)}</ul>
+            </div>
+          ) : null}
         </article>
       ))}
       <div className="result-footer">
