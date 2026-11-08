@@ -25,7 +25,7 @@ describe("practice paper selection", () => {
     pushMock.mockReset();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+    fetchMock.mockImplementation((url: string) => {
       const path = String(url);
       if (path.endsWith("/auth/me")) {
         return Promise.resolve(response(200, {
