@@ -1044,6 +1044,29 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/exams/attendance", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const assignments = await db.examAssignment.findMany({
+        orderBy: { assignedAt: "desc" },
+        include: {
+          student: { select: { id: true, email: true } },
+          examVersion: { include: { exam: { select: { id: true, title: true } }, _count: { select: { questions: true } } } },
+          session: { select: { id: true, status: true, startedAt: true, lastHeartbeatAt: true, endedAt: true, heartbeatCount: true, focusLossCount: true, disconnectCount: true } },
+          submission: { select: { id: true, status: true, submittedAt: true, score: true, maximumScore: true } },
+        },
+      });
+      const now = Date.now();
+      res.json({ ok: true, serverTime: new Date(now), attendance: assignments.map((item) => ({
+        assignmentId: item.id, candidate: item.student, exam: item.examVersion.exam,
+        version: item.examVersion.version, questionCount: item.examVersion._count.questions,
+        assignedAt: item.assignedAt, availableFrom: item.availableFrom, dueAt: item.dueAt,
+        attendanceStatus: item.submission ? "SUBMITTED" : item.session?.startedAt ? item.session.status : "NOT_STARTED",
+        connectivity: item.session?.status === "ACTIVE" && item.session.lastHeartbeatAt && now - item.session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : item.session?.startedAt ? "STALE_OR_INACTIVE" : "NOT_STARTED",
+        session: item.session, submission: item.submission,
+      })) });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().max(300).default("") }).parse(req.body);
