@@ -518,8 +518,9 @@ describe("analytics", () => {
     const report = await importFromJson(fresh.db, [
       ...BANK,
       ["Snapshot Subject", "Snapshot classification fixture?", ["A", "B", "C", "D"], 0, "Snapshot explanation"],
+      ["Question Sample Subject", "Minimum sample question?", ["Correct", "Wrong", "Other", "Last"], 0, "Minimum sample fixture"],
     ]);
-    expect(report.added).toBe(4);
+    expect(report.added).toBe(5);
 
     // A different account in the fresh DB — import must land under this user.
     const freshSession = await signUp(fresh.baseUrl, "restored@example.com");
