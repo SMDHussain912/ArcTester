@@ -58,7 +58,7 @@ Open <http://localhost:3000>. The API health endpoint is
 database as well, use `docker compose down -v` (this permanently deletes
 saved accounts and progress).
 
-For phone access, set `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` in the root
+For phone access, set `VITE_API_URL` and `CORS_ORIGINS` in the root
 `.env` file to your computer's LAN IP, then rebuild the web image with
 `docker compose up --build -d`. See the LAN steps below.
 
@@ -74,7 +74,7 @@ To make it work from a real device:
 
 1. Find your machine's LAN IP: `hostname -I` (e.g. `192.168.1.5`).
 2. In `web/.env.local`, point the app at the LAN IP:
-   `NEXT_PUBLIC_API_URL=http://192.168.1.5:4000`.
+   `VITE_API_URL=http://192.168.1.5:4000`.
 3. Add the web origin to `CORS_ORIGINS` in `api/.env`:
    `CORS_ORIGINS=http://192.168.1.5:3000`. Multiple origins can be
    comma-separated. Localhost origins remain allowed by default.
@@ -89,7 +89,7 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | ---------------------- | ---------------------------- |
 | `npm run dev`          | Run API + Web together       |
 | `npm run dev:api`      | API dev server (`tsx watch`) |
-| `npm run dev:web`      | Web dev server (`next dev`)  |
+| `npm run dev:web`      | Web dev server (Vite)  |
 | `npm run build`        | Build both workspaces        |
 | `npm run test`         | Vitest in both workspaces    |
 | `npm run lint`         | ESLint in both workspaces    |
@@ -126,7 +126,7 @@ The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENT
 - [x] **9.** Candidate session records, server-side start/deadline enforcement, heartbeats, audit events, and invigilator actions.
 - [ ] **10 (in progress).** UI modularization, stronger workflow coverage, session recovery, and continued accessibility/responsive polish.
 
-GitHub Actions runs the ArcTester CI workflow for API/web tests, lint, production builds, Prisma migration verification, and mobile typechecking. Check the Actions tab for the exact status of each commit; a pushed commit alone is not proof of verification.
+GitHub Actions runs the ArcTester CI workflow for API/web tests, lint, production builds, Prisma migration verification, mobile typechecking, and privacy-safe TensorFlow dataset converter tests. Check the Actions tab for the exact status of each commit; a pushed commit alone is not proof of verification.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
@@ -160,7 +160,7 @@ CORS: the API allows `http://localhost:*` / `127.0.0.1` origins only (hand-rolle
 
 ## Phase 4 — UI (`/web`, React + TypeScript + Vite)
 
-Plain CSS in one global stylesheet (`web/app/globals.css`) — no UI libraries.
+Plain CSS in one global stylesheet (`web/src/styles.css`) — no UI libraries.
 Light/dark follows `prefers-color-scheme`; every control is keyboard reachable
 with a visible focus ring; labels wrap every input; mobile-friendly at 360px.
 
@@ -175,7 +175,7 @@ with a visible focus ring; labels wrap every input; mobile-friendly at 360px.
 - **Result** (`/result/[id]`) — score, per-subject table, wrong-answer review
   with the correct option and explanation; expired attempts get a warning.
 - **API client** (`web/lib/api.ts`) — typed, base URL from
-  `NEXT_PUBLIC_API_URL` (see `web/.env.local.example`), every failure becomes a
+  `VITE_API_URL` (see `web/.env.local.example`), every failure becomes a
   friendly sentence (never raw error text).
 - **Tests** — pure helpers only, node env, no jsdom:
   `lib/timer.test.ts` (9), `lib/palette.test.ts` (5), `lib/answers.test.ts` (6).
