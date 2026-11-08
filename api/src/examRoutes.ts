@@ -1540,10 +1540,9 @@ export function examRouter(db: PrismaClient): Router {
         return next(conflict("The exam session is not active. Resume it before submitting."));
       }
       const serverStartedAt = examSession.startedAt;
-      if (assignment.dueAt && serverSubmittedAt > assignment.dueAt) {
-        return next(forbidden("The examination submission deadline has passed."));
-      }
-
+      // A request may arrive just after the due time even when the candidate
+      // autosaved answers before the deadline. Keep the submission for review
+      // instead of discarding those answers; late timing is marked REVIEW_REQUIRED.
       const questions = assignment.examVersion.questions;
       const questionIds = new Set(questions.map((question) => question.id));
       if (

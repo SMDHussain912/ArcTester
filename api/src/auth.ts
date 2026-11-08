@@ -5,7 +5,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
-import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 
@@ -108,6 +108,30 @@ export function verifyPassword(password: string, stored: string): boolean {
   const salt = Buffer.from(saltHex, "hex");
   const expected = Buffer.from(hashHex, "hex");
   const derived = scryptSync(password, salt, 64);
+  return derived.length === expected.length && timingSafeEqual(derived, expected);
+}
+
+function scryptAsync(password: string | Buffer, salt: string | Buffer, keylen: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, (error, derived) => {
+      if (error) reject(error);
+      else resolve(derived as Buffer);
+    });
+  });
+}
+
+export async function hashPasswordAsync(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(password, salt, 64);
+  return `${salt.toString("hex")}:${derived.toString("hex")}`;
+}
+
+export async function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex || !/^[a-f0-9]{32}$/i.test(saltHex) || !/^[a-f0-9]{128}$/i.test(hashHex)) return false;
+  const salt = Buffer.from(saltHex, "hex");
+  const expected = Buffer.from(hashHex, "hex");
+  const derived = await scryptAsync(password, salt, 64);
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
@@ -323,6 +347,7 @@ export function authRouter(db: PrismaClient): Router {
     try {
       const input = RegisterSchema.parse(req.body);
       const tokenHash = sha256(input.invitationToken);
+      const passwordHash = await hashPasswordAsync(input.password);
       const now = new Date();
 
       const user = await db.$transaction(async (tx) => {
@@ -356,7 +381,7 @@ export function authRouter(db: PrismaClient): Router {
         return tx.user.create({
           data: {
             email: input.email,
-            passwordHash: hashPassword(input.password),
+            passwordHash,
             role: "STUDENT",
           },
           select: { id: true, email: true, role: true },
@@ -379,7 +404,7 @@ export function authRouter(db: PrismaClient): Router {
       const retryAfter = loginRetryAfter(input.email);
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
-      if (!user || !verifyPassword(input.password, user.passwordHash)) {
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
         const blockedFor = recordLoginFailure(input.email);
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
@@ -399,7 +424,7 @@ export function authRouter(db: PrismaClient): Router {
       const retryAfter = loginRetryAfter(input.email);
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
-      if (!user || !verifyPassword(input.password, user.passwordHash)) {
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
         const blockedFor = recordLoginFailure(input.email);
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));

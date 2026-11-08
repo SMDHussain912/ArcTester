@@ -11,6 +11,8 @@ export type ImportReport = {
   total: number;
 };
 
+export const MAX_QUESTION_IMPORT_ROWS = 2_000;
+
 const CSV_COLUMNS = [
   "subject",
   "topic",
@@ -55,6 +57,10 @@ export async function importFromJson(db: PrismaClient, payload: unknown): Promis
     // Fall through to per-row validation below for a precise report.
   }
   const rows = Array.isArray(payload) ? payload : [];
+  if (rows.length > MAX_QUESTION_IMPORT_ROWS) {
+    report.invalid.push(invalidRow(0, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`));
+    return report;
+  }
   const valid: { index: number; input: QuestionInput }[] = [];
   rows.forEach((raw, i) => {
     const rowNumber = i + 1;
@@ -100,6 +106,11 @@ export async function importFromCsv(db: PrismaClient, content: string): Promise<
     table = parseCsv(content);
   } catch (error) {
     report.invalid.push(invalidRow(1, error instanceof Error ? error.message : "bad CSV"));
+    return report;
+  }
+  if (table.rows.length > MAX_QUESTION_IMPORT_ROWS) {
+    report.total = table.rows.length;
+    report.invalid.push(invalidRow(1, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`));
     return report;
   }
   const required = ["subject", "text", "optiona", "optionb", "optionc", "optiond", "correctindex"];
@@ -175,6 +186,9 @@ export async function previewImport(
     }
 
     total = payload.length;
+    if (total > MAX_QUESTION_IMPORT_ROWS) {
+      return { valid: 0, duplicates: 0, invalid: [invalidRow(0, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`)], total };
+    }
     payload.forEach((raw, index) => {
       const parsed = BaseRowSchema.safeParse(raw);
       if (!parsed.success) {
@@ -211,6 +225,10 @@ export async function previewImport(
       };
     }
 
+    total = table.rows.length;
+    if (total > MAX_QUESTION_IMPORT_ROWS) {
+      return { valid: 0, duplicates: 0, invalid: [invalidRow(1, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`)], total };
+    }
     const required = [
       "subject",
       "text",
@@ -232,7 +250,6 @@ export async function previewImport(
     }
 
     const col = (name: string) => lower.indexOf(name);
-    total = table.rows.length;
     table.rows.forEach((cells, index) => {
       const get = (name: string) => (cells[col(name)] ?? "").trim();
       const correctRaw = get("correctindex");

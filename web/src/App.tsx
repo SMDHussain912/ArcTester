@@ -202,6 +202,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
+  const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
@@ -444,8 +445,9 @@ export default function App() {
     const assignmentId = activeAssignmentPackage.assignmentId;
     const saveVersion = ++assignmentSaveSequenceRef.current;
     setAssignmentSaveStatus("saving");
-    const timer = window.setTimeout(async () => {
-      try {
+    const timer = window.setTimeout(() => {
+      // Serialize saves so an older, slower request cannot overwrite newer answers.
+      const save = assignmentSaveQueueRef.current.catch(() => undefined).then(async () => {
         await request(`/exams/assignments/${assignmentId}/answers`, {
           method: "PUT",
           body: JSON.stringify({
@@ -456,12 +458,13 @@ export default function App() {
           }),
         });
         if (assignmentSaveSequenceRef.current === saveVersion) setAssignmentSaveStatus("saved");
-      } catch (cause) {
+      }).catch((cause) => {
         if (assignmentSaveSequenceRef.current === saveVersion) {
           setAssignmentSaveStatus("error");
           setError(`Server autosave failed: ${(cause as Error).message}. Your local backup is still available.`);
         }
-      }
+      });
+      assignmentSaveQueueRef.current = save.then(() => undefined);
     }, 450);
     return () => {
       window.clearTimeout(timer);
@@ -1135,6 +1138,7 @@ export default function App() {
       const previousAttemptId = localStorage.getItem("arctester-active-practice-attempt");
       if (previousAttemptId) localStorage.removeItem(practiceAnswersKey(previousAttemptId));
       setTest(created);
+      setActivePage("practice");
       practiceAutoSubmitRef.current = null;
       setPracticeClock(Date.now());
       localStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));

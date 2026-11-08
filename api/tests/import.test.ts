@@ -11,6 +11,17 @@ const VALID_JSON = [
 ];
 
 describe("importFromJson", () => {
+  it("rejects oversized JSON imports before writing any rows", async () => {
+    const db = await testDb();
+    const oversized = Array.from({ length: 2001 }, (_, index) => [
+      "Maths", `Question ${index}?`, ["a", "b", "c", "d"], 0, "",
+    ]);
+    const report = await importFromJson(db, oversized);
+    expect(report.added).toBe(0);
+    expect(report.invalid[0].reason).toContain("2000-question limit");
+    expect(await db.question.count()).toBe(0);
+  });
+
   it("imports valid rows", async () => {
     const db = await testDb();
     const report = await importFromJson(db, VALID_JSON);

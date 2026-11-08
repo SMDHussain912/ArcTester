@@ -573,6 +573,9 @@ const ImportStatSchema = z.object({
   seen: z.number().int().nonnegative(),
   wrong: z.number().int().nonnegative(),
   lastSeen: z.string().datetime().nullable().optional(),
+}).refine((stat) => stat.wrong <= stat.seen, {
+  message: "wrong cannot exceed seen",
+  path: ["wrong"],
 });
 
 const ImportAttemptSchema = z.object({

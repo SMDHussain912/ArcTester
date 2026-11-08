@@ -601,6 +601,15 @@ describe("analytics", () => {
     expect(await server.db.stat.count({ where: { userId: studentId } })).toBe(before);
   });
 
+  it("POST /analytics/import rejects stats where wrong exceeds seen", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const res = await api.post("/analytics/import", {
+      stats: [{ questionId: question.id, seen: 2, wrong: 3 }],
+    });
+    expect(res.status).toBe(400);
+    expect((res.json as { error: string }).error).toContain("wrong cannot exceed seen");
+  });
+
   it("POST /analytics/import rejects oversized backups before database writes", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const res = await api.post("/analytics/import", {
