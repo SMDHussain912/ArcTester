@@ -228,6 +228,9 @@ describe("submit + result", () => {
     expect(early.status).toBe(403);
 
     const correct = await server.db.question.findUniqueOrThrow({ where: { id: questionId } });
+    const previousStat = await server.db.stat.findUnique({
+      where: { userId_questionId: { userId, questionId } },
+    });
     const submitted = await api.post(`/tests/${attemptId}/submit`, {
       answers: [{ questionId, selectedIndex: correct.correctIndex }],
     });
@@ -252,7 +255,10 @@ describe("submit + result", () => {
     const stat = await server.db.stat.findUniqueOrThrow({
       where: { userId_questionId: { userId, questionId } },
     });
-    expect(stat).toMatchObject({ seen: 1, wrong: 0 });
+    expect(stat).toMatchObject({
+      seen: (previousStat?.seen ?? 0) + 1,
+      wrong: Math.max(0, (previousStat?.wrong ?? 0) - 1),
+    });
 
     const again = await api.post(`/tests/${attemptId}/submit`, {
       answers: [{ questionId, selectedIndex: 0 }],
