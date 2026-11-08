@@ -251,7 +251,7 @@ export default function AdminPage() {
       setQuestionScoring(Object.fromEntries(version.questions.map((question) => [
         question.sourceQuestionId as number,
         { marks: question.marks, negativeMarks: question.negativeMarks },
-      ]))) as Record<number, { marks: number; negativeMarks: number }>);
+      ])) as Record<number, { marks: number; negativeMarks: number }>);
       setTab("create");
       setNotice(`Editing ${result.exam.title}. Saving creates a new immutable version; previous assignments remain unchanged.`);
     } catch (cause: unknown) {
