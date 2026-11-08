@@ -467,8 +467,8 @@ export default function AdminPage() {
                       <td>{session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "—"}</td>
                       <td>{session.focusLossCount}</td><td>{session.disconnectCount}</td>
                       <td><div className="row" style={{ gap: 6 }}>
-                        {session.status === "ACTIVE" ? <button className="button button-secondary button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "PAUSE")}>{sessionActionId === session.id ? "Updating…" : "Pause"}</button> : <button className="button button-secondary button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "RESUME")}>{sessionActionId === session.id ? "Updating…" : "Resume"}</button>}
-                        <button className="button button-quiet button-small" disabled={sessionActionId === session.id} onClick={() => void controlSession(session, "TERMINATE")}>Terminate</button>
+                        {session.status === "ACTIVE" ? <button className="button button-secondary button-small" disabled={sessionActionId !== null} onClick={() => void controlSession(session, "PAUSE")}>{sessionActionId === session.id ? "Updating…" : "Pause"}</button> : <button className="button button-secondary button-small" disabled={sessionActionId !== null} onClick={() => void controlSession(session, "RESUME")}>{sessionActionId === session.id ? "Updating…" : "Resume"}</button>}
+                        <button className="button button-quiet button-small" disabled={sessionActionId !== null} onClick={() => void controlSession(session, "TERMINATE")}>Terminate</button>
                       </div></td>
                     </tr>
                   ))}</tbody>
