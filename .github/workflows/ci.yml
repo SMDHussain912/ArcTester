@@ -53,10 +53,12 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      - name: Preview assignment runner formatting
+      - name: Preview new feature formatting
         run: |
-          npx prettier "web/app/assignments/[id]/page.tsx" > /tmp/assignment-runner.tsx
-          diff -u "web/app/assignments/[id]/page.tsx" /tmp/assignment-runner.tsx || true
+          for file in "web/app/assignments/page.tsx" "web/app/assignments/[id]/page.tsx" "web/app/assignments/[id]/result/page.tsx" "web/lib/api.ts"; do
+            npx prettier "$file" > /tmp/formatted
+            diff -u "$file" /tmp/formatted || true
+          done
 
       - name: Check formatting of changed files
         shell: bash
