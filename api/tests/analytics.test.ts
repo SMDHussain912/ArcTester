@@ -110,6 +110,7 @@ describe("analytics", () => {
         incorrect: number;
         unanswered: number;
         accuracy: number | null;
+        difficulty: { difficulty: string; correct: number; incorrect: number; unanswered: number; answered: number; accuracy: number | null }[];
       };
       formalExams: { submissions: number; graded: number; reviewRequired: number };
     };
@@ -118,6 +119,9 @@ describe("analytics", () => {
     expect(body.practice.incorrect).toBe(1);
     expect(body.practice.unanswered).toBe(0);
     expect(body.practice.accuracy).toBe(0.5);
+    expect(body.practice.difficulty).toEqual([{
+      difficulty: "medium", correct: 1, incorrect: 1, unanswered: 0, answered: 2, accuracy: 0.5,
+    }]);
     expect(body.formalExams).toMatchObject({ submissions: 0, graded: 0, reviewRequired: 0 });
   });
 
