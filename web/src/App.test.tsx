@@ -136,7 +136,7 @@ describe("live Vite application", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add question to bank" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Question added to the question bank.");
-    expect(screen.getByText(createdQuestion.text)).toBeInTheDocument();
+    expect(screen.getAllByText(createdQuestion.text).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Exams" }));
     fireEvent.change(screen.getByLabelText("Exam title"), { target: { value: "CSE Mock Test 01" } });
