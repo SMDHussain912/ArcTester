@@ -285,9 +285,7 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
           onPress={() => void submitExam()}
           style={styles.primary}
         >
-          <Text style={styles.primaryText}>
-            {busyId ? "Saving…" : "Submit exam"}
-          </Text>
+          <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           disabled={busyId !== null}
@@ -337,7 +335,11 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
                     style={styles.secondaryButton}
                   >
                     <Text style={styles.secondaryText}>
-                      {busyId === assignment.id ? "Working…" : downloaded ? "Downloaded" : "Download"}
+                      {busyId === assignment.id
+                        ? "Working…"
+                        : downloaded
+                          ? "Downloaded"
+                          : "Download"}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -354,12 +356,16 @@ export function OfflineExams({ api, apiUrl, token, userId }: Props) {
         })
       )}
       {cachedPackages
-        .filter((examPackage) => !assignments.some((assignment) => assignment.id === examPackage.assignmentId))
+        .filter(
+          (examPackage) =>
+            !assignments.some((assignment) => assignment.id === examPackage.assignmentId)
+        )
         .map((examPackage) => (
           <View key={examPackage.assignmentId} style={styles.assignment}>
             <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
             <Text style={styles.muted}>
-              {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes · Saved offline
+              {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes ·
+              Saved offline
             </Text>
             <TouchableOpacity
               disabled={busyId !== null}
