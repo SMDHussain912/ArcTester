@@ -19,6 +19,16 @@ describe("importFromJson", () => {
     expect(await db.question.count()).toBe(2);
   });
 
+  it("previews imports without writing and counts repeated rows as duplicates", async () => {
+    const db = await testDb();
+    const report = await importFromJson(db, [
+      ["Maths", "Preview only?", ["a", "b", "c", "d"], 0, ""],
+      ["Maths", "Preview only?", ["a", "b", "c", "d"], 0, ""],
+    ], { dryRun: true });
+    expect(report).toMatchObject({ added: 1, duplicates: 1, total: 2 });
+    expect(await db.question.count()).toBe(0);
+  });
+
   it("imports rich JSON objects with topic, difficulty, source and explanation", async () => {
     const db = await testDb();
     const report = await importFromJson(db, [{
