@@ -58,20 +58,15 @@ export async function importFromJson(db: PrismaClient, payload: unknown): Promis
   const valid: { index: number; input: QuestionInput }[] = [];
   rows.forEach((raw, i) => {
     const rowNumber = i + 1;
-    const single = BaseRowSchema.safeParse(raw);
-    if (!single.success) {
-      report.invalid.push(invalidRow(rowNumber, describeIssue(single.error)));
-      return;
-    }
-    const [subject, text, options, correctIndex, explanation] = single.data;
-    const checked = QuestionInputSchema.safeParse({
-      subject,
-      text,
-      options,
-      correctIndex,
-      explanation: explanation ?? "",
-      source: "json",
-    });
+    const checked = QuestionInputSchema.safeParse(
+      Array.isArray(raw)
+        ? (() => {
+            const tuple = BaseRowSchema.parse(raw);
+            const [subject, text, options, correctIndex, explanation] = tuple;
+            return { subject, text, options, correctIndex, explanation: explanation ?? "", source: "json" };
+          })()
+        : raw
+    );
     if (!checked.success) {
       report.invalid.push(invalidRow(rowNumber, describeIssue(checked.error)));
       return;
