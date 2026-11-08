@@ -5,6 +5,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest } from "./errors.js";
+import { buildPerformanceExplanation, type PerformanceExplanation } from "./intelligence/performanceExplanation.js";
 
 export interface TopicRow {
   subject: string;
@@ -458,6 +459,7 @@ export interface StudyRecommendationsReport {
   basedOnAttempts: number;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
+  performanceExplanation: PerformanceExplanation;
   recommendations: StudyRecommendation[];
 }
 
@@ -571,6 +573,11 @@ export async function getStudyRecommendations(
     basedOnAttempts: history.total,
     minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
     weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
+    performanceExplanation: buildPerformanceExplanation(
+      weakTopics.topics,
+      RECOMMENDATION_MINIMUM_ANSWERS,
+      RECOMMENDATION_WEAK_ACCURACY,
+    ),
     recommendations,
   };
 }
