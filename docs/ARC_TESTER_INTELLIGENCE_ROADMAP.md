@@ -71,6 +71,40 @@ Before implementation, inspect the Prisma schema, routes, and tests for:
 
 Map the actual database fields before designing new tables or migrations. Prefer derived analytics queries over storing duplicate aggregates. Add persisted aggregates only if query performance requires them and their refresh strategy is defined.
 
+### Phase 1 implementation log — 2026-11-08
+
+**Implemented and pushed (not yet locally verified):**
+
+- Replaced weak-topic accuracy derived from `Stat.wrong` with aggregation from completed `AttemptAnswer` records.
+- Accuracy now uses `correct / (correct + incorrect)`; unanswered answers are counted separately and do not reduce answered accuracy. Accuracy is `null` when there are no answered questions.
+- Completed practice history now excludes unfinished attempts.
+- Added authenticated `GET /analytics/overview`:
+  - Practice totals, answer outcomes, subject breakdown, and the latest 12 completed-attempt accuracy points.
+  - Formal exam submission totals, verified `GRADED` results, separate `REVIEW_REQUIRED` count, score/maximum marks, answer outcomes and subject-level marks/accuracy.
+  - Practice and formal exam scoring remain separate.
+- Connected the student analytics page to the overview endpoint and added formal exam performance and recent practice trend sections.
+- Added API integration coverage for practice accuracy, unanswered questions, unfinished attempts, formal exam aggregation, and student isolation.
+
+**Important limitations still open in Phase 1:**
+
+- Practice subject/topic history still joins mutable current question metadata. A snapshot migration is still needed before treating long-term topic trends as historically stable.
+- Formal exam analytics currently count only `GRADED` answer outcomes in verified score and subject metrics. `REVIEW_REQUIRED` submissions are counted separately and excluded from those metrics.
+- No trustworthy per-question timing data exists; no time-spent metric is exposed.
+- Admin cohort analytics and deeper question-level analysis are not yet implemented.
+- Automated tests, TypeScript checks, lint, formatting and production builds have not been run in this environment. GitHub status checks for the latest commit returned no statuses, so CI is not verified.
+
+**Commits in this implementation batch:**
+
+- `deae513` — derive student accuracy from completed answers.
+- `f4c37d3` — add source-separated performance analytics.
+- `fafb28b` — expose student performance overview endpoint.
+- `c2daeab` — add typed performance analytics client.
+- `f78efe1` — show separate practice and formal exam analytics.
+- `00977db` — cover analytics accuracy and student isolation.
+- `e6124ec` — cover formal exam analytics aggregation.
+- `7c61ff6` — clarify practice question metric breakdown.
+- `94a5f54` — simplify practice trend aggregation.
+
 ### Phase 0 audit — current repository findings (2026-11-08)
 
 The audit inspected the Prisma schema, API route registration, practice-test service, analytics service/routes, formal exam routes, relevant API tests, and the student analytics page.
@@ -447,7 +481,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - [x] Intelligence architecture and constraints documented.
 - [x] Initial algorithms, use cases, and phases defined.
 - [x] Phase 0 — repository/data audit (completed 2026-11-08; findings recorded above).
-- [ ] Phase 1 — analytics foundation.
+- [ ] Phase 1 — analytics foundation (in progress; backend aggregation, API and initial dashboard integration committed; verification and remaining coverage pending).
 - [ ] Phase 2 — weak-area detection.
 - [ ] Phase 3 — regression engine.
 - [ ] Phase 4 — classification engine.
