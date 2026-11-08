@@ -56,3 +56,26 @@ The generator uses seeded pseudo-random sampling and explicit constraints rather
 The generated `manifest.json` includes each dataset's task type, identifier column, explicit feature columns, target column, and a quality report. Reports include row count, duplicate IDs, missing values, invalid feature rows, numeric feature ranges/means, target distribution, and warnings. The analyzer rejects definitions that put the target column into the feature list.
 
 Target columns are prefixed with `target_` and are not part of the feature lists. Do not train by blindly passing every CSV column into a model: use the manifest's `featureColumns` and `targetColumn` definitions. Synthetic targets include noise/latent outcomes to avoid simple exact-rule labels wherever possible; they still represent simulated assumptions, not measured learner behaviour.
+
+## Train and compare models
+
+Run the end-to-end experiment pipeline from the repository root:
+
+```bash
+npm run dataset:experiment --workspace=api
+```
+
+Choose the synthetic row count, random seed, and output folder:
+
+```bash
+npm run dataset:experiment --workspace=api -- --rows 5000 --seed 42 --out ../datasets/experiments
+```
+
+The runner prepares all five datasets, makes a deterministic row-level holdout split, fits categorical vocabularies on training rows only, trains the existing algorithms, and writes:
+
+- `report.json` — dataset split sizes, feature metadata, and held-out metrics.
+- `models/` — JSON model artifacts with the dataset name, feature names, target name, task type, and trained model.
+
+Binary classification experiments compare Logistic Regression, KNN, Decision Tree, and Gaussian Naive Bayes. Regression experiments use Multiple Linear Regression. Categorical columns are one-hot encoded; categories absent from training are mapped to an explicit unknown bucket. Student identifiers and target columns are never model features.
+
+This initial holdout split is appropriate for checking the synthetic pipeline. It is not a substitute for grouped-by-student or chronological evaluation on real learner histories. Do not interpret model rankings or metrics from generated data as real ECET prediction performance.
