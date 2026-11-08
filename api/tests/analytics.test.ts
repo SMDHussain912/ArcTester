@@ -5,7 +5,7 @@ import { bindSession, signUp, startTestServer, type TestServer } from "./server.
 
 let server: TestServer;
 let api: ReturnType<typeof bindSession>;
-let studentId: number;
+let studentId = 0;
 
 const BANK: unknown[] = [
   ["Maths", "Maths Q1?", ["a1", "b1", "c1", "d1"], 0, "exp-m1"],
