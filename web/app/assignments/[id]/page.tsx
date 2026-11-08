@@ -131,9 +131,7 @@ function AssignedExamRunner() {
         submittedAt: new Date().toISOString(),
         answers: exam.questions.map((question) => ({
           examQuestionId: question.id,
-          selectedIndex: attempt.answers[question.id] === undefined || attempt.answers[question.id] === null
-            ? null
-            : question.optionOrder[attempt.answers[question.id]],
+          selectedIndex: attempt.answers[question.id] ?? null,
         })),
       });
       window.localStorage.removeItem(storageKey(assignmentId));
