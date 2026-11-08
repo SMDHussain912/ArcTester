@@ -294,7 +294,7 @@ export default function App() {
                 <Text style={styles.muted}>Subjects</Text>
               </View>
             </View>
-            <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} />
+            <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} />
             <Text style={styles.sectionTitle}>Practice by subject</Text>
             {bank?.subjects.map((item) => (
               <TouchableOpacity
