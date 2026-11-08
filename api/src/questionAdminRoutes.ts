@@ -104,11 +104,12 @@ export function questionAdminRouter(db: PrismaClient): Router {
     try {
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id < 1) return next(badRequest("Invalid question ID."));
-      const [answers, snapshots] = await Promise.all([
+      const [answers, snapshots, stats] = await Promise.all([
         db.attemptAnswer.count({ where: { questionId: id } }),
         db.examVersionQuestion.count({ where: { sourceQuestionId: id } }),
+        db.stat.count({ where: { questionId: id } }),
       ]);
-      if (answers || snapshots) return next(badRequest("This question is referenced by an attempt or exam snapshot. Keep it in the bank instead of deleting historical data."));
+      if (answers || snapshots || stats) return next(badRequest("This question has student history or an exam snapshot. Keep it in the bank instead of deleting historical data."));
       await db.question.delete({ where: { id } });
       res.json({ ok: true });
     } catch (error) { next(error); }
@@ -117,11 +118,12 @@ export function questionAdminRouter(db: PrismaClient): Router {
   router.post("/admin/questions/bulk-delete", async (req, res, next) => {
     try {
       const { ids } = BulkSchema.parse(req.body);
-      const [answers, snapshots] = await Promise.all([
+      const [answers, snapshots, stats] = await Promise.all([
         db.attemptAnswer.findMany({ where: { questionId: { in: ids } }, select: { questionId: true }, distinct: ["questionId"] }),
         db.examVersionQuestion.findMany({ where: { sourceQuestionId: { in: ids } }, select: { sourceQuestionId: true }, distinct: ["sourceQuestionId"] }),
+        db.stat.findMany({ where: { questionId: { in: ids } }, select: { questionId: true }, distinct: ["questionId"] }),
       ]);
-      const blocked = new Set([...answers.map(x => x.questionId), ...snapshots.map(x => x.sourceQuestionId).filter((x): x is number => x !== null)]);
+      const blocked = new Set([...answers.map(x => x.questionId), ...stats.map(x => x.questionId), ...snapshots.map(x => x.sourceQuestionId).filter((x): x is number => x !== null)]);
       const safeIds = ids.filter(id => !blocked.has(id));
       const deleted = await db.question.deleteMany({ where: { id: { in: safeIds } } });
       res.json({ ok: true, deleted: deleted.count, blocked: [...blocked] });
