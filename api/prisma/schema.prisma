@@ -82,6 +82,7 @@ model User {
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementReads   AnnouncementRead[]
   examSessions        ExamSession[]
+  examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
 }
 
 model Invitation {
@@ -306,6 +307,8 @@ model ExamSessionEvent {
   id        String      @id @default(cuid())
   session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   sessionId String
+  actor     User?       @relation("SessionEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
   type      String
   detail    String      @default("")
   createdAt DateTime    @default(now())
