@@ -49,7 +49,9 @@ const registryArtifactSchema = z.object({
     }
   }
 });
-type RegistryArtifact = z.infer<typeof registryArtifactSchema>;
+export type RegistryArtifact = z.infer<typeof registryArtifactSchema>;
+
+export function validateRegistryArtifact(input: unknown): RegistryArtifact { return validateArtifact(input); }
 
 export interface ModelFeatureEncoder {
   name: string;
@@ -237,31 +239,7 @@ export class ModelRegistry {
   }
 
   async predict(modelId: string, input: Record<string, number | string>): Promise<ModelPrediction> {
-    const artifact = await this.loadActive(modelId);
-    const features = transformFeatures(artifact.featureSchema, input);
-    if (artifact.task === "regression") {
-      return {
-        modelId,
-        version: artifact.version,
-        task: "regression",
-        prediction: predictLinearRegression(artifact.model, features),
-      };
-    }
-    let probability: number;
-    switch (artifact.algorithm) {
-      case "logistic-regression": probability = predictLogisticProbability(artifact.model, features); break;
-      case "knn": probability = predictKnnProbability(artifact.model, features); break;
-      case "decision-tree": probability = predictDecisionTreeProbability(artifact.model, features); break;
-      case "gaussian-naive-bayes": probability = predictNaiveBayesProbability(artifact.model, features); break;
-      default: throw new Error("Unsupported classifier algorithm");
-    }
-    return {
-      modelId,
-      version: artifact.version,
-      task: "binary-classification",
-      prediction: probability >= 0.5 ? 1 : 0,
-      probability,
-    };
+    return predictWithRegistryArtifact(await this.loadActive(modelId), input);
   }
 
   private async loadVersion(modelId: string, version: number): Promise<RegistryArtifact> {
@@ -331,4 +309,35 @@ export function transformFeatures(
     const categories = feature.categories ?? [];
     return [...categories.map((category) => Number(value === category)), Number(!categories.includes(value))];
   });
+}
+
+
+export function predictWithRegistryArtifact(
+  artifact: RegistryArtifact,
+  input: Record<string, number | string>,
+): ModelPrediction {
+  const features = transformFeatures(artifact.featureSchema, input);
+  if (artifact.task === "regression") {
+    return {
+      modelId: artifact.modelId,
+      version: artifact.version,
+      task: "regression",
+      prediction: predictLinearRegression(artifact.model, features),
+    };
+  }
+  let probability: number;
+  switch (artifact.algorithm) {
+    case "logistic-regression": probability = predictLogisticProbability(artifact.model, features); break;
+    case "knn": probability = predictKnnProbability(artifact.model, features); break;
+    case "decision-tree": probability = predictDecisionTreeProbability(artifact.model, features); break;
+    case "gaussian-naive-bayes": probability = predictNaiveBayesProbability(artifact.model, features); break;
+    default: throw new Error("Unsupported classifier algorithm");
+  }
+  return {
+    modelId: artifact.modelId,
+    version: artifact.version,
+    task: "binary-classification",
+    prediction: probability >= 0.5 ? 1 : 0,
+    probability,
+  };
 }
