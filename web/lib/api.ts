@@ -525,7 +525,7 @@ export const api = {
       `/exams/assignments/${id}/package`
     ),
   startAssignedExamSession: (id: string) =>
-    request<{ ok: true; session: { id: string; status: string; startedAt: string; serverTime: string } }>(
+    request<{ ok: true; session: { id: string; status: string; startedAt: string; serverTime: string; deadline: string | null } }>(
       `/exams/assignments/${id}/session/start`, json({})
     ),
   heartbeatAssignedExamSession: (id: string, event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED" = "HEARTBEAT") =>
