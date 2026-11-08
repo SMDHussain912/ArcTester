@@ -68,6 +68,7 @@ type Test = {
   questions: Question[];
   warnings: string[];
 };
+type RestoredTest = Test & { serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
 type Result = {
   attemptId: number;
   score: number;
@@ -225,6 +226,14 @@ export default function App() {
 
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
+    const savedAttemptId = localStorage.getItem("arctester-active-practice-attempt");
+    if (savedAttemptId && /^\\d+$/.test(savedAttemptId)) {
+      request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
+        setTest(restored);
+        setAnswers(Object.fromEntries(restored.saved.flatMap((answer) => answer.selectedIndex === null ? [] : [[answer.questionId, answer.selectedIndex]])));
+        setActivePage("practice");
+      }).catch(() => localStorage.removeItem("arctester-active-practice-attempt"));
+    }
     request<{ assignments: AssignedExam[] }>("/exams/assigned")
       .then(({ assignments }) => setAssignedExams(assignments ?? []))
       .catch((cause) => setError((cause as Error).message));
@@ -958,6 +967,7 @@ export default function App() {
         body: JSON.stringify({ mode, ...(subject ? { subject } : {}), ...(practiceConfig ? { subjects: practiceConfig.subjects, topicFilters: practiceConfig.topicFilters, count: practiceConfig.count, difficulty: practiceConfig.difficulty } : mode === "practice" ? { count: 10 } : {}) }),
       });
       setTest(created);
+      localStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
       setAnswers({});
     } catch (cause) {
       setError((cause as Error).message);
@@ -990,6 +1000,7 @@ export default function App() {
       });
       const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
+      localStorage.removeItem("arctester-active-practice-attempt");
       setTest(null);
     } catch (cause) {
       setError((cause as Error).message);
@@ -1481,8 +1492,8 @@ export default function App() {
                   {test.questions.length} questions · {Object.keys(answers).length} answered
                 </p>
               </div>
-              <button className="ghost" onClick={() => setTest(null)}>
-                Exit session
+              <button className="ghost" onClick={() => setActivePage("dashboard")}>
+                Leave session
               </button>
             </div>
             {test.warnings.map((warning) => (
