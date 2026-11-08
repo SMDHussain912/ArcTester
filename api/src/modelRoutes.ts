@@ -57,7 +57,7 @@ const EvaluationSchema = z.object({
 const DatasetSampleSchema = z.object({
   features: z.record(z.union([z.number().finite(), z.string().max(500)])),
   target: z.number().finite(),
-  // SHA-256 pseudonym only; never store a learner name, email or database ID here.
+  // Keyed HMAC-SHA-256 pseudonym only; never store a learner name, email or database ID here.
   groupId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
 
@@ -322,7 +322,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
       if (input.modelId === "student-score-population") validateStudentPopulationDataset(featureSchema, samples);
       if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
-        return next(badRequest("TensorFlow.js training requires a SHA-256 pseudonymous groupId on every sample."));
+        return next(badRequest("TensorFlow.js training requires a keyed HMAC-SHA-256 pseudonymous groupId on every sample."));
       }
       const modelId = input.modelId;
       const latest = await db.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
