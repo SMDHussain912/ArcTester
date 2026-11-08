@@ -18,6 +18,7 @@ import { OfflineExams } from "./src/OfflineExams";
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
+type Announcement = { id: string; title: string; message: string; publishedAt: string; expiresAt: string | null };
 type Question = {
   id: number;
   subject: string;
@@ -35,6 +36,8 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [showExams, setShowExams] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -98,7 +101,22 @@ export default function App() {
     api<Bank>("/bank")
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
+    api<{ announcements: Announcement[] }>("/announcements")
+      .then((result) => setAnnouncements(result.announcements))
+      .catch(() => undefined);
   }, [token, user]);
+
+  async function refreshAnnouncements() {
+    setRefreshingAnnouncements(true);
+    try {
+      const result = await api<{ announcements: Announcement[] }>("/announcements");
+      setAnnouncements(result.announcements);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setRefreshingAnnouncements(false);
+    }
+  }
 
   async function authenticate() {
     setBusy(true);
@@ -178,6 +196,7 @@ export default function App() {
     setToken(null);
     setUser(null);
     setBank(null);
+    setAnnouncements([]);
     setTest(null);
     setShowExams(false);
   }
@@ -299,6 +318,25 @@ export default function App() {
                 <Text style={styles.muted}>Subjects</Text>
               </View>
             </View>
+            <View style={styles.announcementHeader}>
+              <Text style={styles.sectionTitle}>Announcements</Text>
+              <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
+                <Text style={styles.refreshText}>{refreshingAnnouncements ? "Refreshing…" : "Refresh"}</Text>
+              </TouchableOpacity>
+            </View>
+            {announcements.length === 0 ? (
+              <View style={styles.announcementCard}>
+                <Text style={styles.muted}>No announcements right now.</Text>
+              </View>
+            ) : announcements.map((announcement) => (
+              <View key={announcement.id} style={styles.announcementCard}>
+                <Text style={styles.announcementTitle}>{announcement.title}</Text>
+                <Text style={styles.announcementMessage}>{announcement.message}</Text>
+                <Text style={styles.announcementDate}>
+                  {new Date(announcement.publishedAt).toLocaleString()}
+                </Text>
+              </View>
+            ))}
             <TouchableOpacity
               onPress={() => setShowExams(true)}
               style={[styles.primary, { marginTop: 20 }]}
@@ -399,6 +437,12 @@ const styles = StyleSheet.create({
     borderColor: "#e4e8ef",
   },
   statValue: { color: "#172033", fontSize: 25, fontWeight: "800" },
+  announcementHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
+  refreshText: { color: "#2563eb", fontWeight: "700", fontSize: 13 },
+  announcementCard: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e4e8ef", borderRadius: 14, padding: 15, marginBottom: 9 },
+  announcementTitle: { color: "#172033", fontWeight: "800", fontSize: 15 },
+  announcementMessage: { color: "#526078", fontSize: 14, lineHeight: 21, marginTop: 7 },
+  announcementDate: { color: "#9aa3b2", fontSize: 11, marginTop: 10 },
   sectionTitle: {
     color: "#172033",
     fontSize: 17,
