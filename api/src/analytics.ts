@@ -214,6 +214,14 @@ export interface PerformanceOverview {
     unanswered: number;
     accuracy: number | null;
     subjects: TopicRow[];
+    difficulty: {
+      difficulty: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+      answered: number;
+    }[];
     trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
   };
   formalExams: {
@@ -248,6 +256,7 @@ export async function getPerformanceOverview(
     practiceTotalsRows,
     recentAttempts,
     weakTopics,
+    difficultyRows,
     submissionCount,
     gradedCount,
     reviewRequiredCount,
@@ -274,6 +283,17 @@ export async function getPerformanceOverview(
       },
     }),
     getWeakTopics(db, userId),
+    db.$queryRaw<Array<{ difficulty: string; correct: number; incorrect: number; unanswered: number }>>`
+      SELECT
+        aa.difficultySnapshot AS difficulty,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+      FROM AttemptAnswer aa
+      INNER JOIN Attempt a ON a.id = aa.attemptId
+      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+      GROUP BY aa.difficultySnapshot
+    `,
     db.examSubmission.count({ where: { assignment: { studentId: userId } } }),
     db.examSubmission.count({ where: { status: "GRADED", assignment: { studentId: userId } } }),
     db.examSubmission.count({ where: { status: "REVIEW_REQUIRED", assignment: { studentId: userId } } }),
@@ -340,6 +360,20 @@ export async function getPerformanceOverview(
       correct: practiceCorrect, incorrect: practiceIncorrect, unanswered: practiceUnanswered,
       accuracy: practiceAnswered > 0 ? practiceCorrect / practiceAnswered : null,
       subjects: weakTopics.subjects,
+      difficulty: difficultyRows.map((row) => {
+        const correct = Number(row.correct ?? 0);
+        const incorrect = Number(row.incorrect ?? 0);
+        const unanswered = Number(row.unanswered ?? 0);
+        const answered = correct + incorrect;
+        return {
+          difficulty: row.difficulty,
+          correct,
+          incorrect,
+          unanswered,
+          answered,
+          accuracy: answered > 0 ? correct / answered : null,
+        };
+      }).sort((a, b) => ["easy", "medium", "hard"].indexOf(a.difficulty) - ["easy", "medium", "hard"].indexOf(b.difficulty)),
       trend,
     },
     formalExams: {
