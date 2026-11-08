@@ -56,11 +56,12 @@ describe("assigned exam result page", () => {
                   id: "question-1",
                   position: 1,
                   subject: "Mathematics",
-                  topic: "Algebra",
-                  text: "What is 2 + 2?",
-                  options: ["3", "4", "5", "6"],
+                  topic: "Data Structures",
+                  relatedConcepts: [{ slug: "stack", title: "Stack" }],
+                  text: "Which order does a stack follow?",
+                  options: ["FIFO", "LIFO", "Random", "Sorted"],
                   correctIndex: 1,
-                  explanation: "Two plus two equals four.",
+                  explanation: "A stack follows last-in, first-out.",
                   marks: 2,
                   negativeMarks: 0,
                   selectedIndex: 1,
@@ -82,8 +83,9 @@ describe("assigned exam result page", () => {
     );
 
     await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
-    expect(screen.getByText("What is 2 + 2?")).toBeInTheDocument();
-    expect(screen.getByText("Two plus two equals four.")).toBeInTheDocument();
+    expect(screen.getByText("Which order does a stack follow?")).toBeInTheDocument();
+    expect(screen.getByText("A stack follows last-in, first-out.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/learning#stack");
     expect(screen.getByText("Correct answer")).toBeInTheDocument();
   });
 });
