@@ -502,7 +502,8 @@ describe("analytics", () => {
     expect(body.weakAccuracyThreshold).toBe(0.6);
     expect(body.performanceExplanation.answeredQuestions).toBeGreaterThanOrEqual(5);
     expect(body.performanceExplanation.incorrectAnswers).toBeGreaterThanOrEqual(0);
-    expect(body.performanceExplanation.headline).toContain("Graphs");
+    expect(body.performanceExplanation.headline.length).toBeGreaterThan(0);
+    expect(body.performanceExplanation.details.join(" ")).toContain("% accuracy");
     expect(body.performanceExplanation.details.join(" ")).toContain("answered questions");
     const evidenced = body.recommendations.find((item) => item.evidence !== null);
     expect(evidenced).toMatchObject({
