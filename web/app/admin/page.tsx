@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSession } from "../../lib/session";
-import { api, ApiError, type AdminExam, type AdminAttendanceRow, type AdminExamReport, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
+import { api, ApiError, type AdminExam, type AdminAttendanceRow, type AdminExamAudit, type AdminExamReport, type AdminLiveSession, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
 
 type Tab = "overview" | "exams" | "create";
 const emptyOverview: AdminOverview = {
@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [liveSessions, setLiveSessions] = useState<AdminLiveSession[]>([]);
   const [attendance, setAttendance] = useState<AdminAttendanceRow[]>([]);
   const [selectedReport, setSelectedReport] = useState<AdminExamReport | null>(null);
+  const [selectedAudit, setSelectedAudit] = useState<AdminExamAudit | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
   const [questionScoring, setQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
@@ -218,6 +219,16 @@ export default function AdminPage() {
       setAssignExamId(result.exam.id);
     } catch (e) { showError(e, "Could not create the exam."); }
     finally { setBusy(false); }
+  }
+
+  async function viewExamAudit(assignmentId: string) {
+    setBusy(true); setError("");
+    try {
+      const result = await api.adminExamAudit(assignmentId);
+      setSelectedAudit(result.audit);
+    } catch (cause: unknown) {
+      showError(cause, "Could not load the candidate audit trail.");
+    } finally { setBusy(false); }
   }
 
   async function viewExamReport(id: string) {
@@ -457,7 +468,7 @@ export default function AdminPage() {
             <div className="panel-header"><h2>Candidate attendance register</h2><span className="pill">{attendance.length} assigned candidates</span></div>
             <div style={{ overflowX: "auto" }}>
               <table>
-                <thead><tr><th>Candidate</th><th>Exam</th><th>Attendance</th><th>Started</th><th>Submitted</th><th>Result</th></tr></thead>
+                <thead><tr><th>Candidate</th><th>Exam</th><th>Attendance</th><th>Started</th><th>Submitted</th><th>Result</th><th>Audit</th></tr></thead>
                 <tbody>{attendance.map((row) => (
                   <tr key={row.assignmentId}>
                     <td>{row.candidate.email}</td><td>{row.exam.title} · v{row.version}</td>
@@ -465,11 +476,25 @@ export default function AdminPage() {
                     <td>{row.session?.startedAt ? new Date(row.session.startedAt).toLocaleString() : "—"}</td>
                     <td>{row.submission?.submittedAt ? new Date(row.submission.submittedAt).toLocaleString() : "—"}</td>
                     <td>{row.submission ? row.submission.status : "Not submitted"}</td>
+                    <td><button className="button button-quiet button-small" disabled={busy} onClick={() => void viewExamAudit(row.assignmentId)}>View log</button></td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
           </section>
+          {selectedAudit ? <section className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-header"><h2>Candidate audit trail · {selectedAudit.candidate.email}</h2><button className="button button-quiet button-small" onClick={() => setSelectedAudit(null)}>Close log</button></div>
+            <p className="muted">{selectedAudit.exam.title} · Version {selectedAudit.version} · Session {selectedAudit.session?.status ?? "Not started"}</p>
+            {selectedAudit.session ? <div className="stat-grid">
+              <div className="stat-card"><div className="stat-label">Heartbeats</div><div className="stat-value">{selectedAudit.session.heartbeatCount}</div></div>
+              <div className="stat-card"><div className="stat-label">Focus losses</div><div className="stat-value">{selectedAudit.session.focusLossCount}</div></div>
+              <div className="stat-card"><div className="stat-label">Connection gaps</div><div className="stat-value">{selectedAudit.session.disconnectCount}</div></div>
+              <div className="stat-card"><div className="stat-label">Submission</div><div className="stat-value" style={{ fontSize: 16 }}>{selectedAudit.submission?.status ?? "Pending"}</div></div>
+            </div> : <p className="mute">Candidate has not started this examination.</p>}
+            {selectedAudit.events.length === 0 ? <p className="mute">No session events recorded.</p> : selectedAudit.events.map((event) => (
+              <p key={event.id} className="mute">{new Date(event.createdAt).toLocaleString()} · {event.type} · {event.actor?.email ?? "System"} — {event.detail}</p>
+            ))}
+          </section> : null}
         </>
       ) : null}
 
