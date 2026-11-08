@@ -178,6 +178,14 @@ describe("student analytics page", () => {
             basedOnAttempts: 1,
             minimumAnswers: 5,
             weakAccuracyThreshold: 0.6,
+            performanceExplanation: {
+              headline: "Your clearest revision gap is Mechanics in Physics.",
+              details: ["Mechanics in Physics: 30% accuracy across 10 answered questions, with 7 incorrect.", "This analysis uses 10 answered practice questions. Unanswered questions are excluded from accuracy."],
+              answeredQuestions: 10,
+              incorrectAnswers: 7,
+              evidenceThreshold: 5,
+              weakAccuracyThreshold: 0.6,
+            },
             recommendations: [
               {
                 id: "revise-topic-Physics%3AMechanics",
@@ -226,6 +234,8 @@ describe("student analytics page", () => {
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
     expect(screen.getByText("80% score")).toBeInTheDocument();
     expect(screen.getByText("Your next study steps")).toBeInTheDocument();
+    expect(screen.getByText("Your clearest revision gap is Mechanics in Physics.")).toBeInTheDocument();
+    expect(screen.getByText(/This analysis uses 10 answered practice questions/)).toBeInTheDocument();
     expect(screen.getByText("Revise Mechanics")).toBeInTheDocument();
     expect(screen.getByText(/Evidence: 7\/10 incorrect · 30% accuracy · minimum 5 answered\./)).toBeInTheDocument();
     expect(screen.getByText("high priority")).toBeInTheDocument();
@@ -367,7 +377,13 @@ describe("student analytics page", () => {
       if (path.endsWith("/analytics/recommendations")) {
         return Promise.resolve(jsonResponse(200, {
           generatedAt: "2026-11-08T08:30:00.000Z", basedOnAttempts: 0,
-          minimumAnswers: 5, weakAccuracyThreshold: 0.6, recommendations: [],
+          minimumAnswers: 5, weakAccuracyThreshold: 0.6,
+          performanceExplanation: {
+            headline: "There is not enough completed practice data to explain your performance yet.",
+            details: ["Complete a practice session and answer some questions to establish a reliable baseline."],
+            answeredQuestions: 0, incorrectAnswers: 0, evidenceThreshold: 5, weakAccuracyThreshold: 0.6,
+          },
+          recommendations: [],
         }));
       }
       if (path.includes("/analytics/history")) {
