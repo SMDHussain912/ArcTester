@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getHistory,
+  getPerformanceOverview,
   getWeakTopics,
   getStudyRecommendations,
   importProgress,
@@ -11,6 +12,15 @@ import type { PrismaClient } from "@prisma/client";
 
 export function analyticsRouter(db: PrismaClient): Router {
   const router = Router();
+
+  router.get("/overview", requireAuth, async (req, res, next) => {
+    try {
+      const report = await getPerformanceOverview(db, (req as AuthedRequest).user!.id);
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/weak-topics", requireAuth, async (req, res, next) => {
     try {
