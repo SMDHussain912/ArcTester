@@ -12,6 +12,10 @@ type ExamPackage = {
   questions:{id:string;position:number;subject:string;topic:string|null;text:string;options:string[];optionOrder:number[];marks:number;negativeMarks:number}[];
 };
 type ExamResult = {status:string;score:number;maximumScore:number;questions:{id:string;position:number;subject:string;topic:string|null;text:string;options:string[];correctIndex:number;selectedIndex:number|null;isCorrect:boolean;awardedMarks:number;marks:number;negativeMarks:number;explanation:string}[]};
+function createUuid():string {
+ if(typeof crypto!=="undefined"&&"randomUUID" in crypto)return crypto.randomUUID();
+ return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,char=>{const value=Math.random()*16|0;return (char==="x"?value:(value&3|8)).toString(16);});
+}
 async function request<T>(path:string,init:RequestInit={}):Promise<T>{
  const response=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});
  const body=await response.json().catch(()=>({}));
@@ -19,13 +23,13 @@ async function request<T>(path:string,init:RequestInit={}):Promise<T>{
  return body as T;
 }
 export default function AssignedExams(){
- const [items,setItems]=useState<Assignment[]>([]),[active,setActive]=useState<ExamPackage|null>(null),[activeId,setActiveId]=useState(""),[startedAt,setStartedAt]=useState(""),[attemptUuid,setAttemptUuid]=useState(""),[answers,setAnswers]=useState<Record<string,number>>({}),[remaining,setRemaining]=useState(0),[result,setResult]=useState<ExamResult|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [items,setItems]=useState<Assignment[]>([]),[active,setActive]=useState<ExamPackage|null>(null),[activeId,setActiveId]=useState(""),[startedAt,setStartedAt]=useState(""),[attemptUuid,setAttemptUuid]=useState(""),[answers,setAnswers]=useState<Record<string,number>>({}),[remaining,setRemaining]=useState(0),[result,setResult]=useState<ExamResult|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[autoSubmitTriggered,setAutoSubmitTriggered]=useState(false);
  async function load(){try{const r=await request<{assignments:Assignment[]}>("/exams/assigned");setItems(r.assignments);}catch(e){setError((e as Error).message);}}
  useEffect(()=>{void load();},[]);
- async function start(id:string){setBusy(true);setError("");setResult(null);try{const r=await request<{package:ExamPackage}>(`/exams/assignments/${id}/package`);setActive(r.package);setActiveId(id);setStartedAt(new Date().toISOString());setAttemptUuid(crypto.randomUUID());setAnswers({});setRemaining(r.package.durationMinutes*60);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function start(id:string){setBusy(true);setError("");setResult(null);try{const r=await request<{package:ExamPackage}>(`/exams/assignments/${id}/package`);setActive(r.package);setActiveId(id);setStartedAt(new Date().toISOString());setAttemptUuid(createUuid());setAutoSubmitTriggered(false);setAnswers({});setRemaining(r.package.durationMinutes*60);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function submit(){if(!active||busy||result)return;setBusy(true);setError("");try{await request(`/exams/assignments/${activeId}/submission`,{method:"POST",body:JSON.stringify({attemptUuid,startedAt,submittedAt:new Date().toISOString(),answers:active.questions.map(q=>({examQuestionId:q.id,selectedIndex:answers[q.id]===undefined?null:q.optionOrder[answers[q.id]]}))})});const r=await request<{result:ExamResult}>(`/exams/assignments/${activeId}/result`);setResult(r.result);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  useEffect(()=>{if(!active||result||busy)return;const timer=window.setInterval(()=>setRemaining(value=>Math.max(0,value-1)),1000);return()=>window.clearInterval(timer);},[active,result,busy]);
- useEffect(()=>{if(active&&remaining===0&&!result&&!busy)void submit();},[active,remaining,result,busy]);
+ useEffect(()=>{if(active&&remaining===0&&!result&&!busy&&!autoSubmitTriggered){setAutoSubmitTriggered(true);void submit();}},[active,remaining,result,busy,autoSubmitTriggered]);
  function close(){setActive(null);setResult(null);setActiveId("");setAnswers({});void load();}
  const clock=`${Math.floor(remaining/60).toString().padStart(2,"0")}:${(remaining%60).toString().padStart(2,"0")}`;
  return <section className="assigned-exams-section">
