@@ -297,6 +297,37 @@ export interface AdminOverview {
     submissionRate: number;
     averagePercentage: number | null;
   };
+  practice: {
+    completedAttempts: number;
+    questions: number;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    accuracy: number | null;
+    subjects: {
+      subject: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+    }[];
+  };
+  formalExams: {
+    graded: number;
+    reviewRequired: number;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    subjects: {
+      subject: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      awardedMarks: number;
+      maximumMarks: number;
+      accuracy: number | null;
+    }[];
+  };
   exams: {
     examId: string;
     title: string;
