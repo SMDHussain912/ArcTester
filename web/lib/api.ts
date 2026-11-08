@@ -40,11 +40,21 @@ export interface SubmitSummary {
   expired: boolean;
 }
 export interface TestResult {
-  attemptId: number; mode: string; score: number; total: number; expired: boolean;
+  attemptId: number;
+  mode: string;
+  score: number;
+  total: number;
+  expired: boolean;
   breakdown: { subject: string; correct: number; total: number }[];
   questions: {
-    questionId: number; subject: string; text: string; options: string[];
-    selectedIndex: number | null; correctIndex: number; isCorrect: boolean; explanation: string;
+    questionId: number;
+    subject: string;
+    text: string;
+    options: string[];
+    selectedIndex: number | null;
+    correctIndex: number;
+    isCorrect: boolean;
+    explanation: string;
   }[];
 }
 export interface BankInfo {
@@ -52,14 +62,33 @@ export interface BankInfo {
   total: number;
   serverNow: string;
 }
-export interface AuthUser { id: number; email: string; role: "ADMIN" | "STUDENT" }
-export interface AuthSession { ok: boolean; user: AuthUser }
+export interface AuthUser {
+  id: number;
+  email: string;
+  role: "ADMIN" | "STUDENT";
+}
+export interface AuthSession {
+  ok: boolean;
+  user: AuthUser;
+}
 export type AdminQuestion = PublicQuestion;
-export interface AdminStudent { id: number; email: string }
+export interface AdminStudent {
+  id: number;
+  email: string;
+}
 export interface AdminExam {
-  id: string; title: string; description: string; status: string; updatedAt: string;
-  versions: { id: string; version: number; durationMinutes: number; publishedAt: string | null;
-    _count: { questions: number; assignments: number } }[];
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  updatedAt: string;
+  versions: {
+    id: string;
+    version: number;
+    durationMinutes: number;
+    publishedAt: string | null;
+    _count: { questions: number; assignments: number };
+  }[];
 }
 
 export interface AssignedExam {
@@ -127,12 +156,30 @@ export interface AssignedExamResult {
 }
 
 export interface AdminOverview {
-  totals: { students: number; exams: number; assignments: number; submissions: number;
-    submissionRate: number; averagePercentage: number | null };
-  exams: { examId: string; title: string; assigned: number; submitted: number;
-    submissionRate: number; averagePercentage: number | null }[];
-  recentSubmissions: { studentEmail: string; examTitle: string; submittedAt: string;
-    score: number | null; maximumScore: number | null; status: string }[];
+  totals: {
+    students: number;
+    exams: number;
+    assignments: number;
+    submissions: number;
+    submissionRate: number;
+    averagePercentage: number | null;
+  };
+  exams: {
+    examId: string;
+    title: string;
+    assigned: number;
+    submitted: number;
+    submissionRate: number;
+    averagePercentage: number | null;
+  }[];
+  recentSubmissions: {
+    studentEmail: string;
+    examTitle: string;
+    submittedAt: string;
+    score: number | null;
+    maximumScore: number | null;
+    status: string;
+  }[];
 }
 
 /** Thrown for any non-2xx; `.message` is always UI-safe. */
@@ -150,7 +197,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
-      ...init, credentials: "include",
+      ...init,
+      credentials: "include",
       headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
@@ -166,8 +214,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!response.ok) {
-    const serverMessage = body && typeof body === "object" && "error" in body
-      ? String((body as { error: unknown }).error) : "";
+    const serverMessage =
+      body && typeof body === "object" && "error" in body
+        ? String((body as { error: unknown }).error)
+        : "";
     throw new ApiError(response.status, serverMessage || friendlyError(response.status));
   }
   return body as T;
@@ -188,11 +238,10 @@ export const api = {
     request<AuthSession>("/auth/login", json({ email, password })),
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
   me: () => request<AuthSession>("/auth/me"),
-  assignedExams: () =>
-    request<{ ok: true; assignments: AssignedExam[] }>("/exams/assigned"),
+  assignedExams: () => request<{ ok: true; assignments: AssignedExam[] }>("/exams/assigned"),
   assignedExamPackage: (id: string) =>
     request<{ ok: true; package: AssignedExamPackage; sha256: string }>(
-      `/exams/assignments/${id}/package`,
+      `/exams/assignments/${id}/package`
     ),
   submitAssignedExam: (
     id: string,
@@ -201,26 +250,38 @@ export const api = {
       startedAt: string;
       submittedAt: string;
       answers: { examQuestionId: string; selectedIndex: number | null }[];
-    },
+    }
   ) =>
     request<{ ok: true; duplicate: boolean; submission: { id: string; status: string } }>(
       `/exams/assignments/${id}/submission`,
-      json(body),
+      json(body)
     ),
   assignedExamResult: (id: string) =>
-    request<{ ok: true; result: AssignedExamResult }>(
-      `/exams/assignments/${id}/result`,
-    ),
+    request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
   adminQuestions: () => request<{ ok: true; questions: AdminQuestion[] }>("/admin/question-bank"),
-  createAdminExam: (body: { title: string; description: string; instructions: string;
-    durationMinutes: number; shuffleQuestions: boolean; shuffleOptions: boolean;
-    questions: { questionId: number; marks: number; negativeMarks: number }[] }) =>
-    request<{ ok: true; exam: AdminExam }>("/admin/exams", json(body)),
+  createAdminExam: (body: {
+    title: string;
+    description: string;
+    instructions: string;
+    durationMinutes: number;
+    shuffleQuestions: boolean;
+    shuffleOptions: boolean;
+    questions: { questionId: number; marks: number; negativeMarks: number }[];
+  }) => request<{ ok: true; exam: AdminExam }>("/admin/exams", json(body)),
   publishAdminExam: (id: string) =>
-    request<{ ok: true; examId: string; versionId: string; publishedAt: string }>(`/admin/exams/${id}/publish`, json({})),
-  assignAdminExam: (id: string, body: { studentIds: number[]; availableFrom?: string; dueAt?: string }) =>
-    request<{ ok: true; created: number; assignments: unknown[] }>(`/admin/exams/${id}/assign`, json(body)),
+    request<{ ok: true; examId: string; versionId: string; publishedAt: string }>(
+      `/admin/exams/${id}/publish`,
+      json({})
+    ),
+  assignAdminExam: (
+    id: string,
+    body: { studentIds: number[]; availableFrom?: string; dueAt?: string }
+  ) =>
+    request<{ ok: true; created: number; assignments: unknown[] }>(
+      `/admin/exams/${id}/assign`,
+      json(body)
+    ),
 };
