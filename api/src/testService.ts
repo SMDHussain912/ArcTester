@@ -187,7 +187,7 @@ export async function createTest(
       let added = 0;
       for (const entry of active) {
         const available = entry.pool.filter((question) => !selectedById.has(question.id));
-        const picked = selectQuestions(available, stats, Math.min(quota, available.length));
+        const picked = selectQuestions(available, stats, Math.min(quota, available.length, remaining - added));
         for (const question of picked) { selected.push(question); selectedById.add(question.id); }
         added += picked.length;
       }
