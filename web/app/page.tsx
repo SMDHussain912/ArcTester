@@ -65,7 +65,7 @@ export default function HomePage() {
           <section className="panel hero-panel">
             <div className="panel-header">
               <span className="pill pill-accent">Study dashboard</span>
-              {status === "authenticated" && user ? <span className="pill">Personal workspace</span> : null}
+              {status === "authenticated" && user ? <span className="pill">{user.email}</span> : null}
             </div>
             <h1>{status === "authenticated" && user ? "Welcome back." : "Ready when you are."}</h1>
             <p className="muted">
