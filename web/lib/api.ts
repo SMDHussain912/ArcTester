@@ -292,6 +292,19 @@ export interface StudyRecommendationsReport {
   recommendations: StudyRecommendation[];
 }
 
+export interface AdminExamReport {
+  title: string;
+  version: number | null;
+  assigned: number;
+  started: number;
+  active: number;
+  submitted: number;
+  reviewRequired: number;
+  averagePercentage: number | null;
+  subjects: { subject: string; questions: number; correct: number; incorrect: number; unanswered: number; marks: number }[];
+  questions: { questionId: string; position: number; subject: string; topic: string | null; responses: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null }[];
+}
+
 export interface AdminAttendanceRow {
   assignmentId: string;
   candidate: { id: number; email: string };
@@ -551,6 +564,7 @@ export const api = {
   importAdminJson: (questions: unknown[]) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/json", json({ questions })),
   validateAdminPaper: (body: { durationMinutes: number; questions: { questionId: number; marks: number; negativeMarks: number }[] }) =>
     request<{ ok: true; valid: boolean; errors: string[]; warnings: string[]; totalQuestions: number; totalMarks: number; averageSecondsPerQuestion: number; subjects: { subject: string; count: number; percentage: number }[]; difficulties: { difficulty: string; count: number; percentage: number }[] }>("/admin/exams/validate-paper", json(body)),
+  adminExamReport: (id: string) => request<{ ok: true; report: AdminExamReport }>(`/admin/exams/${id}/report`),
   adminLatestExamVersion: (id: string) =>
     request<{ ok: true; exam: { id: string; title: string; description: string; status: string; version: { id: string; version: number; instructions: string; durationMinutes: number; shuffleQuestions: boolean; shuffleOptions: boolean; publishedAt: string | null; questions: { sourceQuestionId: number | null; position: number; subject: string; topic: string | null; text: string; marks: number; negativeMarks: number }[] } | null } }>(`/admin/exams/${id}/latest-version`),
   cloneAdminExam: (id: string) => request<{ ok: true; exam: AdminExam }>(`/admin/exams/${id}/clone`, json({})),
