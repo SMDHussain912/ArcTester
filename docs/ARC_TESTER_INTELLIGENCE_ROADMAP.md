@@ -485,8 +485,8 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - [x] Initial algorithms, use cases, and phases defined.
 - [x] Phase 0 — repository/data audit (completed 2026-11-08; findings recorded above).
 - [ ] Phase 1 — analytics foundation (in progress; student practice/formal analytics, historical practice metadata snapshots, admin cohort aggregates and initial dashboard integrations committed; verification and remaining coverage pending).
-- [ ] Phase 2 — weak-area detection.
-- [ ] Phase 3 — regression engine.
+- [ ] Phase 2 — weak-area detection (threshold-based recommendations and 7-day recent-practice cooldown implemented; final acceptance/UI review pending).
+- [ ] Phase 3 — regression engine (initial TypeScript multiple-linear-regression core implemented and CI-verified; training pipeline, baseline comparison, artifact persistence and prediction integration remain).
 - [ ] Phase 4 — classification engine.
 - [ ] Phase 5 — personalized recommendations.
 - [ ] Phase 6 — explanation engine.
@@ -644,3 +644,30 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 2. Fix any failures before expanding recommendation behavior.
 3. Add safeguards against repeatedly recommending the same topic after recent practice, if the existing data can support this without introducing misleading recency assumptions.
 4. Review recommendation interactions and responsive layout.
+
+
+### Phase 2 cooldown and Phase 3 regression foundation — 2026-11-08
+
+**Phase 2 correction**
+- The 7-day recent-practice cooldown was already implemented in `getStudyRecommendations` in `api/src/analytics.ts`.
+- Weak topics practiced within the cooldown are suppressed from revision prompts; when all qualifying topics are recent, the response explains why and suggests reviewing recent answers.
+- Existing analytics tests move practice timestamps beyond the cooldown before asserting eligible recommendations. The cooldown logic is present in the current main branch; a dedicated within-window suppression assertion remains a useful coverage improvement.
+
+**Phase 3 implementation started**
+- Added `api/src/intelligence/linearRegression.ts`.
+- Implemented multiple linear regression using standardized features and batch gradient descent.
+- Added prediction with feature-schema validation.
+- Added version-1 model artifact validation.
+- Added evaluation metrics: MAE, RMSE and R-squared (null when target variance is zero).
+- Added chronological train/test splitting so newer observations remain in the test set.
+- Added tests for multi-feature fitting, constant features, prediction, metrics, malformed artifacts, invalid training data and chronological splits.
+
+**Verification**
+- GitHub Actions run [42506847582](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42506847582) passed on commit `1886b0df55edae801ed02e01776da55d61ffb13c`.
+- API/web tests, lint, Prisma generation, clean SQLite migration verification, API/web production builds and mobile typecheck all passed.
+- This is the regression algorithm foundation, not a production score predictor yet. No student-data feature pipeline, baseline comparison, persistent model registry or prediction endpoint has been connected.
+
+**Commits**
+- `9978d62` — add TypeScript linear regression foundation.
+- `5be2f71` — add regression training and evaluation tests.
+- `1886b0d` — correct regression fixture expectation.
