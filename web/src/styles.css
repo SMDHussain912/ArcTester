@@ -817,3 +817,7 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 
 .exam-countdown,.timer-warning{font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .timer-warning{color:var(--danger)}
+
+
+.admin-question-row{flex-wrap:wrap}
+.question-bank-preview{flex-basis:100%}
