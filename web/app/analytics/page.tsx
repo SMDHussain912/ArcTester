@@ -170,6 +170,9 @@ function AnalyticsDashboard() {
             <h2 id="study-recommendations-title">Your next study steps</h2>
             <span className="pill">{recommendations.basedOnAttempts} attempts analyzed</span>
           </div>
+          <p className="mute">
+            Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round(recommendations.weakAccuracyThreshold * 100)}%. Formal exam results are not mixed into this practice recommendation score.
+          </p>
           <div className="stack">
             {recommendations.recommendations.map((item) => (
               <article key={item.id}>
@@ -178,9 +181,16 @@ function AnalyticsDashboard() {
                   <span className="pill">{item.priority} priority</span>
                 </div>
                 <p className="muted">{item.reason}</p>
+                {item.evidence ? (
+                  <p className="mute">
+                    Evidence: {item.evidence.incorrectAnswers}/{item.evidence.answeredQuestions} incorrect ·
+                    {" "}{item.evidence.accuracy === null ? "—" : Math.round(item.evidence.accuracy * 100) + "% accuracy"} ·
+                    {" "}minimum {item.evidence.minimumAnswers} answered.
+                  </p>
+                ) : null}
                 <p className="mute">
                   Suggested session: {item.questionCount} {item.mode === "mistakes" ? "mistake review" : item.mode === "mock" ? "mock test" : "practice"} questions
-                  {item.subject ? ` in ${item.subject}` : ""}.
+                  {item.subject ? ` in ${item.subject}` : ""}{item.topic ? ` · ${item.topic}` : ""}.
                 </p>
                 <Link className="button button-secondary" href="/#practice">Open practice setup</Link>
               </article>
