@@ -143,6 +143,36 @@ describe("POST /tests", () => {
     expect(body.questions.every((question) => question.subject === "Maths" && question.topic === "Algebra")).toBe(true);
   });
 
+  it("keeps all topics for selected subjects without a topic restriction", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
+    const algebra = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Algebra" },
+    });
+    const mechanics = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: physics.id, name: "Mechanics" } },
+      update: {},
+      create: { subjectId: physics.id, name: "Mechanics" },
+    });
+    const mathsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    const physicsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: physics.id } });
+    await server.db.question.update({ where: { id: mathsQuestion.id }, data: { topicId: algebra.id } });
+    await server.db.question.update({ where: { id: physicsQuestion.id }, data: { topicId: mechanics.id } });
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topicFilters: [{ subject: "Maths", topic: "Algebra" }],
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string; topic: string | null }[] };
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Maths", topic: "Algebra" }));
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Physics", topic: "Mechanics" }));
+  });
+
   it("applies difficulty filters after subject and optional topic selection", async () => {
     const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
     await server.db.question.updateMany({ where: { subjectId: physics.id }, data: { difficulty: "easy" } });
