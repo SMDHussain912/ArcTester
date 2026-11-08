@@ -797,6 +797,30 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/exams/:id/latest-version", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const exam = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1, include: { questions: { orderBy: { position: "asc" } } } } },
+      });
+      if (!exam) return next(notFound("Exam not found."));
+      res.json({ ok: true, exam: {
+        id: exam.id, title: exam.title, description: exam.description, status: exam.status,
+        version: exam.versions[0] ? {
+          id: exam.versions[0].id, version: exam.versions[0].version,
+          instructions: exam.versions[0].instructions, durationMinutes: exam.versions[0].durationMinutes,
+          shuffleQuestions: exam.versions[0].shuffleQuestions, shuffleOptions: exam.versions[0].shuffleOptions,
+          publishedAt: exam.versions[0].publishedAt,
+          questions: exam.versions[0].questions.map((question) => ({
+            sourceQuestionId: question.sourceQuestionId, position: question.position,
+            subject: question.subject, topic: question.topic, text: question.text,
+            marks: question.marks, negativeMarks: question.negativeMarks,
+          })),
+        } : null,
+      } });
+    } catch (error) { next(error); }
+  });
+
   router.patch("/admin/exams/:id", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = CreateExamSchema.parse(req.body);
