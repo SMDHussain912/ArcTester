@@ -85,6 +85,7 @@ model User {
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
   modelEvaluations    ModelEvaluation[]    @relation("ModelEvaluationActor")
+  modelDatasets       ModelDataset[]       @relation("ModelDatasetCreator")
 }
 
 model Invitation {
@@ -389,4 +390,23 @@ model ModelEvaluation {
 
   @@index([modelId, candidateVersion, evaluatedAt])
   @@index([actorId, evaluatedAt])
+}
+
+
+model ModelDataset {
+  id                 String   @id @default(cuid())
+  createdBy          User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById        Int?
+  name               String
+  task               String
+  featureSchemaJson  String
+  samplesJson        String
+  rowCount           Int
+  sourceDescription  String
+  sourceAttested     Boolean  @default(false)
+  fingerprint        String   @unique
+  createdAt          DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([createdById, createdAt])
 }
