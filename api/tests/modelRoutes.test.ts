@@ -290,6 +290,74 @@ describe("admin model registry API", () => {
     expect(String(rejected.body.error ?? rejected.body.message)).toContain("regression datasets only");
   });
 
+  it("enforces the exact student population feature schema and accuracy target range", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: {
+        completed_attempts: 3 + Math.floor(index / 2),
+        previous_accuracy: 0.5 + (index % 5) / 10,
+        recent_average_accuracy: 0.55 + (index % 4) / 10,
+        overall_average_accuracy: 0.6 + (index % 3) / 10,
+        previous_question_count: 10 + (index % 5),
+      },
+      target: 0.5 + (index % 5) / 10,
+      groupId: Math.floor(index / 6).toString(16).padStart(64, "0"),
+    }));
+    const schema = [
+      { name: "completed_attempts", type: "numeric" },
+      { name: "previous_accuracy", type: "numeric" },
+      { name: "recent_average_accuracy", type: "numeric" },
+      { name: "overall_average_accuracy", type: "numeric" },
+      { name: "previous_question_count", type: "numeric" },
+    ];
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "student-population-contract-valid",
+      task: "regression",
+      targetColumn: "next_attempt_accuracy",
+      featureSchema: schema,
+      samples,
+      sourceDescription: "Synthetic fixture validating the student population feature contract.",
+      sourceAttested: true,
+      datasetKind: "synthetic",
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const invalidTarget = await server.db.modelDataset.update({
+      where: { id: datasetId },
+      data: { samplesJson: JSON.stringify(samples.map((sample, index) => index === 0 ? { ...sample, target: 1.2 } : sample)) },
+    });
+    expect(invalidTarget.id).toBe(datasetId);
+    const rejectedTarget = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
+      modelId: "student-score-population",
+      epochs: 2,
+    });
+    expect(rejectedTarget.status).toBe(400);
+    expect(String(rejectedTarget.body.error ?? rejectedTarget.body.message)).toContain("targets must be between 0 and 1");
+  });
+
+  it("rejects an incompatible feature schema for the student population model", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index / 60,
+      groupId: Math.floor(index / 6).toString(16).padStart(64, "0"),
+    }));
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "student-population-contract-invalid-schema",
+      task: "regression",
+      targetColumn: "next_attempt_accuracy",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples,
+      sourceDescription: "Synthetic fixture validating student population feature schema rejection.",
+      sourceAttested: true,
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const rejected = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
+      modelId: "student-score-population",
+    });
+    expect(rejected.status).toBe(400);
+    expect(String(rejected.body.error ?? rejected.body.message)).toContain("exactly the five registered student inference features");
+  });
+
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
     const datasetId = await registerEvaluationDataset("dataset-registry-test");
     const listed = await request("/admin/model-datasets");
