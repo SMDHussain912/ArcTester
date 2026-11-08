@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError, isAuthError, type TestResult } from "../../../lib/api";
 import { RequireSession, useSession } from "../../../lib/session";
 
@@ -117,6 +118,12 @@ function ResultLoader() {
               ))}
             </ul>
             {q.explanation ? <div className="exp"><strong>Explanation</strong><p>{q.explanation}</p></div> : null}
+            {q.relatedConcepts.length > 0 ? (
+              <div className="exp">
+                <strong>Revise this concept</strong>
+                <ul>{q.relatedConcepts.map((concept) => <li key={concept.slug}><Link href={`/learning#${concept.slug}`}>{concept.title}</Link></li>)}</ul>
+              </div>
+            ) : null}
           </article>
         ))
       )}
