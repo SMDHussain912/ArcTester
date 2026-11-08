@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { xlsxToCsv } from "./xlsx";
+import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -659,7 +660,7 @@ export default function App() {
       const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
       ));
-      restoredAnswers = { ...restoredAnswers, ...serverAnswers };
+      restoredAnswers = mergeAssignedExamAnswers(serverAnswers, restoredAnswers);
       setAssignmentSaveStatus(serverSaved.answers.length > 0 ? "saved" : "idle");
       setActiveAssignmentPackage(response.package);
       setAssignmentAnswers(restoredAnswers);
