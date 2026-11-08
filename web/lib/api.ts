@@ -118,6 +118,17 @@ export interface AdminExam {
   }[];
 }
 
+export interface PublishedExamCatalogItem {
+  examId: string;
+  title: string;
+  description: string;
+  version: number;
+  durationMinutes: number;
+  questionCount: number;
+  publishedAt: string | null;
+  assignment: { id: string; availableFrom: string | null; dueAt: string | null; submission: { id: string; status: string } | null } | null;
+}
+
 export interface AssignedExam {
   id: string;
   status: string;
@@ -508,6 +519,7 @@ export const api = {
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
   me: () => request<AuthSession>("/auth/me"),
   assignedExams: () => request<{ ok: true; assignments: AssignedExam[] }>("/exams/assigned"),
+  publishedExamCatalog: () => request<{ ok: true; catalog: PublishedExamCatalogItem[] }>("/exams/catalog"),
   assignedExamPackage: (id: string) =>
     request<{ ok: true; package: AssignedExamPackage; sha256: string }>(
       `/exams/assignments/${id}/package`
