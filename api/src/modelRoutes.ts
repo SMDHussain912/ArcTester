@@ -69,6 +69,7 @@ const DatasetRegistrationSchema = z.object({
   samples: z.array(DatasetSampleSchema).min(10).max(5000),
   sourceDescription: z.string().trim().min(10).max(500),
   sourceAttested: z.literal(true),
+  datasetKind: z.enum(["synthetic", "real-anonymized"]).default("synthetic"),
 }).strict();
 
 function canonicalJson(value: unknown): string {
@@ -114,7 +115,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         take: 200,
         select: {
           id: true, name: true, task: true, targetColumn: true, featureSchemaJson: true,
-          rowCount: true, sourceDescription: true, sourceAttested: true,
+          rowCount: true, sourceDescription: true, sourceAttested: true, datasetKind: true,
           fingerprint: true, createdById: true, createdAt: true,
         },
       });
@@ -133,6 +134,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         targetColumn: input.targetColumn,
         featureSchema: input.featureSchema,
         samples: input.samples,
+        datasetKind: input.datasetKind,
       };
       if (Buffer.byteLength(JSON.stringify(payload), "utf8") > 8 * 1024 * 1024) {
         return next(badRequest("Dataset payload exceeds the 8 MB limit."));
@@ -174,11 +176,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           rowCount: input.samples.length,
           sourceDescription: input.sourceDescription,
           sourceAttested: true,
+          datasetKind: input.datasetKind,
           fingerprint,
         },
         select: {
           id: true, name: true, task: true, rowCount: true, sourceDescription: true,
-          sourceAttested: true, fingerprint: true, createdById: true, createdAt: true,
+          sourceAttested: true, datasetKind: true, fingerprint: true, createdById: true, createdAt: true,
         },
       });
       res.status(201).json({ ok: true, dataset: { ...created, featureSchema: input.featureSchema } });
@@ -305,9 +308,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           modelId,
           version,
           featureNames: featureSchema.map((feature) => feature.name),
-          // Dataset provenance is not yet explicitly classified in the dataset schema.
-          // Until that field is added, artifacts remain experiment-only and cannot be production eligible.
-          datasetKind: "synthetic",
+          datasetKind: dataset.datasetKind as "synthetic" | "real-anonymized",
           seed: input.seed,
           epochs: input.epochs,
           batchSize: input.batchSize,
