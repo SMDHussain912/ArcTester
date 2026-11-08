@@ -52,3 +52,15 @@
 .student-pick{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text)}
 .empty-state{padding:22px;color:var(--muted)}
 @media(max-width:650px){.exam-builder{grid-template-columns:1fr}.exam-builder>label:nth-child(3),.exam-question-picker,.exam-builder>.primary{grid-column:auto}.admin-exam-meta{align-items:flex-start;flex-direction:column}}
+
+
+/* Admin results analytics */
+.admin-analytics-stats{grid-template-columns:repeat(5,minmax(0,1fr));margin:16px 0 28px}
+.analytics-table-wrap{overflow-x:auto}
+.analytics-table{width:100%;border-collapse:collapse;min-width:620px;text-align:left}
+.analytics-table th,.analytics-table td{padding:14px 16px;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+.analytics-table th{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+.analytics-table tbody tr:last-child td{border-bottom:0}
+.analytics-table td:first-child{font-weight:650;color:var(--text)}
+@media(max-width:900px){.admin-analytics-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.admin-analytics-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-table th,.analytics-table td{padding:12px}}

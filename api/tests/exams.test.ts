@@ -265,6 +265,27 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
+  it("shows administrator analytics and blocks student access", async () => {
+    const admin = await request("/admin/analytics/overview", "GET", undefined, adminCookie);
+    expect(admin.status).toBe(200);
+    const body = admin.json as {
+      totals: { students: number; exams: number; assignments: number; submissions: number; averagePercentage: number | null };
+      exams: { title: string; assigned: number; submitted: number; averagePercentage: number | null }[];
+      recentSubmissions: { studentEmail: string; examTitle: string; score: number | null }[];
+    };
+    expect(body.totals.students).toBe(2);
+    expect(body.totals.exams).toBe(1);
+    expect(body.totals.assignments).toBe(1);
+    expect(body.totals.submissions).toBe(1);
+    expect(body.totals.averagePercentage).toBe(100);
+    expect(body.exams[0].title).toBe("Offline Systems Test");
+    expect(body.exams[0].submitted).toBe(1);
+    expect(body.recentSubmissions[0].studentEmail).toBe("exam-student@arctester.test");
+
+    const student = await request("/admin/analytics/overview", "GET", undefined, studentCookie);
+    expect(student.status).toBe(403);
+  });
+
   it("prevents another student from reading a submission result", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/result`,
