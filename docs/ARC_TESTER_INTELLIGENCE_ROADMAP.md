@@ -586,3 +586,12 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 2. Fix any TypeScript/Prisma/test issues reported by the local run.
 3. Review student and admin analytics layouts on desktop and mobile.
 4. Only then close Phase 1 and proceed to Phase 2 weak-area detection/recommendation safeguards.
+
+
+### Local verification follow-up — 2026-11-08
+
+The user's local run reported 112/114 API tests passing, with two fixture expectation failures:
+- The progress-import round-trip restored only the original four questions, while the exported analytics payload also referenced the fifth question created by the minimum-sample test. Updated the fresh restore database fixture to include that question, preserving matching question IDs.
+- The admin analytics test now creates a third STUDENT account to prove the three-distinct-student safeguard. Updated the expected admin student total from two to three.
+
+**Status:** Both test fixtures have been corrected and pushed. The user must rerun `npm test` to confirm. The supplied run showed no lint/build errors, but the two API test failures mean the overall verification run was not green.
