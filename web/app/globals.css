@@ -90,7 +90,7 @@ p { margin-bottom: 12px; }
 .mute, .muted { color: var(--muted); font-size: 13px; }
 .page-intro { max-width: 680px; margin-bottom: 28px; }
 .eyebrow { margin-bottom: 9px; color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
-.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 34px 0 14px; }
+.section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 34px 0 14px; }
 .section-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, .85fr); gap: 18px; align-items: start; }
