@@ -69,7 +69,7 @@ export async function getStudentScorePrediction(
       finishedAt: { not: null },
       answers: { some: {} },
     },
-    orderBy: [{ finishedAt: "asc" }, { id: "asc" }],
+    orderBy: [{ finishedAt: "desc" }, { id: "desc" }],
     take: SCORE_PREDICTION_MAX_ATTEMPTS,
     select: {
       finishedAt: true,
@@ -85,6 +85,7 @@ export async function getStudentScorePrediction(
       total: row.answers.length,
     }];
   });
+  attempts.reverse();
   const samples = buildNextAttemptScoreSamples(attempts);
 
   if (samples.length < SCORE_PREDICTION_MINIMUM_SAMPLES) {
