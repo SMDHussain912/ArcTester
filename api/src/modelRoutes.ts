@@ -141,23 +141,28 @@ export function modelRegistryRouter(db: PrismaClient): Router {
   router.post("/admin/models/:modelId/rollback", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
-      const active = await db.registeredModel.findFirst({ where: { modelId, isActive: true } });
-      if (!active) return next(notFound("No active model version was found."));
-      const previous = await db.registeredModel.findFirst({
-        where: { modelId, version: { lt: active.version } },
-        orderBy: { version: "desc" },
-      });
-      if (!previous) return next(badRequest("No earlier model version is available for rollback."));
-      validateRegistryArtifact(JSON.parse(previous.artifactJson));
-      const rolledBack = await db.$transaction(async (tx) => {
+      const outcome = await db.$transaction(async (tx) => {
+        const active = await tx.registeredModel.findFirst({ where: { modelId, isActive: true } });
+        if (!active) return { error: "missing-active" as const };
+        const previous = await tx.registeredModel.findFirst({
+          where: { modelId, version: { lt: active.version } },
+          orderBy: { version: "desc" },
+        });
+        if (!previous) return { error: "missing-previous" as const };
+        validateRegistryArtifact(JSON.parse(previous.artifactJson));
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
-        return tx.registeredModel.update({
+        const model = await tx.registeredModel.update({
           where: { id: previous.id },
           data: { isActive: true, activatedAt: new Date() },
           select: { modelId: true, version: true, isActive: true, activatedAt: true },
         });
+        return { model };
       });
-      res.json({ ok: true, model: rolledBack });
+      if ("error" in outcome) {
+        if (outcome.error === "missing-active") return next(notFound("No active model version was found."));
+        return next(badRequest("No earlier model version is available for rollback."));
+      }
+      res.json({ ok: true, model: outcome.model });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
       if (error instanceof Error) return next(badRequest(error.message));
