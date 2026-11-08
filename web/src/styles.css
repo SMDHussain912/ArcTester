@@ -90,3 +90,13 @@
   .topbar nav { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
   .nav-button, .nav-active { white-space: nowrap; }
 }
+
+/* Theme token compatibility for the live Vite workspace */
+:root {
+  --ink: var(--text);
+  --line: var(--border);
+  --surface-soft: var(--accent-soft);
+}
+:root[data-theme="dark"] {
+  --text: #e8edf6;
+}
