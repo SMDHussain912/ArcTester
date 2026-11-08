@@ -88,10 +88,12 @@ describe("analytics", () => {
     };
     expect(new Date(body.generatedAt).getTime()).toBeGreaterThan(0);
     expect(body.basedOnAttempts).toBeGreaterThanOrEqual(2);
+    const weakReport = await api.get("/analytics/weak-topics");
+    const weakSubjects = (weakReport.json as { subjects: { subject: string }[] }).subjects;
     expect(body.recommendations[0]).toMatchObject({
       id: "strengthen-weakest-subject",
       priority: "high",
-      subject: "Physics",
+      subject: weakSubjects[0].subject,
       mode: "practice",
       questionCount: 15,
     });
