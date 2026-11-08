@@ -126,7 +126,7 @@ The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENT
 - [x] **9.** Candidate session records, server-side start/deadline enforcement, heartbeats, audit events, and invigilator actions.
 - [ ] **10 (in progress).** UI modularization, stronger workflow coverage, session recovery, and continued accessibility/responsive polish.
 
-GitHub Actions automation is not currently configured. Do not infer verification from a commit being pushed.
+GitHub Actions runs the ArcTester CI workflow for API/web tests, lint, production builds, Prisma migration verification, and mobile typechecking. Check the Actions tab for the exact status of each commit; a pushed commit alone is not proof of verification.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
