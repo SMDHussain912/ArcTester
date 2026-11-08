@@ -413,7 +413,15 @@ export function examRouter(db: PrismaClient): Router {
         const accuracy = sampleSize > 0 ? row.correct / sampleSize : null;
         const uniqueStudents = row.studentIds.size;
         const sufficientData = sampleSize >= minimumQuestionAnswers && uniqueStudents >= minimumQuestionStudents;
-        const { studentIds: _studentIds, ...publicRow } = row;
+        const publicRow = {
+          questionId: row.questionId,
+          subject: row.subject,
+          topic: row.topic,
+          difficulty: row.difficulty,
+          correct: row.correct,
+          incorrect: row.incorrect,
+          unanswered: row.unanswered,
+        };
         return {
           ...publicRow,
           sampleSize,
