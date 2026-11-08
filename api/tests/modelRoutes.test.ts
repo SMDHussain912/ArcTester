@@ -96,6 +96,7 @@ describe("admin model registry API", () => {
     const registered = await request("/admin/model-datasets", "POST", {
       name: "training-workflow-fixture",
       task: "binary-classification",
+      targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
       samples,
       sourceDescription: "Synthetic fixture used only to test the registered training workflow.",
