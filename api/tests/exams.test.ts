@@ -265,6 +265,16 @@ describe("versioned exam management", () => {
     const live = await request("/admin/exams/live-sessions", "GET", undefined, adminCookie);
     expect(live.status).toBe(200);
     expect((live.json.sessions as Array<{ assignmentId: string }>).some((item) => item.assignmentId === assignmentId)).toBe(true);
+    const liveSessions = live.json.sessions as Array<{ id: string; assignmentId: string }>;
+    const activeSession = liveSessions.find((item) => item.assignmentId === assignmentId)!;
+    const paused = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "PAUSE", reason: "Test pause" }, adminCookie);
+    expect(paused.status).toBe(200);
+    const blockedResume = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(blockedResume.status).toBe(409);
+    const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME" }, adminCookie);
+    expect(resumed.status).toBe(200);
+    const resumedHeartbeat = await request(`/exams/assignments/${assignmentId}/session/heartbeat`, "POST", { event: "HEARTBEAT" }, studentCookie);
+    expect(resumedHeartbeat.status).toBe(200);
     const startedAt = sessionInfo.startedAt;
     const submittedAt = new Date().toISOString();
     const body = {
