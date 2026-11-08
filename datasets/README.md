@@ -217,3 +217,17 @@ The admin Model Lab can train candidates directly from a registered dataset:
 Candidates must still pass the separate registered-dataset baseline evaluation
 before activation. Training and evaluation on synthetic data are pipeline
 checks only, not evidence that a model is suitable for real student decisions.
+
+
+### Candidate ranking
+
+Each training response includes a deterministic rank for candidates trained on
+the same dataset and held-out split:
+
+- Binary classification: F1 descending, then accuracy, precision, and recall.
+- Regression: RMSE ascending, then MAE.
+- Exact metric ties are broken by algorithm name for stable ordering.
+
+The Model Lab shows this as an experiment leaderboard. Rank 1 is not an automatic
+promotion: the candidate must still be evaluated against a separately registered
+baseline dataset and pass the model governance gate.
