@@ -34,6 +34,26 @@ type AdminAnalytics = {
   exams: { examId: string; title: string; assigned: number; submitted: number; submissionRate: number; averagePercentage: number | null }[];
   recentSubmissions: { studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
 };
+type LiveSession = {
+  id: string; status: string; student: { id: number; email: string }; exam: { id: string; title: string };
+  assignmentId: string; startedAt: string | null; lastHeartbeatAt: string | null; connectivity: string;
+  heartbeatCount: number; focusLossCount: number; disconnectCount: number;
+  submission: { id: string; status: string } | null;
+  events: { id: string; type: string; detail: string; createdAt: string; actor: { email: string; role: string } | null }[];
+};
+type ExamAttendance = {
+  assignmentId: string; candidate: { id: number; email: string }; exam: { id: string; title: string };
+  version: number; questionCount: number; assignedAt: string; availableFrom: string | null; dueAt: string | null;
+  attendanceStatus: string; connectivity: string;
+  session: { id: string; status: string; startedAt: string | null; lastHeartbeatAt: string | null; endedAt: string | null; heartbeatCount: number; focusLossCount: number; disconnectCount: number } | null;
+  submission: { id: string; status: string; submittedAt: string; score: number | null; maximumScore: number | null } | null;
+};
+type SessionAudit = {
+  assignmentId: string; candidate: { id: number; email: string }; exam: { title: string }; version: number;
+  session: { id: string; status: string; startedAt: string | null; lastHeartbeatAt: string | null; endedAt: string | null; heartbeatCount: number; focusLossCount: number; disconnectCount: number } | null;
+  submission: { id: string; status: string; submittedAt: string; receivedAt: string; score: number | null; maximumScore: number | null } | null;
+  events: { id: string; type: string; detail: string; createdAt: string; actor: { id: number; email: string; role: string } | null }[];
+};
 type Question = {
   id: number;
   subject: string;
@@ -97,6 +117,10 @@ export default function App() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
+  const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
+  const [examAttendance, setExamAttendance] = useState<ExamAttendance[]>([]);
+  const [sessionAudit, setSessionAudit] = useState<SessionAudit | null>(null);
+  const [sessionActionBusy, setSessionActionBusy] = useState<string | null>(null);
   const [adminQuestions, setAdminQuestions] = useState<AdminQuestion[]>([]);
   const [adminSubjects, setAdminSubjects] = useState<AdminSubject[]>([]);
   const [newSubjectName, setNewSubjectName] = useState("");
@@ -164,7 +188,7 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "announcements" | "invitations" | "assigned-exams">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -292,7 +316,20 @@ export default function App() {
     request<AdminAnalytics>("/admin/analytics/overview")
       .then(setAdminAnalytics)
       .catch((cause) => setError((cause as Error).message));
+    void refreshLiveSessions();
+    void refreshExamAttendance();
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== "ADMIN" || !["live-sessions", "attendance"].includes(activePage)) return;
+    const refresh = () => {
+      if (activePage === "live-sessions") void refreshLiveSessions();
+      if (activePage === "attendance") void refreshExamAttendance();
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 15_000);
+    return () => window.clearInterval(interval);
+  }, [user, activePage]);
 
   async function refreshAssignedExams() {
     const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
@@ -390,6 +427,43 @@ export default function App() {
   async function refreshAdminExams() {
     const refreshed = await request<{ exams: AdminExam[] }>("/admin/exams");
     setAdminExams(refreshed.exams);
+  }
+
+  async function refreshLiveSessions() {
+    const response = await request<{ sessions: LiveSession[] }>("/admin/exams/live-sessions");
+    setLiveSessions(response.sessions ?? []);
+  }
+
+  async function refreshExamAttendance() {
+    const response = await request<{ attendance: ExamAttendance[] }>("/admin/exams/attendance");
+    setExamAttendance(response.attendance ?? []);
+  }
+
+  async function controlExamSession(sessionId: string, action: "PAUSE" | "RESUME" | "TERMINATE") {
+    const confirmation = action === "TERMINATE"
+      ? "Terminate this candidate session? The candidate will not be able to continue."
+      : action === "PAUSE" ? "Pause this candidate session?" : "Resume this candidate session?";
+    if (!window.confirm(confirmation)) return;
+    setSessionActionBusy(sessionId);
+    setError("");
+    try {
+      await request(`/admin/exams/sessions/${sessionId}/action`, {
+        method: "POST", body: JSON.stringify({ action, reason: `Administrator selected ${action.toLowerCase()} from the live invigilation workspace.` }),
+      });
+      await refreshLiveSessions();
+      await refreshExamAttendance();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setSessionActionBusy(null); }
+  }
+
+  async function loadSessionAudit(assignmentId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request<{ audit: SessionAudit }>(`/admin/exams/assignments/${assignmentId}/audit`);
+      setSessionAudit(response.audit);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function createQuestion(event: FormEvent<HTMLFormElement>) {
@@ -974,6 +1048,8 @@ export default function App() {
           <nav aria-label="Admin navigation">
             <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Overview</button>
             <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
+            <button className={activePage === "live-sessions" ? "nav-active" : "nav-button"} onClick={() => setActivePage("live-sessions")}>Live invigilation</button>
+            <button className={activePage === "attendance" ? "nav-active" : "nav-button"} onClick={() => setActivePage("attendance")}>Attendance</button>
             <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
             <button className={activePage === "subjects" ? "nav-active" : "nav-button"} onClick={() => setActivePage("subjects")}>Subjects & topics</button>
             <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
@@ -1105,6 +1181,28 @@ export default function App() {
                 </article>;
               })}
             </div>
+          </section>
+          <section hidden={activePage !== "live-sessions"} id="admin-live-sessions">
+            <div className="section-head">
+              <div><p className="eyebrow">REAL-TIME EXAM OPERATIONS</p><h2>Live invigilation</h2><p className="muted">Candidate sessions refresh every 15 seconds. Stale connections need review.</p></div>
+              <button className="ghost" disabled={busy} onClick={() => void refreshLiveSessions()}>Refresh now</button>
+            </div>
+            <div className="stats-row admin-analytics-stats invigilation-stats">
+              <article className="panel stat"><span className="muted">Active sessions</span><strong>{liveSessions.filter((item) => item.status === "ACTIVE").length}</strong><span className="muted">Currently running</span></article>
+              <article className="panel stat"><span className="muted">Paused</span><strong>{liveSessions.filter((item) => item.status === "PAUSED").length}</strong><span className="muted">Awaiting resume</span></article>
+              <article className="panel stat"><span className="muted">Connection alerts</span><strong>{liveSessions.filter((item) => item.connectivity !== "CONNECTED").length}</strong><span className="muted">Stale or disconnected</span></article>
+            </div>
+            {liveSessions.length === 0 ? <div className="panel empty-state"><h3>No live exam sessions</h3><p className="muted">When students start assigned exams, their sessions and connection signals will appear here.</p></div> : <div className="live-session-list">{liveSessions.map((session) => <article className="panel live-session-card" key={session.id}>
+              <div className="live-session-heading"><div><strong>{session.student.email}</strong><p className="muted">{session.exam.title}</p></div><div className="live-session-badges"><span className={`status status-${session.status.toLowerCase()}`}>{session.status}</span><span className={`status ${session.connectivity === "CONNECTED" ? "status-used" : "status-expired"}`}>{session.connectivity}</span></div></div>
+              <div className="live-session-metrics"><span><b>{session.heartbeatCount}</b> heartbeats</span><span><b>{session.focusLossCount}</b> focus losses</span><span><b>{session.disconnectCount}</b> reconnects</span><span>Last signal: {session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "Never"}</span></div>
+              <div className="live-session-actions">{session.status === "ACTIVE" ? <button className="ghost" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "PAUSE")}>Pause</button> : session.status === "PAUSED" ? <button className="primary" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "RESUME")}>Resume</button> : null}<button className="ghost danger-action" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "TERMINATE")}>Terminate</button><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(session.assignmentId)}>View audit trail</button></div>
+            </article>)}</div>}
+            {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><div className="session-audit-summary"><span>Status: <b>{sessionAudit.session?.status ?? "NOT STARTED"}</b></span><span>Heartbeats: <b>{sessionAudit.session?.heartbeatCount ?? 0}</b></span><span>Focus losses: <b>{sessionAudit.session?.focusLossCount ?? 0}</b></span><span>Reconnects: <b>{sessionAudit.session?.disconnectCount ?? 0}</b></span></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
+          </section>
+          <section hidden={activePage !== "attendance"} id="admin-exam-attendance">
+            <div className="section-head"><div><p className="eyebrow">EXAM REGISTER</p><h2>Candidate attendance</h2><p className="muted">Assignment, session, connectivity and submission records.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshExamAttendance()}>Refresh now</button></div>
+            <div className="panel analytics-table-wrap"><table className="analytics-table attendance-table"><thead><tr><th>Candidate</th><th>Examination</th><th>Attendance</th><th>Connection</th><th>Started</th><th>Submitted</th><th>Score</th><th>Audit</th></tr></thead><tbody>{examAttendance.map((item) => <tr key={item.assignmentId}><td>{item.candidate.email}</td><td>{item.exam.title} · v{item.version}</td><td><span className={`status status-${item.attendanceStatus.toLowerCase()}`}>{item.attendanceStatus.replaceAll("_", " ")}</span></td><td>{item.connectivity.replaceAll("_", " ")}</td><td>{item.session?.startedAt ? new Date(item.session.startedAt).toLocaleString() : "—"}</td><td>{item.submission?.submittedAt ? new Date(item.submission.submittedAt).toLocaleString() : "—"}</td><td>{item.submission ? `${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}` : "—"}</td><td><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(item.assignmentId)}>View</button></td></tr>)}</tbody></table>{examAttendance.length === 0 && <p className="empty-state">No exam assignments have been created yet.</p>}</div>
+            {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
           </section>
           <section hidden={activePage !== "subjects"} id="admin-subjects-topics">
             <div className="section-head"><div><p className="eyebrow">QUESTION TAXONOMY</p><h2>Subjects and topics</h2><p className="muted">Organise the question bank before building exam blueprints.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshSubjects()}>Refresh</button></div>
