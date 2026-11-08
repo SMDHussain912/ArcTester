@@ -344,9 +344,10 @@ export interface AdminOverview {
     }[];
     questionPerformance: {
       minimumAnswers: number;
+      minimumStudents: number;
       weakAccuracyThreshold: number;
       insufficientSampleCount: number;
-      questions: (QuestionPerformanceRow & { sampleSize: number })[];
+      questions: (QuestionPerformanceRow & { sampleSize: number; uniqueStudents: number })[];
     };
   };
   formalExams: {
