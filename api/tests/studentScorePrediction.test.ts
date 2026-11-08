@@ -59,6 +59,7 @@ describe("student score prediction endpoint", () => {
       requiredSamples: 20,
       requiredCompletedAttempts: 23,
     });
+    expect(response.json.populationFeatures).toMatchObject({ completed_attempts: 3, previous_accuracy: 1, previous_question_count: 1 });
   });
 
 
@@ -97,6 +98,7 @@ describe("student score prediction endpoint", () => {
       trainingSamples: 27,
       evaluationSamples: 9,
     });
+    expect(response.json.populationFeatures).toMatchObject({ completed_attempts: 30, previous_accuracy: 0.7, previous_question_count: 10 });
     expect(response.json.predictedScorePercent).toBeGreaterThanOrEqual(0);
     expect(response.json.predictedScorePercent).toBeLessThanOrEqual(100);
     expect(response.json.predictionInterval.lowerPercent).toBeGreaterThanOrEqual(0);
@@ -156,5 +158,6 @@ describe("student score prediction endpoint", () => {
       completedAttempts: 0,
       availableSamples: 0,
     });
+    expect(response.json).not.toHaveProperty("populationFeatures");
   });
 });
