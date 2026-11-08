@@ -7,6 +7,10 @@ import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { importFromCsv, importFromJson, previewImport } from "./importService.js";
+import {
+  QUESTION_ANALYTICS_MINIMUM_ANSWERS,
+  QUESTION_ANALYTICS_WEAK_ACCURACY,
+} from "./analytics.js";
 
 const CreateExamSchema = z.object({
   title: z.string().trim().min(2).max(120),
@@ -408,9 +412,9 @@ export function examRouter(db: PrismaClient): Router {
         }
       }
       const practiceAnswered = practiceCorrect + practiceIncorrect;
-      const minimumQuestionAnswers = 5;
+      const minimumQuestionAnswers = QUESTION_ANALYTICS_MINIMUM_ANSWERS;
       const minimumQuestionStudents = 3;
-      const weakQuestionAccuracy = 0.6;
+      const weakQuestionAccuracy = QUESTION_ANALYTICS_WEAK_ACCURACY;
       const questionPerformance = [...practiceByQuestion.values()].map((row) => {
         const sampleSize = row.correct + row.incorrect;
         const accuracy = sampleSize > 0 ? row.correct / sampleSize : null;
