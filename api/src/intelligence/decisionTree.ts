@@ -16,7 +16,7 @@ interface SplitNode {
 }
 type DecisionTreeNode = LeafNode | SplitNode;
 
-const nodeSchema: z.ZodType<DecisionTreeNode> = z.lazy(() => z.discriminatedUnion("type", [
+const nodeSchema: z.ZodType<DecisionTreeNode> = z.lazy(() => z.union([
   z.object({
     type: z.literal("leaf"), samples: z.number().int().positive(),
     positives: z.number().int().min(0), probability: z.number().min(0).max(1),
