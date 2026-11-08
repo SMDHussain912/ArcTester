@@ -19,6 +19,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/api/package.json ./api/package.json
 COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
+COPY --from=build /app/api/docker-entrypoint.sh ./api/docker-entrypoint.sh
 
 RUN mkdir -p /app/api/prisma/data && chown -R node:node /app/api
 USER node
