@@ -213,7 +213,7 @@ describe("student analytics page", () => {
     expect(await screen.findByText("Next practice score estimate")).toBeInTheDocument();
     expect(screen.getByText("84%")).toBeInTheDocument();
     expect(screen.getByText(/Estimated accuracy on your next practice attempt/)).toBeInTheDocument();
-    expect(screen.getByText(/Approximate prediction range: 76%–92%/)).toBeInTheDocument();
+    expect(screen.getByText("76%–92%")).toBeInTheDocument();
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(
       screen.getByText(
