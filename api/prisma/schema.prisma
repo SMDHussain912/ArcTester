@@ -81,6 +81,7 @@ model User {
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementReads   AnnouncementRead[]
+  examSessions        ExamSession[]
 }
 
 model Invitation {
@@ -182,6 +183,7 @@ model ExamAssignment {
   dueAt          DateTime?
   status         String       @default("ASSIGNED")
   submission     ExamSubmission?
+  session        ExamSession?
 
   @@unique([examVersionId, studentId])
   @@index([studentId, status])
@@ -274,4 +276,37 @@ model AnnouncementRead {
 
   @@id([announcementId, studentId])
   @@index([studentId, seenAt])
+}
+
+ 
+model ExamSession {
+  id               String             @id @default(cuid())
+  assignment       ExamAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId     String             @unique
+  student          User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId        Int
+  status           String             @default("NOT_STARTED")
+  startedAt        DateTime?
+  lastHeartbeatAt  DateTime?
+  lastActivityAt   DateTime?
+  endedAt          DateTime?
+  heartbeatCount   Int                @default(0)
+  focusLossCount   Int                @default(0)
+  disconnectCount  Int                @default(0)
+  createdAt        DateTime           @default(now())
+  events           ExamSessionEvent[]
+
+  @@index([status, lastHeartbeatAt])
+  @@index([studentId, status])
+}
+
+model ExamSessionEvent {
+  id        String      @id @default(cuid())
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  type      String
+  detail    String      @default("")
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
 }
