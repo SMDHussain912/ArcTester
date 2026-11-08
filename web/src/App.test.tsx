@@ -180,7 +180,7 @@ describe("live Vite application", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
     fireEvent.click(screen.getByLabelText(/Maths/));
     fireEvent.click(screen.getByLabelText(/Physics/));
-    fireEvent.click(screen.getByLabelText("Algebra", { selector: "input" }));
+    fireEvent.click(screen.getAllByLabelText(/Algebra/)[0]);
     fireEvent.change(screen.getByLabelText("Number of questions"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "easy" } });
     fireEvent.click(screen.getByRole("button", { name: "Create 5-question paper" }));
