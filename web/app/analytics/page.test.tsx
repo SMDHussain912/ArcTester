@@ -380,14 +380,18 @@ describe("student analytics page", () => {
       </SessionProvider>
     );
 
-    expect(
-      await screen.findByText((_, element) =>
-        payload.status === "baseline_not_beaten"
-          ? element?.tagName === "P" && element.textContent?.includes(expected) === true
-          : element?.textContent === expected
-      )
-    ).toBeInTheDocument();
-    expect(screen.getByText(detail)).toBeInTheDocument();
+    if (payload.status === "baseline_not_beaten") {
+      expect(
+        await screen.findByText((_, element) =>
+          element?.tagName === "P" &&
+          element.textContent?.includes(expected) === true &&
+          element.textContent.includes(detail)
+        )
+      ).toBeInTheDocument();
+    } else {
+      expect(await screen.findByText(expected)).toBeInTheDocument();
+      expect(screen.getByText(detail)).toBeInTheDocument();
+    }
     expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
   });
 
