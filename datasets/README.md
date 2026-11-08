@@ -151,14 +151,25 @@ student-facing predictions.
 
 ## Candidate evaluation and promotion gates
 
-Admin endpoint:
+The admin Model Lab registers immutable evaluation dataset versions before
+using them to compare model versions.
 
-- `POST /admin/models/:modelId/:version/evaluate` — evaluates a candidate and
-  an explicit baseline version on the same held-out samples.
-- Request body: `baselineVersion`, `evaluationDataset`, and `samples`
-  containing feature objects and numeric targets. Evaluation accepts 10–5,000
-  rows and classification data must contain both classes.
+Admin endpoints:
+
+- `POST /admin/model-datasets` — register a holdout dataset with its name,
+  task, feature schema, 10–5,000 samples, source description, and explicit
+  source attestation. The API validates every row and stores the payload,
+  creator, timestamp, and SHA-256 content fingerprint.
+- `GET /admin/model-datasets` — list registered dataset versions and their
+  metadata without returning the stored sample payload.
+- `POST /admin/models/:modelId/:version/evaluate` — evaluate a candidate
+  against a baseline using a registered `datasetId`; arbitrary sample arrays
+  are no longer accepted by this evaluation endpoint.
 - `GET /admin/models/:modelId/audit` includes the resulting `EVALUATED` event.
+
+Identical dataset payloads (including name, task, feature schema and samples)
+cannot be registered twice. Registered sample content is immutable through
+the current API. Dataset metadata and fingerprints are visible in Model Lab.
 
 Acceptance rules are deliberately conservative and explicit:
 
@@ -166,16 +177,17 @@ Acceptance rules are deliberately conservative and explicit:
   the baseline.
 - Regression: candidate MAE **and** RMSE must both be no worse than baseline.
 
-The API computes both metric sets server-side against the exact same samples,
-stores an immutable evaluation report, and records a SHA-256 fingerprint of the
-submitted sample payload. A candidate version above version 1 cannot be manually
+The API computes both metric sets server-side against the same stored samples,
+stores an immutable evaluation report linked by dataset ID, and records the
+dataset fingerprint. A candidate version above version 1 cannot be manually
 activated unless its latest evaluation report has status `PASSED`. Rollback
 only selects an earlier version that was activated before, so it cannot
 accidentally promote an unreviewed failed candidate.
 
-**Evidence limitation:** the current evaluation endpoint accepts holdout rows
-from an administrator. The fingerprint detects later payload differences; it
-does not prove dataset provenance, prevent a dishonest admin from submitting
-fabricated data, or establish real-world model quality. Reports must be treated
-as operator-supplied evaluation evidence until a trusted dataset ingestion and
-versioning workflow is implemented. Synthetic data is not production validation.
+**Evidence limitation:** source descriptions and attestation are administrator
+declarations, not independent proof of dataset provenance. The fingerprint
+detects content changes and duplicate payloads; it does not prove the original
+data was genuine, prevent an administrator from registering fabricated data,
+or establish real-world model quality. Synthetic data is not production
+validation. A future trusted ingestion workflow must verify provenance and
+separate training, validation, and final holdout splits before production use.
