@@ -66,7 +66,10 @@ export default function AdminPage() {
     return questions.filter((q) => (subjectFilter === "All subjects" || q.subject === subjectFilter) && (difficultyFilter === "All difficulties" || (q.difficulty ?? "Unspecified") === difficultyFilter) && (!term || [q.text, q.subject, q.topic ?? ""].some((v) => v.toLowerCase().includes(term))));
   }, [questions, search, subjectFilter, difficultyFilter]);
 
-  const selectedQuestionRows = useMemo(() => questions.filter((question) => selectedQuestions.includes(question.id)), [questions, selectedQuestions]);
+  const selectedQuestionRows = useMemo(
+    () => selectedQuestions.map((id) => questions.find((question) => question.id === id)).filter((question): question is AdminQuestion => Boolean(question)),
+    [questions, selectedQuestions]
+  );
   const totalMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.marks ?? defaultMarks), 0);
   const maximumNegativeMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.negativeMarks ?? negativeMarks), 0);
   const questionsWithoutTopic = selectedQuestionRows.filter((question) => !question.topic).length;
@@ -104,6 +107,16 @@ export default function AdminPage() {
         [field]: Math.max(0, Math.min(100, value)),
       },
     }));
+  }
+  function moveQuestion(id: number, direction: -1 | 1) {
+    setSelectedQuestions((current) => {
+      const index = current.indexOf(id);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
   }
   function toggleStudent(id: number) {
     setSelectedStudents((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -404,6 +417,10 @@ export default function AdminPage() {
                 {selectedQuestionRows.map((question) => (
                   <div key={question.id} className="row" style={{ justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
                     <span style={{ flex: "2 1 260px" }}><strong>#{question.id} · {question.subject}</strong><br /><span className="mute">{question.text}</span></span>
+                    <div className="row">
+                      <button type="button" className="button button-quiet button-small" aria-label={"Move question " + question.id + " up"} onClick={() => moveQuestion(question.id, -1)} disabled={selectedQuestions[0] === question.id}>↑</button>
+                      <button type="button" className="button button-quiet button-small" aria-label={"Move question " + question.id + " down"} onClick={() => moveQuestion(question.id, 1)} disabled={selectedQuestions[selectedQuestions.length - 1] === question.id}>↓</button>
+                    </div>
                     <label style={{ width: 100 }}>Marks<input type="number" min={0} max={100} step="0.25" value={questionScoring[question.id]?.marks ?? defaultMarks} onChange={(event) => updateQuestionScoring(question.id, "marks", Number(event.target.value) || 0)} /></label>
                     <label style={{ width: 110 }}>Wrong answer<input type="number" min={0} max={100} step="0.25" value={questionScoring[question.id]?.negativeMarks ?? negativeMarks} onChange={(event) => updateQuestionScoring(question.id, "negativeMarks", Number(event.target.value) || 0)} /></label>
                   </div>
