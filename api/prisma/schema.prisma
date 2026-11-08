@@ -1,8 +1,8 @@
 // SQLite has NO enum type and NO array type, so:
-// - difficulty/source are plain validated Strings (Zod enforces the values in code)
-// - options are stored as a JSON string; Zod enforces "exactly 4 non-empty strings"
-// questionHash is a UNIQUE normalized hash (lowercase, trimmed, collapsed spaces)
-// so duplicates are blocked at the database level, not just in code.
+ // - difficulty/source are plain validated Strings (Zod enforces the values in code)
+ // - options are stored as a JSON string; Zod enforces "exactly 4 non-empty strings"
+ // questionHash is a UNIQUE normalized hash (lowercase, trimmed, collapsed spaces)
+ // so duplicates are blocked at the database level, not just in code.
 
 generator client {
   provider = "prisma-client-js"
@@ -66,12 +66,45 @@ model Attempt {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  attempts     Attempt[]
-  stats        Stat[]
+  id                 Int          @id @default(autoincrement())
+  email              String       @unique
+  passwordHash       String
+  role               String       @default("STUDENT")
+  createdAt          DateTime     @default(now())
+  attempts           Attempt[]
+  stats              Stat[]
+  devices            Device[]
+  invitationsCreated Invitation[] @relation("InvitationCreator")
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  createdBy   User      @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById Int
+
+  @@index([email, expiresAt])
+  @@index([createdById])
+}
+
+model Device {
+  id            String    @id @default(cuid())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        Int
+  deviceName    String
+  platform      String
+  fingerprint   String
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  revokedAt     DateTime?
+
+  @@unique([userId, fingerprint])
+  @@index([userId, revokedAt])
 }
 
 model AttemptAnswer {
