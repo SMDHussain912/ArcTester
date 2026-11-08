@@ -127,6 +127,42 @@ describe("admin model registry API", () => {
     expect((audit.body.events as Array<{ action: string }>).map((event) => event.action)).toContain("TRAINED");
   });
 
+  it("serves no TensorFlow artifact unless an eligible active version exists", async () => {
+    expect((await request("/models/tensorflow-fixture/active/tensorflow", "GET", undefined, "")).status).toBe(403);
+    const missing = await request("/models/tensorflow-fixture/active/tensorflow");
+    expect(missing.status).toBe(404);
+  });
+
+  it("blocks synthetic TensorFlow artifacts from activation", async () => {
+    const modelId = "tensorflow-gate-fixture";
+    const artifact = {
+      schemaVersion: 1,
+      format: "tensorflow-js-layers-model",
+      modelId,
+      version: 1,
+      task: "regression",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      normalization: { means: [0], scales: [1] },
+      modelTopology: {},
+      weightSpecs: [{ name: "dense/kernel", shape: [1, 1], dtype: "float32" }],
+      weightDataBase64: "AAAAAA==",
+      evaluation: {
+        candidateMae: 1, baselineMae: 1, candidateRmse: 1, baselineRmse: 1,
+        testSamples: 20, splitMethod: "grouped-student-holdout", datasetKind: "synthetic",
+      },
+      trainedAt: new Date().toISOString(),
+    };
+    await server.db.registeredModel.create({
+      data: {
+        modelId, version: 1, algorithm: "tensorflow-js-layers", task: "regression",
+        dataset: "synthetic-fixture", artifactJson: JSON.stringify(artifact), isActive: false,
+      },
+    });
+    const activation = await request(`/admin/models/${modelId}/1/activate`, "POST", {});
+    expect(activation.status).toBe(409);
+    expect(String(activation.body.error ?? activation.body.message)).toContain("real-anonymized production eligibility");
+  });
+
   it("requires privacy-preserving learner groups for TensorFlow.js training", async () => {
     const samples = Array.from({ length: 60 }, (_, index) => ({
       features: { practice_score: index },
