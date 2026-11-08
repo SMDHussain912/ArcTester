@@ -10,6 +10,7 @@ let secondStudentCookie = "";
 let studentId = 0;
 let examId = "";
 let assignmentId = "";
+let displayedCorrectIndex = 1;
 
 async function request(
   path: string,
@@ -122,6 +123,7 @@ describe("versioned exam management", () => {
         instructions: "Choose one answer per question.",
         durationMinutes: 45,
         shuffleQuestions: true,
+        shuffleOptions: true,
         questions: [{ questionId: question.id, marks: 2, negativeMarks: 0.5 }],
       },
       adminCookie
@@ -189,15 +191,17 @@ describe("versioned exam management", () => {
     );
     expect(packageResponse.status).toBe(200);
     const packageBody = packageResponse.json.package as {
-      questions: Array<Record<string, unknown>>;
+      questions: Array<{ options: string[]; optionOrder: number[] }>;
     };
     expect(packageBody.questions).toHaveLength(1);
-    expect(packageBody.questions[0].correctIndex).toBeUndefined();
-    expect(packageBody.questions[0].explanation).toBeUndefined();
+    expect(packageBody.questions[0].options).not.toContain(undefined);
+    expect([...packageBody.questions[0].optionOrder].sort()).toEqual([0, 1, 2, 3]);
+    displayedCorrectIndex = packageBody.questions[0].optionOrder.indexOf(1);
+    expect(displayedCorrectIndex).toBeGreaterThanOrEqual(0);
     expect(packageResponse.json.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("allows downloading a published package before its start window", async () => {
+  it("blocks access to a published paper before its availability window", async () => {
     const availableFrom = new Date(Date.now() + 60 * 60 * 1000);
     await server.db.examAssignment.update({
       where: { id: assignmentId },
@@ -209,9 +213,8 @@ describe("versioned exam management", () => {
       undefined,
       studentCookie
     );
-    expect(response.status).toBe(200);
-    const packageBody = response.json.package as { availableFrom: string };
-    expect(new Date(packageBody.availableFrom).getTime()).toBe(availableFrom.getTime());
+    expect(response.status).toBe(403);
+    expect(response.json.error).toContain("not available yet");
     await server.db.examAssignment.update({
       where: { id: assignmentId },
       data: { availableFrom: null },
@@ -236,7 +239,7 @@ describe("versioned exam management", () => {
       attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
       startedAt,
       submittedAt,
-      answers: [{ examQuestionId: question.id, selectedIndex: 1 }],
+      answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
     };
 
     const first = await request(
