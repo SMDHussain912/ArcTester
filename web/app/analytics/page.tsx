@@ -199,6 +199,37 @@ function AnalyticsDashboard() {
         </section>
       ) : null}
 
+      {overview?.practice.difficulty.length ? (
+        <section className="panel" aria-labelledby="difficulty-performance-title">
+          <h2 id="difficulty-performance-title">Performance by difficulty</h2>
+          <p className="muted">Accuracy is calculated from answered questions only. Unanswered questions are shown separately.</p>
+          <div className="stack">
+            {overview.practice.difficulty.map((item) => (
+              <div key={item.difficulty}>
+                <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <strong>{item.difficulty.charAt(0).toUpperCase() + item.difficulty.slice(1)}</strong>
+                  <span className="pill">
+                    {item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "% accuracy"}
+                    {" · "}{item.answered} answered
+                  </span>
+                </div>
+                <p className="mute">{item.correct} correct · {item.incorrect} incorrect · {item.unanswered} unanswered</p>
+                <div
+                  role="progressbar"
+                  aria-label={item.difficulty + " difficulty accuracy"}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={item.accuracy === null ? 0 : Math.round(item.accuracy * 100)}
+                  style={{ height: 8, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}
+                >
+                  <div style={{ width: (item.accuracy === null ? 0 : Math.max(0, Math.min(100, item.accuracy * 100))) + "%", height: "100%", background: "var(--accent)", borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {recommendations ? (
         <section className="panel" aria-labelledby="study-recommendations-title">
           <div className="panel-header">
