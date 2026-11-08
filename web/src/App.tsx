@@ -729,13 +729,14 @@ export default function App() {
       setError("Select at least one topic or switch Topic selection to All topics.");
       return;
     }
-    const requestedTotal = Object.values(subjectQuotas).reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0), 0);
+    const subjects = [...new Set(adminQuestions.map((question) => question.subject))];
+    const requestedTotal = subjects.reduce((sum, subject) => sum + (Number.isFinite(subjectQuotas[subject]) ? Math.max(0, Math.floor(subjectQuotas[subject] ?? 0)) : 0), 0);
     if (requestedTotal > 500) {
       setError("A formal examination cannot contain more than 500 questions.");
       return;
     }
     const picked: number[] = [];
-    const subjects = [...new Set(adminQuestions.map((question) => question.subject))];
+    const shortfalls: string[] = [];
     for (const subject of subjects) {
       const quota = Math.max(0, subjectQuotas[subject] ?? 0);
       let pool = adminQuestions.filter((question) => question.subject === subject && !picked.includes(question.id));
@@ -747,7 +748,14 @@ export default function App() {
         pool = pool.filter((question) => !question.topic || !selectedForSubject.includes(`${subject}::${question.topic}`));
       }
       if (difficultyMix === "balanced") {
-        const shuffled = (items: AdminQuestion[]) => [...items].sort(() => Math.random() - 0.5);
+        const shuffled = (items: AdminQuestion[]) => {
+          const values = [...items];
+          for (let index = values.length - 1; index > 0; index -= 1) {
+            const swapIndex = Math.floor(Math.random() * (index + 1));
+            [values[index], values[swapIndex]] = [values[swapIndex], values[index]];
+          }
+          return values;
+        };
         const easy = shuffled(pool.filter((question) => question.difficulty === "easy"));
         const medium = shuffled(pool.filter((question) => (question.difficulty ?? "medium") === "medium"));
         const hard = shuffled(pool.filter((question) => question.difficulty === "hard"));
@@ -767,10 +775,16 @@ export default function App() {
         if (difficultyMix !== "any") pool = pool.filter((question) => (question.difficulty ?? "medium") === difficultyMix);
         pool = [...pool].sort(() => Math.random() - 0.5).slice(0, quota);
       }
-      for (const question of pool.slice(0, quota)) picked.push(question.id);
+      const subjectSelection = pool.slice(0, quota);
+      for (const question of subjectSelection) picked.push(question.id);
+      if (subjectSelection.length < quota) {
+        shortfalls.push(`${subject}: requested ${quota}, only ${subjectSelection.length} questions match the selected topic and difficulty rules.`);
+      }
     }
     setSelectedQuestionIds(picked);
-    setError(picked.length ? `Generated a ${picked.length}-question paper from your subject, topic and difficulty rules.` : "No questions matched the current blueprint. Check subject quotas and topic filters.");
+    setError(picked.length
+      ? `Generated a ${picked.length}-question paper. ${shortfalls.length ? shortfalls.join(" ") : "All subject quotas were satisfied."}`
+      : "No questions matched the current blueprint. Check subject quotas and topic filters.");
   }
 
   async function editExam(examId: string) {
