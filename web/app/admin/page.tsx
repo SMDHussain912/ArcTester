@@ -79,21 +79,20 @@ export default function AdminPage() {
   }, {});
 
   function toggleQuestion(id: number) {
-    setSelectedQuestions((current) => {
-      if (current.includes(id)) {
-        setQuestionScoring((scoring) => {
-          const next = { ...scoring };
-          delete next[id];
-          return next;
-        });
-        return current.filter((value) => value !== id);
-      }
-      setQuestionScoring((scoring) => ({
-        ...scoring,
-        [id]: { marks: defaultMarks, negativeMarks },
-      }));
-      return [...current, id];
-    });
+    if (selectedQuestions.includes(id)) {
+      setSelectedQuestions((current) => current.filter((value) => value !== id));
+      setQuestionScoring((scoring) => {
+        const next = { ...scoring };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+    setSelectedQuestions((current) => [...current, id]);
+    setQuestionScoring((scoring) => ({
+      ...scoring,
+      [id]: { marks: defaultMarks, negativeMarks },
+    }));
   }
 
   function updateQuestionScoring(id: number, field: "marks" | "negativeMarks", value: number) {
