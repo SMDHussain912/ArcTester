@@ -81,6 +81,40 @@ describe("registered dataset training", () => {
     ], "binary-classification")).toThrow("does not match the declared feature schema");
   });
 
+
+  it("uses a learner-group holdout when pseudonymous group IDs are supplied", () => {
+    const samples: RegisteredTrainingSample[] = Array.from({ length: 100 }, (_, index) => ({
+      features: { attempts: index, accuracy: index / 100 },
+      target: index * 1.25 + 3,
+      groupId: String(Math.floor(index / 10)).padStart(64, "0"),
+    }));
+    const results = trainRegisteredDataset(samples, [
+      { name: "attempts", type: "numeric" },
+      { name: "accuracy", type: "numeric" },
+    ], "regression", 42);
+    expect(results[0]?.groupSplit).toEqual({ trainGroups: 8, testGroups: 2 });
+    expect(results[0]?.trainRows).toBe(80);
+    expect(results[0]?.testRows).toBe(20);
+  });
+
+  it("rejects incomplete or insufficient learner-group identifiers", () => {
+    const grouped = Array.from({ length: 50 }, (_, index) => ({
+      features: { attempts: index },
+      target: index * 2,
+      groupId: String(Math.floor(index / 10)).padStart(64, "0"),
+    }));
+    expect(() => trainRegisteredDataset(
+      grouped.map((sample, index) => index === 0 ? { ...sample, groupId: undefined } : sample),
+      [{ name: "attempts", type: "numeric" }],
+      "regression",
+    )).toThrow("pseudonymous groupId on every sample");
+    expect(() => trainRegisteredDataset(
+      grouped.slice(0, 40),
+      [{ name: "attempts", type: "numeric" }],
+      "regression",
+    )).toThrow("At least five unique groups");
+  });
+
   it("rejects classification datasets without enough examples of both classes", () => {
     const samples = Array.from({ length: 40 }, (_, index) => ({
       features: { score: index },
