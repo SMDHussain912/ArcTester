@@ -13,3 +13,4 @@ web/src/App.tsx
 web/src/styles.css
 api/src/examRoutes.ts
 api/tests/exams.test.ts
+api/src/index.ts
