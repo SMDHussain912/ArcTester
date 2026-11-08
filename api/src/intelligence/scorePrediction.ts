@@ -1,7 +1,7 @@
 import {
   evaluateLinearRegression,
   fitLinearRegression,
-  splitChronological,
+  predictLinearRegression,
   type RegressionMetrics,
   type RegressionSample,
   type LinearRegressionArtifact,
@@ -17,6 +17,7 @@ export interface ScorePredictionEvaluation {
   model: LinearRegressionArtifact;
   trainRows: number;
   testRows: number;
+  evaluationWindows: number;
   regression: RegressionMetrics;
   meanBaseline: RegressionMetrics;
   beatsMeanBaseline: boolean;
@@ -119,10 +120,7 @@ export function trainAndEvaluateNextAttemptModel(
     const model = fitLinearRegression(training);
     finalFoldModel = model;
     targets.push(testing.target);
-    modelPredictions.push(model.weights.reduce(
-      (sum, weight, index) => sum + weight * testing.features[index],
-      model.bias,
-    ));
+    modelPredictions.push(predictLinearRegression(model, testing.features));
     baselinePredictions.push(
       training.reduce((sum, sample) => sum + sample.target, 0) / training.length,
     );
@@ -134,6 +132,7 @@ export function trainAndEvaluateNextAttemptModel(
     model: finalFoldModel!,
     trainRows: initialTrainRows,
     testRows: targets.length,
+    evaluationWindows: targets.length,
     regression,
     meanBaseline,
     beatsMeanBaseline: regression.mae < meanBaseline.mae,
