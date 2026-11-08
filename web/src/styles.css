@@ -771,3 +771,19 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   input[type="checkbox"], input[type="radio"] { transition: none; }
 }
+
+
+/* Question-bank management additions */
+.question-row-actions,.row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.question-row-actions{justify-content:flex-end}
+.danger-action{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--border))}
+.subject-management-list{display:grid;gap:14px;margin-top:18px}
+.topic-chip-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.topic-chip{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:999px;background:var(--bg);font-size:13px}
+.topic-chip button{border:0;background:transparent;color:var(--danger);font-size:18px;line-height:1;cursor:pointer}
+.assignment-schedule{margin:14px 0}
+.assignment-schedule label{display:grid;gap:7px;font-size:13px}
+.import-preview .import-report{margin-top:12px}
+.import-preview details{margin-top:12px}
+.import-preview details p{font-size:13px;color:var(--danger)}
+@media(max-width:650px){.question-row-actions{justify-content:flex-start}.question-row-actions .ghost{padding:8px 10px}.assignment-schedule{grid-template-columns:1fr}}
