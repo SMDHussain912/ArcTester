@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useSession } from "../../lib/session";
 import { api, ApiError, type AdminExam, type AdminOverview, type AdminQuestion, type AdminStudent } from "../../lib/api";
 
@@ -54,9 +55,8 @@ export default function AdminPage() {
 
   const filteredQuestions = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return questions;
-    return questions.filter((q) => [q.text, q.subject, q.topic ?? ""].some((v) => v.toLowerCase().includes(term)));
-  }, [questions, search]);
+    return questions.filter((q) => (subjectFilter === "All subjects" || q.subject === subjectFilter) && (!term || [q.text, q.subject, q.topic ?? ""].some((v) => v.toLowerCase().includes(term))));
+  }, [questions, search, subjectFilter]);
 
   function toggleQuestion(id: number) {
     setSelectedQuestions((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -135,7 +135,8 @@ export default function AdminPage() {
             {value === "overview" ? "Overview" : value === "exams" ? "Exams & assignments" : "Create exam"}
           </button>
         ))}
-        <Link className="button button-secondary" href="/admin/questions">Question bank · Upload / Manage</Link>\n        <button className="button button-secondary" disabled={busy} onClick={() => { setError(""); load().catch((e: unknown) => showError(e, "Refresh failed.")); }}>Refresh</button>
+        <Link className="button button-secondary" href="/admin/questions">Question bank · Upload / Manage</Link>
+        <button className="button button-secondary" disabled={busy} onClick={() => { setError(""); load().catch((e: unknown) => showError(e, "Refresh failed.")); }}>Refresh</button>
       </div>
 
       {tab === "overview" ? (
@@ -219,9 +220,20 @@ export default function AdminPage() {
             <label style={{ display: "block" }}>Exam title<input required minLength={2} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. ECET CSE Mock Test 01" /></label>
             <label style={{ display: "block" }}>Description<input maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description for students" /></label>
             <label style={{ display: "block" }}>Instructions<input maxLength={5000} value={instructions} onChange={(e) => setInstructions(e.target.value)} /></label>
-            <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>\n              <label style={{ display: "block", maxWidth: 180 }}>Duration (minutes)<input type="number" min={1} max={600} required value={duration} onChange={(e) => setDuration(Math.max(1, Math.min(600, Number(e.target.value) || 1)))} /></label>\n              <label style={{ display: "block", maxWidth: 150 }}>Marks per question<input type="number" min={0} max={100} step="0.25" value={defaultMarks} onChange={(e) => setDefaultMarks(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>\n              <label style={{ display: "block", maxWidth: 150 }}>Negative marks<input type="number" min={0} max={100} step="0.25" value={negativeMarks} onChange={(e) => setNegativeMarks(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>\n            </div>\n            <div className="row" style={{ gap: 18, flexWrap: "wrap", marginTop: 12 }}>\n              <label><input type="checkbox" checked={shuffleQuestions} onChange={(e) => setShuffleQuestions(e.target.checked)} /> Shuffle question order</label>\n              <label><input type="checkbox" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} /> Shuffle answer options</label>\n            </div>
+            <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
+              <label style={{ display: "block", maxWidth: 180 }}>Duration (minutes)<input type="number" min={1} max={600} required value={duration} onChange={(e) => setDuration(Math.max(1, Math.min(600, Number(e.target.value) || 1)))} /></label>
+              <label style={{ display: "block", maxWidth: 150 }}>Marks per question<input type="number" min={0} max={100} step="0.25" value={defaultMarks} onChange={(e) => setDefaultMarks(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>
+              <label style={{ display: "block", maxWidth: 150 }}>Negative marks<input type="number" min={0} max={100} step="0.25" value={negativeMarks} onChange={(e) => setNegativeMarks(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>
+            </div>
+            <div className="row" style={{ gap: 18, flexWrap: "wrap", marginTop: 12 }}>
+              <label><input type="checkbox" checked={shuffleQuestions} onChange={(e) => setShuffleQuestions(e.target.checked)} /> Shuffle question order</label>
+              <label><input type="checkbox" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} /> Shuffle answer options</label>
+            </div>
             <div className="section-heading"><div><h2>Select questions</h2><p>{selectedQuestions.length} selected from {questions.length} available</p></div></div>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>\n              <input style={{ flex: "2 1 240px" }} aria-label="Search question bank" placeholder="Search question, subject or topic…" value={search} onChange={(e) => setSearch(e.target.value)} />\n              <select style={{ flex: "1 1 180px" }} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option>All subjects</option>{[...new Set(questions.map((q) => q.subject))].sort().map((subject) => <option key={subject}>{subject}</option>)}</select>\n            </div>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <input style={{ flex: "2 1 240px" }} aria-label="Search question bank" placeholder="Search question, subject or topic…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select style={{ flex: "1 1 180px" }} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option>All subjects</option>{[...new Set(questions.map((q) => q.subject))].sort().map((subject) => <option key={subject}>{subject}</option>)}</select>
+            </div>
             <div style={{ maxHeight: 430, overflowY: "auto", marginTop: 12, border: "1px solid var(--line)", borderRadius: 10, padding: 8 }}>
               {filteredQuestions.map((question) => <label key={question.id}>
                 <input type="checkbox" checked={selectedQuestions.includes(question.id)} onChange={() => toggleQuestion(question.id)} />
