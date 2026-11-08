@@ -515,7 +515,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 
 **Remaining in Phase 6**
 - Curated content review and broader syllabus coverage.
-- Integrate concept links into question-result explanations and study recommendations.
+- Broader study-recommendation concept links remain open; question-result concept integration is implemented below.
 - Add tests that enforce formal-exam answer-release policy before showing protected answers.
 
 ### Current progress
@@ -768,3 +768,22 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 1. Verify the walk-forward batch with GitHub Actions and fix any failures.
 2. Add the dedicated 7-day recommendation cooldown suppression test.
 3. Continue student/admin analytics responsive UI acceptance review.
+
+
+### Phase 6 — question-result concept integration — 2026-11-09
+
+**Implemented**
+- Added exact topic-label matching between result questions and the curated concept knowledge base. No fuzzy guesses are made when a topic is missing or does not match a curated topic.
+- Practice result payloads now include the snapshotted topic and matching concept links.
+- Released formal exam result payloads include matching concept links. The mapping is inside the existing `GRADED`-only response branch; `REVIEW_REQUIRED` submissions still receive no question review, correct answers, explanations, or concept links.
+- Practice and released formal exam review cards now link directly to the matching concept in `/learning#<slug>`.
+- Added stable concept anchors to the Concept Library.
+- Added unit and UI tests for exact topic matching and practice/formal result links.
+
+**Safety boundary**
+- Practice result answers remain available only after the attempt is submitted and owned by the signed-in user.
+- Formal exam correct answers and concept links remain hidden until the submission is `GRADED`.
+
+**Verification**
+- GitHub Actions verification is pending for this implementation batch.
+- Exact topic matching intentionally returns no concept for unmatched syllabus labels. Broader syllabus coverage and explicit topic-to-concept curation remain future work.
