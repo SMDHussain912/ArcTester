@@ -375,6 +375,9 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment) return next(notFound("Exam assignment not found."));
       const now = Date.now();
       if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
+      if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
+        return next(forbidden("This exam is not available yet."));
+      }
       if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
       }
