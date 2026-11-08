@@ -476,6 +476,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         db.modelDataset.findUnique({ where: { id: input.datasetId } }),
       ]);
       if (!candidateRow || !baselineRow) return next(notFound("Candidate or baseline model version was not found."));
+      if (candidateRow.algorithm === "tensorflow-js-layers" || baselineRow.algorithm === "tensorflow-js-layers") {
+        return next(badRequest("TensorFlow.js candidates are evaluated during training and cannot use the statistical registry evaluation endpoint."));
+      }
       if (!dataset) return next(notFound("Registered evaluation dataset was not found."));
       if (!dataset.sourceAttested) return next(conflict("Dataset source has not been attested."));
       const candidate = validateRegistryArtifact(JSON.parse(candidateRow.artifactJson));
@@ -544,7 +547,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         } else {
           validateRegistryArtifact(JSON.parse(target.artifactJson));
         }
-        if (!target.isActive) {
+        if (!target.isActive && target.algorithm !== "tensorflow-js-layers") {
           const evaluation = await tx.modelEvaluation.findFirst({
             where: { modelId, candidateVersion: version },
             orderBy: { evaluatedAt: "desc" },
@@ -590,7 +593,14 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           orderBy: { version: "desc" },
         });
         if (!previous) return { error: "missing-previous" as const };
-        validateRegistryArtifact(JSON.parse(previous.artifactJson));
+        if (previous.algorithm === "tensorflow-js-layers") {
+          const tensorflowArtifact = validateTensorflowJsArtifact(JSON.parse(previous.artifactJson));
+          if (!isTensorflowJsArtifactProductionEligible(tensorflowArtifact)) {
+            return { error: "previous-tensorflow-ineligible" as const };
+          }
+        } else {
+          validateRegistryArtifact(JSON.parse(previous.artifactJson));
+        }
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
         const model = await tx.registeredModel.update({
           where: { id: previous.id },
