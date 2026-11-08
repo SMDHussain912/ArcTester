@@ -551,7 +551,7 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 - Updated student analytics page test mocks to provide the new `/analytics/overview` response and the `topics` collection.
 - Updated the empty-state analytics mock to return an empty topic collection.
 
-**Verification:** fixes are pushed, but they have not been executed in this environment. The user's next local run is required to confirm all tests and lint pass.
+**Verification:** The user confirmed that all tests passed after these fixes. This confirmation applies to the verification-fix commit, not to later question-level analytics changes.
 
 
 ### Question-level analytics — 2026-11-08 (implementation in progress)
