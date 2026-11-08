@@ -14,7 +14,7 @@ type Invitation = {
   status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
-type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null };
+type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null; seenAt?: string | null };
 type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[] };
 type AdminStudent = { id: number; email: string };
 type AdminExam = {
@@ -105,6 +105,7 @@ export default function App() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementExpiresAt, setAnnouncementExpiresAt] = useState("");
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -278,12 +279,26 @@ export default function App() {
         body: JSON.stringify({
           title: announcementTitle.trim(),
           message: announcementMessage.trim(),
+          expiresAt: announcementExpiresAt ? new Date(announcementExpiresAt).toISOString() : undefined,
         }),
       });
       setAnnouncementTitle("");
       setAnnouncementMessage("");
+      setAnnouncementExpiresAt("");
       const refreshed = await request<{ announcements: Announcement[] }>("/admin/announcements");
       setAnnouncements(refreshed.announcements);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acknowledgeAnnouncement(id: string) {
+    setBusy(true);
+    try {
+      const result = await request<{ seenAt: string }>(`/announcements/${id}/read`, { method: "POST" });
+      setAnnouncements((current) => current.map((item) => item.id === id ? { ...item, seenAt: result.seenAt } : item));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -564,6 +579,10 @@ export default function App() {
               <label>Message
                 <textarea required maxLength={4000} rows={3} value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} placeholder="Write a message for your students…" />
               </label>
+              <label>Expiry date and time <span className="muted">(optional)</span>
+                <input type="datetime-local" value={announcementExpiresAt} onChange={(event) => setAnnouncementExpiresAt(event.target.value)} />
+              </label>
+              <p className="muted announcement-expiry-help">Leave empty if this notice should not expire. Expired notices are automatically hidden from students.</p>
               <button className="primary" disabled={busy}>{busy ? "Publishing…" : "Publish announcement"}</button>
             </form>
             <div className="panel announcement-list">
@@ -571,7 +590,7 @@ export default function App() {
                 <article className="announcement-row" key={item.id}>
                   <strong>{item.title}</strong>
                   <p>{item.message}</p>
-                  <small>{new Date(item.publishedAt).toLocaleString()}</small>
+                  <small>Published {new Date(item.publishedAt).toLocaleString()} · {item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleString()}` : "No expiry"}</small>
                 </article>
               ))}
             </div>
@@ -623,7 +642,7 @@ export default function App() {
           <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
           <button className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
           <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
-          <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.length > 0 ? ` (${announcements.length})` : ""}</button>
+          <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.filter((item) => !item.seenAt).length > 0 ? ` (${announcements.filter((item) => !item.seenAt).length})` : ""}</button>
         </nav>
         <div className="top-actions">
           <button
@@ -640,6 +659,22 @@ export default function App() {
         </div>
       </header>
 
+      {user.role === "STUDENT" && !test && !result && announcements.some((item) => !item.seenAt) ? (() => {
+        const notice = announcements.find((item) => !item.seenAt)!;
+        return (
+          <div className="announcement-overlay">
+            <section className="announcement-popup panel" role="dialog" aria-modal="true" aria-labelledby="announcement-popup-title">
+              <div className="announcement-popup-top"><span className="status status-pending">NEW ANNOUNCEMENT</span><span className="muted">{new Date(notice.publishedAt).toLocaleString()}</span></div>
+              <p className="eyebrow">FROM ARCTESTER ADMIN</p>
+              <h2 id="announcement-popup-title">{notice.title}</h2>
+              <p className="announcement-popup-message">{notice.message}</p>
+              {notice.expiresAt ? <p className="announcement-popup-expiry">Expires {new Date(notice.expiresAt).toLocaleString()}</p> : null}
+              <button className="primary" disabled={busy} onClick={() => void acknowledgeAnnouncement(notice.id)}>{busy ? "Saving…" : "Got it · Mark as seen"}</button>
+              <p className="muted announcement-popup-footnote">You won't see this announcement again after marking it as seen.</p>
+            </section>
+          </div>
+        );
+      })() : null}
       <main className="main-content">
         {test ? (
           <section>
