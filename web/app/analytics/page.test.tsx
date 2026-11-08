@@ -200,7 +200,7 @@ describe("student analytics page", () => {
         );
       }
       if (path.endsWith("/analytics/weak-topics")) {
-        return Promise.resolve(jsonResponse(200, { subjects: [], weakest: null }));
+        return Promise.resolve(jsonResponse(200, { subjects: [], topics: [], weakest: null }));
       }
       if (path.endsWith("/analytics/history")) {
         return Promise.resolve(jsonResponse(200, []));
