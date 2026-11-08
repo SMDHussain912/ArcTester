@@ -484,7 +484,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - [x] Intelligence architecture and constraints documented.
 - [x] Initial algorithms, use cases, and phases defined.
 - [x] Phase 0 — repository/data audit (completed 2026-11-08; findings recorded above).
-- [ ] Phase 1 — analytics foundation (in progress; backend aggregation, API and initial dashboard integration committed; verification and remaining coverage pending).
+- [ ] Phase 1 — analytics foundation (in progress; student practice/formal analytics, historical practice metadata snapshots, admin cohort aggregates and initial dashboard integrations committed; verification and remaining coverage pending).
 - [ ] Phase 2 — weak-area detection.
 - [ ] Phase 3 — regression engine.
 - [ ] Phase 4 — classification engine.
@@ -494,3 +494,40 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - [ ] Phase 8 — integration and polish.
 
 **Important:** No ArcTester Intelligence implementation is claimed complete by this planning document.
+
+
+### Phase 1 implementation log — 2026-11-08 (continued)
+
+**Implemented in this batch**
+- Added immutable practice-answer classification fields: subject, topic and difficulty snapshots.
+- Added a SQLite migration that backfills existing answer rows from the current question bank at migration time.
+- New practice attempts now save classification snapshots when their answer rows are created.
+- Student weak-topic analytics uses snapshots, with a legacy fallback for rows that have no snapshot.
+- Progress imports create snapshots for imported answers using the question metadata available at import time.
+- Added a regression test that edits a question's subject, topic and difficulty after an attempt and checks that its historical subject classification remains unchanged.
+- Expanded admin analytics with student-cohort practice totals and subject accuracy, plus verified graded-exam question metrics. REVIEW_REQUIRED submissions are counted separately and excluded from verified metrics.
+- Updated the admin dashboard to display practice and verified formal-exam cohort analytics.
+- Removed the unused `.github/workflows/ci.yml` workflow from the fork. This does not alter Render or Vercel deployment configuration.
+
+**Files changed**
+- `api/prisma/schema.prisma`
+- `api/prisma/migrations/20261108120000_practice_answer_metadata/migration.sql`
+- `api/src/testService.ts`
+- `api/src/analytics.ts`
+- `api/src/examRoutes.ts`
+- `api/tests/analytics.test.ts`
+- `web/lib/api.ts`
+- `web/app/admin/page.tsx`
+- `.github/workflows/ci.yml` (deleted)
+
+**Verification state**
+- Tests, Prisma migration execution, lint, typecheck and production builds have not been run in this environment.
+- The GitHub Actions workflow has been removed, so it will not provide CI verification.
+- Historical subject/topic snapshots protect against later metadata edits. Existing question deletion still cascades to practice answers; preserving attempts after question deletion would require a separate relationship/data-retention change and remains open.
+- Existing practice answers are backfilled from the question metadata present when the migration runs; metadata changes that happened before this migration cannot be reconstructed.
+
+**Next**
+1. Run Prisma migration and regenerate the client in the user's environment.
+2. Run API analytics tests and resolve any schema/fixture issues.
+3. Add question-level aggregates and minimum-sample safeguards.
+4. Review the admin analytics page on desktop/mobile and finish Phase 1 acceptance coverage.
