@@ -110,3 +110,20 @@ The mobile app now exposes assigned exams from the student dashboard and include
 - Mobile clients persist announcements in SQLite so messages remain readable offline.
 - Reconnect synchronization now follows this order: report connection, upload pending submissions/analytics, refresh assigned exams and download packages, then fetch announcements and display the messages.
 - Publishing is restricted to administrators. Student access is read-only.
+The next mobile slice is wiring this store into the exam-taking UI and reconnect synchronization. Background notification delivery remains separate.
+
+
+## Mobile assigned-exam runner
+
+The mobile dashboard now integrates the offline storage and sync foundation:
+
+- Lists the signed-in student's assigned exams and shows whether each package is cached.
+- Downloads published exam packages ahead of their availability window and verifies the server-provided SHA-256 digest before saving.
+- Starts and resumes attempts from SQLite, including when the device is offline and the API cannot be reached.
+- Saves each answer locally and restores saved answers after an app restart.
+- Displays a countdown and automatically queues the attempt when its local timer reaches zero.
+- Uploads pending submissions when connectivity returns, when the app becomes active, or when the student taps Sync now.
+- Uploads attempts before refreshing the assigned-exam list. Failed attempts remain in the outbox for another retry.
+- Shows cached exam packages even when the assigned-exam API is unreachable.
+
+The mobile runner is now functional for assigned exam download, offline answering, and retryable submission. Admin announcements, the exact multi-step reconnect popup sequence, result/explanation review screens, and a dedicated analytics upload endpoint are still outstanding. The countdown and offline availability gate are client-side controls; the API remains authoritative for scoring and flags suspicious timestamps for review.

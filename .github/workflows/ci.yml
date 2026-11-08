@@ -53,6 +53,13 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      - name: Preview mobile Prettier changes
+        run: |
+          npx prettier mobile/src/OfflineExams.tsx > /tmp/OfflineExams.tsx
+          diff -u mobile/src/OfflineExams.tsx /tmp/OfflineExams.tsx || true
+          npx prettier mobile/src/offlineSync.ts > /tmp/offlineSync.ts
+          diff -u mobile/src/offlineSync.ts /tmp/offlineSync.ts || true
+
       - name: Check formatting of changed files
         shell: bash
         env:
@@ -93,9 +100,12 @@ jobs:
           CORS_ORIGINS: http://localhost:3000
 
   mobile-typecheck:
-    name: Mobile offline foundation typecheck
+    name: Mobile TypeScript check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
 
     steps:
       - name: Check out repository
@@ -107,9 +117,7 @@ jobs:
           node-version: 20
 
       - name: Install mobile dependencies
-        working-directory: mobile
         run: npm install --no-audit --no-fund
 
       - name: Typecheck mobile app
-        working-directory: mobile
         run: npm run typecheck
