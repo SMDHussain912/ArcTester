@@ -31,6 +31,7 @@ export default function AdminPage() {
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
   const [assignExamId, setAssignExamId] = useState("");
   const [title, setTitle] = useState("");
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("Read each question carefully. Select one answer.");
   const [duration, setDuration] = useState(60);
@@ -196,17 +197,62 @@ export default function AdminPage() {
       if (validation.warnings.length && !window.confirm(
         "Paper blueprint warnings:\\n\\n" + validation.warnings.map((warning) => "• " + warning).join("\\n") + "\\n\\nContinue and create this draft?"
       )) return;
-      const result = await api.createAdminExam({
+      const payload = {
         title, description, instructions, durationMinutes: duration,
-        shuffleQuestions, shuffleOptions,
-        questions: paper.questions,
-      });
-      setNotice("Draft exam created. Publish it from the Exams tab when it is ready.");
+        shuffleQuestions, shuffleOptions, questions: paper.questions,
+      };
+      const result = editingExamId
+        ? await api.updateAdminExam(editingExamId, payload)
+        : await api.createAdminExam(payload);
+      setNotice(editingExamId
+        ? "A new immutable exam version was saved. Existing assignments remain on their original version."
+        : "Draft exam created. Publish it from the Exams tab when it is ready.");
+      setEditingExamId(null);
       setTitle(""); setDescription(""); setSelectedQuestions([]); setQuestionScoring({});
       await load(); setTab("exams");
       setAssignExamId(result.exam.id);
     } catch (e) { showError(e, "Could not create the exam."); }
     finally { setBusy(false); }
+  }
+
+  async function editExam(id: string) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api.adminLatestExamVersion(id);
+      const version = result.exam.version;
+      if (!version) throw new Error("This exam has no version to edit.");
+      const ids = version.questions.map((question) => question.sourceQuestionId);
+      if (ids.some((questionId) => questionId === null)) {
+        throw new Error("Some source questions were deleted. Clone this paper to preserve its immutable content.");
+      }
+      setEditingExamId(id);
+      setTitle(result.exam.title);
+      setDescription(result.exam.description);
+      setInstructions(version.instructions);
+      setDuration(version.durationMinutes);
+      setShuffleQuestions(version.shuffleQuestions);
+      setShuffleOptions(version.shuffleOptions);
+      setSelectedQuestions(ids as number[]);
+      setQuestionScoring(Object.fromEntries(version.questions.map((question) => [
+        question.sourceQuestionId as number,
+        { marks: question.marks, negativeMarks: question.negativeMarks },
+      ])));
+      setTab("create");
+      setNotice(`Editing ${result.exam.title}. Saving creates a new immutable version; previous assignments remain unchanged.`);
+    } catch (cause: unknown) {
+      showError(cause, "Could not load this exam version.");
+    } finally { setBusy(false); }
+  }
+
+  async function cloneExam(id: string) {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api.cloneAdminExam(id);
+      setNotice(`Created ${result.exam.title} as a new draft. Edit it before publishing.`);
+      await load();
+    } catch (cause: unknown) {
+      showError(cause, "Could not clone this exam.");
+    } finally { setBusy(false); }
   }
 
   async function publishExam(id: string) {
@@ -426,6 +472,8 @@ export default function AdminPage() {
                 <div className="row">
                   {!version?.publishedAt ? <button disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version {version?.version ?? 1}</button> :
                     <button className="button button-secondary" onClick={() => { setAssignExamId(exam.id); setTab("exams"); document.getElementById("assign-exam")?.scrollIntoView({ behavior: "smooth" }); }}>Assign to students</button>}
+                  <button className="button button-secondary button-small" disabled={busy} onClick={() => void editExam(exam.id)}>Create new version</button>
+                  <button className="button button-quiet button-small" disabled={busy} onClick={() => void cloneExam(exam.id)}>Clone</button>
                   <span className="mute">{version?._count.assignments ?? 0} assignments</span>
                 </div>
               </article>;
@@ -460,8 +508,8 @@ export default function AdminPage() {
 
       {tab === "create" ? (
         <section className="panel">
-          <h2>Create an exam draft</h2>
-          <p className="mute">Questions are copied into an immutable version snapshot. Later question-bank edits will not change this exam.</p>
+          <h2>{editingExamId ? "Create a new exam version" : "Create an exam draft"}</h2>
+          <p className="mute">Questions are copied into an immutable version snapshot. Later question-bank edits will not change this exam. {editingExamId ? "Saving preserves the old version and its assignments." : ""}</p>
           <form onSubmit={createExam}>
             <label style={{ display: "block" }}>Exam title<input required minLength={2} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. ECET CSE Mock Test 01" /></label>
             <label style={{ display: "block" }}>Description<input maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description for students" /></label>
