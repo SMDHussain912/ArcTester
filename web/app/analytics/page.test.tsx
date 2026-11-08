@@ -275,6 +275,9 @@ describe("student analytics page", () => {
           items: [], page: 1, limit: 10, total: 0, totalPages: 0,
         }));
       }
+      if (path.endsWith("/analytics/overview")) {
+        return Promise.resolve(jsonResponse(200, overviewResponse(0.75, 4, 3)));
+      }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
     });
 
@@ -287,5 +290,7 @@ describe("student analytics page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Analytics are temporarily unavailable."
     );
+    expect(screen.getByText("Formal exam performance")).toBeInTheDocument();
+    expect(screen.getByText("75%")).toBeInTheDocument();
   });
 });
