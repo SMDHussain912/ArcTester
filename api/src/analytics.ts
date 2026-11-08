@@ -212,9 +212,6 @@ export async function getPerformanceOverview(
       else if (answer.isCorrect) correct += 1;
       else incorrect += 1;
     }
-    practiceCorrect += correct;
-    practiceIncorrect += incorrect;
-    practiceUnanswered += unanswered;
     const answered = correct + incorrect;
     return {
       attemptId: attempt.id,
@@ -225,10 +222,7 @@ export async function getPerformanceOverview(
     };
   });
 
-  // Totals must include all completed attempts, not only the 12 shown in trend.
-  practiceCorrect = 0;
-  practiceIncorrect = 0;
-  practiceUnanswered = 0;
+  // Totals include every completed attempt; the trend is intentionally limited to 12.
   for (const attempt of attempts) {
     for (const answer of attempt.answers) {
       if (answer.chosen === null) practiceUnanswered += 1;
