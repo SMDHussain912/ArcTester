@@ -15,7 +15,8 @@ type Invitation = {
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null; seenAt?: string | null };
-type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[]; difficulty?: string };
+type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[]; correctIndex?: number; explanation?: string; source?: string; difficulty?: string };
+type AdminSubject = { id: number; name: string; questionCount: number; topics: { id: number; name: string }[] };
 type AdminStudent = { id: number; email: string };
 type AdminExam = {
   id: string;
@@ -93,6 +94,13 @@ export default function App() {
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
   const [adminQuestions, setAdminQuestions] = useState<AdminQuestion[]>([]);
+  const [adminSubjects, setAdminSubjects] = useState<AdminSubject[]>([]);
+  const [newSubjectName, setNewSubjectName] = useState("");
+  const [newTopicName, setNewTopicName] = useState("");
+  const [newTopicSubjectId, setNewTopicSubjectId] = useState(0);
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
+  const [assignmentAvailableFrom, setAssignmentAvailableFrom] = useState("");
+  const [assignmentDueAt, setAssignmentDueAt] = useState("");
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
   const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
   const [examTitle, setExamTitle] = useState("");
@@ -135,7 +143,7 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "exams" | "announcements" | "invitations">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "announcements" | "invitations">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -188,6 +196,9 @@ export default function App() {
     request<{ questions: AdminQuestion[] }>("/admin/question-bank")
       .then(({ questions }) => setAdminQuestions(questions))
       .catch((cause) => setError((cause as Error).message));
+    request<{ subjects: AdminSubject[] }>("/admin/subjects")
+      .then(({ subjects }) => { setAdminSubjects(subjects); if (subjects[0]) setNewTopicSubjectId(subjects[0].id); })
+      .catch((cause) => setError((cause as Error).message));
     request<{ students: AdminStudent[] }>("/admin/students")
       .then(({ students }) => setAdminStudents(students))
       .catch((cause) => setError((cause as Error).message));
@@ -231,11 +242,17 @@ export default function App() {
     setError("");
     setQuestionSaved(false);
     try {
-      const { question } = await request<{ question: AdminQuestion }>("/admin/questions", {
-        method: "POST",
-        body: JSON.stringify({ subject: questionSubject.trim(), topic: questionTopic.trim() || "General", text: questionText.trim(), options: questionOptions.map((option) => option.trim()), correctIndex: questionCorrectIndex, explanation: questionExplanation.trim(), difficulty: questionDifficulty, source: "Admin question editor" }),
+      const payload = { subject: questionSubject.trim(), topic: questionTopic.trim() || "General", text: questionText.trim(), options: questionOptions.map((option) => option.trim()), correctIndex: questionCorrectIndex, explanation: questionExplanation.trim(), difficulty: questionDifficulty, source: "Admin question editor" };
+      const endpoint = editingQuestionId === null ? "/admin/questions" : `/admin/questions/${editingQuestionId}`;
+      const { question } = await request<{ question: AdminQuestion }>(endpoint, {
+        method: editingQuestionId === null ? "POST" : "PATCH",
+        body: JSON.stringify(payload),
       });
-      setAdminQuestions((current) => [...current, question].sort((a, b) => a.subject.localeCompare(b.subject) || a.id - b.id));
+      setAdminQuestions((current) => {
+        const next = editingQuestionId === null ? [...current, question] : current.map((item) => item.id === question.id ? question : item);
+        return next.sort((a, b) => a.subject.localeCompare(b.subject) || a.id - b.id);
+      });
+      setEditingQuestionId(null);
       setQuestionText("");
       setQuestionOptions(["", "", "", ""]);
       setQuestionCorrectIndex(0);
@@ -246,6 +263,78 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function editQuestion(question: AdminQuestion) {
+    setEditingQuestionId(question.id);
+    setQuestionSubject(question.subject);
+    setQuestionTopic(question.topic ?? "General");
+    setQuestionText(question.text);
+    setQuestionOptions([...question.options]);
+    setQuestionCorrectIndex(question.correctIndex ?? 0);
+    setQuestionExplanation(question.explanation ?? "");
+    setQuestionDifficulty((question.difficulty ?? "medium") as "easy" | "medium" | "hard");
+    setQuestionSaved(false);
+    document.getElementById("question-editor-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function deleteQuestion(question: AdminQuestion) {
+    if (!window.confirm(`Delete question #${question.id}? It will also remove linked practice history for this question.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/questions/${question.id}`, { method: "DELETE" });
+      setAdminQuestions((current) => current.filter((item) => item.id !== question.id));
+      setSelectedQuestionIds((current) => current.filter((id) => id !== question.id));
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshSubjects() {
+    const response = await request<{ subjects: AdminSubject[] }>("/admin/subjects");
+    setAdminSubjects(response.subjects);
+    if (!newTopicSubjectId && response.subjects[0]) setNewTopicSubjectId(response.subjects[0].id);
+  }
+
+  async function createSubject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await request("/admin/subjects", { method: "POST", body: JSON.stringify({ name: newSubjectName.trim() }) });
+      setNewSubjectName("");
+      await refreshSubjects();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function createTopic(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newTopicSubjectId) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/subjects/${newTopicSubjectId}/topics`, { method: "POST", body: JSON.stringify({ name: newTopicName.trim() }) });
+      setNewTopicName("");
+      await refreshSubjects();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteTopic(topicId: number) {
+    if (!window.confirm("Delete this topic? Questions assigned to it will move to no topic.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/topics/${topicId}`, { method: "DELETE" });
+      await refreshSubjects();
+      const refreshed = await request<{ questions: AdminQuestion[] }>("/admin/question-bank");
+      setAdminQuestions(refreshed.questions);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function importQuestions() {
@@ -387,10 +476,12 @@ export default function App() {
     try {
       const result = await request<{ created: number }>(`/admin/exams/${examId}/assign`, {
         method: "POST",
-        body: JSON.stringify({ studentIds: selectedStudentIds }),
+        body: JSON.stringify({ studentIds: selectedStudentIds, availableFrom: assignmentAvailableFrom ? new Date(assignmentAvailableFrom).toISOString() : undefined, dueAt: assignmentDueAt ? new Date(assignmentDueAt).toISOString() : undefined }),
       });
       setAssigningExamId("");
       setSelectedStudentIds([]);
+      setAssignmentAvailableFrom("");
+      setAssignmentDueAt("");
       setError(`Exam assigned to ${result.created} student(s).`);
       await refreshAdminExams();
     } catch (cause) {
@@ -595,6 +686,7 @@ export default function App() {
             <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Overview</button>
             <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
             <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
+            <button className={activePage === "subjects" ? "nav-active" : "nav-button"} onClick={() => setActivePage("subjects")}>Subjects & topics</button>
             <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
             <button className={activePage === "invitations" ? "nav-active" : "nav-button"} onClick={() => setActivePage("invitations")}>Invitations</button>
           </nav>
@@ -713,12 +805,21 @@ export default function App() {
                   </div>
                   {assigningExamId === exam.id && <div className="student-picker">
                     <strong>Select students</strong>
+                    <div className="question-editor-grid assignment-schedule"><label>Available from<input type="datetime-local" value={assignmentAvailableFrom} onChange={(event) => setAssignmentAvailableFrom(event.target.value)} /></label><label>Due date<input type="datetime-local" value={assignmentDueAt} onChange={(event) => setAssignmentDueAt(event.target.value)} /></label></div>
                     {adminStudents.length === 0 ? <p className="muted">No student accounts are registered yet.</p> : adminStudents.map((student) => <label className="student-pick" key={student.id}><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} />{student.email}</label>)}
                     <button className="primary" disabled={busy || selectedStudentIds.length === 0} onClick={() => void assignExam(exam.id)}>Assign to {selectedStudentIds.length} student(s)</button>
                   </div>}
                 </article>;
               })}
             </div>
+          </section>
+          <section hidden={activePage !== "subjects"} id="admin-subjects-topics">
+            <div className="section-head"><div><p className="eyebrow">QUESTION TAXONOMY</p><h2>Subjects and topics</h2><p className="muted">Organise the question bank before building exam blueprints.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshSubjects()}>Refresh</button></div>
+            <div className="grid two">
+              <form className="panel admin-form" onSubmit={(event) => void createSubject(event)}><label>New subject<input required maxLength={80} value={newSubjectName} onChange={(event) => setNewSubjectName(event.target.value)} placeholder="e.g. Computer Networks" /></label><button className="primary" disabled={busy || !newSubjectName.trim()}>Add subject</button></form>
+              <form className="panel admin-form" onSubmit={(event) => void createTopic(event)}><label>Subject<select required value={newTopicSubjectId || ""} onChange={(event) => setNewTopicSubjectId(Number(event.target.value))}><option value="" disabled>Select subject</option>{adminSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label><label>New topic<input required maxLength={80} value={newTopicName} onChange={(event) => setNewTopicName(event.target.value)} placeholder="e.g. Routing protocols" /></label><button className="primary" disabled={busy || !newTopicSubjectId || !newTopicName.trim()}>Add topic</button></form>
+            </div>
+            <div className="subject-management-list">{adminSubjects.map((subject) => <article className="panel admin-exam-card" key={subject.id}><div className="admin-exam-meta"><div><strong>{subject.name}</strong><p className="muted">{subject.questionCount} questions · {subject.topics.length} topics</p></div></div><div className="topic-chip-list">{subject.topics.map((topic) => <span className="topic-chip" key={topic.id}>{topic.name}<button type="button" aria-label={`Delete ${topic.name}`} disabled={busy} onClick={() => void deleteTopic(topic.id)}>×</button></span>)}{subject.topics.length === 0 && <span className="muted">No topics yet.</span>}</div></article>)}{adminSubjects.length === 0 && <div className="panel empty-state">No subjects yet. Add one above or import questions to create subjects automatically.</div>}</div>
           </section>
           <section hidden={activePage !== "question-bank"} id="admin-question-bank">
             <section className="panel import-workspace">
@@ -738,9 +839,9 @@ export default function App() {
               {importReport && <div className="import-report" role="status"><div><strong>{importReport.added}</strong><span>Added</span></div><div><strong>{importReport.duplicates}</strong><span>Duplicates skipped</span></div><div><strong>{importReport.invalid.length}</strong><span>Invalid rows</span></div><div><strong>{importReport.total}</strong><span>Rows processed</span></div>{importReport.invalid.length > 0 && <details><summary>Review invalid rows</summary>{importReport.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
             </section>
             <div className="section-head">
-              <div><p className="eyebrow">QUESTION AUTHORING</p><h2>Add a question</h2><p className="muted">Create four-option AP ECET questions and add them directly to your reusable bank.</p></div>
+              <div><p className="eyebrow">QUESTION AUTHORING</p><h2>{editingQuestionId === null ? "Add a question" : `Edit question #${editingQuestionId}`}</h2><p className="muted">Create or update four-option questions in your reusable bank.</p></div>
             </div>
-            <form className="panel admin-form question-editor" onSubmit={(event) => void createQuestion(event)}>
+            <form id="question-editor-form" className="panel admin-form question-editor" onSubmit={(event) => void createQuestion(event)}>
               <div className="question-editor-grid">
                 <label>Subject
                   <input required maxLength={80} value={questionSubject} onChange={(event) => setQuestionSubject(event.target.value)} placeholder="Computer Science" />
@@ -773,7 +874,7 @@ export default function App() {
                 <textarea rows={2} maxLength={3000} value={questionExplanation} onChange={(event) => setQuestionExplanation(event.target.value)} placeholder="Explain why the correct answer is right…" />
               </label>
               {questionSaved && <p className="success-message" role="status">Question added to the question bank.</p>}
-              <button className="primary" disabled={busy}>{busy ? "Adding…" : "Add question to bank"}</button>
+              <div className="row-actions"><button className="primary" disabled={busy}>{busy ? "Saving…" : editingQuestionId === null ? "Add question to bank" : "Save question changes"}</button>{editingQuestionId !== null && <button type="button" className="ghost" disabled={busy} onClick={() => { setEditingQuestionId(null); setQuestionText(""); setQuestionOptions(["", "", "", ""]); setQuestionCorrectIndex(0); setQuestionExplanation(""); }}>Cancel edit</button>}</div>
             </form>
             <div className="section-head">
               <div><p className="eyebrow">REUSABLE CONTENT</p><h2>Question bank <span className="muted">({adminQuestions.length})</span></h2></div>
@@ -795,7 +896,7 @@ export default function App() {
               {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => (
                 <article className="admin-question-row" key={question.id}>
                   <div><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><p>{question.text}</p><small className="muted">{question.difficulty ?? "medium"} · {question.options.length} options</small></div>
-                  <span className="status status-used">#{question.id}</span>
+                  <div className="question-row-actions"><span className="status status-used">#{question.id}</span><button type="button" className="ghost" disabled={busy} onClick={() => editQuestion(question)}>Edit</button><button type="button" className="ghost danger-action" disabled={busy} onClick={() => void deleteQuestion(question)}>Delete</button></div>
                 </article>
               ))}
               {adminQuestions.length > 0 && adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length === 0 && <p className="muted">No questions match these filters.</p>}
