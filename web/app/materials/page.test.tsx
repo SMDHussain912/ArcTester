@@ -38,8 +38,13 @@ describe("offline study materials page", () => {
       </SessionProvider>
     );
 
-    expect(await screen.findByRole("heading", { name: "Offline study materials" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+    expect(
+      await screen.findByRole("heading", { name: "Offline study materials" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login"
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -69,7 +74,9 @@ describe("offline study materials page", () => {
       configurable: true,
       value: vi.fn(),
     });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
 
     render(
       <SessionProvider>
