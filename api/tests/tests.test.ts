@@ -84,6 +84,43 @@ describe("POST /tests", () => {
     expect(body.warnings[0]).toContain("Maths");
   });
 
+  it("builds a balanced paper from multiple selected subjects", async () => {
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      count: 4,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string }[] };
+    expect(body.questions).toHaveLength(4);
+    expect(new Set(body.questions.map((question) => question.subject))).toEqual(new Set(["Maths", "Physics"]));
+    expect(body.questions.filter((question) => question.subject === "Maths")).toHaveLength(2);
+    expect(body.questions.filter((question) => question.subject === "Physics")).toHaveLength(2);
+  });
+
+  it("applies optional topic filters only after subject selection", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const topic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Algebra" },
+    });
+    const question = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    await server.db.question.update({ where: { id: question.id }, data: { topicId: topic.id } });
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topics: ["Algebra"],
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string; topic: string | null }[]; warnings: string[] };
+    expect(body.questions).toHaveLength(1);
+    expect(body.questions[0]).toMatchObject({ subject: "Maths", topic: "Algebra" });
+    expect(body.warnings[0]).toContain("only 1");
+  });
+
   it("rejects invalid bodies with friendly 400s", async () => {
     const { status, json } = await api.post(`/tests`, { mode: "nope" });
     expect(status).toBe(400);
