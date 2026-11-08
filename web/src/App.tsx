@@ -68,7 +68,7 @@ type Test = {
   questions: Question[];
   warnings: string[];
 };
-type RestoredTest = Test & { serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
+type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
 type Result = {
   attemptId: number;
   score: number;
@@ -229,7 +229,7 @@ export default function App() {
     const savedAttemptId = localStorage.getItem("arctester-active-practice-attempt");
     if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
-        setTest(restored);
+        setTest({ ...restored, warnings: restored.warnings ?? [] });
         setAnswers(Object.fromEntries(restored.saved.flatMap((answer) => answer.selectedIndex === null ? [] : [[answer.questionId, answer.selectedIndex]])));
         setActivePage("practice");
       }).catch(() => localStorage.removeItem("arctester-active-practice-attempt"));
@@ -1663,14 +1663,19 @@ export default function App() {
                     <div className="practice-subject-grid">
                       {(bank?.subjects ?? []).map((item) => <label className={practiceSubjects.includes(item.subject) ? "practice-subject-choice selected" : "practice-subject-choice"} key={item.subject}>
                         <input type="checkbox" checked={practiceSubjects.includes(item.subject)} onChange={(event) => {
-                          setPracticeSubjects((current) => event.target.checked ? [...current, item.subject] : current.filter((name) => name !== item.subject));
+                          setPracticeSubjects((current) => {
+                            if (!event.target.checked) return current.filter((name) => name !== item.subject);
+                            if (current.length >= 30) { setError("You can select up to 30 subjects in one practice paper."); return current; }
+                            setError("");
+                            return [...current, item.subject];
+                          });
                           if (!event.target.checked) setPracticeTopicKeys((current) => current.filter((key) => { try { return (JSON.parse(key) as [string, string])[0] !== item.subject; } catch { return false; } }));
                         }} />
                         <span><strong>{item.subject}</strong><small>{item.count} questions available</small></span>
                       </label>)}
                     </div>
                     {(!bank || bank.subjects.length === 0) && <p className="muted">No subjects are available in the question bank yet.</p>}
-                    <div className="practice-builder-actions"><button type="button" className="text-button" disabled={!bank?.subjects.length} onClick={() => setPracticeSubjects(bank?.subjects.map((item) => item.subject) ?? [])}>Select all subjects</button><button type="button" className="text-button" disabled={!practiceSubjects.length} onClick={() => { setPracticeSubjects([]); setPracticeTopicKeys([]); }}>Clear selection</button></div>
+                    <div className="practice-builder-actions"><button type="button" className="text-button" disabled={!bank?.subjects.length} onClick={() => { const all = bank?.subjects.map((item) => item.subject) ?? []; setPracticeSubjects(all.slice(0, 30)); setError(all.length > 30 ? "Only the first 30 subjects were selected. The API supports up to 30 subjects per paper." : ""); }}>Select all subjects</button><button type="button" className="text-button" disabled={!practiceSubjects.length} onClick={() => { setPracticeSubjects([]); setPracticeTopicKeys([]); }}>Clear selection</button></div>
                   </div>
                   <div className="practice-builder-section">
                     <div className="practice-builder-label"><strong>2. Choose topics <span className="muted">(optional)</span></strong><span className="muted">{practiceTopicKeys.length ? String(practiceTopicKeys.length) + " selected" : "All topics"}</span></div>
