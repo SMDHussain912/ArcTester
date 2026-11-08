@@ -178,6 +178,23 @@ export interface StudyHistoryItem {
   expired: boolean;
 }
 
+export interface StudyRecommendation {
+  id: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  reason: string;
+  subject: string | null;
+  topic: string | null;
+  mode: "practice" | "mistakes" | "mock";
+  questionCount: number;
+}
+
+export interface StudyRecommendationsReport {
+  generatedAt: string;
+  basedOnAttempts: number;
+  recommendations: StudyRecommendation[];
+}
+
 export interface AdminSubmission {
   id: string;
   status: string;
@@ -314,6 +331,8 @@ export const api = {
     request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
   studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
+  studyRecommendations: () =>
+    request<StudyRecommendationsReport>("/analytics/recommendations"),
   adminSubmission: (id: string) =>
     request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
