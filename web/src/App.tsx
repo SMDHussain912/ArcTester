@@ -113,6 +113,14 @@ export default function App() {
   const [questionExplanation, setQuestionExplanation] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [questionSaved, setQuestionSaved] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importFormat, setImportFormat] = useState<"csv" | "json">("csv");
+  const [importReport, setImportReport] = useState<{ added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [bankSubjectFilter, setBankSubjectFilter] = useState("all");
+  const [bankSearch, setBankSearch] = useState("");
+  const [subjectQuotas, setSubjectQuotas] = useState<Record<string, number>>({});
+  const [difficultyMix, setDifficultyMix] = useState<"any" | "balanced" | "easy" | "medium" | "hard">("any");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [assigningExamId, setAssigningExamId] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -236,6 +244,70 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function importQuestions() {
+    setImportBusy(true);
+    setError("");
+    setImportReport(null);
+    try {
+      const endpoint = importFormat === "csv" ? "/admin/questions/import/csv" : "/admin/questions/import/json";
+      const payload = importFormat === "csv"
+        ? { content: importText }
+        : { questions: JSON.parse(importText) };
+      const response = await request<{ report: { added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } }>(endpoint, {
+        method: "POST", body: JSON.stringify(payload),
+      });
+      setImportReport(response.report);
+      const refreshed = await request<{ questions: AdminQuestion[] }>("/admin/question-bank");
+      setAdminQuestions(refreshed.questions);
+      const bankInfo = await request<Bank>("/bank");
+      setBank(bankInfo);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function loadImportFile(file?: File) {
+    if (!file) return;
+    const extension = file.name.toLowerCase().split(".").pop();
+    const format = extension === "json" ? "json" : "csv";
+    setImportFormat(format);
+    setImportText(await file.text());
+    setImportReport(null);
+  }
+
+  function downloadQuestionTemplate(format: "csv" | "json") {
+    const sample = format === "csv"
+      ? "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty\nComputer Science,Data Structures,Which structure uses FIFO?,Stack,Queue,Tree,Graph,1,Queue follows first in first out,AP ECET,easy"
+      : JSON.stringify([["Computer Science","Which structure uses FIFO?",["Stack","Queue","Tree","Graph"],1,"Queue follows first in first out"]], null, 2);
+    const blob = new Blob([sample], { type: format === "csv" ? "text/csv" : "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = `arctester-questions-template.${format}`; anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function generateSubjectPaper() {
+    const picked: number[] = [];
+    const subjects = [...new Set(adminQuestions.map((question) => question.subject))];
+    for (const subject of subjects) {
+      const quota = Math.max(0, subjectQuotas[subject] ?? 0);
+      let pool = adminQuestions.filter((question) => question.subject === subject && !picked.includes(question.id));
+      if (difficultyMix !== "any") {
+        if (difficultyMix === "balanced") {
+          const easy = pool.filter((q) => q.difficulty === "easy").slice(0, Math.ceil(quota / 3));
+          const medium = pool.filter((q) => q.difficulty === "medium").slice(0, Math.ceil(quota / 3));
+          const hard = pool.filter((q) => q.difficulty === "hard").slice(0, Math.floor(quota / 3));
+          pool = [...easy, ...medium, ...hard];
+        } else pool = pool.filter((q) => (q.difficulty ?? "medium") === difficultyMix);
+      }
+      for (const q of pool.sort(() => Math.random() - 0.5).slice(0, quota)) picked.push(q.id);
+    }
+    setSelectedQuestionIds(picked);
+    setError(picked.length ? `Generated a ${picked.length}-question paper from your subject quotas.` : "Set at least one subject quota and make sure the bank has enough matching questions.");
   }
 
   async function createExam(event: FormEvent<HTMLFormElement>) {
@@ -587,6 +659,12 @@ export default function App() {
                 <label><input type="checkbox" checked={shuffleExamQuestions} onChange={(event) => setShuffleExamQuestions(event.target.checked)} /> Shuffle question order</label>
                 <label><input type="checkbox" checked={shuffleExamOptions} onChange={(event) => setShuffleExamOptions(event.target.checked)} /> Shuffle answer options</label>
               </div>
+              <section className="subject-quota-builder">
+                <div className="picker-heading"><strong>Examiner paper blueprint</strong><span>Allocate question counts by subject</span></div>
+                <div className="quota-grid">{[...new Set(adminQuestions.map((question) => question.subject))].map((subject) => <label key={subject}>{subject}<span className="muted">{adminQuestions.filter((q) => q.subject === subject).length} available</span><input type="number" min={0} max={adminQuestions.filter((q) => q.subject === subject).length} value={subjectQuotas[subject] ?? 0} onChange={(event) => setSubjectQuotas((current) => ({ ...current, [subject]: Number(event.target.value) }))} /></label>)}</div>
+                <div className="quota-actions"><label>Difficulty distribution<select value={difficultyMix} onChange={(event) => setDifficultyMix(event.target.value as typeof difficultyMix)}><option value="any">Any difficulty</option><option value="balanced">Balanced easy / medium / hard</option><option value="easy">Easy only</option><option value="medium">Medium only</option><option value="hard">Hard only</option></select></label><button type="button" className="ghost" onClick={generateSubjectPaper}>Generate paper from quotas</button></div>
+                <p className="muted">The generated selection is editable below. Total selected: {selectedQuestionIds.length} questions.</p>
+              </section>
               <div className="exam-question-picker">
                 <div className="picker-heading"><strong>Choose questions</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} available</span></div>
                 <input className="question-search" type="search" value={examQuestionSearch} onChange={(event) => setExamQuestionSearch(event.target.value)} placeholder="Search by subject, topic or question…" />
