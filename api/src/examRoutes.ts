@@ -684,6 +684,51 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/admin/exams/validate-paper", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({
+        durationMinutes: z.number().int().min(1).max(600),
+        questions: z.array(z.object({
+          questionId: z.number().int().positive(),
+          marks: z.number().finite().min(0).max(100),
+          negativeMarks: z.number().finite().min(0).max(100),
+        })).min(1).max(500),
+      }).parse(req.body);
+      const ids = input.questions.map((question) => question.questionId);
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      if (new Set(ids).size !== ids.length) errors.push("Duplicate questions are not allowed in one paper.");
+      if (input.questions.some((question) => question.negativeMarks > question.marks)) errors.push("Negative marks cannot exceed the marks for a correct answer.");
+      const source = await db.question.findMany({
+        where: { id: { in: [...new Set(ids)] } },
+        include: { subject: true },
+      });
+      if (source.length !== new Set(ids).size) errors.push("One or more selected questions no longer exist in the question bank.");
+      const byId = new Map(source.map((question) => [question.id, question]));
+      const subjects = new Map<string, number>();
+      const difficulties = new Map<string, number>();
+      let totalMarks = 0;
+      for (const selected of input.questions) {
+        totalMarks += selected.marks;
+        const question = byId.get(selected.questionId);
+        if (!question) continue;
+        subjects.set(question.subject.name, (subjects.get(question.subject.name) ?? 0) + 1);
+        const difficulty = question.difficulty || "unspecified";
+        difficulties.set(difficulty, (difficulties.get(difficulty) ?? 0) + 1);
+      }
+      if (totalMarks <= 0) errors.push("The paper must award more than zero total marks.");
+      const subjectRows = [...subjects.entries()].map(([subject, count]) => ({ subject, count, percentage: Math.round(count / input.questions.length * 100) }));
+      const difficultyRows = [...difficulties.entries()].map(([difficulty, count]) => ({ difficulty, count, percentage: Math.round(count / input.questions.length * 100) }));
+      if (subjectRows.length > 1 && subjectRows.some((row) => row.percentage > 70)) warnings.push("One subject contributes more than 70% of the paper. Verify this against the approved examination blueprint.");
+      if (subjectRows.length > 1 && subjectRows.some((row) => row.percentage < 5)) warnings.push("A selected subject contributes less than 5% of the paper. Check whether its allocation is intentional.");
+      if ((difficulties.get("easy") ?? 0) === 0 || (difficulties.get("medium") ?? 0) === 0 || (difficulties.get("hard") ?? 0) === 0) warnings.push("The paper does not contain all three difficulty levels. Confirm the intended difficulty blueprint.");
+      const averageSeconds = input.questions.length ? input.durationMinutes * 60 / input.questions.length : 0;
+      if (averageSeconds < 30) warnings.push("Average time is below 30 seconds per question. Check whether the duration is sufficient.");
+      if (averageSeconds > 300) warnings.push("Average time exceeds 5 minutes per question. Confirm the duration and question complexity.");
+      res.json({ ok: true, valid: errors.length === 0, errors, warnings, totalQuestions: input.questions.length, totalMarks, averageSecondsPerQuestion: Math.round(averageSeconds), subjects: subjectRows, difficulties: difficultyRows });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/exams", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = CreateExamSchema.parse(req.body);
