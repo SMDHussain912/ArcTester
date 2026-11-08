@@ -158,16 +158,25 @@ describe("student analytics page", () => {
           jsonResponse(200, {
             generatedAt: "2026-11-08T08:30:00.000Z",
             basedOnAttempts: 1,
+            minimumAnswers: 5,
+            weakAccuracyThreshold: 0.6,
             recommendations: [
               {
-                id: "strengthen-weakest-subject",
+                id: "revise-topic-Physics%3AMechanics",
                 priority: "high",
-                title: "Strengthen Physics",
-                reason: "30% accuracy across 10 answered questions. Focused practice will help close this gap.",
+                title: "Revise Mechanics",
+                reason: "30% accuracy across 10 answered practice questions in Physics. This meets the minimum evidence threshold; focus practice here before another full mock.",
                 subject: "Physics",
-                topic: null,
+                topic: "Mechanics",
                 mode: "practice",
                 questionCount: 15,
+                evidence: {
+                  answeredQuestions: 10,
+                  incorrectAnswers: 7,
+                  accuracy: 0.3,
+                  minimumAnswers: 5,
+                  weakAccuracyThreshold: 0.6,
+                },
               },
             ],
           })
@@ -193,7 +202,8 @@ describe("student analytics page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
     expect(screen.getByText("Your next study steps")).toBeInTheDocument();
-    expect(screen.getByText("Strengthen Physics")).toBeInTheDocument();
+    expect(screen.getByText("Revise Mechanics")).toBeInTheDocument();
+    expect(screen.getByText(/Evidence: 7\/10 incorrect · 30% accuracy · minimum 5 answered\./)).toBeInTheDocument();
     expect(screen.getByText("high priority")).toBeInTheDocument();
     expect(screen.getByText("Practice question-level performance")).toBeInTheDocument();
     expect(screen.getByText("Question #41 · Physics")).toBeInTheDocument();
