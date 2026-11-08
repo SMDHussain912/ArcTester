@@ -333,7 +333,7 @@ describe("versioned exam management", () => {
           minimumStudents: number;
           weakAccuracyThreshold: number;
           insufficientSampleCount: number;
-          questions: { questionId: number; sampleSize: number; sufficientData: boolean; weak: boolean }[];
+          questions: { questionId: number; sampleSize: number; uniqueStudents: number; sufficientData: boolean; weak: boolean }[];
         };
       };
       exams: { title: string; assigned: number; submitted: number; averagePercentage: number | null }[];
