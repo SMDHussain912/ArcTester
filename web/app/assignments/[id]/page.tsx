@@ -84,7 +84,7 @@ function AssignedExamRunner() {
     if (!exam) return;
     const next: SavedAttempt = {
       attemptUuid: window.crypto.randomUUID(),
-      startedAt: exam.serverTime,
+      startedAt: new Date().toISOString(),
       answers: {},
     };
     persist(next);
