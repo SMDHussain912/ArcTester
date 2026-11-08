@@ -154,6 +154,7 @@ export interface AssignedExamPackage {
     topic: string | null;
     text: string;
     options: string[];
+    optionOrder: number[];
     marks: number;
     negativeMarks: number;
   }[];
