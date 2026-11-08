@@ -42,7 +42,9 @@ describe("Decision tree classifier", () => {
   it("validates artifacts and rejects incompatible prediction features", () => {
     const model = fitDecisionTree(samples);
     expect(validateDecisionTreeArtifact(model)).toEqual(model);
-    expect(() => validateDecisionTreeArtifact({ ...model, featureCount: 9 })).toThrow("Invalid decision tree");
+    const invalidModel = structuredClone(model);
+    if (invalidModel.root.type === "split") invalidModel.root.feature = 9;
+    expect(() => validateDecisionTreeArtifact(invalidModel)).toThrow("Invalid decision tree");
     expect(() => predictDecisionTreeProbability(model, [1])).toThrow("Prediction features do not match");
   });
   it("rejects malformed training data and invalid options", () => {
