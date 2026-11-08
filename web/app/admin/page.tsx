@@ -78,7 +78,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (status !== "authenticated" || user?.role !== "ADMIN") return;
     const timer = window.setInterval(() => {
-      api.adminLiveSessions().then((result) => setLiveSessions(result.sessions)).catch(() => undefined);
+      Promise.all([api.adminLiveSessions(), api.adminExamAttendance()]).then(([live, register]) => {
+        setLiveSessions(live.sessions);
+        setAttendance(register.attendance);
+      }).catch(() => undefined);
     }, 15000);
     return () => window.clearInterval(timer);
   }, [status, user?.role]);
@@ -89,8 +92,9 @@ export default function AdminPage() {
     if (!window.confirm(`${action} session for ${session.student.email}?`)) return;
     try {
       await api.adminSessionAction(session.id, action, reason ?? "");
-      const refreshed = await api.adminLiveSessions();
+      const [refreshed, register] = await Promise.all([api.adminLiveSessions(), api.adminExamAttendance()]);
       setLiveSessions(refreshed.sessions);
+      setAttendance(register.attendance);
       setNotice(`Session ${action.toLowerCase()} action recorded.`);
       setError("");
     } catch (cause: unknown) {
