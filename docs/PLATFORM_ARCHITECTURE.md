@@ -27,4 +27,4 @@ Electron Builder produces a Windows NSIS installer using `npm run dist:win` from
 
 ## Migration rule
 
-The existing Next.js UI remains in the repository until the React + Vite replacement has equivalent routes, tests, theme behavior, and exam functionality. Do not delete the working UI during the migration. The Vite application becomes the default web target only after parity checks pass.
+The React + Vite application is now the default web target. The previous Next.js route components and tests remain temporarily as migration references while equivalent flows are consolidated and retested in the Vite app. Remove Next.js dependencies and legacy files only after all required flows and tests have been migrated.
