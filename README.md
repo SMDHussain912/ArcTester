@@ -49,8 +49,9 @@ To make it work from a real device:
 1. Find your machine's LAN IP: `hostname -I` (e.g. `192.168.1.5`).
 2. In `web/.env.local`, point the app at the LAN IP:
    `NEXT_PUBLIC_API_URL=http://192.168.1.5:4000`.
-3. Allow that origin in the API's CORS check in `api/src/index.ts`
-   (`localCors`) — the current regex only matches `localhost` / `127.0.0.1`.
+3. Add the web origin to `CORS_ORIGINS` in `api/.env`:
+   `CORS_ORIGINS=http://192.168.1.5:3000`. Multiple origins can be
+   comma-separated. Localhost origins remain allowed by default.
 4. Open `http://192.168.1.5:3000` on the phone.
 
 For a native app, no cookie is needed: use `POST /auth/token` and send
