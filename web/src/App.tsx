@@ -15,7 +15,7 @@ type Invitation = {
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null; seenAt?: string | null };
-type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[] };
+type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[]; difficulty?: string };
 type AdminStudent = { id: number; email: string };
 type AdminExam = {
   id: string;
@@ -100,6 +100,18 @@ export default function App() {
   const [examInstructions, setExamInstructions] = useState("");
   const [examDuration, setExamDuration] = useState(180);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
+  const [examQuestionSearch, setExamQuestionSearch] = useState("");
+  const [examMarks, setExamMarks] = useState(1);
+  const [examNegativeMarks, setExamNegativeMarks] = useState(0);
+  const [shuffleExamQuestions, setShuffleExamQuestions] = useState(false);
+  const [shuffleExamOptions, setShuffleExamOptions] = useState(false);
+  const [questionSubject, setQuestionSubject] = useState("Computer Science");
+  const [questionTopic, setQuestionTopic] = useState("General");
+  const [questionText, setQuestionText] = useState("");
+  const [questionOptions, setQuestionOptions] = useState(["", "", "", ""]);
+  const [questionCorrectIndex, setQuestionCorrectIndex] = useState(0);
+  const [questionExplanation, setQuestionExplanation] = useState("");
+  const [questionDifficulty, setQuestionDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [assigningExamId, setAssigningExamId] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -202,6 +214,28 @@ export default function App() {
     setAdminExams(refreshed.exams);
   }
 
+  async function createQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const { question } = await request<{ question: AdminQuestion }>("/admin/questions", {
+        method: "POST",
+        body: JSON.stringify({ subject: questionSubject.trim(), topic: questionTopic.trim() || "General", text: questionText.trim(), options: questionOptions.map((option) => option.trim()), correctIndex: questionCorrectIndex, explanation: questionExplanation.trim(), difficulty: questionDifficulty, source: "Admin question editor" }),
+      });
+      setAdminQuestions((current) => [...current, question].sort((a, b) => a.subject.localeCompare(b.subject) || a.id - b.id));
+      setQuestionText("");
+      setQuestionOptions(["", "", "", ""]);
+      setQuestionCorrectIndex(0);
+      setQuestionExplanation("");
+      setError("Question added to the question bank.");
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createExam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (selectedQuestionIds.length === 0) {
@@ -218,7 +252,9 @@ export default function App() {
           description: examDescription.trim(),
           instructions: examInstructions.trim(),
           durationMinutes: examDuration,
-          questions: selectedQuestionIds.map((questionId) => ({ questionId, marks: 1, negativeMarks: 0 })),
+          shuffleQuestions: shuffleExamQuestions,
+          shuffleOptions: shuffleExamOptions,
+          questions: selectedQuestionIds.map((questionId) => ({ questionId, marks: examMarks, negativeMarks: examNegativeMarks })),
         }),
       });
       setExamTitle("");
