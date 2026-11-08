@@ -68,4 +68,19 @@ describe("practice paper selection", () => {
     await user.click(screen.getByRole("button", { name: /I understand — Start exam/ }));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/test/81"));
   });
+  it("switches practice modes instead of retaining the mock selection", async () => {
+    const user = userEvent.setup();
+    render(<SessionProvider><PracticePage /></SessionProvider>);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Full AP ECET CSE Mock/ })).toBeEnabled());
+
+    const mock = screen.getByRole("button", { name: /Full AP ECET CSE Mock/ });
+    const custom = screen.getByRole("button", { name: /Custom Subject Practice/ });
+    await user.click(mock);
+    expect(mock).toHaveAttribute("aria-pressed", "true");
+    await user.click(custom);
+    expect(custom).toHaveAttribute("aria-pressed", "true");
+    expect(mock).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("heading", { name: "1. Select subjects" })).toBeInTheDocument();
+  });
+
 });
