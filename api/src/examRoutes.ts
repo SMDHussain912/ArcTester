@@ -359,10 +359,12 @@ export function examRouter(db: PrismaClient): Router {
       let practiceIncorrect = 0;
       let practiceUnanswered = 0;
       const practiceBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
+      const practiceByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>();
       for (const attempt of practiceAttempts) {
         for (const answer of attempt.answers) {
           const hasSnapshot = answer.subjectSnapshot.length > 0;
           const subject = hasSnapshot ? answer.subjectSnapshot : answer.question.subject.name;
+          const topic = hasSnapshot ? answer.topicSnapshot : answer.question.topic?.name ?? null;
           if (answer.chosen === null) practiceUnanswered += 1;
           else if (answer.isCorrect) practiceCorrect += 1;
           else practiceIncorrect += 1;
@@ -371,16 +373,24 @@ export function examRouter(db: PrismaClient): Router {
           else if (answer.isCorrect) row.correct += 1;
           else row.incorrect += 1;
           practiceBySubject.set(subject, row);
+          const topicKey = JSON.stringify([subject, topic]);
+          const topicRow = practiceByTopic.get(topicKey) ?? { subject, topic, correct: 0, incorrect: 0, unanswered: 0 };
+          if (answer.chosen === null) topicRow.unanswered += 1;
+          else if (answer.isCorrect) topicRow.correct += 1;
+          else topicRow.incorrect += 1;
+          practiceByTopic.set(topicKey, topicRow);
         }
       }
       const practiceAnswered = practiceCorrect + practiceIncorrect;
       const formalBySubject = new Map<string, { correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
+      const formalByTopic = new Map<string, { subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number }>();
       let formalCorrect = 0;
       let formalIncorrect = 0;
       let formalUnanswered = 0;
       for (const submission of gradedSubmissions) {
         for (const answer of submission.answers) {
           const subject = answer.examQuestion.subject;
+          const topic = answer.examQuestion.topic;
           const row = formalBySubject.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
           if (answer.selectedIndex === null) { formalUnanswered += 1; row.unanswered += 1; }
           else if (answer.isCorrect) { formalCorrect += 1; row.correct += 1; }
@@ -388,6 +398,14 @@ export function examRouter(db: PrismaClient): Router {
           row.awardedMarks += answer.awardedMarks;
           row.maximumMarks += answer.examQuestion.marks;
           formalBySubject.set(subject, row);
+          const topicKey = JSON.stringify([subject, topic]);
+          const topicRow = formalByTopic.get(topicKey) ?? { subject, topic, correct: 0, incorrect: 0, unanswered: 0, awardedMarks: 0, maximumMarks: 0 };
+          if (answer.selectedIndex === null) topicRow.unanswered += 1;
+          else if (answer.isCorrect) topicRow.correct += 1;
+          else topicRow.incorrect += 1;
+          topicRow.awardedMarks += answer.awardedMarks;
+          topicRow.maximumMarks += answer.examQuestion.marks;
+          formalByTopic.set(topicKey, topicRow);
         }
       }
       const averagePercentage = scored.length
@@ -431,6 +449,12 @@ export function examRouter(db: PrismaClient): Router {
               ? row.correct / (row.correct + row.incorrect)
               : null,
           })),
+          topics: [...practiceByTopic.values()].map((row) => ({
+            ...row,
+            accuracy: row.correct + row.incorrect > 0
+              ? row.correct / (row.correct + row.incorrect)
+              : null,
+          })),
         },
         formalExams: {
           graded: gradedSubmissions.length,
@@ -440,6 +464,12 @@ export function examRouter(db: PrismaClient): Router {
           unanswered: formalUnanswered,
           subjects: [...formalBySubject.entries()].map(([subject, row]) => ({
             subject,
+            ...row,
+            accuracy: row.correct + row.incorrect > 0
+              ? row.correct / (row.correct + row.incorrect)
+              : null,
+          })),
+          topics: [...formalByTopic.values()].map((row) => ({
             ...row,
             accuracy: row.correct + row.incorrect > 0
               ? row.correct / (row.correct + row.incorrect)
