@@ -112,6 +112,20 @@ describe("versioned exam management", () => {
     expect((bank.json.questions as Array<{ text: string }>).some((item) => item.text === payload.text)).toBe(true);
   });
 
+  it("rejects a paper where negative marks exceed correct-answer marks", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const response = await request("/admin/exams", "POST", {
+      title: "Invalid Marking Paper",
+      description: "",
+      instructions: "",
+      durationMinutes: 30,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: [{ questionId: question.id, marks: 0.25, negativeMarks: 1 }],
+    }, adminCookie);
+    expect(response.status).toBe(400);
+  });
+
   it("creates a draft with immutable question snapshots and marking values", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const response = await request(
