@@ -42,7 +42,7 @@ const PredictionSchema = z.object({
 }).strict();
 
 const TrainingSchema = z.object({
-  modelId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,55}$/),
+  modelId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/),
   seed: z.number().int().min(0).max(0xffffffff).default(42),
 }).strict();
 
