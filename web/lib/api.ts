@@ -155,6 +155,35 @@ export interface AssignedExamResult {
   }[];
 }
 
+export interface AdminSubmission {
+  id: string;
+  status: string;
+  score: number | null;
+  maximumScore: number | null;
+  startedAt: string;
+  submittedAt: string;
+  receivedAt: string;
+  student: { id: number; email: string };
+  exam: { id: string; title: string; version: number; durationMinutes: number };
+  availableFrom: string | null;
+  dueAt: string | null;
+  questions: {
+    id: string;
+    position: number;
+    subject: string;
+    topic: string | null;
+    text: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+    marks: number;
+    negativeMarks: number;
+    selectedIndex: number | null;
+    isCorrect: boolean;
+    awardedMarks: number;
+  }[];
+}
+
 export interface AdminOverview {
   totals: {
     students: number;
@@ -173,6 +202,8 @@ export interface AdminOverview {
     averagePercentage: number | null;
   }[];
   recentSubmissions: {
+    submissionId: string;
+    studentId: number;
     studentEmail: string;
     examTitle: string;
     submittedAt: string;
@@ -258,6 +289,8 @@ export const api = {
     ),
   assignedExamResult: (id: string) =>
     request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
+  adminSubmission: (id: string) =>
+    request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
