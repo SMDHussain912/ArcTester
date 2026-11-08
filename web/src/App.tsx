@@ -573,12 +573,26 @@ export default function App() {
               <label>Duration (minutes)
                 <input type="number" min={1} max={600} required value={examDuration} onChange={(event) => setExamDuration(Number(event.target.value))} />
               </label>
+              <div className="question-editor-grid exam-scoring-grid">
+                <label>Marks per question
+                  <input type="number" min={0} max={100} step="0.25" value={examMarks} onChange={(event) => setExamMarks(Number(event.target.value))} />
+                </label>
+                <label>Negative marks per wrong answer
+                  <input type="number" min={0} max={100} step="0.25" value={examNegativeMarks} onChange={(event) => setExamNegativeMarks(Number(event.target.value))} />
+                </label>
+              </div>
+              <div className="exam-settings-row">
+                <label><input type="checkbox" checked={shuffleExamQuestions} onChange={(event) => setShuffleExamQuestions(event.target.checked)} /> Shuffle question order</label>
+                <label><input type="checkbox" checked={shuffleExamOptions} onChange={(event) => setShuffleExamOptions(event.target.checked)} /> Shuffle answer options</label>
+              </div>
               <div className="exam-question-picker">
-                <div className="picker-heading"><strong>Question bank</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} loaded</span></div>
-                {adminQuestions.length === 0 ? <p className="muted">No questions found. Import questions into the bank first.</p> : adminQuestions.map((question) => (
+                <div className="picker-heading"><strong>Choose questions</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} available</span></div>
+                <input className="question-search" type="search" value={examQuestionSearch} onChange={(event) => setExamQuestionSearch(event.target.value)} placeholder="Search by subject, topic or question…" />
+                {adminQuestions.length === 0 ? <p className="muted">No questions yet. Open Question bank to add your first question.</p> : adminQuestions.filter((question) => `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(examQuestionSearch.trim().toLowerCase())).map((question) => (
                   <label className="pick-row" key={question.id}>
                     <input type="checkbox" checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />
                     <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><small>{question.text}</small></span>
+                    <small className="muted">{question.difficulty ?? "medium"}</small>
                   </label>
                 ))}
               </div>
