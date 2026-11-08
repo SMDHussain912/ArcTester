@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
+import { OfflineExams } from "./src/OfflineExams";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string };
@@ -293,6 +294,7 @@ export default function App() {
                 <Text style={styles.muted}>Subjects</Text>
               </View>
             </View>
+            <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} />
             <Text style={styles.sectionTitle}>Practice by subject</Text>
             {bank?.subjects.map((item) => (
               <TouchableOpacity
