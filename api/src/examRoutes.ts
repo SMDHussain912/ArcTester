@@ -110,6 +110,7 @@ export function examRouter(db: PrismaClient): Router {
           topic: question.topic?.name ?? null,
           text: question.text,
           options: parseOptions(question.options),
+          difficulty: question.difficulty,
         })),
       });
     } catch (error) {
