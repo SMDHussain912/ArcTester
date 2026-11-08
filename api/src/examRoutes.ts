@@ -3,7 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
-import { QuestionInputSchema } from "./questions.js";
+import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 
@@ -76,7 +76,7 @@ export function examRouter(db: PrismaClient): Router {
       const outcome = await insertQuestion(db, input);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
       const question = await db.question.findFirstOrThrow({
-        where: { questionHash: (await import("./questions.js")).hashQuestion(input.text) },
+        where: { questionHash: hashQuestion(input.text) },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
       res.status(201).json({
