@@ -13,6 +13,7 @@ import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
 import { assessFeatureDrift, driftBucket, expectedDriftCounts } from "./intelligence/modelDrift.js";
 import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
 import { trainTensorflowRegressionCandidate } from "./intelligence/tensorflowJsTraining.js";
+import { isTensorflowJsArtifactProductionEligible, validateTensorflowJsArtifact } from "./intelligence/tensorflowJsArtifact.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("numeric") }).strict(),
@@ -84,6 +85,27 @@ const VersionSchema = z.coerce.number().int().positive().max(Number.MAX_SAFE_INT
 
 export function modelRegistryRouter(db: PrismaClient): Router {
   const router = Router();
+
+  router.get("/models/:modelId/active/tensorflow", requireAuth, async (req, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const model = await db.registeredModel.findFirst({
+        where: { modelId, algorithm: "tensorflow-js-layers", isActive: true },
+        select: { artifactJson: true },
+      });
+      if (!model) return next(notFound("No active TensorFlow.js model is available."));
+      const artifact = validateTensorflowJsArtifact(JSON.parse(model.artifactJson));
+      if (artifact.modelId !== modelId || !isTensorflowJsArtifactProductionEligible(artifact)) {
+        return next(conflict("The active TensorFlow.js artifact has not passed production eligibility."));
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json({ ok: true, artifact });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
 
   router.get("/admin/model-datasets", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
@@ -513,7 +535,14 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           where: { modelId_version: { modelId, version } },
         });
         if (!target) return null;
-        validateRegistryArtifact(JSON.parse(target.artifactJson));
+        if (target.algorithm === "tensorflow-js-layers") {
+          const tensorflowArtifact = validateTensorflowJsArtifact(JSON.parse(target.artifactJson));
+          if (!isTensorflowJsArtifactProductionEligible(tensorflowArtifact)) {
+            return { error: "tensorflow-production-gate" as const };
+          }
+        } else {
+          validateRegistryArtifact(JSON.parse(target.artifactJson));
+        }
         if (!target.isActive) {
           const evaluation = await tx.modelEvaluation.findFirst({
             where: { modelId, candidateVersion: version },
@@ -535,7 +564,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         return model;
       });
       if (!activated) return next(notFound("Model version was not found."));
-      if ("error" in activated) return next(conflict("This model version needs a passing evaluation against a baseline before activation."));
+      if ("error" in activated) {
+        if (activated.error === "tensorflow-production-gate") {
+          return next(conflict("TensorFlow.js model cannot be activated until it passes real-anonymized production eligibility."));
+        }
+        return next(conflict("This model version needs a passing evaluation against a baseline before activation."));
+      }
       res.json({ ok: true, model: activated });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
