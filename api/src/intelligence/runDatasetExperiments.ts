@@ -44,7 +44,7 @@ async function main(): Promise<void> {
         models: results.map(({ algorithm, parameters, crossValidation, metrics }) => ({ algorithm, parameters, crossValidation, heldOutMetrics: metrics })),
       };
       for (const result of results) {
-        const registered = await registry.register({
+        await registry.register({
           modelId: `${name}-${result.algorithm}`,
           algorithm: result.algorithm as "logistic-regression" | "knn" | "decision-tree" | "gaussian-naive-bayes",
           task: "binary-classification",
