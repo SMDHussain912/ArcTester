@@ -60,7 +60,7 @@ const app = buildApp();
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
-    console.log(\`ecet-api listening on http://localhost:\${PORT}\`);
+    console.log(`ecet-api listening on http://localhost:\${PORT}`);
   });
 }
 
