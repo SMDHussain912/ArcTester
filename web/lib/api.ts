@@ -229,6 +229,7 @@ export interface PerformanceOverview {
 
 export interface WeakTopicsReport {
   subjects: WeakTopicRow[];
+  topics: WeakTopicRow[];
   weakest: WeakTopicRow | null;
 }
 
