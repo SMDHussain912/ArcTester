@@ -34,6 +34,7 @@ function AssignedExamRunner() {
   const [index, setIndex] = useState(0);
   const [marked, setMarked] = useState<string[]>([]);
   const [now, setNow] = useState(Date.now());
+  const [serverDeadline, setServerDeadline] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ function AssignedExamRunner() {
     if (!attempt || sessionStartedRef.current) return;
     sessionStartedRef.current = true;
     api.startAssignedExamSession(assignmentId).then(({ session }) => {
+      setServerDeadline(session.deadline);
       if (session.startedAt !== attempt.startedAt) {
         const restored = { ...attempt, startedAt: session.startedAt };
         setAttempt(restored);
@@ -90,7 +92,7 @@ function AssignedExamRunner() {
     const durationDeadline = new Date(attempt.startedAt).getTime() + exam.durationMinutes * 60_000;
     const dueDeadline = exam.dueAt ? new Date(exam.dueAt).getTime() : Number.POSITIVE_INFINITY;
     return Math.min(durationDeadline, dueDeadline);
-  }, [exam, attempt]);
+  }, [exam, attempt, serverDeadline]);
   const remaining = deadline === null ? 0 : Math.max(0, deadline - now);
 
   const persist = useCallback(
@@ -111,6 +113,7 @@ function AssignedExamRunner() {
     try {
       const { session } = await api.startAssignedExamSession(assignmentId);
       sessionStartedRef.current = true;
+      setServerDeadline(session.deadline);
       const next: SavedAttempt = {
         attemptUuid: window.crypto.randomUUID(),
         startedAt: session.startedAt,
@@ -174,15 +177,19 @@ function AssignedExamRunner() {
     if (!attempt || !sessionStartedRef.current) return;
     const heartbeat = () => {
       const event = document.visibilityState === "visible" ? "HEARTBEAT" : "FOCUS_LOST";
-      void api.heartbeatAssignedExamSession(assignmentId, event).catch(() => {
-        setError("Connection to the exam server was interrupted. Your answers remain saved locally; reconnect immediately.");
+      void api.heartbeatAssignedExamSession(assignmentId, event).then((result) => {
+        if (result.deadline) setServerDeadline(result.deadline);
+      }).catch(() => {
+        setError("Connection to the exam server was interrupted or the session is paused. Your answers remain saved locally; reconnect or contact the invigilator.");
       });
     };
     const interval = window.setInterval(heartbeat, 15000);
     const onVisibility = () => {
-      void api.heartbeatAssignedExamSession(assignmentId, document.visibilityState === "visible" ? "FOCUS_RESTORED" : "FOCUS_LOST").catch(() => undefined);
+      void api.heartbeatAssignedExamSession(assignmentId, document.visibilityState === "visible" ? "FOCUS_RESTORED" : "FOCUS_LOST")
+        .then((result) => { if (result.deadline) setServerDeadline(result.deadline); }).catch(() => undefined);
     };
-    const onOnline = () => { void api.heartbeatAssignedExamSession(assignmentId, "CONNECTION_RESTORED").catch(() => undefined); };
+    const onOnline = () => { void api.heartbeatAssignedExamSession(assignmentId, "CONNECTION_RESTORED")
+      .then((result) => { if (result.deadline) setServerDeadline(result.deadline); }).catch(() => undefined); };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
     return () => {
