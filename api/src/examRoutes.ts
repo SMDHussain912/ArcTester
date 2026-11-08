@@ -1138,6 +1138,7 @@ export function examRouter(db: PrismaClient): Router {
         include: {
           examVersion: { include: { questions: { orderBy: { position: "asc" } } } },
           submission: true,
+          session: true,
         },
       });
       if (!assignment) return next(notFound("Exam assignment not found."));
@@ -1162,6 +1163,15 @@ export function examRouter(db: PrismaClient): Router {
           });
         }
         return next(conflict("An attempt has already been submitted for this assignment."));
+      }
+
+      if (!assignment.session || assignment.session.status !== "ACTIVE" || !assignment.session.startedAt) {
+        return next(conflict("Start or resume the server exam session before submitting."));
+      }
+      const serverSubmittedAt = new Date();
+      const serverStartedAt = assignment.session.startedAt;
+      if (assignment.dueAt && serverSubmittedAt > assignment.dueAt) {
+        return next(forbidden("The examination submission deadline has passed."));
       }
 
       const questions = assignment.examVersion.questions;
@@ -1200,22 +1210,19 @@ export function examRouter(db: PrismaClient): Router {
 
       // Offline timestamps are client claims. Suspicious values are retained for review,
       // not silently trusted as proof of when the exam was conducted.
-      const startedAt = new Date(input.startedAt);
-      const submittedAt = new Date(input.submittedAt);
-      const now = Date.now();
-      const toleranceMs = 5 * 60 * 1000;
+      // Server-owned session timestamps prevent candidates from extending time by editing browser clocks.
+      const startedAt = serverStartedAt;
+      const submittedAt = serverSubmittedAt;
       const durationMs = assignment.examVersion.durationMinutes * 60 * 1000;
+      const staleHeartbeat = !assignment.session.lastHeartbeatAt ||
+        serverSubmittedAt.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
-        startedAt.getTime() > now + toleranceMs ||
-        submittedAt.getTime() > now + toleranceMs ||
-        submittedAt.getTime() < startedAt.getTime() ||
-        submittedAt.getTime() - startedAt.getTime() > durationMs + toleranceMs ||
-        now > startedAt.getTime() + durationMs + toleranceMs ||
-        (assignment.dueAt !== null && now > assignment.dueAt.getTime() + toleranceMs) ||
-        (assignment.availableFrom !== null &&
-          startedAt.getTime() < assignment.availableFrom.getTime() - toleranceMs) ||
-        (assignment.dueAt !== null &&
-          submittedAt.getTime() > assignment.dueAt.getTime() + toleranceMs);
+        serverSubmittedAt.getTime() > startedAt.getTime() + durationMs + 60000 ||
+        staleHeartbeat ||
+        (assignment.availableFrom !== null && startedAt < assignment.availableFrom) ||
+        (assignment.dueAt !== null && submittedAt > assignment.dueAt) ||
+        new Date(input.startedAt).getTime() < startedAt.getTime() - 60000 ||
+        new Date(input.startedAt).getTime() > startedAt.getTime() + 60000;
 
       const submission = await db.$transaction(async (tx) => {
         const existing = await tx.examSubmission.findUnique({
@@ -1257,6 +1264,13 @@ export function examRouter(db: PrismaClient): Router {
         await tx.examAssignment.update({
           where: { id: assignment.id },
           data: { status: "SUBMITTED" },
+        });
+        await tx.examSession.update({
+          where: { id: assignment.session!.id },
+          data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
+        });
+        await tx.examSessionEvent.create({
+          data: { sessionId: assignment.session!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
         });
         return created;
       });
