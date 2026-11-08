@@ -37,6 +37,29 @@ Open <http://localhost:3000>, create an account on **Sign in**, and start a
 test. The API runs on :4000 and the web app talks to it at
 `http://localhost:4000` (set in `web/.env.local`).
 
+## Run with Docker
+
+```bash
+# Create your local Docker settings and replace the JWT secret.
+cp .env.docker.example .env
+# Start both services (the API applies migrations and seeds the starter bank).
+docker compose up --build -d
+
+# Follow logs or stop the services.
+docker compose logs -f
+docker compose down
+```
+
+Open <http://localhost:3000>. The API health endpoint is
+<http://localhost:4000/health>. SQLite data is stored in the named
+`arc-tester-data` volume and survives container restarts. To remove the
+database as well, use `docker compose down -v` (this permanently deletes
+saved accounts and progress).
+
+For phone access, set `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` in the root
+`.env` file to your computer's LAN IP, then rebuild the web image with
+`docker compose up --build -d`. See the LAN steps below.
+
 ### Running on a phone (same Wi-Fi)
 
 Both servers bind to all interfaces by default, so a phone on the same
@@ -88,7 +111,7 @@ Question bank (run from the repo root):
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
-- [ ] **7 (later).** Dockerfile, GitHub Actions, native mobile client
+- [ ] **7 (in progress).** Docker Compose deployment, GitHub Actions CI, LAN CORS support; native mobile client remains
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
