@@ -68,6 +68,41 @@ function parseOptions(raw: string): string[] {
 export function examRouter(db: PrismaClient): Router {
   const router = Router();
 
+  router.get("/admin/question-bank", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const questions = await db.question.findMany({
+        orderBy: [{ subject: { name: "asc" } }, { id: "asc" }],
+        take: 500,
+        include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
+      });
+      res.json({
+        ok: true,
+        questions: questions.map((question) => ({
+          id: question.id,
+          subject: question.subject.name,
+          topic: question.topic?.name ?? null,
+          text: question.text,
+          options: parseOptions(question.options),
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/admin/students", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const students = await db.user.findMany({
+        where: { role: "STUDENT" },
+        orderBy: { email: "asc" },
+        select: { id: true, email: true },
+      });
+      res.json({ ok: true, students });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/exams", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const exams = await db.exam.findMany({
