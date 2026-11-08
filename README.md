@@ -108,6 +108,10 @@ Question bank (run from the repo root):
 | `npm run import:questions --workspace=api`           | Seed the starter bank (idempotent) |
 | `npm run prisma:migrate --workspace=api`             | Create/apply migrations            |
 
+## Product requirements
+
+The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md). It defines role boundaries, subject-first practice, the formal examination lifecycle, invigilation, attendance, announcements, UX standards, verification requirements, and the prioritized roadmap. Treat roadmap items as planned until their end-to-end workflow is implemented and verified.
+
 ## Phases
 
 - [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
@@ -117,8 +121,12 @@ Question bank (run from the repo root):
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
-- [ ] **7 (in progress).** Docker Compose deployment and LAN CORS support;
-  native mobile client remains. GitHub Actions automation is not used.
+- [x] **7.** Docker Compose deployment and LAN CORS support.
+- [x] **8.** Administrative examination authoring, immutable versions, assignment, submissions, and reports.
+- [x] **9.** Candidate session records, server-side start/deadline enforcement, heartbeats, audit events, and invigilator actions.
+- [ ] **10 (in progress).** UI modularization, stronger workflow coverage, session recovery, and continued accessibility/responsive polish.
+
+GitHub Actions automation is not currently configured. Do not infer verification from a commit being pushed.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
@@ -150,7 +158,7 @@ no new libraries (plain `fetch`, no supertest).
 CORS: the API allows `http://localhost:*` / `127.0.0.1` origins only (hand-rolled
 8-line middleware — no `cors` package, so no new dependency).
 
-## Phase 4 — UI (`/web`, Next.js App Router)
+## Phase 4 — UI (`/web`, React + TypeScript + Vite)
 
 Plain CSS in one global stylesheet (`web/app/globals.css`) — no UI libraries.
 Light/dark follows `prefers-color-scheme`; every control is keyboard reachable
@@ -278,9 +286,9 @@ Invalid rows never stop the run — the valid rows are still imported, and each
 bad row is reported with a reason (missing column, wrong `correctIndex`,
 empty option, and so on).
 
-## Phase 5 — Analytics (`api/src/analytics.ts` + `analyticsRoutes.ts`)
+## Phase 5 — Analytics (`api/src/analytics.ts`, `analyticsRoutes.ts`, and admin exam analytics)
 
-No UI yet — API endpoints only, same Zod validation + friendly-error middleware.
+Practice analytics and formal-exam analytics are exposed through authenticated APIs and administrative views. The admin workspace summarizes students, exams, assignments, submissions, submission rates, average percentages, and recent submissions. Candidate attendance, live session connectivity, and audit history are separate operational views.
 
 - `GET /analytics/weak-topics` — per-subject (and per-topic) rows
   `{ subject, topic, seen, wrong, accuracy }` sorted weakest-first
