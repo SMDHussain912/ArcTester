@@ -352,6 +352,7 @@ export default function AdminPage() {
         <p className="eyebrow">ArcTester administration</p>
         <h1>Admin workspace</h1>
         <p className="muted">Manage exams, publish immutable versions, assign students and monitor submissions.</p>
+        <Link href="/admin/models" className="button button-secondary">Model intelligence</Link>
       </section>
       {error ? <p className="error" role="alert">{error}</p> : null}
       {notice ? <p className="warn" role="status">{notice}</p> : null}
