@@ -103,6 +103,73 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/analytics/overview", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const [studentCount, examCount, assignments] = await Promise.all([
+        db.user.count({ where: { role: "STUDENT" } }),
+        db.exam.count(),
+        db.examAssignment.findMany({
+          orderBy: { assignedAt: "desc" },
+          include: {
+            student: { select: { email: true } },
+            examVersion: { include: { exam: { select: { id: true, title: true } } } },
+            submission: { select: { score: true, maximumScore: true, submittedAt: true, status: true } },
+          },
+        }),
+      ]);
+      const submitted = assignments.filter((item) => item.submission !== null);
+      const scored = submitted.filter((item) =>
+        item.submission?.score !== null && item.submission?.maximumScore !== null && (item.submission?.maximumScore ?? 0) > 0
+      );
+      const averagePercentage = scored.length
+        ? scored.reduce((sum, item) => sum + ((item.submission!.score! / item.submission!.maximumScore!) * 100), 0) / scored.length
+        : null;
+      const byExam = new Map<string, { examId: string; title: string; assigned: number; submitted: number; scoreTotal: number; scored: number }>();
+      for (const item of assignments) {
+        const key = item.examVersion.exam.id;
+        const row = byExam.get(key) ?? { examId: key, title: item.examVersion.exam.title, assigned: 0, submitted: 0, scoreTotal: 0, scored: 0 };
+        row.assigned += 1;
+        if (item.submission) {
+          row.submitted += 1;
+          if (item.submission.score !== null && item.submission.maximumScore !== null && item.submission.maximumScore > 0) {
+            row.scoreTotal += (item.submission.score / item.submission.maximumScore) * 100;
+            row.scored += 1;
+          }
+        }
+        byExam.set(key, row);
+      }
+      res.json({
+        ok: true,
+        totals: {
+          students: studentCount,
+          exams: examCount,
+          assignments: assignments.length,
+          submissions: submitted.length,
+          submissionRate: assignments.length ? submitted.length / assignments.length : 0,
+          averagePercentage,
+        },
+        exams: [...byExam.values()].map((item) => ({
+          examId: item.examId,
+          title: item.title,
+          assigned: item.assigned,
+          submitted: item.submitted,
+          submissionRate: item.assigned ? item.submitted / item.assigned : 0,
+          averagePercentage: item.scored ? item.scoreTotal / item.scored : null,
+        })).sort((a, b) => b.assigned - a.assigned),
+        recentSubmissions: submitted.slice(0, 10).map((item) => ({
+          studentEmail: item.student.email,
+          examTitle: item.examVersion.exam.title,
+          submittedAt: item.submission!.submittedAt,
+          score: item.submission!.score,
+          maximumScore: item.submission!.maximumScore,
+          status: item.submission!.status,
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/exams", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const exams = await db.exam.findMany({
