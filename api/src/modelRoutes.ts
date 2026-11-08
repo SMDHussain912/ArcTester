@@ -380,13 +380,28 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           algorithm: true,
           task: true,
           dataset: true,
+          artifactJson: true,
           isActive: true,
           createdAt: true,
           activatedAt: true,
         },
         take: 500,
       });
-      res.json({ ok: true, models });
+      res.json({
+        ok: true,
+        models: models.map(({ artifactJson, ...model }) => ({
+          ...model,
+          productionEligible: model.algorithm === "tensorflow-js-layers"
+            ? (() => {
+              try {
+                return isTensorflowJsArtifactProductionEligible(validateTensorflowJsArtifact(JSON.parse(artifactJson)));
+              } catch {
+                return false;
+              }
+            })()
+            : null,
+        })),
+      });
     } catch (error) { next(error); }
   });
 
