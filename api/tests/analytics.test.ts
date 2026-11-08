@@ -418,8 +418,11 @@ describe("analytics", () => {
     };
 
     const fresh = await startTestServer(buildApp);
-    const report = await importFromJson(fresh.db, BANK);
-    expect(report.added).toBe(3);
+    const report = await importFromJson(fresh.db, [
+      ...BANK,
+      ["Snapshot Subject", "Snapshot classification fixture?", ["A", "B", "C", "D"], 0, "Snapshot explanation"],
+    ]);
+    expect(report.added).toBe(4);
 
     // A different account in the fresh DB — import must land under this user.
     const freshSession = await signUp(fresh.baseUrl, "restored@example.com");
@@ -435,6 +438,10 @@ describe("analytics", () => {
     };
     expect(importBody.addedStats).toBeGreaterThan(0);
     expect(importBody.addedAttempts).toBeGreaterThan(0);
+    const restoredSnapshot = await fresh.db.attemptAnswer.findFirst({
+      where: { subjectSnapshot: "Snapshot Subject", topicSnapshot: "Original Topic" },
+    });
+    expect(restoredSnapshot?.difficultySnapshot).toBe("easy");
 
     const weak = await freshApi.get(`/analytics/weak-topics`);
     const weakBody = weak.json as { subjects: { subject: string; accuracy: number }[] };
