@@ -6,3 +6,4 @@ coverage
 *.db
 legacy/
 ecet-mock.html
+README.md
