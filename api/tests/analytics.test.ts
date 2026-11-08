@@ -386,6 +386,24 @@ describe("analytics", () => {
       weak: false,
     });
 
+    const unansweredAttempt = await api.post("/tests", {
+      mode: "practice",
+      subject: subject.name,
+      count: 1,
+    });
+    await api.post(`/tests/${(unansweredAttempt.json as { attemptId: number }).attemptId}/submit`, {
+      answers: [{ questionId: question.id, selectedIndex: null }],
+    });
+    const stillInsufficient = await api.get("/analytics/question-performance");
+    const unansweredReport = stillInsufficient.json as {
+      questions: { questionId: number; sampleSize: number; unanswered: number; weak: boolean }[];
+    };
+    expect(unansweredReport.questions.find((row) => row.questionId === question.id)).toMatchObject({
+      sampleSize: 4,
+      unanswered: 1,
+      weak: false,
+    });
+
     const fifth = await api.post("/tests", {
       mode: "practice",
       subject: subject.name,
