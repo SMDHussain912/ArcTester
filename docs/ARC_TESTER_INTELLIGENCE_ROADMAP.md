@@ -785,5 +785,49 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - Formal exam correct answers and concept links remain hidden until the submission is `GRADED`.
 
 **Verification**
-- GitHub Actions verification is pending for this implementation batch.
+- GitHub Actions run #603 passed both jobs: API/web tests, lint, builds, migration verification and mobile typecheck.
 - Exact topic matching intentionally returns no concept for unmatched syllabus labels. Broader syllabus coverage and explicit topic-to-concept curation remain future work.
+
+
+### Phase 7 — TensorFlow.js hybrid intelligence — architecture and artifact foundation — 2026-11-09
+
+**Architecture decision**
+- Runtime: hybrid. Training and evaluation run centrally in the Node.js API; inference is intended to run in the browser through TensorFlow.js.
+- Approach: hybrid ML. Existing statistical models remain the production baseline and fallback. TensorFlow.js models are candidates, not automatic replacements.
+- The browser receives only a versioned, validated model artifact and normalized feature input. It does not receive other students' raw attempt history or training records.
+- TensorFlow.js model artifacts are separate from the existing hand-built model artifact formats until the browser loader and registry integration are implemented.
+
+**Existing system inspection**
+- Existing algorithms: multiple linear regression, logistic regression, KNN, decision tree and Gaussian Naive Bayes.
+- Existing infrastructure: deterministic synthetic dataset generation, dataset quality checks, feature encoding, candidate/baseline evaluation, versioned model registry and a student-specific next-attempt score predictor.
+- The student-specific predictor currently requires at least 20 sequential training samples and uses expanding-window evaluation against a mean baseline.
+- Synthetic datasets are generated from known formulas. They are useful for testing pipeline mechanics, but cannot establish real-world predictive performance.
+
+**Implemented foundation**
+- Added a strict TensorFlow.js artifact contract with model topology, weight specs, base64 weight payload, numeric feature schema, normalization metadata, evaluation metrics and dataset provenance.
+- Added artifact validation for feature/normalization dimensions, duplicate feature names, model payload limits, held-out sample count and baseline performance.
+- Synthetic artifacts can be validated for experiments but are explicitly blocked from production eligibility.
+- Production eligibility requires real-anonymized evaluation provenance, at least 20 held-out samples, and candidate MAE/RMSE no worse than the statistical baseline.
+
+**Phase 7 delivery steps**
+1. Add TensorFlow.js dependencies to API and web workspaces, preserving the npm lockfile through a real npm install.
+2. Implement deterministic server-side training and export of a portable TensorFlow.js LayersModel artifact.
+3. Add grouped-by-student and chronological evaluation splits to prevent the same learner leaking across train/test sets and to preserve temporal ordering where required.
+4. Compare TensorFlow candidates with the strongest existing statistical baseline using identical held-out samples; report MAE/RMSE for regression and F1/accuracy for classification.
+5. Add an authenticated model-artifact endpoint that returns only an approved active version and never includes training rows or other students' records.
+6. Add a browser inference adapter with feature-schema validation, normalization, model-version display and disposal of tensors/models.
+7. Keep statistical predictions active whenever the TensorFlow artifact is unavailable, invalid, stale or fails the acceptance gate.
+8. Add model lifecycle tests, browser inference tests, API authorization tests and CI verification before enabling any TensorFlow predictions in student-facing features.
+
+**Release gates**
+- No training or evaluation on a student's formal exam answer key or unreleased submissions.
+- Never treat synthetic dataset metrics as production evidence.
+- No model is activated unless it passes the same held-out evaluation as the current baseline.
+- Split datasets by student identity when evaluating population-level models; do not leak a student's rows across training and evaluation.
+- Model artifacts must be size-limited, versioned, validated and owner-safe before browser delivery.
+- TensorFlow.js is an optional candidate path; the current statistical path remains available as fallback.
+
+**Current status**
+- Phase 7 architecture and portable artifact validation foundation are committed.
+- TensorFlow.js runtime dependencies, training, browser inference and API artifact delivery are not yet implemented.
+- CI verification for the artifact foundation is pending.
