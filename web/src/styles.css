@@ -174,3 +174,8 @@
   .exam-question-picker .pick-row > small { grid-column: 2; }
 }
 .success-message { margin: 0; color: var(--success, #16804a); font-size: 13px; font-weight: 650; }
+
+.question-editor textarea,.question-editor select { width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--ink); font:inherit; }
+.question-editor textarea { resize:vertical; }
+.question-correct-choice input { width:auto; flex:0 0 auto; }
+.question-option-row > input { min-width:0; }
