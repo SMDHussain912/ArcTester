@@ -220,6 +220,30 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.patch("/admin/questions/bulk", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+        difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+      }).refine((value) => value.difficulty !== undefined, { message: "Choose at least one field to update." }).parse(req.body);
+      if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
+      const result = await db.question.updateMany({
+        where: { id: { in: input.ids } },
+        data: { difficulty: input.difficulty },
+      });
+      res.json({ ok: true, updated: result.count });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/admin/questions/bulk", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }).parse(req.body);
+      if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
+      const result = await db.question.deleteMany({ where: { id: { in: input.ids } } });
+      res.json({ ok: true, deleted: result.count });
+    } catch (error) { next(error); }
+  });
+
   router.patch("/admin/questions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const id = Number(req.params.id);
