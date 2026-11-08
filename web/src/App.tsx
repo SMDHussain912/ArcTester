@@ -113,6 +113,9 @@ export default function App() {
   const [activeAssignmentPackage, setActiveAssignmentPackage] = useState<AssignedExamPackage | null>(null);
   const [assignmentAnswers, setAssignmentAnswers] = useState<Record<string, number>>({});
   const [assignmentStartedAt, setAssignmentStartedAt] = useState<string | null>(null);
+  const [assignmentDeadline, setAssignmentDeadline] = useState<string | null>(null);
+  const [assignmentServerOffset, setAssignmentServerOffset] = useState(0);
+  const [assignmentSessionPaused, setAssignmentSessionPaused] = useState(false);
   const [assignmentClock, setAssignmentClock] = useState(Date.now());
   const [assignmentAutoSubmitTriggered, setAssignmentAutoSubmitTriggered] = useState(false);
   const [examTitle, setExamTitle] = useState("");
@@ -207,24 +210,64 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused) return;
     const interval = window.setInterval(() => setAssignmentClock(Date.now()), 1000);
     return () => window.clearInterval(interval);
-  }, [activeAssignmentPackage, assignmentStartedAt]);
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused]);
 
-  const assignmentRemainingSeconds = activeAssignmentPackage && assignmentStartedAt
+  const assignmentRemainingSeconds = activeAssignmentPackage && assignmentDeadline
     ? Math.max(0, Math.min(
-        activeAssignmentPackage.durationMinutes * 60 - Math.floor((assignmentClock - new Date(assignmentStartedAt).getTime()) / 1000),
-        activeAssignmentPackage.dueAt ? Math.floor((new Date(activeAssignmentPackage.dueAt).getTime() - assignmentClock) / 1000) : Number.POSITIVE_INFINITY,
+        Math.floor((new Date(assignmentDeadline).getTime() - (assignmentClock + assignmentServerOffset)) / 1000),
+        activeAssignmentPackage.dueAt ? Math.floor((new Date(activeAssignmentPackage.dueAt).getTime() - (assignmentClock + assignmentServerOffset)) / 1000) : Number.POSITIVE_INFINITY,
       ))
     : 0;
 
   useEffect(() => {
-    if (activeAssignmentPackage && assignmentStartedAt && assignmentRemainingSeconds === 0 && !busy && !assignmentAutoSubmitTriggered) {
+    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    let disposed = false;
+    const heartbeat = async (event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED" = "HEARTBEAT") => {
+      try {
+        const response = await request<{ serverTime: string; deadline: string | null; sessionStatus: string }>(
+          `/exams/assignments/${activeAssignmentPackage.assignmentId}/session/heartbeat`,
+          { method: "POST", body: JSON.stringify({ event }) },
+        );
+        if (disposed) return;
+        setAssignmentServerOffset(new Date(response.serverTime).getTime() - Date.now());
+        if (response.deadline) setAssignmentDeadline(response.deadline);
+        setAssignmentSessionPaused(response.sessionStatus !== "ACTIVE");
+        setError("");
+      } catch (cause) {
+        if (disposed) return;
+        const message = (cause as Error).message;
+        if (message.toLowerCase().includes("no active exam session")) {
+          setAssignmentSessionPaused(true);
+          setError("Your exam session is paused or locked by the invigilator. Your timer is on hold until the session is resumed.");
+        } else if (message.toLowerCase().includes("time has expired") || message.toLowerCase().includes("deadline has passed")) {
+          setError(message);
+          setAssignmentSessionPaused(true);
+        }
+      }
+    };
+    const onVisibilityChange = () => { void heartbeat(document.hidden ? "FOCUS_LOST" : "FOCUS_RESTORED"); };
+    const onOnline = () => { void heartbeat("CONNECTION_RESTORED"); };
+    void heartbeat();
+    const interval = window.setInterval(() => { void heartbeat(); }, 15_000);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("online", onOnline);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [activeAssignmentPackage, assignmentStartedAt]);
+
+  useEffect(() => {
+    if (activeAssignmentPackage && assignmentStartedAt && !assignmentSessionPaused && assignmentRemainingSeconds === 0 && !busy && !assignmentAutoSubmitTriggered) {
       setAssignmentAutoSubmitTriggered(true);
       void submitAssignedExam(true);
     }
-  }, [activeAssignmentPackage, assignmentStartedAt, assignmentRemainingSeconds, busy, assignmentAutoSubmitTriggered]);
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentRemainingSeconds, assignmentSessionPaused, busy, assignmentAutoSubmitTriggered]);
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
@@ -272,9 +315,15 @@ export default function App() {
     setError("");
     try {
       const response = await request<{ package: AssignedExamPackage }>(`/exams/assignments/${assignmentId}/package`);
+      const sessionResponse = await request<{ session: { startedAt: string; serverTime: string; deadline: string | null; status: string } }>(
+        `/exams/assignments/${assignmentId}/session/start`, { method: "POST", body: JSON.stringify({}) },
+      );
       setActiveAssignmentPackage(response.package);
       setAssignmentAnswers({});
-      setAssignmentStartedAt(new Date().toISOString());
+      setAssignmentStartedAt(sessionResponse.session.startedAt);
+      setAssignmentDeadline(sessionResponse.session.deadline);
+      setAssignmentServerOffset(new Date(sessionResponse.session.serverTime).getTime() - Date.now());
+      setAssignmentSessionPaused(false);
       setAssignmentClock(Date.now());
       setAssignmentAutoSubmitTriggered(false);
     } catch (cause) { setError((cause as Error).message); }
@@ -307,6 +356,8 @@ export default function App() {
       });
       setActiveAssignmentPackage(null);
       setAssignmentStartedAt(null);
+      setAssignmentDeadline(null);
+      setAssignmentSessionPaused(false);
       setAssignmentAnswers({});
       setAssignmentAutoSubmitTriggered(false);
       await refreshAssignedExams();
@@ -1263,13 +1314,14 @@ export default function App() {
       <main className="main-content">
         {activeAssignmentPackage ? (
           <section className="assigned-exam-session">
-            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); setAssignmentAutoSubmitTriggered(false); } }}>Exit exam</button></div>
+            <div className="page-heading"><div><p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activeAssignmentPackage.version}</p><h1>{activeAssignmentPackage.title}</h1><p className="muted">{activeAssignmentPackage.questions.length} questions · {activeAssignmentPackage.durationMinutes} minutes · <strong className={assignmentSessionPaused || assignmentRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(assignmentRemainingSeconds / 60).toString().padStart(2, "0")}:{(assignmentRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></p></div><button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Exit this exam? Your answers in this session will be discarded.")) { setActiveAssignmentPackage(null); setAssignmentStartedAt(null); setAssignmentAnswers({}); setAssignmentAutoSubmitTriggered(false); } }}>Exit exam</button></div>
+            {assignmentSessionPaused && <p className="notice session-paused" role="status">Session paused or awaiting invigilator action. The server-controlled timer is held.</p>}
             {activeAssignmentPackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activeAssignmentPackage.instructions}</p></div>}
             {activeAssignmentPackage.dueAt && <p className="notice">Submission deadline: {new Date(activeAssignmentPackage.dueAt).toLocaleString()}</p>}
             <div className="assigned-exam-question-list">{activeAssignmentPackage.questions.map((question, index) => <article className="panel question-card" key={question.id}><p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? ` · ${question.topic}` : ""}</p><h2>{question.text}</h2><div className="options">{question.options.map((option, optionIndex) => <button type="button" key={optionIndex} className={assignmentAnswers[question.id] === optionIndex ? "option selected" : "option"} onClick={() => setAssignmentAnswers((current) => ({ ...current, [question.id]: optionIndex }))}><span>{String.fromCharCode(65 + optionIndex)}</span>{option}</button>)}</div><small className="muted">+{question.marks} marks · −{question.negativeMarks} for a wrong answer</small></article>)}</div>
             <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><button className="primary" disabled={busy} onClick={() => void submitAssignedExam()}>{busy ? "Submitting…" : "Submit final answers"}</button></div>
           </section>
-        ) : test ? (
+        ) : activePage === "practice" && test ? (
           <section>
             <div className="page-heading">
               <div>
@@ -1318,7 +1370,7 @@ export default function App() {
               {busy ? "Submitting…" : "Submit answers"}
             </button>
           </section>
-        ) : result ? (
+        ) : activePage === "practice" && result ? (
           <section>
             <div className="page-heading">
               <div>
