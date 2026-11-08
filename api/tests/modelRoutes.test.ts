@@ -87,6 +87,39 @@ describe("admin model registry API", () => {
       .toEqual([[2, false], [1, true]]);
   });
 
+  it("trains model candidates from a registered dataset without auto-promoting them", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index >= 30 ? 1 : 0,
+    }));
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "training-workflow-fixture",
+      task: "binary-classification",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples,
+      sourceDescription: "Synthetic fixture used only to test the registered training workflow.",
+      sourceAttested: true,
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${datasetId}/train`, "POST", {
+      modelId: "training-fixture",
+      targetColumn: "target_ready",
+      seed: 42,
+    });
+    expect(trained.status).toBe(201);
+    expect(trained.body.promoted).toBe(false);
+    const models = trained.body.models as Array<{ modelId: string; version: number; isActive: boolean; trainRows: number; testRows: number }>;
+    expect(models).toHaveLength(4);
+    expect(models.every((model) => model.version === 1 && model.isActive === false)).toBe(true);
+    expect(models.every((model) => model.trainRows + model.testRows === 60)).toBe(true);
+
+    const listed = await request("/admin/models");
+    const registeredModels = listed.body.models as Array<{ modelId: string; isActive: boolean }>;
+    expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-"))).toHaveLength(4);
+    expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-")).every((model) => !model.isActive)).toBe(true);
+  });
+
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
     const datasetId = await registerEvaluationDataset("dataset-registry-test");
     const listed = await request("/admin/model-datasets");
