@@ -787,3 +787,15 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 .import-preview details{margin-top:12px}
 .import-preview details p{font-size:13px;color:var(--danger)}
 @media(max-width:650px){.question-row-actions{justify-content:flex-start}.question-row-actions .ghost{padding:8px 10px}.assignment-schedule{grid-template-columns:1fr}}
+
+
+/* Assigned examination experience */
+.assigned-exams-page,.assigned-exam-session{display:grid;gap:16px}
+.assigned-exam-card{padding:22px;margin:14px 0;display:grid;gap:14px}
+.assigned-exam-dates{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted)}
+.assigned-exam-question-list{display:grid;gap:14px}
+.assigned-exam-question-list .question-card{margin:0}
+.assigned-exam-submit{position:sticky;bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+.exam-instructions{padding:18px}
+.exam-instructions p{white-space:pre-wrap}
+@media(max-width:560px){.assigned-exam-submit{align-items:stretch;flex-direction:column}.assigned-exam-dates{flex-direction:column;gap:6px}}
