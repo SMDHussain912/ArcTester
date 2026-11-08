@@ -953,6 +953,116 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  // Server-owned exam session: browser timestamps are never the source of truth.
+  router.post("/exams/assignments/:id/session/start", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: { examVersion: { select: { durationMinutes: true, publishedAt: true } }, submission: true, session: true },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
+      if (assignment.submission) return next(conflict("This exam has already been submitted."));
+      const now = new Date();
+      if (assignment.availableFrom && assignment.availableFrom > now) return next(forbidden("This exam is not available yet."));
+      if (assignment.dueAt && assignment.dueAt <= now) return next(forbidden("The exam deadline has passed."));
+      if (assignment.session?.status === "TERMINATED" || assignment.session?.status === "COMPLETED") {
+        return next(conflict("This exam session has been closed by the invigilator."));
+      }
+      if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + 60000) {
+        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
+        return next(conflict("The exam duration has expired. Contact the invigilator."));
+      }
+      const session = assignment.session
+        ? await db.examSession.update({
+            where: { id: assignment.session.id },
+            data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+          })
+        : await db.examSession.create({
+            data: {
+              assignmentId: assignment.id, studentId: req.user!.id, status: "ACTIVE",
+              startedAt: now, lastHeartbeatAt: now, lastActivityAt: now,
+              events: { create: { type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
+            },
+          });
+      if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
+      res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now } });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/exams/assignments/:id/session/heartbeat", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ event: z.enum(["HEARTBEAT", "FOCUS_LOST", "FOCUS_RESTORED", "CONNECTION_RESTORED"]).default("HEARTBEAT") }).parse(req.body ?? {});
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: { session: true, examVersion: { select: { durationMinutes: true } }, submission: { select: { id: true } } },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (!assignment.session || assignment.session.status !== "ACTIVE") return next(conflict("There is no active exam session."));
+      if (assignment.submission) return next(conflict("This exam has already been submitted."));
+      const now = new Date();
+      const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
+      const session = await db.examSession.update({
+        where: { id: assignment.session.id },
+        data: {
+          lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
+          ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
+          ...(stale ? { disconnectCount: { increment: 1 } } : {}),
+        },
+      });
+      if (input.event !== "HEARTBEAT" || stale) {
+        await db.examSessionEvent.create({
+          data: { sessionId: session.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+        });
+      }
+      const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000) : null;
+      res.json({ ok: true, serverTime: now, deadline, sessionStatus: session.status });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const sessions = await db.examSession.findMany({
+        where: { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } },
+        orderBy: { lastHeartbeatAt: "desc" },
+        include: {
+          student: { select: { id: true, email: true } },
+          assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
+          events: { orderBy: { createdAt: "desc" }, take: 12 },
+        },
+      });
+      const now = Date.now();
+      res.json({ ok: true, serverTime: new Date(now), sessions: sessions.map((session) => ({
+        id: session.id, status: session.status, student: session.student,
+        exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
+        startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
+        connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
+        heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
+        disconnectCount: session.disconnectCount, submission: session.assignment.submission,
+        events: session.events,
+      })) });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().max(300).default("") }).parse(req.body);
+      const session = await db.examSession.findUnique({ where: { id: req.params.id } });
+      if (!session) return next(notFound("Exam session not found."));
+      if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(session.status)) return next(conflict("This exam session is already closed."));
+      const now = new Date();
+      const status = input.action === "PAUSE" ? "PAUSED" : input.action === "RESUME" ? "ACTIVE" : "TERMINATED";
+      const updated = await db.examSession.update({
+        where: { id: session.id },
+        data: { status, lastActivityAt: now, ...(input.action === "TERMINATE" ? { endedAt: now } : {}) },
+      });
+      await db.examSessionEvent.create({
+        data: { sessionId: session.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+      });
+      res.json({ ok: true, session: { id: updated.id, status: updated.status, endedAt: updated.endedAt } });
+    } catch (error) { next(error); }
+  });
+
   router.get("/exams/assignments/:id/package", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const assignment = await db.examAssignment.findFirst({
