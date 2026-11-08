@@ -113,7 +113,7 @@ export function examRouter(db: PrismaClient): Router {
           include: {
             student: { select: { email: true } },
             examVersion: { include: { exam: { select: { id: true, title: true } } } },
-            submission: { select: { score: true, maximumScore: true, submittedAt: true, status: true } },
+            submission: { select: { id: true, score: true, maximumScore: true, submittedAt: true, status: true } },
           },
         }),
       ]);
