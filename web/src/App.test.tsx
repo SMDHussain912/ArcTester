@@ -73,4 +73,85 @@ describe("live Vite application", () => {
     expect(screen.getByText("ECET mock exam schedule")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements"))).toBe(true);
   });
+  it("lets an administrator add a question and build a mock exam from it", async () => {
+    const createdQuestion = {
+      id: 91,
+      subject: "Computer Science",
+      topic: "Data Structures",
+      text: "Which data structure follows FIFO order?",
+      options: ["Stack", "Queue", "Tree", "Graph"],
+      difficulty: "medium",
+    };
+    let examPayload: Record<string, unknown> | null = null;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, {
+          user: { id: 1, email: "admin@example.com", role: "ADMIN" },
+        }));
+      }
+      if (path.endsWith("/admin/question-bank")) {
+        return Promise.resolve(response(200, { questions: [] }));
+      }
+      if (path.endsWith("/admin/questions")) {
+        return Promise.resolve(response(201, { ok: true, question: createdQuestion }));
+      }
+      if (path.endsWith("/admin/exams") && init?.method === "POST") {
+        examPayload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Promise.resolve(response(201, { ok: true }));
+      }
+      if (path.endsWith("/admin/exams")) {
+        return Promise.resolve(response(200, { exams: [] }));
+      }
+      if (path.endsWith("/admin/students")) {
+        return Promise.resolve(response(200, { students: [] }));
+      }
+      if (path.endsWith("/admin/analytics/overview")) {
+        return Promise.resolve(response(200, {
+          totals: { students: 0, exams: 0, assignments: 0, submissions: 0, submissionRate: 0, averagePercentage: null },
+          exams: [],
+          recentSubmissions: [],
+        }));
+      }
+      if (path.endsWith("/auth/invitations")) {
+        return Promise.resolve(response(200, { invitations: [] }));
+      }
+      if (path.endsWith("/admin/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Question bank" }));
+
+    fireEvent.change(screen.getByLabelText("Subject"), { target: { value: "Computer Science" } });
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Data Structures" } });
+    fireEvent.change(screen.getByLabelText("Question"), { target: { value: createdQuestion.text } });
+    createdQuestion.options.forEach((option, index) => {
+      fireEvent.change(screen.getByLabelText(`Option ${String.fromCharCode(65 + index)}`), {
+        target: { value: option },
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add question to bank" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Question added to the question bank.");
+    expect(screen.getByText(createdQuestion.text)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exams" }));
+    fireEvent.change(screen.getByLabelText("Exam title"), { target: { value: "CSE Mock Test 01" } });
+    fireEvent.change(screen.getByLabelText("Duration (minutes)"), { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Which data structure follows FIFO order/ }));
+    fireEvent.change(screen.getByLabelText("Marks per question"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Negative marks per wrong answer"), { target: { value: "0.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Create draft/ }));
+
+    await waitFor(() => expect(examPayload).not.toBeNull());
+    expect(examPayload).toMatchObject({
+      title: "CSE Mock Test 01",
+      durationMinutes: 90,
+      questions: [{ questionId: 91, marks: 2, negativeMarks: 0.5 }],
+    });
+  });
+
 });
