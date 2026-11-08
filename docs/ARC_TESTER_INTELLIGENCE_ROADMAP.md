@@ -1,0 +1,414 @@
+# ArcTester Intelligence — Development Roadmap
+
+**Status:** Planning / implementation not started  
+**Project:** ArcTester — AP ECET CSE mock-test platform  
+**Backend:** Node.js + TypeScript  
+**Primary constraint:** No self-hosted LLM, no Python inference server, and no GPU dependency. Intelligence features must run within the existing Node.js backend and current server resource limits.
+
+---
+
+## 1. Vision
+
+Build **ArcTester Intelligence**, a data-driven learning and assessment system that combines:
+
+1. Analytics — explain what has happened.
+2. Machine learning — estimate what may happen.
+3. Recommendations — decide what the student should practise next.
+4. Explanation generation — explain answers, mistakes, and performance using trusted question-bank content and structured templates.
+
+Regression and classification models are not generative AI. They provide numerical predictions and category predictions. They will be combined with deterministic recommendation logic and a template/knowledge-base explanation engine. The first release will not claim to be a ChatGPT-like conversational model.
+
+## 2. Architecture
+
+```text
+ArcTester Web / Student Dashboard / Admin Dashboard
+                         |
+                    Node.js API
+                         |
+              ArcTester Intelligence
+        +----------------+----------------+
+        |                |                |
+     Analytics        ML Engine      Recommendations
+        |          Regression +       Rules + content
+        |          Classification       similarity
+        |                |                |
+        +----------------+----------------+
+                         |
+                 Explanation Engine
+             Templates + concept knowledge
+                         |
+             Existing ArcTester database
+       Questions / Topics / Attempts / Submissions
+                         |
+              Versioned model artifacts
+                   (JSON initially)
+```
+
+### Design principles
+
+- Reuse the existing ArcTester database and event history. Do not create duplicate attempt or answer tracking.
+- Use real student attempts and immutable exam submission snapshots as the source of truth.
+- Keep student data isolated by authenticated user ID.
+- Never expose answer keys, private student data, or model-training features to unauthorized clients.
+- Separate training from inference. Do not retrain models on every API request.
+- Save model parameters and metadata as versioned JSON artifacts initially.
+- Make predictions explainable: expose the features and reasons behind recommendations where practical.
+- Show confidence and data sufficiency. Do not display predictions when there is insufficient history.
+- Keep deterministic fallbacks available if a model artifact is missing or stale.
+- Do not describe a heuristic as a trained ML model.
+
+## 3. Data foundation and analytics
+
+### Existing data to inspect and reuse
+
+Before implementation, inspect the Prisma schema, routes, and tests for:
+
+- Practice attempts and attempt answers.
+- Exam assignments, exam submissions, and submission answers.
+- Question bank questions, subjects, and topics.
+- Question difficulty, marks, negative marks, and explanations.
+- Existing analytics endpoints and student dashboard data.
+
+Map the actual database fields before designing new tables or migrations. Prefer derived analytics queries over storing duplicate aggregates. Add persisted aggregates only if query performance requires them and their refresh strategy is defined.
+
+### Analytics metrics
+
+Per student:
+- Total practice attempts and completed exams.
+- Average score and score trend.
+- Accuracy and unanswered rate.
+- Correct / incorrect counts.
+- Time spent, only where reliable timing data exists.
+- Subject-level and topic-level performance.
+- Difficulty-level accuracy.
+- Recent improvement or decline.
+- Data coverage and last activity.
+
+Per question:
+- Attempt count.
+- Correct rate and unanswered rate.
+- Difficulty performance based on observed attempts.
+- Commonly selected wrong options, if the stored answer data supports this.
+- Topic and subject distribution.
+
+Admin analytics:
+- Overall participation and completion.
+- Score distribution and average.
+- Subject/topic performance.
+- Question quality indicators.
+- Cohort-level trends with privacy-aware aggregation.
+
+**Metric rules:** Define denominators explicitly. Do not treat unanswered questions as incorrect in every metric; expose both accuracy among answered questions and overall completion/correctness where useful. Avoid mixing practice attempts with formal exam submissions without labeling the source.
+
+## 4. Machine-learning engine
+
+Implement core algorithms in TypeScript for learning, transparency, and control. Use a mature JavaScript/TypeScript library only where it clearly improves reliability or maintainability. Keep algorithms behind common interfaces so implementations can be replaced.
+
+### 4.1 Regression
+
+Purpose: predict continuous numerical values.
+
+Planned models:
+- Simple Linear Regression.
+- Multiple Linear Regression.
+- Polynomial Regression (only if validation justifies it).
+- Ridge Regression (later, to reduce overfitting).
+
+Potential ArcTester use cases:
+- Estimate a student's next mock-test score.
+- Estimate topic mastery as a numerical score.
+- Estimate a performance trend over a defined period.
+
+Potential features (to validate, not blindly assume):
+- Recent scores and their trend.
+- Number of completed attempts.
+- Topic-level accuracy.
+- Difficulty mix.
+- Recency and frequency of practice.
+- Exam duration and question count, where comparable.
+
+Evaluation:
+- MAE.
+- RMSE.
+- R-squared as a supplementary metric, not the only acceptance criterion.
+- Time-based train/test split to avoid training on future data.
+
+### 4.2 Classification
+
+Purpose: predict a discrete category.
+
+Planned models:
+- Logistic Regression.
+- K-Nearest Neighbors.
+- Decision Tree.
+- Naive Bayes (only where its assumptions are appropriate).
+
+Potential ArcTester use cases:
+- Topic mastery category: Weak / Developing / Strong.
+- Readiness category: Not Ready / Nearly Ready / Ready.
+- Risk category: Needs Attention / On Track.
+
+Evaluation:
+- Accuracy.
+- Precision, recall, and F1.
+- Confusion matrix.
+- Class balance checks.
+- Calibration or confidence checks where appropriate.
+
+Labels must be defined from defensible rules or reviewed outcomes. Do not train a classifier on arbitrary labels generated from the same features and then present it as independently validated intelligence.
+
+### 4.3 ML engineering requirements
+
+- Feature extraction and preprocessing must be deterministic and versioned.
+- Handle missing values explicitly.
+- Normalize features when required by the algorithm.
+- Split data by time and, where needed, by student to prevent leakage.
+- Keep a baseline (e.g. mean-score predictor or simple rule) for comparison.
+- Store model name, version, training timestamp, feature schema version, training-row count, evaluation metrics, and supported prediction range.
+- Validate model artifacts before loading.
+- Reject malformed or incompatible model artifacts safely.
+- Provide a fallback when there is not enough training data.
+- Do not train on a student's private data in a way that leaks it to another student's predictions.
+
+## 5. Recommendation engine
+
+Start with deterministic, testable recommendations. Add collaborative filtering only after enough activity exists.
+
+### Stage A — Rule-based recommendations
+
+- Detect weak topics using minimum attempt thresholds and clearly defined accuracy metrics.
+- Recommend revision when evidence indicates repeated mistakes.
+- Avoid repeatedly recommending the same item.
+- Respect recent practice and cooldown windows.
+- Prioritize prerequisite concepts when the knowledge map defines them.
+
+### Stage B — Content-based recommendations
+
+Rank practice questions using:
+- Weak topic match.
+- Appropriate difficulty.
+- Question history (avoid recently repeated questions).
+- Prerequisite/concept relationships.
+- Student's recent performance.
+
+Gradually increase difficulty as performance improves. Include a reason for each recommendation, such as: "Recommended because recent Graph questions have low accuracy."
+
+### Stage C — Collaborative recommendations (later)
+
+Use anonymized/aggregated patterns from students with similar learning histories only when sample sizes are sufficient. Apply privacy safeguards and avoid exposing other students' activity.
+
+### Recommendation output contract (initial proposal)
+
+Each recommendation should contain:
+- Type (topic revision, question practice, mock test, concept review).
+- Target subject/topic/question identifier.
+- Priority.
+- Short reason.
+- Evidence summary.
+- Generated timestamp.
+- Optional expiry or refresh condition.
+
+## 6. Explanation engine (without a hosted LLM)
+
+The initial explanation engine is deterministic and grounded in trusted ArcTester content. It is not a free-form LLM.
+
+### A. Answer explanations
+
+- Use the explanation stored with the question.
+- Show the correct answer and why it is correct after the relevant exam/result policy permits disclosure.
+- Where supported by curated content, explain why common distractors are incorrect.
+
+### B. Performance explanations
+
+Generate natural-language summaries from actual metrics and detected patterns.
+
+Example:
+"Your recent accuracy in Data Structures is 48%. Most of your incorrect answers are from Trees and Graphs. Revise these topics and try a focused practice set."
+
+The message must be generated from measured values, with thresholds and wording tested to avoid misleading claims.
+
+### C. Concept knowledge base
+
+Store curated concept information, for example:
+
+```json
+{
+  "concept": "Queue",
+  "definition": "A linear data structure that follows FIFO order.",
+  "examples": ["Printer queue", "Task scheduling"],
+  "relatedConcepts": ["Stack", "Linked List"],
+  "commonMistakes": ["Confusing FIFO with LIFO"]
+}
+```
+
+Build a concept lookup and template composer that can combine:
+- Definitions.
+- Examples.
+- Related concepts.
+- Common mistakes.
+- Question-bank explanations.
+- Student-specific error patterns.
+
+Content should be curated/reviewed. Do not invent textbook facts from model output.
+
+### D. Future optional provider
+
+A third-party AI API may be added later behind a provider interface, with explicit configuration, rate limits, privacy review, and cost controls. It is not required for the first release and must not be silently enabled.
+
+## 7. Proposed source layout
+
+Adapt to the actual existing backend layout before creating files; do not force a large refactor if the current project conventions differ.
+
+```text
+api/src/intelligence/
+  analytics/
+    performance.ts
+    topic-analysis.ts
+    trends.ts
+  ml/
+    regression/
+      linear-regression.ts
+      polynomial-regression.ts
+    classification/
+      logistic-regression.ts
+      knn.ts
+      decision-tree.ts
+    preprocessing/
+      normalization.ts
+      feature-extraction.ts
+    model-manager.ts
+  recommendations/
+    weak-topics.ts
+    question-recommender.ts
+    learning-path.ts
+  explanations/
+    answer-explainer.ts
+    performance-explainer.ts
+    concept-knowledge.ts
+    templates.ts
+  routes/
+    intelligenceRoutes.ts
+```
+
+Potential API endpoints (final paths and response contracts must follow existing route conventions):
+- Student: analytics overview.
+- Student: subject/topic breakdown.
+- Student: recommendations.
+- Student: answer/performance explanations.
+- Admin: aggregated analytics.
+- Admin: model status and evaluation metadata (no private training rows).
+
+## 8. Development phases and acceptance criteria
+
+### Phase 0 — Repository and data audit
+- Inspect current Prisma schema, API routes, analytics implementation, frontend pages, and tests.
+- Map the authoritative source for every metric.
+- Identify missing or unreliable timing fields.
+- Document data isolation and result-release constraints.
+- No new ML claims or migrations before this audit.
+
+**Done when:** A field-level data map and implementation plan are committed, with tests identified.
+
+### Phase 1 — Analytics foundation
+- Implement reliable student performance aggregation.
+- Add subject/topic breakdown and trends.
+- Add admin-level aggregate analytics.
+- Add tests for empty history, unanswered questions, negative marks, multiple attempts, and student isolation.
+- Build student-facing analytics UI.
+
+**Done when:** Metrics match known test fixtures and do not leak another student's data.
+
+### Phase 2 — Weak-area detection
+- Define minimum evidence thresholds.
+- Identify weak topics and repeated error patterns.
+- Add deterministic explanations for detected patterns.
+- Add tests for low sample counts and borderline thresholds.
+
+**Done when:** Recommendations are reproducible and every result has an evidence-based reason.
+
+### Phase 3 — Regression engine
+- Implement and test linear regression and feature preprocessing.
+- Create training/evaluation pipeline.
+- Compare against a simple baseline.
+- Save/load versioned JSON artifacts.
+- Add prediction API with data sufficiency checks.
+
+**Done when:** Model evaluation is reproducible, artifacts are validated, and predictions beat or justify comparison with the baseline.
+
+### Phase 4 — Classification engine
+- Implement logistic regression first.
+- Add KNN and decision tree only when useful.
+- Define labels and evaluate class imbalance.
+- Expose confidence and fallback behavior.
+
+**Done when:** Evaluation metrics and limitations are visible; no unsupported readiness claims are made.
+
+### Phase 5 — Personalized recommendations
+- Build topic revision and question recommendation ranking.
+- Add difficulty adaptation and repetition controls.
+- Include reasons and evidence.
+- Add recommendation feedback if the UI supports it.
+
+**Done when:** Recommendations are relevant, explainable, tested, and respect student isolation.
+
+### Phase 6 — Explanation engine
+- Build answer explanation rendering.
+- Build curated concept knowledge structure.
+- Build metric-grounded performance explanation templates.
+- Add tests to ensure explanations never reveal protected answers before release.
+
+**Done when:** Explanations are grounded in stored/curated content and respect exam result policies.
+
+### Phase 7 — Admin model operations
+- Model metadata and version management.
+- Training job status and safe retraining workflow.
+- Evaluation history and model rollback.
+- Monitoring for stale artifacts and data drift.
+
+**Done when:** Admins can inspect model health without accessing sensitive raw student data.
+
+### Phase 8 — Integration and polish
+- Integrate student dashboard widgets.
+- Integrate admin analytics.
+- Add loading, empty, error, and insufficient-data states.
+- Run full frontend and API tests, lint, formatting, and production builds.
+- Document deployment and rollback.
+
+**Done when:** Full monorepo verification passes and features work with production-like data.
+
+## 9. Non-goals for the first release
+
+- Hosting a large language model.
+- Claiming regression/classification is generative AI.
+- Training a model on every API request.
+- Making high-stakes academic decisions automatically.
+- Collaborative filtering before sufficient data exists.
+- Generating unverified textbook explanations.
+- Exposing student-level analytics to other students.
+
+## 10. Continuation and progress tracking
+
+This file is the durable source of truth for the ArcTester Intelligence workstream. At the end of each implementation session:
+
+1. Update the phase status and completed acceptance criteria.
+2. Record commits and files changed.
+3. Record tests actually run and their exact results.
+4. Record known failures, limitations, and next tasks.
+5. Do not mark a phase complete based only on code being written.
+6. In a new chat, read this file and inspect the current repository state before continuing. Do not rely only on an old chat summary.
+
+### Current progress
+
+- [x] Intelligence architecture and constraints documented.
+- [x] Initial algorithms, use cases, and phases defined.
+- [ ] Phase 0 — repository/data audit.
+- [ ] Phase 1 — analytics foundation.
+- [ ] Phase 2 — weak-area detection.
+- [ ] Phase 3 — regression engine.
+- [ ] Phase 4 — classification engine.
+- [ ] Phase 5 — personalized recommendations.
+- [ ] Phase 6 — explanation engine.
+- [ ] Phase 7 — admin model operations.
+- [ ] Phase 8 — integration and polish.
+
+**Important:** No ArcTester Intelligence implementation is claimed complete by this planning document.
