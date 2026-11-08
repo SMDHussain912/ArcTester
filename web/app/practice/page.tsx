@@ -43,7 +43,7 @@ function PracticePaperChooser() {
   const availableTopics = useMemo(() => {
     const unique = new Map<string, number>();
     for (const subject of chosenSubjectRows) {
-      for (const topic of subject.topics) unique.set(topic.topic, (unique.get(topic.topic) ?? 0) + topic.count);
+      for (const topic of (subject.topics ?? [])) unique.set(topic.topic, (unique.get(topic.topic) ?? 0) + topic.count);
     }
     return [...unique.entries()].map(([topic, available]) => ({ topic, available }));
   }, [chosenSubjectRows]);
@@ -64,9 +64,14 @@ function PracticePaperChooser() {
     }
   }
   function toggleSubject(subject: string) {
-    setSelectedSubjects((current) => current.includes(subject)
-      ? current.filter((value) => value !== subject)
-      : [...current, subject]);
+    const nextSubjects = selectedSubjects.includes(subject)
+      ? selectedSubjects.filter((value) => value !== subject)
+      : [...selectedSubjects, subject];
+    setSelectedSubjects(nextSubjects);
+    const validTopics = new Set((bank?.subjects ?? [])
+      .filter((item) => nextSubjects.includes(item.subject))
+      .flatMap((item) => (item.topics ?? []).map((topic) => topic.topic)));
+    setSelectedTopics((current) => current.filter((topic) => validTopics.has(topic)));
   }
   function toggleTopic(topic: string) {
     setSelectedTopics((current) => current.includes(topic)
