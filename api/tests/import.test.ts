@@ -113,11 +113,7 @@ describe("previewImport", () => {
       ],
     ]);
 
-    expect(preview).toMatchObject({
-      valid: 1,
-      duplicates: 2,
-      total: 4,
-    });
+    expect(preview).toMatchObject({ valid: 1, duplicates: 2, total: 4 });
     expect(preview.invalid).toHaveLength(1);
     expect(preview.invalid[0].row).toBe(3);
     expect(await db.question.count()).toBe(1);
