@@ -240,6 +240,9 @@ export default function App() {
   const [modelDatasetSource, setModelDatasetSource] = useState("");
   const [modelDatasetAttested, setModelDatasetAttested] = useState(false);
   const [modelCandidateId, setModelCandidateId] = useState("");
+  const [trainingModelPrefix, setTrainingModelPrefix] = useState("ecet-readiness");
+  const [trainingTargetColumn, setTrainingTargetColumn] = useState("target_readiness_label");
+  const [trainingDatasetId, setTrainingDatasetId] = useState("");
   const [modelCandidateVersion, setModelCandidateVersion] = useState("2");
   const [modelBaselineVersion, setModelBaselineVersion] = useState("1");
   const [modelEvaluationDatasetId, setModelEvaluationDatasetId] = useState("");
@@ -481,6 +484,27 @@ export default function App() {
       setModelLabNotice("Evaluation dataset registered and fingerprinted.");
       setModelDatasetAttested(false);
       setModelDatasetSource("");
+      await refreshModelLab();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function trainRegisteredDataset(datasetId: string) {
+    setBusy(true);
+    setError("");
+    setModelLabNotice("");
+    try {
+      const response = await request<{ models: Array<{ modelId: string; version: number; heldOutMetrics: Record<string, number | null> }> }>(
+        `/admin/model-datasets/${encodeURIComponent(datasetId)}/train`,
+        {
+          method: "POST",
+          body: JSON.stringify({ modelId: trainingModelPrefix, targetColumn: trainingTargetColumn, seed: 42 }),
+        },
+      );
+      setModelLabNotice(`Training completed: ${response.models.length} inactive candidates registered. Review and evaluate them before promotion.`);
       await refreshModelLab();
     } catch (cause) {
       setError((cause as Error).message);
@@ -1582,8 +1606,12 @@ export default function App() {
               {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td>{!model.isActive && <button className="ghost" disabled={busy || model.version === 1} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</td></tr>)}</tbody></table></div>}
             </div>
             <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered holdouts</h2></div></div>
-              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td></tr>)}</tbody></table></div>}
+              <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered datasets</h2></div></div>
+              <div className="form-grid">
+                <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={56} pattern="[a-z0-9][a-z0-9-]{0,55}" /></label>
+                <label>Target column name<input value={trainingTargetColumn} onChange={(event) => setTrainingTargetColumn(event.target.value)} maxLength={120} required /></label>
+              </div>
+              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim() || !trainingTargetColumn.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button></td></tr>)}</tbody></table></div>}
               <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
             </div>
           </section>
