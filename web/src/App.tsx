@@ -192,7 +192,7 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
     request<{ assignments: AssignedExam[] }>("/exams/assigned")
-      .then(({ assignments }) => setAssignedExams(assignments))
+      .then(({ assignments }) => setAssignedExams(assignments ?? []))
       .catch((cause) => setError((cause as Error).message));
     let active = true;
     const loadAnnouncements = () => request<{ announcements: Announcement[] }>("/announcements")
@@ -235,7 +235,7 @@ export default function App() {
       .then(({ questions }) => setAdminQuestions(questions))
       .catch((cause) => setError((cause as Error).message));
     request<{ subjects: AdminSubject[] }>("/admin/subjects")
-      .then(({ subjects }) => { setAdminSubjects(subjects); if (subjects[0]) setNewTopicSubjectId(subjects[0].id); })
+      .then(({ subjects }) => { const items = subjects ?? []; setAdminSubjects(items); if (items[0]) setNewTopicSubjectId(items[0].id); })
       .catch((cause) => setError((cause as Error).message));
     request<{ students: AdminStudent[] }>("/admin/students")
       .then(({ students }) => setAdminStudents(students))
@@ -419,8 +419,9 @@ export default function App() {
 
   async function refreshSubjects() {
     const response = await request<{ subjects: AdminSubject[] }>("/admin/subjects");
-    setAdminSubjects(response.subjects);
-    if (!newTopicSubjectId && response.subjects[0]) setNewTopicSubjectId(response.subjects[0].id);
+    const subjects = response.subjects ?? [];
+    setAdminSubjects(subjects);
+    if (!newTopicSubjectId && subjects[0]) setNewTopicSubjectId(subjects[0].id);
   }
 
   async function createSubject(event: FormEvent<HTMLFormElement>) {
