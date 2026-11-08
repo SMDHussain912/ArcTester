@@ -510,6 +510,10 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - Added an admin endpoint test covering cohort aggregation and the exclusion of REVIEW_REQUIRED answers from verified question metrics.
 - Added a regression test that edits a question's subject, topic and difficulty after an attempt and checks that its historical subject classification remains unchanged.
 - Expanded admin analytics with student-cohort practice totals and subject accuracy, plus verified graded-exam question metrics. REVIEW_REQUIRED submissions are counted separately and excluded from verified metrics.
+- Expanded admin cohort analytics to include separate subject and topic breakdowns for practice and verified formal exams.
+- Admin cohort queries are scoped to student accounts; administrator practice activity is not mixed into student metrics.
+- Updated the admin dashboard with subject/topic tables for both assessment sources.
+- Removed the obsolete GitHub Actions references from the README after deleting the workflow.
 - Updated the admin dashboard to display practice and verified formal-exam cohort analytics.
 - Removed the unused `.github/workflows/ci.yml` workflow from the fork. This does not alter Render or Vercel deployment configuration.
 
@@ -523,6 +527,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - `web/lib/api.ts`
 - `web/app/admin/page.tsx`
 - `web/app/analytics/page.tsx`
+- `README.md` (removed obsolete GitHub Actions references)
 - `.github/workflows/ci.yml` (deleted)
 
 **Verification state**
