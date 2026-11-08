@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
 import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
@@ -1664,6 +1665,7 @@ export function examRouter(db: PrismaClient): Router {
               position: question.position,
               subject: question.subject,
               topic: question.topic,
+              relatedConcepts: getLearningConceptsForTopic(question.topic),
               text: question.text,
               options: parseOptions(question.options),
               correctIndex: question.correctIndex,
