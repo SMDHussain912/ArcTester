@@ -16,3 +16,13 @@
 .status-used{color:var(--success)}
 .status-revoked,.status-expired{color:var(--danger)}
 @media(max-width:560px){.admin-form{align-items:stretch;flex-direction:column}.admin-form .primary{width:100%}.invitation-row{align-items:flex-start;flex-wrap:wrap}.invitation-row>div{flex-basis:calc(100% - 100px)}.invitation-row .status{order:2}.invitation-row button{order:3;margin-left:auto}}
+
+.announcement-form{align-items:stretch;flex-direction:column}
+.announcement-form textarea{width:100%;resize:vertical;min-height:96px;padding:13px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font:inherit}
+.announcement-form .primary{align-self:flex-start}
+.announcement-list{padding:4px 20px}
+.announcement-row{display:grid;gap:7px;padding:16px 0;border-bottom:1px solid var(--border)}
+.announcement-row:last-child{border-bottom:0}
+.announcement-row strong{color:var(--text)}
+.announcement-row p{margin:0;color:var(--muted);line-height:1.6;white-space:pre-wrap}
+.announcement-row small{color:var(--muted);font-size:11px}

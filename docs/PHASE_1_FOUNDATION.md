@@ -73,7 +73,7 @@ API endpoints:
 - `GET /exams/assigned`
 - `GET /exams/assignments/:id/package`
 
-Offline attempt submission, server-side scoring, and durable sync outbox processing are still upcoming. The package digest detects accidental corruption; it is not a guarantee against a modified client or a malicious student device.
+The package digest detects accidental corruption; it is not a guarantee against a modified client or a malicious student device.
 
 ## Offline submission and scoring
 
@@ -91,7 +91,7 @@ Endpoints:
 - `POST /exams/assignments/:id/submission`
 - `GET /exams/assignments/:id/result`
 
- The mobile offline persistence foundation now lives in `mobile/src/offline/examStore.ts`:
+The mobile offline persistence foundation now lives in `mobile/src/offline/examStore.ts`:
 
 - SQLite stores downloaded exam packages and local attempt state across app restarts.
 - Downloaded package SHA-256 digests are verified with Expo Crypto before the package is cached.
@@ -99,6 +99,17 @@ Endpoints:
 - Attempts receive a stable UUID, answers are persisted as they change, and submission payloads are moved into a durable pending outbox.
 - Pending submissions can be retried with the same attempt UUID; successful sync and sync errors have explicit persisted states.
 
+The mobile app now exposes assigned exams from the student dashboard and includes an offline exam runner with a persisted countdown, answer restoration, and local answer autosave. On reconnect, it uploads pending submissions first, then refreshes assignments and downloads available exam packages. Cached packages remain visible when the device is offline. The current reconnect flow does not yet download admin announcements; that requires the announcements API and will be added separately. Background push delivery remains separate.
+
+
+## Announcements and reconnect messages
+
+- Admins can publish a title and message from the web administration workspace.
+- Students retrieve active announcements from `GET /announcements`; expired messages are excluded.
+- The student feed supports an optional ISO timestamp cursor for incremental retrieval.
+- Mobile clients persist announcements in SQLite so messages remain readable offline.
+- Reconnect synchronization now follows this order: report connection, upload pending submissions/analytics, refresh assigned exams and download packages, then fetch announcements and display the messages.
+- Publishing is restricted to administrators. Student access is read-only.
 The next mobile slice is wiring this store into the exam-taking UI and reconnect synchronization. Background notification delivery remains separate.
 
 

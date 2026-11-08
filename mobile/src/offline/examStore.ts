@@ -40,6 +40,15 @@ export type OfflineAnswer = {
   selectedIndex: number | null;
 };
 
+export type CachedAnnouncement = {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  publishedAt: string;
+  expiresAt: string | null;
+};
+
 export type PendingSubmission = {
   assignmentId: string;
   attemptUuid: string;
@@ -79,6 +88,11 @@ async function database(): Promise<SQLite.SQLiteDatabase> {
           sha256 TEXT NOT NULL,
           downloaded_at TEXT NOT NULL,
           server_offset_ms REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cached_announcements (
+          announcement_id TEXT PRIMARY KEY NOT NULL,
+          announcement_json TEXT NOT NULL,
+          cached_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS offline_attempts (
           assignment_id TEXT PRIMARY KEY NOT NULL,
@@ -381,4 +395,32 @@ export async function markSubmissionSyncError(
     new Date().toISOString(),
     assignmentId
   );
+}
+
+export async function cacheAnnouncements(
+  announcements: CachedAnnouncement[]
+): Promise<void> {
+  const db = await database();
+  await db.withTransactionAsync(async () => {
+    for (const announcement of announcements) {
+      await db.runAsync(
+        `INSERT INTO cached_announcements (announcement_id, announcement_json, cached_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(announcement_id) DO UPDATE SET
+           announcement_json = excluded.announcement_json,
+           cached_at = excluded.cached_at`,
+        announcement.id,
+        JSON.stringify(announcement),
+        new Date().toISOString()
+      );
+    }
+  });
+}
+
+export async function listCachedAnnouncements(): Promise<CachedAnnouncement[]> {
+  const db = await database();
+  const rows = await db.getAllAsync<{ announcement_json: string }>(
+    "SELECT announcement_json FROM cached_announcements ORDER BY cached_at DESC"
+  );
+  return rows.map((row) => JSON.parse(row.announcement_json) as CachedAnnouncement);
 }

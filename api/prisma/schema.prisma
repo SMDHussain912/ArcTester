@@ -79,6 +79,7 @@ model User {
   examsCreated       Exam[]       @relation("ExamCreator")
   assignments        ExamAssignment[] @relation("StudentAssignments")
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
+  announcementsCreated Announcement[] @relation("AnnouncementCreator")
 }
 
 model Invitation {
@@ -242,4 +243,18 @@ model Stat {
   // One stat row per (user, question) pair.
   @@unique([userId, questionId])
   @@index([questionId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  createdAt   DateTime @default(now())
+  publishedAt DateTime @default(now())
+  expiresAt   DateTime?
+  createdBy   User     @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById Int
+
+  @@index([publishedAt, expiresAt])
+  @@index([createdById])
 }
