@@ -562,8 +562,8 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 - Added a minimum evidence threshold of **5 answered attempts**. A question is flagged weak only when it has at least 5 answered attempts and accuracy below **60%**.
 - Unanswered attempts are reported but do not inflate the accuracy sample size.
 - Added a student dashboard section explaining the threshold and displaying only evidence-qualified weak questions.
-- Added cohort-level question performance to the admin analytics endpoint and dashboard. A cohort question signal requires at least 5 answered attempts from at least 3 distinct students, with accuracy below 60%. Only completed practice attempts from STUDENT accounts are aggregated; student identifiers are used internally for the distinct-student check and are not returned.
-- Added tests for the minimum-sample boundary, student data isolation, the student dashboard display, and the admin response contract.
+- Added cohort-level practice question performance to the admin analytics endpoint and dashboard. A cohort question signal requires at least 5 answered attempts from at least 3 distinct students, with accuracy below 60%. Only completed practice attempts from STUDENT accounts are aggregated; student identifiers are used internally for the distinct-student check and are not returned.
+- Added tests for the minimum-sample boundary, unanswered answers not counting toward the threshold, student data isolation, the student dashboard display, the admin response contract, and the 3-distinct-student cohort requirement.
 
 **Files changed**
 - `api/src/analytics.ts`
