@@ -181,7 +181,8 @@ describe("live Vite application", () => {
 
     render(<App />);
     expect(await screen.findByText("Restored question?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "B" })).toHaveClass("selected");
+    const restoredQuestion = screen.getByText("Restored question?").closest("article");
+    expect(within(restoredQuestion!).getAllByRole("button")[1]).toHaveClass("selected");
   });
 
   it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
