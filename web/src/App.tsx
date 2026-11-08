@@ -112,6 +112,7 @@ export default function App() {
   const [questionCorrectIndex, setQuestionCorrectIndex] = useState(0);
   const [questionExplanation, setQuestionExplanation] = useState("");
   const [questionDifficulty, setQuestionDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [questionSaved, setQuestionSaved] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [assigningExamId, setAssigningExamId] = useState("");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -218,6 +219,7 @@ export default function App() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    setQuestionSaved(false);
     try {
       const { question } = await request<{ question: AdminQuestion }>("/admin/questions", {
         method: "POST",
@@ -228,7 +230,7 @@ export default function App() {
       setQuestionOptions(["", "", "", ""]);
       setQuestionCorrectIndex(0);
       setQuestionExplanation("");
-      setError("Question added to the question bank.");
+      setQuestionSaved(true);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -655,6 +657,7 @@ export default function App() {
               <label>Explanation <span className="muted">(shown after the student submits)</span>
                 <textarea rows={2} maxLength={3000} value={questionExplanation} onChange={(event) => setQuestionExplanation(event.target.value)} placeholder="Explain why the correct answer is right…" />
               </label>
+              {questionSaved && <p className="success-message" role="status">Question added to the question bank.</p>}
               <button className="primary" disabled={busy}>{busy ? "Adding…" : "Add question to bank"}</button>
             </form>
             <div className="section-head">
