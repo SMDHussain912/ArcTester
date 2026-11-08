@@ -155,6 +155,29 @@ export interface AssignedExamResult {
   }[];
 }
 
+export interface WeakTopicRow {
+  subject: string;
+  topic: string | null;
+  seen: number;
+  wrong: number;
+  accuracy: number;
+}
+
+export interface WeakTopicsReport {
+  subjects: WeakTopicRow[];
+  weakest: WeakTopicRow | null;
+}
+
+export interface StudyHistoryItem {
+  attemptId: number;
+  mode: string;
+  startedAt: string;
+  finishedAt: string | null;
+  score: number;
+  total: number;
+  expired: boolean;
+}
+
 export interface AdminSubmission {
   id: string;
   status: string;
@@ -289,6 +312,8 @@ export const api = {
     ),
   assignedExamResult: (id: string) =>
     request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
+  weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
+  studyHistory: () => request<StudyHistoryItem[]>("/analytics/history"),
   adminSubmission: (id: string) =>
     request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
