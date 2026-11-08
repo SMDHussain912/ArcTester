@@ -155,6 +155,59 @@ describe("live Vite application", () => {
   });
 
 
+  it("shows and releases a submission from the dedicated admin review queue", async () => {
+    let released = false;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 1, email: "admin@example.com", role: "ADMIN" },
+      }));
+      if (path.includes("/admin/question-bank")) return Promise.resolve(response(200, { questions: [] }));
+      if (path.endsWith("/auth/invitations")) return Promise.resolve(response(200, { invitations: [] }));
+      if (path.endsWith("/admin/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/admin/subjects")) return Promise.resolve(response(200, { subjects: [] }));
+      if (path.endsWith("/admin/exams")) return Promise.resolve(response(200, { exams: [] }));
+      if (path.includes("/admin/students?")) return Promise.resolve(response(200, { students: [], total: 0 }));
+      if (path.includes("/admin/exams/live-sessions")) return Promise.resolve(response(200, { sessions: [], total: 0 }));
+      if (path.includes("/admin/exams/attendance")) return Promise.resolve(response(200, { attendance: [], total: 0 }));
+      if (path.endsWith("/admin/analytics/overview")) return Promise.resolve(response(200, {
+        totals: { students: 1, exams: 1, assignments: 1, submissions: 1, reviewRequired: released ? 0 : 1, submissionRate: 1, averagePercentage: null },
+        exams: [],
+        recentSubmissions: [],
+      }));
+      if (path.includes("/admin/submissions/review-required")) return Promise.resolve(response(200, {
+        submissions: released ? [] : [{
+          submissionId: "submission-review-1",
+          assignmentId: "assignment-1",
+          studentId: 7,
+          studentEmail: "learner@example.com",
+          examTitle: "ECET Mock 01",
+          submittedAt: "2026-11-08T10:00:00.000Z",
+          receivedAt: "2026-11-08T10:00:02.000Z",
+          score: 8,
+          maximumScore: 10,
+        }],
+        page: 1, limit: 25, total: released ? 0 : 1, totalPages: released ? 0 : 1,
+      }));
+      if (path.endsWith("/admin/submissions/submission-review-1/release") && init?.method === "POST") {
+        released = true;
+        return Promise.resolve(response(200, { ok: true, status: "GRADED" }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Review queue/ }));
+    expect(await screen.findByText("learner@example.com")).toBeInTheDocument();
+    expect(screen.getByText("ECET Mock 01")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve & release" }));
+    await waitFor(() => expect(screen.getByText("No submissions are waiting for review.")).toBeInTheDocument());
+    expect(fetchMock.mock.calls.some(([input, init]) =>
+      String(input).endsWith("/admin/submissions/submission-review-1/release") && init?.method === "POST"
+    )).toBe(true);
+  });
+
   it("restores an in-progress practice attempt and saved answers after reload", async () => {
     vi.stubGlobal("localStorage", {
       getItem: vi.fn((key: string) => key === "arctester-active-practice-attempt" ? "42" : key === "arctester-practice-answers-42" ? JSON.stringify({ "7": 1 }) : null),
