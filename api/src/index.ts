@@ -24,7 +24,8 @@ function localCors(
       .map((value) => value.trim())
       .filter(Boolean)
   );
-  const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+  const isLocalOrigin =
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
