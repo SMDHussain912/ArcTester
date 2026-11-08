@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [dueAt, setDueAt] = useState("");
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("All subjects");
+  const [difficultyFilter, setDifficultyFilter] = useState("All difficulties");
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [shuffleOptions, setShuffleOptions] = useState(false);
   const [defaultMarks, setDefaultMarks] = useState(1);
@@ -61,8 +62,18 @@ export default function AdminPage() {
 
   const filteredQuestions = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return questions.filter((q) => (subjectFilter === "All subjects" || q.subject === subjectFilter) && (!term || [q.text, q.subject, q.topic ?? ""].some((v) => v.toLowerCase().includes(term))));
-  }, [questions, search, subjectFilter]);
+    return questions.filter((q) => (subjectFilter === "All subjects" || q.subject === subjectFilter) && (difficultyFilter === "All difficulties" || (q.difficulty ?? "Unspecified") === difficultyFilter) && (!term || [q.text, q.subject, q.topic ?? ""].some((v) => v.toLowerCase().includes(term))));
+  }, [questions, search, subjectFilter, difficultyFilter]);
+
+  const selectedQuestionRows = useMemo(() => questions.filter((question) => selectedQuestions.includes(question.id)), [questions, selectedQuestions]);
+  const totalMarks = selectedQuestions.length * defaultMarks;
+  const maximumNegativeMarks = selectedQuestions.length * negativeMarks;
+  const selectedSubjects = new Set(selectedQuestionRows.map((question) => question.subject));
+  const selectedDifficulties = selectedQuestionRows.reduce<Record<string, number>>((counts, question) => {
+    const difficulty = question.difficulty || "Unspecified";
+    counts[difficulty] = (counts[difficulty] || 0) + 1;
+    return counts;
+  }, {});
 
   function toggleQuestion(id: number) {
     setSelectedQuestions((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -77,7 +88,11 @@ export default function AdminPage() {
 
   async function createExam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!title.trim()) { setError("Enter an exam title."); return; }
+    if (duration < 1 || duration > 600) { setError("Duration must be between 1 and 600 minutes."); return; }
     if (selectedQuestions.length === 0) { setError("Select at least one question."); return; }
+    if (selectedQuestions.length > 500) { setError("An exam cannot contain more than 500 questions."); return; }
+    if (negativeMarks > defaultMarks) { setError("Negative marks should not exceed marks awarded for a correct answer."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
       const result = await api.createAdminExam({
@@ -300,7 +315,7 @@ export default function AdminPage() {
           <form onSubmit={createExam}>
             <label style={{ display: "block" }}>Exam title<input required minLength={2} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. ECET CSE Mock Test 01" /></label>
             <label style={{ display: "block" }}>Description<input maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description for students" /></label>
-            <label style={{ display: "block" }}>Instructions<input maxLength={5000} value={instructions} onChange={(e) => setInstructions(e.target.value)} /></label>
+            <label style={{ display: "block" }}>Student instructions<textarea rows={5} maxLength={5000} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Explain exam rules, allowed materials, navigation and submission policy." /></label>
             <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
               <label style={{ display: "block", maxWidth: 180 }}>Duration (minutes)<input type="number" min={1} max={600} required value={duration} onChange={(e) => setDuration(Math.max(1, Math.min(600, Number(e.target.value) || 1)))} /></label>
               <label style={{ display: "block", maxWidth: 150 }}>Marks per question<input type="number" min={0} max={100} step="0.25" value={defaultMarks} onChange={(e) => setDefaultMarks(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>
@@ -310,20 +325,41 @@ export default function AdminPage() {
               <label><input type="checkbox" checked={shuffleQuestions} onChange={(e) => setShuffleQuestions(e.target.checked)} /> Shuffle question order</label>
               <label><input type="checkbox" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} /> Shuffle answer options</label>
             </div>
-            <div className="section-heading"><div><h2>Select questions</h2><p>{selectedQuestions.length} selected from {questions.length} available</p></div></div>
+            <div className="section-heading"><div><h2>Build the question paper</h2><p>Select questions deliberately and check the paper balance before creating it.</p></div></div>
+            <div className="stat-grid">
+              <div className="stat-card"><div className="stat-label">Selected questions</div><div className="stat-value">{selectedQuestions.length}</div></div>
+              <div className="stat-card"><div className="stat-label">Total marks</div><div className="stat-value">{totalMarks}</div></div>
+              <div className="stat-card"><div className="stat-label">Subjects covered</div><div className="stat-value">{selectedSubjects.size}</div></div>
+              <div className="stat-card"><div className="stat-label">Maximum negative</div><div className="stat-value">{maximumNegativeMarks}</div></div>
+            </div>
+            <p className="mute">Estimated time per question: {selectedQuestions.length ? (duration / selectedQuestions.length).toFixed(1) : "—"} minutes.</p>
             <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
               <input style={{ flex: "2 1 240px" }} aria-label="Search question bank" placeholder="Search question, subject or topic…" value={search} onChange={(e) => setSearch(e.target.value)} />
               <select style={{ flex: "1 1 180px" }} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}><option>All subjects</option>{[...new Set(questions.map((q) => q.subject))].sort().map((subject) => <option key={subject}>{subject}</option>)}</select>
+              <select style={{ flex: "1 1 180px" }} value={difficultyFilter} onChange={(e) => setDifficultyFilter(e.target.value)}><option>All difficulties</option>{[...new Set(questions.map((q) => q.difficulty || "Unspecified"))].sort().map((difficulty) => <option key={difficulty}>{difficulty}</option>)}</select>
+            </div>
+            <div className="row" style={{ justifyContent: "space-between", marginTop: 10, flexWrap: "wrap" }}>
+              <span className="mute">Showing {filteredQuestions.length} questions · {selectedQuestions.length} selected overall</span>
+              <div className="row">
+                <button type="button" className="button button-secondary button-small" onClick={() => setSelectedQuestions((current) => [...new Set([...current, ...filteredQuestions.map((question) => question.id)])])}>Select visible</button>
+                <button type="button" className="button button-quiet button-small" onClick={() => setSelectedQuestions([])}>Clear selection</button>
+              </div>
             </div>
             <div style={{ maxHeight: 430, overflowY: "auto", marginTop: 12, border: "1px solid var(--line)", borderRadius: 10, padding: 8 }}>
               {filteredQuestions.map((question) => <label key={question.id}>
                 <input type="checkbox" checked={selectedQuestions.includes(question.id)} onChange={() => toggleQuestion(question.id)} />
-                <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><br />{question.text}</span>
+                <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong> <span className="pill">{question.difficulty || "Unspecified"}</span><br />{question.text}</span>
               </label>)}
               {filteredQuestions.length === 0 ? <p className="mute">No matching questions.</p> : null}
             </div>
+            {selectedQuestions.length > 0 ? <section className="panel" style={{ marginTop: 14 }}>
+              <div className="panel-header"><h3>Paper composition</h3><span className="pill">{selectedQuestions.length} questions</span></div>
+              <p className="mute">{Object.entries(selectedDifficulties).map(([difficulty, count]) => `${difficulty}: ${count}`).join(" · ")}</p>
+              <p className="mute">Selected subjects: {[...selectedSubjects].join(", ")}</p>
+              <p className="mute">The selected questions are included in the order shown in the bank. Enable shuffle if students should receive a randomized order.</p>
+            </section> : null}
             <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
-              <span className="mute">{selectedQuestions.length} questions · {duration} minutes</span>
+              <span className="mute">{selectedQuestions.length} questions · {duration} minutes · {totalMarks} marks</span>
               <button disabled={busy || !title.trim() || selectedQuestions.length === 0}>{busy ? "Creating…" : "Create draft exam"}</button>
             </div>
           </form>
