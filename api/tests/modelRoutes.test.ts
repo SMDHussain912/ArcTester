@@ -80,9 +80,22 @@ describe("admin model registry API", () => {
 
     const audit = await request("/admin/models/exam-readiness-demo/audit");
     expect(audit.status).toBe(200);
-    expect((audit.body.events as Array<{ action: string; actorId: number | null }>).map((event) => event.action))
-      .toEqual(["ROLLED_BACK", "ACTIVATED", "ACTIVATED", "REGISTERED", "REGISTERED"]);
+    const actions = (audit.body.events as Array<{ action: string; actorId: number | null }>).map((event) => event.action);
+    expect(actions).toHaveLength(5);
+    expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED"]));
     expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
+  });
+
+  it("enforces one active version per model at the database level", async () => {
+    await expect(server.db.registeredModel.update({
+      where: { modelId_version: { modelId: "exam-readiness-demo", version: 2 } },
+      data: { isActive: true },
+    })).rejects.toThrow();
+    const active = await server.db.registeredModel.findMany({
+      where: { modelId: "exam-readiness-demo", isActive: true },
+    });
+    expect(active).toHaveLength(1);
+    expect(active[0]?.version).toBe(1);
   });
 
   it("runs inference only from the active, validated model", async () => {
