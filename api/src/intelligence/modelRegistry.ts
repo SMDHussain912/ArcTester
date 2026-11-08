@@ -169,7 +169,7 @@ export class ModelRegistry {
     const directory = path.join(this.modelDirectory(input.modelId), "versions");
     await mkdir(directory, { recursive: true });
     const existing = (await readdir(directory)).flatMap((name) => {
-      const match = name.match(/^(\\d+)\\.json$/);
+      const match = name.match(/^(\d+)\.json$/);
       return match ? [Number(match[1])] : [];
     });
     const version = existing.length ? Math.max(...existing) + 1 : 1;
@@ -200,7 +200,7 @@ export class ModelRegistry {
       throw error;
     }
     const versions = names.flatMap((name) => {
-      const match = name.match(/^(\\d+)\\.json$/);
+      const match = name.match(/^(\d+)\.json$/);
       return match ? [Number(match[1])] : [];
     }).sort((a, b) => a - b);
     const artifacts = await Promise.all(versions.map((version) => this.loadVersion(modelId, version)));
