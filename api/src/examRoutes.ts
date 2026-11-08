@@ -6,6 +6,7 @@ import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { importFromCsv, importFromJson } from "./importService.js";
 
 const CreateExamSchema = z.object({
   title: z.string().trim().min(2).max(120),
@@ -69,6 +70,21 @@ function parseOptions(raw: string): string[] {
 
 export function examRouter(db: PrismaClient): Router {
   const router = Router();
+
+  router.post("/admin/questions/import/csv", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const content = z.string().min(1).max(8_000_000).parse(req.body?.content);
+      const report = await importFromCsv(db, content);
+      res.status(200).json({ ok: true, report });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/questions/import/json", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const report = await importFromJson(db, req.body?.questions);
+      res.status(200).json({ ok: true, report });
+    } catch (error) { next(error); }
+  });
 
   router.post("/admin/questions", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
