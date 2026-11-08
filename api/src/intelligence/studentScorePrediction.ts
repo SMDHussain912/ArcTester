@@ -33,6 +33,12 @@ export type StudentScorePrediction =
       trainingSamples: number;
       evaluationSamples: number;
       predictedScorePercent: number;
+      predictionInterval: {
+        lowerPercent: number;
+        upperPercent: number;
+        estimatedErrorPercent: number;
+        method: "walk-forward-rmse";
+      };
       modelMae: number;
       baselineMae: number;
       message: string;
@@ -119,6 +125,12 @@ export async function getStudentScorePrediction(
     trainingSamples: samples.length,
     evaluationSamples: evaluation.testRows,
     predictedScorePercent: Math.round(Math.min(1, Math.max(0, rawPrediction)) * 100),
+    predictionInterval: {
+      lowerPercent: Math.round(Math.min(1, Math.max(0, rawPrediction - 1.96 * evaluation.regression.rmse)) * 100),
+      upperPercent: Math.round(Math.min(1, Math.max(0, rawPrediction + 1.96 * evaluation.regression.rmse)) * 100),
+      estimatedErrorPercent: Math.round(evaluation.regression.rmse * 1000) / 10,
+      method: "walk-forward-rmse",
+    },
     modelMae: evaluation.regression.mae,
     baselineMae: evaluation.meanBaseline.mae,
     message: "Estimate based on your completed practice history; actual results may differ.",
