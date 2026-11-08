@@ -35,6 +35,21 @@ type AdminAnalytics = {
   exams: { examId: string; title: string; assigned: number; submitted: number; submissionRate: number; averagePercentage: number | null }[];
   recentSubmissions: { submissionId: string; studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
 };
+type ModelDataset = {
+  id: string; name: string; task: "regression" | "binary-classification"; rowCount: number;
+  sourceDescription: string; sourceAttested: boolean; fingerprint: string; createdById: number | null; createdAt: string;
+  featureSchema: { name: string; type: "numeric" | "categorical"; categories?: string[] }[];
+};
+type RegisteredModel = {
+  modelId: string; version: number; algorithm: string; task: string; dataset: string;
+  isActive: boolean; createdAt: string; activatedAt: string | null;
+};
+type ModelEvaluationReport = {
+  status: "PASSED" | "REJECTED"; evaluationDataset: string; datasetFingerprint: string;
+  sampleCount: number; candidateVersion: number; baselineVersion: number;
+  candidateMetrics: Record<string, number | null>; baselineMetrics: Record<string, number | null>;
+  acceptanceRule: string; evaluatedAt: string;
+};
 type LiveSession = {
   id: string; status: string; student: { id: number; email: string }; exam: { id: string; title: string };
   assignmentId: string; startedAt: string | null; lastHeartbeatAt: string | null; connectivity: string;
@@ -215,7 +230,22 @@ export default function App() {
   const assignmentSaveSequenceRef = useRef(0);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const assignmentAnswersRevisionRef = useRef(0);
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "review-queue" | "announcements" | "invitations" | "assigned-exams">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "review-queue" | "announcements" | "invitations" | "assigned-exams" | "model-lab">("dashboard");
+  const [modelDatasets, setModelDatasets] = useState<ModelDataset[]>([]);
+  const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([]);
+  const [modelDatasetName, setModelDatasetName] = useState("ecet-holdout-v1");
+  const [modelDatasetTask, setModelDatasetTask] = useState<"regression" | "binary-classification">("binary-classification");
+  const [modelFeatureSchemaJson, setModelFeatureSchemaJson] = useState('[{"name":"practice_score","type":"numeric"}]');
+  const [modelSamplesJson, setModelSamplesJson] = useState('[{"features":{"practice_score":2},"target":0},{"features":{"practice_score":8},"target":1}]');
+  const [modelDatasetSource, setModelDatasetSource] = useState("");
+  const [modelDatasetAttested, setModelDatasetAttested] = useState(false);
+  const [modelCandidateId, setModelCandidateId] = useState("");
+  const [modelCandidateVersion, setModelCandidateVersion] = useState("2");
+  const [modelBaselineVersion, setModelBaselineVersion] = useState("1");
+  const [modelEvaluationDatasetId, setModelEvaluationDatasetId] = useState("");
+  const [modelEvaluationReport, setModelEvaluationReport] = useState<ModelEvaluationReport | null>(null);
+  const [modelLabLoading, setModelLabLoading] = useState(false);
+  const [modelLabNotice, setModelLabNotice] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -386,6 +416,11 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.role !== "ADMIN" || activePage !== "model-lab") return;
+    void refreshModelLab();
+  }, [user, activePage]);
+
+  useEffect(() => {
     if (user?.role !== "ADMIN") return;
     void refreshAdminStudents();
   }, [user, adminStudentPage, adminStudentSearch]);
@@ -405,6 +440,98 @@ export default function App() {
     const interval = window.setInterval(refresh, 15_000);
     return () => window.clearInterval(interval);
   }, [user, activePage, liveSessionsPage, attendancePage]);
+
+  async function refreshModelLab() {
+    setModelLabLoading(true);
+    try {
+      const [datasetResponse, modelResponse] = await Promise.all([
+        request<{ datasets: ModelDataset[] }>("/admin/model-datasets"),
+        request<{ models: RegisteredModel[] }>("/admin/models"),
+      ]);
+      setModelDatasets(datasetResponse.datasets);
+      setRegisteredModels(modelResponse.models);
+      if (!modelEvaluationDatasetId && datasetResponse.datasets[0]) setModelEvaluationDatasetId(datasetResponse.datasets[0].id);
+      if (!modelCandidateId && modelResponse.models[0]) setModelCandidateId(modelResponse.models[0].modelId);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setModelLabLoading(false);
+    }
+  }
+
+  async function registerModelDataset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setModelLabNotice("");
+    try {
+      const featureSchema = JSON.parse(modelFeatureSchemaJson);
+      const samples = JSON.parse(modelSamplesJson);
+      await request("/admin/model-datasets", {
+        method: "POST",
+        body: JSON.stringify({
+          name: modelDatasetName,
+          task: modelDatasetTask,
+          featureSchema,
+          samples,
+          sourceDescription: modelDatasetSource,
+          sourceAttested: modelDatasetAttested,
+        }),
+      });
+      setModelLabNotice("Evaluation dataset registered and fingerprinted.");
+      setModelDatasetAttested(false);
+      setModelDatasetSource("");
+      await refreshModelLab();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function evaluateModelCandidate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setModelLabNotice("");
+    try {
+      const response = await request<{ report: ModelEvaluationReport }>(
+        `/admin/models/${encodeURIComponent(modelCandidateId)}/${Number(modelCandidateVersion)}/evaluate`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            baselineVersion: Number(modelBaselineVersion),
+            datasetId: modelEvaluationDatasetId,
+          }),
+        },
+      );
+      setModelEvaluationReport(response.report);
+      setModelLabNotice(`Evaluation completed: ${response.report.status}.`);
+      await refreshModelLab();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function activateModelCandidate(modelId: string, version: number) {
+    setBusy(true);
+    setError("");
+    setModelLabNotice("");
+    try {
+      await request(`/admin/models/${encodeURIComponent(modelId)}/${version}/activate`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setModelLabNotice(`${modelId} v${version} is now active.`);
+      await refreshModelLab();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function refreshAssignedExams() {
     const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
@@ -1390,6 +1517,7 @@ export default function App() {
             <button className={activePage === "subjects" ? "nav-active" : "nav-button"} onClick={() => setActivePage("subjects")}>Subjects & topics</button>
             <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
             <button className={activePage === "invitations" ? "nav-active" : "nav-button"} onClick={() => setActivePage("invitations")}>Invitations</button>
+            <button className={activePage === "model-lab" ? "nav-active" : "nav-button"} onClick={() => setActivePage("model-lab")}>Model lab</button>
           </nav>
           <div className="top-actions">
             <button
@@ -1407,6 +1535,58 @@ export default function App() {
           </div>
         </header>
         <main className="main-content">
+          <section hidden={activePage !== "model-lab"}>
+            <div className="section-head">
+              <div><p className="eyebrow">INTELLIGENCE & GOVERNANCE</p><h1>Model lab</h1><p className="muted">Register immutable holdout datasets, compare candidate models, and control promotions.</p></div>
+              <button className="ghost" disabled={modelLabLoading || busy} onClick={() => void refreshModelLab()}>Refresh</button>
+            </div>
+            <div className="stats-row admin-analytics-stats">
+              <article className="panel stat"><span className="muted">Registered datasets</span><strong>{modelDatasets.length}</strong><span className="muted">Immutable dataset versions</span></article>
+              <article className="panel stat"><span className="muted">Model versions</span><strong>{registeredModels.length}</strong><span className="muted">Across registered models</span></article>
+              <article className="panel stat"><span className="muted">Active versions</span><strong>{registeredModels.filter((model) => model.isActive).length}</strong><span className="muted">Production registry pointers</span></article>
+            </div>
+            {modelLabNotice && <p className="success">{modelLabNotice}</p>}
+            <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">DATA GOVERNANCE</p><h2>Register evaluation dataset</h2></div></div>
+              <p className="muted">Register a fixed holdout dataset once. Its fingerprint prevents duplicate versions with identical content. Only upload data you have permission to use.</p>
+              <form className="stack-form" onSubmit={registerModelDataset}>
+                <label>Dataset name<input value={modelDatasetName} onChange={(event) => setModelDatasetName(event.target.value)} required maxLength={120}/></label>
+                <label>Task<select value={modelDatasetTask} onChange={(event) => setModelDatasetTask(event.target.value as "regression" | "binary-classification")}><option value="binary-classification">Binary classification</option><option value="regression">Regression</option></select></label>
+                <label>Feature schema JSON<textarea rows={3} value={modelFeatureSchemaJson} onChange={(event) => setModelFeatureSchemaJson(event.target.value)} required /></label>
+                <label>Holdout samples JSON<textarea rows={6} value={modelSamplesJson} onChange={(event) => setModelSamplesJson(event.target.value)} required /></label>
+                <label>Dataset source / provenance<input value={modelDatasetSource} onChange={(event) => setModelDatasetSource(event.target.value)} required minLength={10} maxLength={500} placeholder="Where this holdout data came from"/></label>
+                <label className="checkbox-row"><input type="checkbox" checked={modelDatasetAttested} onChange={(event) => setModelDatasetAttested(event.target.checked)} required/> I confirm I have permission to use this data and the source description is accurate.</label>
+                <button className="primary" type="submit" disabled={busy || !modelDatasetAttested}>Register dataset</button>
+              </form>
+            </div>
+            <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">MODEL EVALUATION</p><h2>Compare candidate against baseline</h2></div></div>
+              <form className="stack-form" onSubmit={evaluateModelCandidate}>
+                <label>Model ID<select value={modelCandidateId} onChange={(event) => setModelCandidateId(event.target.value)}><option value="">Select model</option>{[...new Set(registeredModels.map((model) => model.modelId))].map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
+                <div className="form-grid">
+                  <label>Candidate version<input type="number" min="1" value={modelCandidateVersion} onChange={(event) => setModelCandidateVersion(event.target.value)} required/></label>
+                  <label>Baseline version<input type="number" min="1" value={modelBaselineVersion} onChange={(event) => setModelBaselineVersion(event.target.value)} required/></label>
+                </div>
+                <label>Registered holdout dataset<select value={modelEvaluationDatasetId} onChange={(event) => setModelEvaluationDatasetId(event.target.value)}><option value="">Select dataset</option>{modelDatasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.task}</option>)}</select></label>
+                <button className="primary" type="submit" disabled={busy || !modelCandidateId || !modelEvaluationDatasetId}>Run evaluation</button>
+              </form>
+              {modelEvaluationReport && <div className="result-card">
+                <h3>Latest evaluation: {modelEvaluationReport.status}</h3>
+                <p className="muted">{modelEvaluationReport.evaluationDataset} · {modelEvaluationReport.sampleCount} rows · SHA-256 {modelEvaluationReport.datasetFingerprint.slice(0, 16)}…</p>
+                <p>{modelEvaluationReport.acceptanceRule}</p>
+                <div className="form-grid"><div><strong>Candidate</strong><pre>{JSON.stringify(modelEvaluationReport.candidateMetrics, null, 2)}</pre></div><div><strong>Baseline</strong><pre>{JSON.stringify(modelEvaluationReport.baselineMetrics, null, 2)}</pre></div></div>
+              </div>}
+            </div>
+            <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">VERSION REGISTRY</p><h2>Registered models</h2></div></div>
+              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td>{!model.isActive && <button className="ghost" disabled={busy || model.version === 1} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</td></tr>)}</tbody></table></div>}
+            </div>
+            <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered holdouts</h2></div></div>
+              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td></tr>)}</tbody></table></div>}
+              <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
+            </div>
+          </section>
           <section hidden={activePage !== "dashboard"} className="welcome panel" id="admin-dashboard">
             <div>
               <p className="eyebrow">ARCTESTER ADMINISTRATION</p>
