@@ -35,7 +35,10 @@ describe("practice paper selection", () => {
       }
       if (path.endsWith("/bank")) {
         return Promise.resolve(response(200, {
-          subjects: [{ subject: "Mathematics", count: 120 }],
+          subjects: [
+            { subject: "Mathematics", count: 120, topics: [{ topic: "Algebra", count: 40 }] },
+            { subject: "Physics", count: 80, topics: [{ topic: "Mechanics", count: 30 }] },
+          ],
           total: 120,
           serverNow: "2026-11-08T00:00:00.000Z",
         }));
