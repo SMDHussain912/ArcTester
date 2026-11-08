@@ -83,6 +83,7 @@ model User {
   announcementReads   AnnouncementRead[]
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
+  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
 }
 
 model Invitation {
@@ -353,4 +354,19 @@ model RegisteredModel {
   @@unique([modelId, version])
   @@index([modelId, isActive])
   @@index([createdAt])
+}
+
+
+model ModelRegistryAudit {
+  id        String   @id @default(cuid())
+  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
+  modelId   String
+  version   Int
+  action    String
+  details   String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([modelId, version, createdAt])
+  @@index([actorId, createdAt])
 }
