@@ -16,6 +16,34 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
+function overviewResponse(practiceAccuracy: number | null, questions: number, correct: number) {
+  return {
+    generatedAt: "2026-11-08T08:30:00.000Z",
+    practice: {
+      completedAttempts: questions ? 1 : 0,
+      questions,
+      correct,
+      incorrect: questions - correct,
+      unanswered: 0,
+      accuracy: practiceAccuracy,
+      subjects: [],
+      trend: [],
+    },
+    formalExams: {
+      submissions: 0,
+      graded: 0,
+      reviewRequired: 0,
+      score: 0,
+      maximumScore: 0,
+      scorePercentage: null,
+      correct: 0,
+      incorrect: 0,
+      unanswered: 0,
+      subjects: [],
+    },
+  };
+}
+
 describe("student analytics page", () => {
   const fetchMock = vi.fn();
 
@@ -67,6 +95,7 @@ describe("student analytics page", () => {
       if (path.endsWith("/analytics/weak-topics")) {
         return Promise.resolve(
           jsonResponse(200, {
+            topics: [],
             subjects: [
               {
                 subject: "Physics",
@@ -92,6 +121,9 @@ describe("student analytics page", () => {
             },
           })
         );
+      }
+      if (path.endsWith("/analytics/overview")) {
+        return Promise.resolve(jsonResponse(200, overviewResponse(0.8, 10, 8)));
       }
       if (path.endsWith("/analytics/history")) {
         return Promise.resolve(
@@ -172,6 +204,9 @@ describe("student analytics page", () => {
       }
       if (path.endsWith("/analytics/history")) {
         return Promise.resolve(jsonResponse(200, []));
+      }
+      if (path.endsWith("/analytics/overview")) {
+        return Promise.resolve(jsonResponse(200, overviewResponse(null, 0, 0)));
       }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
     });
