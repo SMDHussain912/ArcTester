@@ -56,6 +56,7 @@ export interface ImportReport {
 
 function sortWeakest(rows: TopicRow[]): TopicRow[] {
   return [...rows].sort((a, b) => {
+    if (a.accuracy === null && b.accuracy === null) return 0;
     if (a.accuracy === null) return 1;
     if (b.accuracy === null) return -1;
     if (a.accuracy !== b.accuracy) return a.accuracy - b.accuracy;
@@ -341,7 +342,7 @@ export async function getStudyRecommendations(
     getHistory(db, userId),
   ]);
   const recommendations: StudyRecommendation[] = [];
-  const weakestSubject = weakTopics.subjects[0];
+  const weakestSubject = weakTopics.subjects.find((subject) => subject.accuracy !== null);
 
   if (weakestSubject) {
     const accuracy = Math.round((weakestSubject.accuracy ?? 0) * 100);
