@@ -94,12 +94,7 @@ describe("admin announcements", () => {
     expect(seenAnnouncements[0].id).toBe(announcementId);
     expect(seenAnnouncements[0].seenAt).toBeTruthy();
 
-    const otherStudentFeed = await request(
-      "/announcements",
-      "GET",
-      undefined,
-      secondStudentCookie
-    );
+    const otherStudentFeed = await request("/announcements", "GET", undefined, secondStudentCookie);
     const otherStudentAnnouncements = otherStudentFeed.json.announcements as Array<{
       id: string;
       seenAt: string | null;
@@ -138,12 +133,10 @@ describe("admin announcements", () => {
       data: {
         title: "New message",
         message: "This is newer than the cursor.",
-        createdById: (
-          await server.db.user.findUniqueOrThrow({
-            where: { email: "announcement-admin@arctester.test" },
-            select: { id: true },
-          })
-        ).id,
+        createdById: (await server.db.user.findUniqueOrThrow({
+          where: { email: "announcement-admin@arctester.test" },
+          select: { id: true },
+        })).id,
       },
     });
     await server.db.announcement.create({
@@ -151,12 +144,10 @@ describe("admin announcements", () => {
         title: "Expired message",
         message: "This must not be delivered.",
         expiresAt: new Date(Date.now() - 1000),
-        createdById: (
-          await server.db.user.findUniqueOrThrow({
-            where: { email: "announcement-admin@arctester.test" },
-            select: { id: true },
-          })
-        ).id,
+        createdById: (await server.db.user.findUniqueOrThrow({
+          where: { email: "announcement-admin@arctester.test" },
+          select: { id: true },
+        })).id,
       },
     });
 
