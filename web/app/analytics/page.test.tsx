@@ -214,6 +214,7 @@ describe("student analytics page", () => {
     expect(screen.getByText("84%")).toBeInTheDocument();
     expect(screen.getByText(/Estimated accuracy on your next practice attempt/)).toBeInTheDocument();
     expect(screen.getByText("76%–92%")).toBeInTheDocument();
+    expect(screen.getByText(/not a calibrated confidence interval/)).toBeInTheDocument();
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(
       screen.getByText(
