@@ -47,6 +47,7 @@ model Question {
   createdAt    DateTime  @default(now())
   answers      AttemptAnswer[]
   stats        Stat[]
+  examSnapshots ExamVersionQuestion[]
 
   @@index([subjectId])
 }
@@ -75,6 +76,9 @@ model User {
   stats              Stat[]
   devices            Device[]
   invitationsCreated Invitation[] @relation("InvitationCreator")
+  examsCreated       Exam[]       @relation("ExamCreator")
+  assignments        ExamAssignment[] @relation("StudentAssignments")
+  assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
 }
 
 model Invitation {
@@ -105,6 +109,110 @@ model Device {
 
   @@unique([userId, fingerprint])
   @@index([userId, revokedAt])
+}
+
+// Exam content is versioned. Each version stores immutable question snapshots so
+// later edits to the shared question bank cannot change an assigned exam.
+model Exam {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  status      String   @default("DRAFT")
+  createdBy   User     @relation("ExamCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  versions    ExamVersion[]
+
+  @@index([createdById, status])
+}
+
+model ExamVersion {
+  id               String                 @id @default(cuid())
+  exam             Exam                   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examId           String
+  version          Int
+  instructions     String                 @default("")
+  durationMinutes  Int
+  shuffleQuestions Boolean                @default(false)
+  shuffleOptions   Boolean                @default(false)
+  publishedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  questions        ExamVersionQuestion[]
+  assignments      ExamAssignment[]
+
+  @@unique([examId, version])
+  @@index([examId, publishedAt])
+}
+
+model ExamVersionQuestion {
+  id              String       @id @default(cuid())
+  examVersion     ExamVersion  @relation(fields: [examVersionId], references: [id], onDelete: Cascade)
+  examVersionId   String
+  sourceQuestion  Question?    @relation(fields: [sourceQuestionId], references: [id], onDelete: SetNull)
+  sourceQuestionId Int?
+  position        Int
+  subject         String
+  topic           String?
+  text            String
+  options         String
+  correctIndex    Int
+  explanation     String       @default("")
+  marks           Float        @default(1)
+  negativeMarks   Float        @default(0)
+  createdAt       DateTime     @default(now())
+
+  @@unique([examVersionId, position])
+  @@index([sourceQuestionId])
+}
+
+model ExamAssignment {
+  id             String       @id @default(cuid())
+  examVersion    ExamVersion  @relation(fields: [examVersionId], references: [id], onDelete: Restrict)
+  examVersionId  String
+  student        User         @relation("StudentAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+  studentId      Int
+  assignedBy     User         @relation("AssignmentCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedById   Int
+  assignedAt     DateTime     @default(now())
+  availableFrom  DateTime?
+  dueAt          DateTime?
+  status         String       @default("ASSIGNED")
+  submission     ExamSubmission?
+
+  @@unique([examVersionId, studentId])
+  @@index([studentId, status])
+  @@index([assignedById])
+}
+
+model ExamSubmission {
+  id              String                 @id @default(cuid())
+  assignment      ExamAssignment         @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId    String                 @unique
+  attemptUuid     String                 @unique
+  startedAt       DateTime
+  submittedAt     DateTime
+  receivedAt      DateTime               @default(now())
+  status          String                 @default("RECEIVED")
+  score           Float?
+  maximumScore    Float?
+  answers         ExamSubmissionAnswer[]
+
+  @@index([receivedAt, status])
+}
+
+model ExamSubmissionAnswer {
+  id                 String               @id @default(cuid())
+  submission         ExamSubmission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId       String
+  examQuestion       ExamVersionQuestion @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  examQuestionId     String
+  selectedIndex      Int?
+  isCorrect          Boolean
+  awardedMarks       Float
+
+  @@unique([submissionId, examQuestionId])
+  @@index([examQuestionId])
 }
 
 model AttemptAnswer {
