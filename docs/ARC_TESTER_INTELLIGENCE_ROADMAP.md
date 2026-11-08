@@ -562,8 +562,8 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 - Added a minimum evidence threshold of **5 answered attempts**. A question is flagged weak only when it has at least 5 answered attempts and accuracy below **60%**.
 - Unanswered attempts are reported but do not inflate the accuracy sample size.
 - Added a student dashboard section explaining the threshold and displaying only evidence-qualified weak questions.
-- Added cohort-level question performance to the admin analytics endpoint and dashboard. Only completed practice attempts from STUDENT accounts are aggregated; no student identity or per-student rows are exposed.
-- Added tests for the minimum-sample boundary, the student dashboard display, and the admin response contract.
+- Added cohort-level question performance to the admin analytics endpoint and dashboard. A cohort question signal requires at least 5 answered attempts from at least 3 distinct students, with accuracy below 60%. Only completed practice attempts from STUDENT accounts are aggregated; student identifiers are used internally for the distinct-student check and are not returned.
+- Added tests for the minimum-sample boundary, student data isolation, the student dashboard display, and the admin response contract.
 
 **Files changed**
 - `api/src/analytics.ts`
@@ -578,7 +578,7 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 
 **Verification**
 - Implementation and regression tests have been pushed, but this batch has not yet been run locally.
-- The 5-answer / below-60% rule is a transparent heuristic, not a statistical significance claim.
+- Student flags use at least 5 answered attempts and accuracy below 60%. Admin cohort flags additionally require at least 3 distinct students. These are transparent heuristics, not statistical significance claims.
 - Question-level cohort metrics currently cover practice answers. Formal exam subject/topic analytics remain available separately; per-question formal exam cohort aggregation can be added after this pass is verified.
 
 **Next**
