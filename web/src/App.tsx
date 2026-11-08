@@ -84,10 +84,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user)
-      request<Bank>("/bank")
-        .then(setBank)
-        .catch((cause) => setError((cause as Error).message));
+    if (!user) return;
+    request("/auth/devices/register", {
+      method: "POST",
+      body: JSON.stringify({
+        deviceName: "Web browser",
+        platform: "web",
+        fingerprint: browserDeviceFingerprint(),
+      }),
+    }).catch((cause) => setError((cause as Error).message));
+    request<Bank>("/bank")
+      .then(setBank)
+      .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
   async function authenticate() {

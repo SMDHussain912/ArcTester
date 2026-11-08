@@ -70,6 +70,28 @@ export default function App() {
 
   useEffect(() => {
     if (!token || !user) return;
+    const registerDevice = async () => {
+      let fingerprint = await SecureStore.getItemAsync("arctester-device-fingerprint");
+      if (!fingerprint) {
+        fingerprint = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+        await SecureStore.setItemAsync("arctester-device-fingerprint", fingerprint);
+      }
+      const platform = Platform.OS === "android" || Platform.OS === "ios" ? Platform.OS : "web";
+      await api("/auth/devices/register", {
+        method: "POST",
+        body: JSON.stringify({
+          deviceName:
+            Platform.OS === "android"
+              ? "Android device"
+              : Platform.OS === "ios"
+                ? "iOS device"
+                : "Mobile app",
+          platform,
+          fingerprint,
+        }),
+      });
+    };
+    registerDevice().catch((cause) => setError((cause as Error).message));
     api<Bank>("/bank")
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
