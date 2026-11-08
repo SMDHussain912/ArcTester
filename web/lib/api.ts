@@ -314,7 +314,7 @@ export interface StudyRecommendation {
 export type StudentScorePrediction =
   | { status: "insufficient_data"; completedAttempts: number; availableSamples: number; requiredSamples: number; requiredCompletedAttempts: number; message: string }
   | { status: "baseline_not_beaten"; completedAttempts: number; evaluationSamples: number; modelMae: number; baselineMae: number; message: string }
-  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; modelMae: number; baselineMae: number; message: string };
+  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; predictionInterval: { lowerPercent: number; upperPercent: number; estimatedErrorPercent: number; method: "walk-forward-rmse" }; modelMae: number; baselineMae: number; message: string };
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
