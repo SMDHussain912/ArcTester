@@ -91,7 +91,7 @@ Map the actual database fields before designing new tables or migrations. Prefer
 - Formal exam analytics currently count only `GRADED` answer outcomes in verified score and subject metrics. `REVIEW_REQUIRED` submissions are counted separately and excluded from those metrics.
 - No trustworthy per-question timing data exists; no time-spent metric is exposed.
 - Admin cohort analytics and deeper question-level analysis are not yet implemented.
-- CI is now running through GitHub Actions. The last fully verified run (`42505842339`) passed API/web tests, lint, production builds, Prisma migration verification and mobile typecheck. Later analytics UI changes are being verified in a newer run.
+- CI runs through GitHub Actions. Run `42523991967` passed API/web tests, lint, production builds, Prisma migration verification and mobile typecheck for commit `d434637`. Later commits must be checked against their own workflow runs.
 
 **Commits in this implementation batch:**
 
@@ -479,17 +479,36 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 5. Do not mark a phase complete based only on code being written.
 6. In a new chat, read this file and inspect the current repository state before continuing. Do not rely only on an old chat summary.
 
+### Phase 2 / Phase 6 implementation log — 2026-11-09
+
+**Implemented and pushed**
+- Added a pure, deterministic performance explanation composer driven by the student's own topic-level answer aggregates.
+- The explanation reports the strongest evidence-backed revision gap, measured accuracy, answered-question count, and incorrect-answer count.
+- Low-sample topics are explicitly withheld from weak-topic claims; no-data and no-confirmed-gap states have separate wording.
+- Unanswered questions are excluded from accuracy and incorrect-answer totals.
+- Extended the authenticated recommendations response with a typed `performanceExplanation` payload.
+- Added the explanation to the student analytics page with its evidence totals.
+- Added unit tests for empty history, weak-topic evidence, low sample counts, no confirmed weak topics, and unanswered-answer handling; extended API and frontend tests.
+- Updated README guidance to reflect the active GitHub Actions workflow.
+
+**Verification**
+- Previous batch commit `d434637` passed GitHub Actions run `42523991967`.
+- The current explanation-engine commits require their own CI run; do not treat them as verified until that run succeeds.
+
+**Current limitation**
+- This is a performance-explanation slice, not the complete explanation engine. Curated concept knowledge and answer-release policy integration remain open.
+
 ### Current progress
 
 - [x] Intelligence architecture and constraints documented.
 - [x] Initial algorithms, use cases, and phases defined.
 - [x] Phase 0 — repository/data audit (completed 2026-11-08; findings recorded above).
-- [ ] Phase 1 — analytics foundation (in progress; student practice/formal analytics, historical practice metadata snapshots, admin cohort aggregates and initial dashboard integrations committed; verification and remaining coverage pending).
-- [ ] Phase 2 — weak-area detection (threshold-based recommendations and 7-day recent-practice cooldown implemented; final acceptance/UI review pending).
-- [ ] Phase 3 — regression engine (initial TypeScript multiple-linear-regression core implemented and CI-verified; training pipeline, baseline comparison, artifact persistence and prediction integration remain).
+- [ ] Phase 1 — analytics foundation (student practice/formal analytics, historical practice metadata snapshots, admin cohort aggregates and dashboard integrations implemented; continue edge-case and production-data verification).
+- [ ] Phase 2 — weak-area detection (threshold-based recommendations, 7-day recent-practice cooldown, and deterministic evidence-grounded performance explanations implemented; continue recommendation relevance and UI acceptance testing).
+- [ ] Phase 3 — regression engine (student score prediction with chronological evaluation, baseline comparison, data-sufficiency gates, model registry/artifacts, prediction intervals, and drift telemetry implemented; continue model validation and operational acceptance).
 - [ ] Phase 4 — classification engine.
 - [ ] Phase 5 — personalized recommendations.
-- [ ] Phase 6 — explanation engine.
+- [ ] Phase 6 — explanation engine (first deterministic performance-explanation slice implemented; answer explanation policy, curated concept knowledge, and protected-answer release tests remain).
 - [ ] Phase 7 — admin model operations.
 - [ ] Phase 8 — integration and polish.
 
