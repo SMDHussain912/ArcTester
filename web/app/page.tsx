@@ -174,11 +174,11 @@ export default function HomePage() {
                 <span className="action-title">Question bank</span>
                 <span className="action-description">Browse available subjects</span>
               </a>
-              <div className="action-card" aria-disabled="true">
+              <a className="action-card" href="/analytics">
                 <span className="action-icon">↗</span>
                 <span className="action-title">Analytics</span>
-                <span className="action-description">Performance dashboard coming next</span>
-              </div>
+                <span className="action-description">Review accuracy and weak subjects</span>
+              </a>
             </div>
           </section>
 
