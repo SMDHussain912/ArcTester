@@ -24,18 +24,17 @@ function AnalyticsDashboard() {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [questionPerformance, setQuestionPerformance] = useState<QuestionPerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
-    Promise.all([api.weakTopics(), api.studyHistory(historyPage), api.performanceOverview()])
-      .then(([weak, attempts, performance]) => {
+    setLoading(true);
+    Promise.all([api.weakTopics(), api.performanceOverview()])
+      .then(([weak, performance]) => {
         if (cancelled) return;
         setWeakTopics(weak);
-        setHistory(attempts.items);
-        setHistoryTotal(attempts.total);
-        setHistoryTotalPages(attempts.totalPages);
         setOverview(performance);
       })
       .catch((cause: unknown) => {
@@ -56,6 +55,30 @@ function AnalyticsDashboard() {
         if (!cancelled) setQuestionPerformance(report);
       })
       .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    api.studyHistory(historyPage)
+      .then((attempts) => {
+        if (cancelled) return;
+        setHistory(attempts.items);
+        setHistoryTotal(attempts.total);
+        setHistoryTotalPages(attempts.totalPages);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(cause instanceof ApiError ? cause.message : "Could not load your practice history.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -297,8 +320,8 @@ function AnalyticsDashboard() {
           <h2>Recent practice history</h2>
           <span className="pill">{historyTotal} attempts</span>
         </div>
-        {loading ? <p className="mute">Loading your attempts…</p> : null}
-        {!loading && history.length === 0 ? (
+        {historyLoading ? <p className="mute">Loading your attempts…</p> : null}
+        {!historyLoading && history.length === 0 ? (
           <div>
             <p className="muted">Your practice history will appear here after your first submitted test.</p>
             <Link className="button button-primary" href="/">Start practicing</Link>
@@ -323,8 +346,8 @@ function AnalyticsDashboard() {
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
             <span className="mute">Page {historyPage} of {historyTotalPages}</span>
             <div className="row">
-              <button className="button button-secondary" disabled={historyPage <= 1 || loading} onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}>Previous</button>
-              <button className="button button-secondary" disabled={historyPage >= historyTotalPages || loading} onClick={() => setHistoryPage((current) => current + 1)}>Next</button>
+              <button className="button button-secondary" disabled={historyPage <= 1 || historyLoading} onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}>Previous</button>
+              <button className="button button-secondary" disabled={historyPage >= historyTotalPages || historyLoading} onClick={() => setHistoryPage((current) => current + 1)}>Next</button>
             </div>
           </div>
         ) : null}
