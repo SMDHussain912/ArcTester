@@ -11,7 +11,7 @@ const emptyOverview: AdminOverview = {
   practice: {
     completedAttempts: 0, questions: 0, correct: 0, incorrect: 0, unanswered: 0, accuracy: null,
     subjects: [], topics: [],
-    questionPerformance: { minimumAnswers: 5, weakAccuracyThreshold: 0.6, insufficientSampleCount: 0, questions: [] },
+    questionPerformance: { minimumAnswers: 5, minimumStudents: 3, weakAccuracyThreshold: 0.6, insufficientSampleCount: 0, questions: [] },
   },
   formalExams: { graded: 0, reviewRequired: 0, correct: 0, incorrect: 0, unanswered: 0, subjects: [], topics: [] },
   exams: [], recentSubmissions: [],
