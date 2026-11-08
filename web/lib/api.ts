@@ -7,6 +7,7 @@
 // protected route answers 403.
 
 import { friendlyError, type SubmitAnswer } from "./answers";
+import type { BrowserTensorflowArtifact } from "./tensorflowInference";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "http://localhost:4000";
@@ -327,9 +328,9 @@ export interface StudyRecommendation {
 }
 
 export type StudentScorePrediction =
-  | { status: "insufficient_data"; completedAttempts: number; availableSamples: number; requiredSamples: number; requiredCompletedAttempts: number; message: string }
-  | { status: "baseline_not_beaten"; completedAttempts: number; evaluationSamples: number; modelMae: number; baselineMae: number; message: string }
-  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; predictionInterval: { lowerPercent: number; upperPercent: number; estimatedErrorPercent: number; method: "walk-forward-rmse" }; modelMae: number; baselineMae: number; message: string };
+  | { status: "insufficient_data"; completedAttempts: number; availableSamples: number; requiredSamples: number; requiredCompletedAttempts: number; message: string; populationFeatures?: Record<string, number> }
+  | { status: "baseline_not_beaten"; completedAttempts: number; evaluationSamples: number; modelMae: number; baselineMae: number; message: string; populationFeatures?: Record<string, number> }
+  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; predictionInterval: { lowerPercent: number; upperPercent: number; estimatedErrorPercent: number; method: "walk-forward-rmse" }; modelMae: number; baselineMae: number; message: string; populationFeatures?: Record<string, number> };
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
@@ -664,6 +665,7 @@ export const api = {
   questionPerformance: () => request<QuestionPerformanceReport>("/analytics/question-performance"),
   studyHistory: (page = 1) => request<StudyHistoryPage>(`/analytics/history?page=${page}&limit=10`),
   studentScorePrediction: () => request<StudentScorePrediction>("/analytics/score-prediction"),
+  activeTensorflowModel: (modelId: string) => request<{ ok: true; artifact: BrowserTensorflowArtifact }>(`/models/${encodeURIComponent(modelId)}/active/tensorflow`),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
   announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),
