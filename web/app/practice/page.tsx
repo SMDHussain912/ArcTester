@@ -11,7 +11,7 @@ type Stage = "select" | "instructions";
 
 function PracticePaperChooser() {
   const router = useRouter();
-  const { refresh, user } = useSession();
+  const { refresh } = useSession();
   const [bank, setBank] = useState<BankInfo | null>(null);
   const [mode, setMode] = useState<PaperMode>("mock");
   const [subject, setSubject] = useState("");
