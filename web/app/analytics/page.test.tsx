@@ -108,6 +108,26 @@ describe("student analytics page", () => {
           ])
         );
       }
+      if (path.endsWith("/analytics/recommendations")) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            generatedAt: "2026-11-08T08:30:00.000Z",
+            basedOnAttempts: 1,
+            recommendations: [
+              {
+                id: "strengthen-weakest-subject",
+                priority: "high",
+                title: "Strengthen Physics",
+                reason: "30% accuracy across 10 answered questions. Focused practice will help close this gap.",
+                subject: "Physics",
+                topic: null,
+                mode: "practice",
+                questionCount: 15,
+              },
+            ],
+          })
+        );
+      }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
     });
 
@@ -127,6 +147,9 @@ describe("student analytics page", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
+    expect(screen.getByText("Your next study steps")).toBeInTheDocument();
+    expect(screen.getByText("Strengthen Physics")).toBeInTheDocument();
+    expect(screen.getByText("high priority")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute(
       "aria-valuenow",
       "30"
