@@ -369,53 +369,53 @@ export function examRouter(db: PrismaClient): Router {
           questionId: number; subject: string; topic: string | null; difficulty: string;
           correct: number; incorrect: number; unanswered: number; uniqueStudents: number;
         }>>`
-          SELECT aa.questionId AS questionId,
-            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.subjectSnapshot ELSE s.name END) AS subject,
-            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END) AS topic,
-            MAX(CASE WHEN aa.difficultySnapshot <> '' THEN aa.difficultySnapshot ELSE q.difficulty END) AS difficulty,
-            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+          SELECT aa."questionId" AS "questionId",
+            MAX(CASE WHEN aa."subjectSnapshot" <> '' THEN aa."subjectSnapshot" ELSE s.name END) AS subject,
+            MAX(CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END) AS topic,
+            MAX(CASE WHEN aa."difficultySnapshot" <> '' THEN aa."difficultySnapshot" ELSE q.difficulty END) AS difficulty,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
             SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered,
-            COUNT(DISTINCT CASE WHEN aa.chosen IS NOT NULL THEN a.userId END) AS uniqueStudents
-          FROM AttemptAnswer aa
-          INNER JOIN Attempt a ON a.id = aa.attemptId
-          INNER JOIN User u ON u.id = a.userId
-          INNER JOIN Question q ON q.id = aa.questionId
-          INNER JOIN Subject s ON s.id = q.subjectId
-          LEFT JOIN Topic t ON t.id = q.topicId
-          WHERE a.finishedAt IS NOT NULL AND u.role = 'STUDENT'
-          GROUP BY aa.questionId
+            COUNT(DISTINCT CASE WHEN aa.chosen IS NOT NULL THEN a."userId" END) AS "uniqueStudents"
+          FROM "AttemptAnswer" aa
+          INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+          INNER JOIN "User" u ON u.id = a."userId"
+          INNER JOIN "Question" q ON q.id = aa."questionId"
+          INNER JOIN "Subject" s ON s.id = q."subjectId"
+          LEFT JOIN "Topic" t ON t.id = q."topicId"
+          WHERE a."finishedAt" IS NOT NULL AND u.role = 'STUDENT'
+          GROUP BY aa."questionId"
         `,
         db.$queryRaw<Array<{
           subject: string; topic: string | null; correct: number; incorrect: number;
           unanswered: number; awardedMarks: number; maximumMarks: number;
         }>>`
           SELECT eq.subject AS subject, eq.topic AS topic,
-            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
-            SUM(CASE WHEN ea.selectedIndex IS NULL THEN 1 ELSE 0 END) AS unanswered,
-            SUM(ea.awardedMarks) AS awardedMarks, SUM(eq.marks) AS maximumMarks
-          FROM ExamSubmissionAnswer ea
-          INNER JOIN ExamSubmission es ON es.id = ea.submissionId
-          INNER JOIN ExamAssignment ass ON ass.id = es.assignmentId
-          INNER JOIN User u ON u.id = ass.studentId
-          INNER JOIN ExamVersionQuestion eq ON eq.id = ea.examQuestionId
+            SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
+            SUM(CASE WHEN ea."selectedIndex" IS NULL THEN 1 ELSE 0 END) AS unanswered,
+            SUM(ea."awardedMarks") AS "awardedMarks", SUM(eq.marks) AS "maximumMarks"
+          FROM "ExamSubmissionAnswer" ea
+          INNER JOIN "ExamSubmission" es ON es.id = ea."submissionId"
+          INNER JOIN "ExamAssignment" ass ON ass.id = es.assignmentId
+          INNER JOIN "User" u ON u.id = ass.studentId
+          INNER JOIN "ExamVersionQuestion" eq ON eq.id = ea."examQuestionId"
           WHERE es.status = 'GRADED' AND u.role = 'STUDENT'
           GROUP BY eq.subject, eq.topic
         `,
         db.$queryRaw<Array<{
           examId: string; title: string; assigned: number; submitted: number; averagePercentage: number | null;
         }>>`
-          SELECT ev.examId AS examId, e.title AS title,
+          SELECT ev."examId" AS "examId", e.title AS title,
             COUNT(ass.id) AS assigned,
             SUM(CASE WHEN sub.id IS NOT NULL THEN 1 ELSE 0 END) AS submitted,
-            AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub.maximumScore > 0
-              THEN (sub.score * 100.0) / sub.maximumScore ELSE NULL END) AS averagePercentage
-          FROM ExamAssignment ass
-          INNER JOIN ExamVersion ev ON ev.id = ass.examVersionId
-          INNER JOIN Exam e ON e.id = ev.examId
-          LEFT JOIN ExamSubmission sub ON sub.assignmentId = ass.id
-          GROUP BY ev.examId, e.title
+            AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub."maximumScore" > 0
+              THEN (sub.score * 100.0) / sub."maximumScore" ELSE NULL END) AS "averagePercentage"
+          FROM "ExamAssignment" ass
+          INNER JOIN "ExamVersion" ev ON ev.id = ass.examVersionId
+          INNER JOIN "Exam" e ON e.id = ev."examId"
+          LEFT JOIN "ExamSubmission" sub ON sub.assignmentId = ass.id
+          GROUP BY ev."examId", e.title
           ORDER BY assigned DESC
         `,
         db.examSubmission.findMany({
@@ -432,12 +432,12 @@ export function examRouter(db: PrismaClient): Router {
           },
         }),
         db.$queryRaw<Array<{ averagePercentage: number | null }>>`
-          SELECT AVG((sub.score * 100.0) / sub.maximumScore) AS averagePercentage
-          FROM ExamSubmission sub
-          INNER JOIN ExamAssignment ass ON ass.id = sub.assignmentId
-          INNER JOIN User u ON u.id = ass.studentId
+          SELECT AVG((sub.score * 100.0) / sub."maximumScore") AS "averagePercentage"
+          FROM "ExamSubmission" sub
+          INNER JOIN "ExamAssignment" ass ON ass.id = sub.assignmentId
+          INNER JOIN "User" u ON u.id = ass.studentId
           WHERE u.role = 'STUDENT' AND sub.status = 'GRADED'
-            AND sub.score IS NOT NULL AND sub.maximumScore > 0
+            AND sub.score IS NOT NULL AND sub."maximumScore" > 0
         `,
       ]);
 
