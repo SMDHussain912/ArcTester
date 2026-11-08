@@ -15,7 +15,7 @@ import { StatusBar } from "expo-status-bar";
 import OfflineExamWorkspace from "./src/offline/OfflineExamWorkspace";
 import { OfflineExams } from "./src/OfflineExams";
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\\/+$/, "");
+const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
 type Announcement = {
