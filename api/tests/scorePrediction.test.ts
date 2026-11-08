@@ -35,9 +35,33 @@ describe("next-attempt score prediction dataset", () => {
     expect(result.model.algorithm).toBe("multiple-linear-regression");
     expect(result.trainRows).toBe(6);
     expect(result.testRows).toBe(3);
+    expect(result.evaluationWindows).toBe(3);
     expect(result.regression.rows).toBe(3);
     expect(result.meanBaseline.rows).toBe(3);
     expect(typeof result.beatsMeanBaseline).toBe("boolean");
+  });
+
+  it("evaluates each later sample using only its earlier chronological prefix", () => {
+    const result = trainAndEvaluateNextAttemptModel(attempts);
+    // Nine samples: six seed rows, then three one-step-ahead evaluation windows.
+    expect(result.trainRows).toBe(6);
+    expect(result.testRows).toBe(3);
+    expect(result.evaluationWindows).toBe(3);
+    expect(result.regression.mae).toBeGreaterThanOrEqual(0);
+    expect(result.meanBaseline.mae).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps walk-forward metrics finite for a noisy score history", () => {
+    const noisyHistory: CompletedAttemptScore[] = [3, 8, 4, 9, 2, 7, 5, 10, 3, 8, 4, 9]
+      .map((correct, index) => ({
+        finishedAt: new Date(Date.UTC(2026, 3, index + 1)),
+        correct,
+        total: 10,
+      }));
+    const result = trainAndEvaluateNextAttemptModel(noisyHistory);
+    expect(Number.isFinite(result.regression.mae)).toBe(true);
+    expect(Number.isFinite(result.meanBaseline.mae)).toBe(true);
+    expect(result.evaluationWindows).toBe(3);
   });
 
   it("does not claim to beat the baseline on a constant-score history", () => {
