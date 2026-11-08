@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number }[] };
+type Bank = { total: number; subjects: { subject: string; count: number; topics: { topic: string; count: number }[] }[] };
 type Invitation = {
   id: string;
   email: string;
@@ -174,6 +174,10 @@ export default function App() {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [subjectQuotas, setSubjectQuotas] = useState<Record<string, number>>({});
   const [difficultyMix, setDifficultyMix] = useState<"any" | "balanced" | "easy" | "medium" | "hard">("any");
+  const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
+  const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
+  const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
+  const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
   const [topicSelectionMode, setTopicSelectionMode] = useState<"all" | "include" | "exclude">("all");
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
@@ -935,14 +939,18 @@ export default function App() {
     }
   }
 
-  async function startTest(mode: "mock" | "practice" | "mistakes", subject?: string) {
+  async function startTest(mode: "mock" | "practice" | "mistakes", subject?: string, practiceConfig?: { subjects: string[]; topicFilters: { subject: string; topic: string }[]; count: number; difficulty: "any" | "easy" | "medium" | "hard" }) {
+    if (mode === "practice" && !subject && (!practiceConfig || practiceConfig.subjects.length === 0)) {
+      setError("Select at least one subject before creating your practice paper.");
+      return;
+    }
     setBusy(true);
     setError("");
     setResult(null);
     try {
       const created = await request<Test>("/tests", {
         method: "POST",
-        body: JSON.stringify({ mode, subject, count: mode === "mock" ? undefined : 10 }),
+        body: JSON.stringify({ mode, ...(subject ? { subject } : {}), ...(practiceConfig ? { subjects: practiceConfig.subjects, topicFilters: practiceConfig.topicFilters, count: practiceConfig.count, difficulty: practiceConfig.difficulty } : mode === "practice" ? { count: 10 } : {}) }),
       });
       setTest(created);
       setAnswers({});
@@ -951,6 +959,14 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function createStudentPracticePaper() {
+    const topicFilters = practiceTopicKeys.flatMap((key) => {
+      try { const parsed = JSON.parse(key) as [string, string]; return [{ subject: parsed[0], topic: parsed[1] }]; }
+      catch { return []; }
+    });
+    void startTest("practice", undefined, { subjects: practiceSubjects, topicFilters, count: practiceQuestionCount, difficulty: practiceDifficulty });
   }
 
   async function submitTest() {
@@ -1576,45 +1592,50 @@ export default function App() {
                   <h2>Choose your practice</h2>
                 </div>
               </div>
-              <div className="grid three">
-                <article className="panel action-card">
-                  <span className="action-icon">◈</span>
-                  <h3>Mock test</h3>
-                  <p className="muted">
-                    Take a full-length exam using the configured test pattern.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => void startTest("mock")}
-                  >
-                    Start mock test
-                  </button>
+              <div className="practice-builder-grid">
+                <article className="panel practice-builder">
+                  <div className="practice-builder-title"><div><span className="action-icon">◎</span><h3>Create your question paper</h3><p className="muted">Choose subjects first. Topic selection is optional and only filters the subjects you choose.</p></div><span className="status status-used">CUSTOM PAPER</span></div>
+                  <div className="practice-builder-section">
+                    <div className="practice-builder-label"><strong>1. Select subjects</strong><span className="muted">{practiceSubjects.length} selected</span></div>
+                    <div className="practice-subject-grid">
+                      {(bank?.subjects ?? []).map((item) => <label className={practiceSubjects.includes(item.subject) ? "practice-subject-choice selected" : "practice-subject-choice"} key={item.subject}>
+                        <input type="checkbox" checked={practiceSubjects.includes(item.subject)} onChange={(event) => {
+                          setPracticeSubjects((current) => event.target.checked ? [...current, item.subject] : current.filter((name) => name !== item.subject));
+                          if (!event.target.checked) setPracticeTopicKeys((current) => current.filter((key) => { try { return (JSON.parse(key) as [string, string])[0] !== item.subject; } catch { return false; } }));
+                        }} />
+                        <span><strong>{item.subject}</strong><small>{item.count} questions available</small></span>
+                      </label>)}
+                    </div>
+                    {(!bank || bank.subjects.length === 0) && <p className="muted">No subjects are available in the question bank yet.</p>}
+                    <div className="practice-builder-actions"><button type="button" className="text-button" disabled={!bank?.subjects.length} onClick={() => setPracticeSubjects(bank?.subjects.map((item) => item.subject) ?? [])}>Select all subjects</button><button type="button" className="text-button" disabled={!practiceSubjects.length} onClick={() => { setPracticeSubjects([]); setPracticeTopicKeys([]); }}>Clear selection</button></div>
+                  </div>
+                  <div className="practice-builder-section">
+                    <div className="practice-builder-label"><strong>2. Choose topics <span className="muted">(optional)</span></strong><span className="muted">{practiceTopicKeys.length ? String(practiceTopicKeys.length) + " selected" : "All topics"}</span></div>
+                    {practiceSubjects.length === 0 ? <p className="practice-helper">Select at least one subject to see its topics.</p> : <div className="practice-topic-groups">{practiceSubjects.map((subject) => {
+                      const item = bank?.subjects.find((entry) => entry.subject === subject);
+                      if (!item?.topics.length) return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><p className="muted">No topics are defined. All questions in this subject remain eligible.</p></div>;
+                      return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><div className="practice-topic-list">{item.topics.map((topic) => {
+                        const key = JSON.stringify([subject, topic.topic]);
+                        return <label key={key}><input type="checkbox" checked={practiceTopicKeys.includes(key)} onChange={(event) => setPracticeTopicKeys((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />{topic.topic}<small>{topic.count}</small></label>;
+                      })}</div></div>;
+                    })}</div>}
+                    <p className="practice-helper">Leave all topics unchecked to include every topic in your selected subjects. Once you select a topic, only selected subject/topic pairs are used.</p>
+                    {practiceTopicKeys.length > 0 && <button type="button" className="text-button" onClick={() => setPracticeTopicKeys([])}>Clear topic filters</button>}
+                  </div>
+                  <div className="practice-builder-section">
+                    <strong>3. Configure your paper</strong>
+                    <div className="practice-config-grid">
+                      <label>Number of questions<input type="number" min={1} max={200} value={practiceQuestionCount} onChange={(event) => setPracticeQuestionCount(Math.max(1, Math.min(200, Number(event.target.value) || 1)))} /></label>
+                      <label>Difficulty<select value={practiceDifficulty} onChange={(event) => setPracticeDifficulty(event.target.value as typeof practiceDifficulty)}><option value="any">All difficulties</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+                    </div>
+                    <p className="practice-helper">Questions are distributed as evenly as possible across selected subjects. If a subject has too few matching questions, ArcTester will tell you.</p>
+                  </div>
+                  <div className="practice-builder-footer"><span className="muted">Your paper will use your selected filters.</span><button className="primary" disabled={busy || practiceSubjects.length === 0 || !bank?.total} onClick={createStudentPracticePaper}>{busy ? "Building paper…" : "Create " + practiceQuestionCount + "-question paper"}</button></div>
                 </article>
-                <article className="panel action-card">
-                  <span className="action-icon">◎</span>
-                  <h3>Quick practice</h3>
-                  <p className="muted">Build a short mixed practice session.</p>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => void startTest("practice")}
-                  >
-                    Start practice
-                  </button>
-                </article>
-                <article className="panel action-card">
-                  <span className="action-icon">↻</span>
-                  <h3>Review mistakes</h3>
-                  <p className="muted">Revisit questions you have answered incorrectly.</p>
-                  <button
-                    className="primary"
-                    disabled={busy}
-                    onClick={() => void startTest("mistakes")}
-                  >
-                    Review mistakes
-                  </button>
-                </article>
+                <div className="practice-side-actions">
+                  <article className="panel action-card"><span className="action-icon">◈</span><h3>ECET mock test</h3><p className="muted">Take a full-length paper using the configured AP ECET test pattern.</p><button className="ghost" disabled={busy} onClick={() => void startTest("mock")}>Start mock test</button></article>
+                  <article className="panel action-card"><span className="action-icon">↻</span><h3>Review mistakes</h3><p className="muted">Revisit questions you have answered incorrectly.</p><button className="ghost" disabled={busy} onClick={() => void startTest("mistakes")}>Review mistakes</button></article>
+                </div>
               </div>
             </section>
             <section hidden={activePage !== "question-bank"}>
