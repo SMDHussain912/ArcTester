@@ -43,6 +43,7 @@ type Props = { token: string; onExit: () => void };
 export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [cached, setCached] = useState<CachedExam[]>([]);
+  const [pendingSubmissionIds, setPendingSubmissionIds] = useState<string[]>([]);
   const [activePackage, setActivePackage] = useState<ExamPackage | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -71,6 +72,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
 
   const refreshLocal = useCallback(async () => {
     setCached(await listCachedExams());
+    setPendingSubmissionIds((await listPendingSubmissions()).map((item) => item.assignmentId));
   }, []);
 
   const refreshAssignments = useCallback(async () => {
@@ -167,6 +169,11 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       const restored: Record<string, number | null> = {};
       for (const question of exam.package.questions) restored[question.id] = null;
       for (const answer of stored?.answers ?? []) restored[answer.examQuestionId] = answer.selectedIndex;
+      for (const question of exam.package.questions) {
+        if (!stored?.answers.some((answer) => answer.examQuestionId === question.id)) {
+          await saveOfflineAnswer(assignmentId, question.id, null);
+        }
+      }
       setAnswers(restored);
       setActivePackage(exam.package);
       setActiveAttempt(attemptUuid);
@@ -256,6 +263,25 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     }
   };
 
+  const displayAssignments = useMemo(() => {
+    const known = new Set(assignments.map((item) => item.id));
+    const offlineOnly: Assignment[] = cached
+      .filter((item) => !known.has(item.package.assignmentId))
+      .map((item) => ({
+        id: item.package.assignmentId,
+        status: "ASSIGNED",
+        assignedAt: item.downloadedAt,
+        availableFrom: item.package.availableFrom,
+        dueAt: item.package.dueAt,
+        exam: { id: item.package.examId, title: item.package.title, description: item.package.description },
+        version: item.package.version,
+        durationMinutes: item.package.durationMinutes,
+        questionCount: item.package.questions.length,
+        submission: null,
+      }));
+    return [...assignments, ...offlineOnly];
+  }, [assignments, cached]);
+
   if (activePackage) {
     return (
       <View style={{ gap: 12 }}>
@@ -312,9 +338,10 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       </Text>
       {!!message && <Text style={{ color: "#526078" }}>{message}</Text>}
       {syncing && <ActivityIndicator />}
-      {assignments.map((assignment) => {
+      {displayAssignments.map((assignment) => {
         const local = cached.find((item) => item.package.assignmentId === assignment.id);
         const completed = Boolean(assignment.submission);
+        const pending = pendingSubmissionIds.includes(assignment.id);
         return (
           <View key={assignment.id} style={{ backgroundColor: "#fff", padding: 16, borderRadius: 14, borderWidth: 1, borderColor: "#e4e8ef" }}>
             <Text style={{ color: "#172033", fontWeight: "800", fontSize: 16 }}>{assignment.exam.title}</Text>
@@ -322,9 +349,9 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
               {assignment.questionCount} questions · {assignment.durationMinutes} minutes · v{assignment.version}
             </Text>
             <Text style={{ color: completed ? "#16845b" : "#748096", marginTop: 6 }}>
-              {completed ? `Submitted · ${assignment.submission?.status}` : local ? "Downloaded for offline use" : "Not downloaded"}
+              {completed ? `Submitted · ${assignment.submission?.status}` : pending ? "Submission saved · Waiting to sync" : local ? "Downloaded for offline use" : "Not downloaded"}
             </Text>
-            {!completed && (
+            {!completed && !pending && (
               <TouchableOpacity disabled={busy || (!local && !online)} onPress={() => void startExam(assignment.id)} style={{ backgroundColor: "#2563eb", padding: 12, borderRadius: 10, alignItems: "center", marginTop: 12 }}>
                 <Text style={{ color: "#fff", fontWeight: "700" }}>{busy ? "Please wait…" : local ? "Start exam" : "Download and start"}</Text>
               </TouchableOpacity>
@@ -332,7 +359,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
           </View>
         );
       })}
-      {!assignments.length && <Text style={{ color: "#748096" }}>No exams have been assigned yet.</Text>}
+      {!displayAssignments.length && <Text style={{ color: "#748096" }}>No exams have been assigned or downloaded yet.</Text>}
       {!!error && <Text style={{ color: "#b42318", lineHeight: 21 }}>{error}</Text>}
       <TouchableOpacity disabled={!online || syncing} onPress={() => void synchronize()} style={{ padding: 14, alignItems: "center" }}>
         <Text style={{ color: "#2563eb", fontWeight: "700" }}>{syncing ? "Synchronizing…" : "Sync now"}</Text>
