@@ -1036,11 +1036,13 @@ export default function App() {
 
   function selectPracticeAnswer(questionId: number, selectedIndex: number) {
     if (!test) return;
-    setAnswers((current) => {
-      const next = { ...current, [questionId]: selectedIndex };
-      try { localStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next)); } catch { setError("Your browser could not save the local answer backup. Submit before closing this tab."); }
-      return next;
-    });
+    const next = { ...answers, [questionId]: selectedIndex };
+    setAnswers(next);
+    try {
+      localStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next));
+    } catch {
+      setError("Your browser could not save the local answer backup. Submit before closing this tab.");
+    }
   }
 
   async function submitTest() {
