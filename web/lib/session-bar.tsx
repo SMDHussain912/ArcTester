@@ -16,12 +16,13 @@ export function SessionBar() {
       </Link>
       <nav className="primary-nav" aria-label="Main navigation">
         <Link href="/" className="nav-link">Dashboard</Link>
-        <a href="/#practice" className="nav-link">Practice</a>
+        {user?.role === "STUDENT" ? <Link href="/practice" className="nav-link">Practice papers</Link> : null}
         {user?.role === "STUDENT" ? <Link href="/assignments" className="nav-link">My exams</Link> : null}
+        {user?.role === "STUDENT" ? <Link href="/analytics" className="nav-link">Performance</Link> : null}
         {user?.role === "STUDENT" ? <Link href="/announcements" className="nav-link">Announcements</Link> : null}
-        <a href="/#question-bank" className="nav-link">Question bank</a>
         {user ? <Link href="/materials" className="nav-link">Study materials</Link> : null}
         {user?.role === "ADMIN" ? <Link href="/admin" className="nav-link">Admin workspace</Link> : null}
+        {user?.role === "ADMIN" ? <Link href="/admin/questions" className="nav-link">Question bank</Link> : null}
         {user?.role === "ADMIN" ? <Link href="/admin/submissions" className="nav-link">Submission review</Link> : null}
         {user?.role === "ADMIN" ? <Link href="/admin/announcements" className="nav-link">Announcements</Link> : null}
       </nav>
