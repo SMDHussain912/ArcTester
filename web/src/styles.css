@@ -974,3 +974,22 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
   .session-audit-panel { padding: 16px; }
   .invigilation-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+
+/* Formal exam question navigator */
+.exam-question-navigator { position: sticky; top: 142px; z-index: 15; padding: 16px 18px; margin: 16px 0 20px; }
+.exam-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+.exam-progress-heading span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.exam-progress-track { height: 6px; overflow: hidden; margin: 12px 0 14px; border-radius: 99px; background: var(--bg); }
+.exam-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.exam-palette { display: flex; flex-wrap: wrap; gap: 7px; }
+.exam-palette-item { width: 34px; height: 34px; min-height: 34px; padding: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.exam-palette-item:hover { border-color: var(--accent); color: var(--accent); }
+.exam-palette-item.answered { border-color: color-mix(in srgb, var(--success) 40%, var(--border)); background: color-mix(in srgb, var(--success) 10%, var(--surface)); color: var(--success); }
+.assigned-exam-question-list .question-card { scroll-margin-top: 235px; }
+@media(max-width:900px) { .exam-question-navigator { top: 126px; } }
+@media(max-width:560px) {
+  .exam-question-navigator { top: 124px; padding: 13px; }
+  .exam-palette-item { width: 32px; height: 32px; min-height: 32px; }
+  .assigned-exam-question-list .question-card { scroll-margin-top: 220px; }
+}
