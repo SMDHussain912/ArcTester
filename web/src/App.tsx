@@ -237,7 +237,14 @@ export default function App() {
   const [modelDatasetTask, setModelDatasetTask] = useState<"regression" | "binary-classification">("binary-classification");
   const [modelDatasetTargetColumn, setModelDatasetTargetColumn] = useState("target_readiness_label");
   const [modelFeatureSchemaJson, setModelFeatureSchemaJson] = useState('[{"name":"practice_score","type":"numeric"}]');
-  const [modelSamplesJson, setModelSamplesJson] = useState('[{"features":{"practice_score":2},"target":0},{"features":{"practice_score":8},"target":1}]');
+  const [modelSamplesJson, setModelSamplesJson] = useState(JSON.stringify(
+    Array.from({ length: 40 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index >= 20 ? 1 : 0,
+    })),
+    null,
+    2,
+  ));
   const [modelDatasetSource, setModelDatasetSource] = useState("");
   const [modelDatasetAttested, setModelDatasetAttested] = useState(false);
   const [modelCandidateId, setModelCandidateId] = useState("");
