@@ -1,6 +1,6 @@
 # ArcTester Intelligence — Development Roadmap
 
-**Status:** Phase 1 analytics foundation implemented; Phase 2 intelligence work in progress  
+**Status:** Phases 0–6 implemented; Phase 7 hybrid TensorFlow.js implementation complete pending real-data qualification and production staging validation  
 **Project:** ArcTester — AP ECET CSE mock-test platform  
 **Backend:** Node.js + TypeScript  
 **Primary constraint:** No self-hosted LLM, no Python inference server, and no GPU dependency. Intelligence features must run within the existing Node.js backend and current server resource limits.
@@ -932,3 +932,32 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - Confirm the trained model's grouped holdout performance and manually activate only if the baseline and provenance gates pass.
 - Perform an end-to-end staging test with an actual active artifact and student account, including artifact refresh/fallback behavior.
 - Confirm production database persistence and model artifact delivery limits. Do not activate a model merely because the UI supports activation.
+
+
+### Phase 7 — data-contract hardening and CI/dependency governance — 2026-11-09
+
+**Implemented**
+- Enforced the exact five-feature contract for `student-score-population`; arbitrary numeric datasets can no longer accidentally be registered under the student-facing model ID.
+- Validated student population training inputs: attempt counts must be integers, question counts must be positive integers, accuracy features must be fractions in [0, 1], and the next-attempt target must be in [0, 1].
+- Changed administrator guidance from plain SHA-256 pseudonyms to keyed HMAC-SHA-256 pseudonyms. A plain hash of predictable student identifiers is vulnerable to dictionary guessing; the secret used to create pseudonyms must remain outside the dataset and database.
+- Added API regression tests for invalid student feature schemas and out-of-range accuracy targets.
+- Removed CI's automatic package-lock mutation and repository write permission. CI now installs exactly the committed dependency lockfile using `npm ci`.
+- Added weekly Dependabot update configuration for root workspaces, mobile dependencies and GitHub Actions.
+- Added a scheduled/manual npm audit workflow that stores a full JSON report and summarizes severity counts in the Actions run.
+
+**Verification**
+- GitHub Actions run #659 passed: 281 API tests and 73 web tests; lint, Prisma clean migration, web/API builds and mobile typecheck passed.
+- GitHub Actions run #661 passed after the dependency audit workflow was added.
+- Dependency audit run #1 completed and reported 17 advisories: 3 critical, 4 high and 10 moderate.
+
+**Security follow-up — not resolved yet**
+- Audit identified advisories affecting Next.js, Vitest/Tinypool, body-parser, Zod, Vite and PostCSS.
+- Some available fixes require major-version upgrades (Next.js, Vitest, Vite and Zod). Do not apply broad forced upgrades without testing the app and API compatibility.
+- Dependabot is configured to propose major updates separately from grouped minor/patch updates. Review and merge only after the full CI suite passes.
+- The audit workflow currently reports and archives vulnerabilities; it does not claim they are fixed.
+
+**Remaining before production completion**
+1. Review and resolve the open npm advisories, prioritizing production runtime dependencies and critical severity.
+2. Register an authorized, genuinely anonymized dataset with the exact five-feature schema and next-attempt accuracy target.
+3. Verify grouped holdout metrics and manually activate only a candidate that passes real-data provenance and baseline checks.
+4. Run staging verification with a real student account and active artifact; confirm persistence, delivery size, fallback and model refresh behavior.
