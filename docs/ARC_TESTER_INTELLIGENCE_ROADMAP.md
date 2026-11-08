@@ -902,3 +902,33 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 2. Test the full student path with an approved real-anonymized artifact in a controlled environment.
 3. Add production deployment checks for persistent database storage, model artifact size and model version freshness.
 4. Review npm audit findings separately; the CI dependency installation reported outstanding advisories, which are not resolved by the TensorFlow work.
+
+
+### Phase 7 — student-facing hybrid prediction path — 2026-11-09
+
+**Implemented**
+- The authenticated student's score-prediction response now includes a privacy-safe five-number feature vector once at least three completed practice attempts exist:
+  - `completed_attempts`
+  - `previous_accuracy`
+  - `recent_average_accuracy`
+  - `overall_average_accuracy`
+  - `previous_question_count`
+- No raw attempt rows, question answers, student IDs, names or emails are exposed in this vector.
+- Student analytics now requests the active `student-score-population` TensorFlow.js artifact and performs browser-side inference when available.
+- Predictions are clamped to the accuracy fraction range and displayed as percentages with the model version.
+- Missing, invalid or unavailable TensorFlow artifacts silently fall back to the existing personal statistical predictor; the previous baseline/validation gates remain unchanged.
+- Admin workspace defaults now match the five student features and documents that training targets must be accuracy fractions from 0 to 1.
+- Fixed model ID alignment so admin training, active artifact delivery and student inference use the same `student-score-population` identifier.
+- Added API feature-vector assertions and student analytics UI coverage for TensorFlow inference. Browser inference tests cover model loading, normalization, feature mismatch, synthetic artifact rejection and disposal.
+
+**Verification**
+- GitHub Actions run #651 passed on commit `b5b79da4991504a8a94b4ce15f3e6156689543ca`.
+- Web: 73/73 tests passed.
+- API: 279/279 tests passed.
+- Lint, clean Prisma migrations, web/API production builds and mobile typecheck passed.
+
+**Phase 7 remaining**
+- Populate the registry with an authorized, genuinely anonymized student dataset using the exact five-feature schema and next-attempt accuracy target.
+- Confirm the trained model's grouped holdout performance and manually activate only if the baseline and provenance gates pass.
+- Perform an end-to-end staging test with an actual active artifact and student account, including artifact refresh/fallback behavior.
+- Confirm production database persistence and model artifact delivery limits. Do not activate a model merely because the UI supports activation.
