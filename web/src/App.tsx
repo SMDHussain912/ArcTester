@@ -725,6 +725,15 @@ export default function App() {
   }
 
   function generateSubjectPaper() {
+    if (topicSelectionMode === "include" && selectedTopics.length === 0) {
+      setError("Select at least one topic or switch Topic selection to All topics.");
+      return;
+    }
+    const requestedTotal = Object.values(subjectQuotas).reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0), 0);
+    if (requestedTotal > 500) {
+      setError("A formal examination cannot contain more than 500 questions.");
+      return;
+    }
     const picked: number[] = [];
     const subjects = [...new Set(adminQuestions.map((question) => question.subject))];
     for (const subject of subjects) {
@@ -786,6 +795,14 @@ export default function App() {
     event.preventDefault();
     if (selectedQuestionIds.length === 0) {
       setError("Select at least one question for the exam.");
+      return;
+    }
+    if (selectedQuestionIds.length > 500) {
+      setError("A formal examination cannot contain more than 500 questions.");
+      return;
+    }
+    if (examNegativeMarks > examMarks) {
+      setError("Negative marks cannot exceed marks awarded for a correct answer.");
       return;
     }
     setBusy(true);
@@ -1013,6 +1030,7 @@ export default function App() {
     await request("/auth/logout", { method: "POST" }).catch(() => undefined);
     setUser(null);
     setBank(null);
+    localStorage.removeItem("arctester-active-practice-attempt");
     setTest(null);
     setResult(null);
     setAnswers({});
@@ -1501,9 +1519,10 @@ export default function App() {
                 {warning}
               </p>
             ))}
+            <section className="panel exam-question-navigator" aria-label="Practice question navigator"><div className="exam-progress-heading"><strong>Question progress</strong><span>{Object.keys(answers).length} / {test.questions.length} answered</span></div><div className="exam-progress-track"><span style={{ width: `${test.questions.length ? Object.keys(answers).length / test.questions.length * 100 : 0}%` }} /></div><div className="exam-palette">{test.questions.map((question, index) => <button type="button" key={question.id} aria-label={`Go to question ${index + 1}${answers[question.id] !== undefined ? ", answered" : ", unanswered"}`} className={answers[question.id] !== undefined ? "exam-palette-item answered" : "exam-palette-item"} onClick={() => document.getElementById(`practice-question-${question.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{index + 1}</button>)}</div></section>
             <div className="question-list">
               {test.questions.map((question, index) => (
-                <article className="panel question-card" key={question.id}>
+                <article id={`practice-question-${question.id}`} className="panel question-card" key={question.id}>
                   <p className="eyebrow">
                     QUESTION {index + 1} · {question.subject}
                   </p>
@@ -1563,9 +1582,11 @@ export default function App() {
               <article className="panel question-card" key={question.questionId}>
                 <p className="eyebrow">QUESTION {index + 1}</p>
                 <h3>{question.text}</h3>
-                <p className={question.isCorrect ? "success" : "error"}>
-                  {question.isCorrect ? "Correct" : "Incorrect"}
+                <p className={question.selectedIndex === null ? "muted" : question.isCorrect ? "success" : "error"}>
+                  {question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"}
                 </p>
+                <p><strong>Your answer:</strong> {question.selectedIndex === null ? "Not answered" : question.options[question.selectedIndex]}</p>
+                <p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p>
                 <p className="muted">{question.explanation}</p>
               </article>
             ))}
@@ -1661,7 +1682,7 @@ export default function App() {
                         return <label key={key}><input type="checkbox" checked={practiceTopicKeys.includes(key)} onChange={(event) => setPracticeTopicKeys((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />{topic.topic}<small>{topic.count}</small></label>;
                       })}</div></div>;
                     })}</div>}
-                    <p className="practice-helper">Leave all topics unchecked to include every topic in your selected subjects. Once you select a topic, only selected subject/topic pairs are used.</p>
+                    <p className="practice-helper">Leave all topics unchecked to include every topic in your selected subjects. For each subject, leave its topics unchecked to include all topics; selecting topics restricts only that subject.</p>
                     {practiceTopicKeys.length > 0 && <button type="button" className="text-button" onClick={() => setPracticeTopicKeys([])}>Clear topic filters</button>}
                   </div>
                   <div className="practice-builder-section">
