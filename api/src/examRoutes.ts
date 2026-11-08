@@ -1114,10 +1114,10 @@ export function examRouter(db: PrismaClient): Router {
             data: {
               assignmentId: assignment.id, studentId: req.user!.id, status: "ACTIVE",
               startedAt: now, lastHeartbeatAt: now, lastActivityAt: now,
-              events: { create: { type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
+              events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
           });
-      if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
+      if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
     } catch (error) { next(error); }
@@ -1154,7 +1154,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       if (input.event !== "HEARTBEAT" || stale) {
         await db.examSessionEvent.create({
-          data: { sessionId: session.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+          data: { sessionId: session.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
         });
       }
       const effectiveDeadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
@@ -1170,7 +1170,7 @@ export function examRouter(db: PrismaClient): Router {
         include: {
           student: { select: { id: true, email: true } },
           assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
-          events: { orderBy: { createdAt: "desc" }, take: 12 },
+          events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
         },
       });
       const now = Date.now();
@@ -1227,7 +1227,7 @@ export function examRouter(db: PrismaClient): Router {
         },
       });
       await db.examSessionEvent.create({
-        data: { sessionId: session.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+        data: { sessionId: session.id, actorId: req.user!.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
       });
       res.json({ ok: true, session: { id: updated.id, status: updated.status, endedAt: updated.endedAt } });
     } catch (error) { next(error); }
@@ -1440,7 +1440,7 @@ export function examRouter(db: PrismaClient): Router {
           data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
         });
         await tx.examSessionEvent.create({
-          data: { sessionId: assignment.session!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
+          data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
         });
         return created;
       });
