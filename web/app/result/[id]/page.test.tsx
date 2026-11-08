@@ -69,7 +69,7 @@ describe("result page", () => {
             total: 5,
             expired: false,
             breakdown: [{ subject: "Maths", correct: 3, total: 5 }],
-            questions: [],
+            questions: [{ questionId: 11, subject: "Computer Science", topic: "Data Structures", relatedConcepts: [{ slug: "stack", title: "Stack" }], text: "Which structure uses LIFO?", options: ["Queue", "Stack"], selectedIndex: 0, correctIndex: 1, isCorrect: false, explanation: "A stack follows LIFO." }],
           })
         );
       }
@@ -83,6 +83,7 @@ describe("result page", () => {
     );
 
     await waitFor(() => expect(screen.getByText("3 / 5")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/learning#stack");
     expect(screen.queryByText("Sign in to continue")).not.toBeInTheDocument();
   });
 
