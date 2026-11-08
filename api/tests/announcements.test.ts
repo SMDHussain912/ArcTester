@@ -68,6 +68,19 @@ describe("admin announcements", () => {
     const announcements = feed.json.announcements as Array<{ title: string; message: string }>;
     expect(announcements).toHaveLength(1);
     expect(announcements[0].message).toContain("10:00 AM");
+
+    const announcementId = (announcements[0] as { id: string }).id;
+    const acknowledged = await request(
+      `/announcements/${announcementId}/read`,
+      "POST",
+      {},
+      studentCookie
+    );
+    expect(acknowledged.status).toBe(200);
+
+    const nextFeed = await request("/announcements", "GET", undefined, studentCookie);
+    expect(nextFeed.status).toBe(200);
+    expect(nextFeed.json.announcements).toEqual([]);
   });
 
   it("rejects student publishing and invalid expiry dates", async () => {
