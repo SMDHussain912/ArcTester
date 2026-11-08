@@ -498,6 +498,25 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 **Current limitation**
 - This is a performance-explanation slice, not the complete explanation engine. Curated concept knowledge and answer-release policy integration remain open.
 
+### Phase 6 implementation log — curated concept knowledge (2026-11-09)
+
+**Implemented and pushed**
+- Added a versioned-in-code curated concept catalogue with definitions, examples, related concepts, and common mistakes.
+- Initial coverage includes core data structures, searching, operating systems, DBMS, computer networks, and selected Physics fundamentals.
+- Added case-insensitive content search, subject filtering, bounded result limits, and slug lookup.
+- Exposed authenticated endpoints: `GET /learning/concepts` and `GET /learning/concepts/:slug`.
+- Added unit and API tests for search, filtering, lookup, missing concepts, and invalid query limits.
+- No new database migration or external AI provider is required; concept content remains explicit and reviewable in source.
+
+**Verification**
+- Previous failure in run `42524281717` was a brittle API test expectation: it required a percentage explanation even when topic-level samples were below the evidence threshold. Updated the test to accept either valid evidence-backed output or the explicit low-sample explanation.
+- The follow-up CI run must verify the fix and concept endpoints before this slice is considered complete.
+
+**Remaining in Phase 6**
+- Curated content review and broader syllabus coverage.
+- Integrate concept links into question-result explanations and study recommendations.
+- Add tests that enforce formal-exam answer-release policy before showing protected answers.
+
 ### Current progress
 
 - [x] Intelligence architecture and constraints documented.
@@ -508,7 +527,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 - [ ] Phase 3 — regression engine (student score prediction with chronological evaluation, baseline comparison, data-sufficiency gates, model registry/artifacts, prediction intervals, and drift telemetry implemented; continue model validation and operational acceptance).
 - [ ] Phase 4 — classification engine.
 - [ ] Phase 5 — personalized recommendations.
-- [ ] Phase 6 — explanation engine (first deterministic performance-explanation slice implemented; answer explanation policy, curated concept knowledge, and protected-answer release tests remain).
+- [ ] Phase 6 — explanation engine (deterministic performance explanations and initial curated concept knowledge/search endpoints implemented; question-result integration, broader reviewed content, and protected-answer release tests remain).
 - [ ] Phase 7 — admin model operations.
 - [ ] Phase 8 — integration and polish.
 
