@@ -22,7 +22,9 @@ describe("CORS origin allowlist", () => {
       headers: { origin: "http://localhost:3000" },
     });
 
-    expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:3000");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://localhost:3000"
+    );
     expect(response.headers.get("access-control-allow-credentials")).toBe("true");
   });
 
@@ -31,7 +33,9 @@ describe("CORS origin allowlist", () => {
       headers: { origin: "http://192.168.1.20:3000" },
     });
 
-    expect(response.headers.get("access-control-allow-origin")).toBe("http://192.168.1.20:3000");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "http://192.168.1.20:3000"
+    );
   });
 
   it("does not reflect an unconfigured origin", async () => {
@@ -53,7 +57,9 @@ describe("CORS origin allowlist", () => {
     });
 
     expect(response.status).toBe(204);
-    expect(response.headers.get("access-control-allow-origin")).toBe("https://study.example.com");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://study.example.com"
+    );
     expect(response.headers.get("access-control-allow-methods")).toContain("POST");
     expect(response.headers.get("access-control-allow-headers")).toContain("authorization");
   });
