@@ -806,6 +806,7 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 **Implemented foundation**
 - Added a strict TensorFlow.js artifact contract with model topology, weight specs, base64 weight payload, numeric feature schema, normalization metadata, evaluation metrics and dataset provenance.
 - Added artifact validation for feature/normalization dimensions, duplicate feature names, model payload limits, held-out sample count and baseline performance.
+- Added deterministic grouped-student train/test splitting so repeated attempts from one student cannot leak into both sides of a population-model evaluation. Dataset preparation can opt into this split while learning encoders from training rows only.
 - Synthetic artifacts can be validated for experiments but are explicitly blocked from production eligibility.
 - Production eligibility requires real-anonymized evaluation provenance, at least 20 held-out samples, and candidate MAE/RMSE no worse than the statistical baseline.
 
@@ -828,6 +829,6 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - TensorFlow.js is an optional candidate path; the current statistical path remains available as fallback.
 
 **Current status**
-- Phase 7 architecture and portable artifact validation foundation are committed.
+- Phase 7 architecture, portable artifact validation and grouped-student split foundation are committed.
 - TensorFlow.js runtime dependencies, training, browser inference and API artifact delivery are not yet implemented.
-- CI verification for the artifact foundation is pending.
+- CI verification for the current artifact and grouped-split foundation is pending.
