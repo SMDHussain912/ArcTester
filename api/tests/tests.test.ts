@@ -294,7 +294,8 @@ describe("submit + result", () => {
 
     const result = await api.get(`/tests/${created.json.attemptId}/result`);
     expect(result.status).toBe(200);
-    expect(result.json.questions[0]).toMatchObject({
+    const resultBody = result.json as { questions: { questionId: number; text: string; options: string[]; correctIndex: number; explanation: string; isCorrect: boolean }[] };
+    expect(resultBody.questions[0]).toMatchObject({
       questionId,
       text: original.text,
       options: originalOptions,
@@ -302,6 +303,25 @@ describe("submit + result", () => {
       explanation: original.explanation,
       isCorrect: true,
     });
+  });
+
+  it("only processes one of two concurrent submissions for the same attempt", async () => {
+    const created = (await api.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 1,
+    })) as { json: { attemptId: number; questions: { id: number }[] } };
+    const questionId = created.json.questions[0].id;
+    const payload = { answers: [{ questionId, selectedIndex: 0 }] };
+    const [first, second] = await Promise.all([
+      api.post(`/tests/${created.json.attemptId}/submit`, payload),
+      api.post(`/tests/${created.json.attemptId}/submit`, payload),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
+    const stat = await server.db.stat.findUniqueOrThrow({
+      where: { userId_questionId: { userId, questionId } },
+    });
+    expect(stat.seen).toBe(1);
   });
 
   it("rejects answers for foreign questions", async () => {

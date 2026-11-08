@@ -24,14 +24,13 @@ INSERT INTO "new_AttemptAnswer" (
 )
 SELECT
   aa."id", aa."attemptId", aa."questionId", aa."chosen", aa."isCorrect",
-  COALESCE(aa."subjectSnapshot", s."name", ''),
-  COALESCE(aa."topicSnapshot", t."name"),
-  COALESCE(aa."difficultySnapshot", q."difficulty", 'medium'),
+  aa."subjectSnapshot",
+  aa."topicSnapshot",
+  aa."difficultySnapshot",
   q."text", q."options", q."correctIndex", q."explanation"
 FROM "AttemptAnswer" aa
 JOIN "Question" q ON q."id" = aa."questionId"
-JOIN "Subject" s ON s."id" = q."subjectId"
-LEFT JOIN "Topic" t ON t."id" = q."topicId";
+;
 
 DROP TABLE "AttemptAnswer";
 ALTER TABLE "new_AttemptAnswer" RENAME TO "AttemptAnswer";

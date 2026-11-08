@@ -356,6 +356,14 @@ export async function submitTest(
   const expired = attempt.deadline ? now.getTime() > attempt.deadline.getTime() : false;
 
   await db.$transaction(async (tx) => {
+    // Claim the attempt inside the same transaction as stat updates. A second
+    // concurrent submit sees finishedAt already set and cannot double-count progress.
+    const claimed = await tx.attempt.updateMany({
+      where: { id: attemptId, userId, finishedAt: null },
+      data: { finishedAt: now, expired },
+    });
+    if (claimed.count !== 1) throw conflict("This test was already submitted.");
+
     for (const row of rows) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: row.questionId },
@@ -381,10 +389,6 @@ export async function submitTest(
         },
       });
     }
-    await tx.attempt.update({
-      where: { id: attemptId },
-      data: { finishedAt: now, expired },
-    });
   });
 
   return { attemptId, score, total: memberIds.size, expired };
