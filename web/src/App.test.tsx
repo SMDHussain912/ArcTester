@@ -156,6 +156,7 @@ describe("live Vite application", () => {
 
 
   it("shows and releases a submission from the dedicated admin review queue", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true));
     let released = false;
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
