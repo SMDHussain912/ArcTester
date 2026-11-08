@@ -125,6 +125,19 @@ describe("student analytics page", () => {
       if (path.endsWith("/analytics/overview")) {
         return Promise.resolve(jsonResponse(200, overviewResponse(0.8, 10, 8)));
       }
+      if (path.endsWith("/analytics/question-performance")) {
+        return Promise.resolve(jsonResponse(200, {
+          generatedAt: "2026-11-08T08:30:00.000Z",
+          minimumAnswers: 5,
+          weakAccuracyThreshold: 0.6,
+          insufficientSampleCount: 0,
+          questions: [{
+            questionId: 41, subject: "Physics", topic: "Mechanics", difficulty: "medium",
+            seen: 5, correct: 1, incorrect: 4, unanswered: 0,
+            accuracy: 0.2, sampleSize: 5, sufficientData: true, weak: true,
+          }],
+        }));
+      }
       if (path.endsWith("/analytics/history")) {
         return Promise.resolve(
           jsonResponse(200, [
@@ -182,6 +195,9 @@ describe("student analytics page", () => {
     expect(screen.getByText("Your next study steps")).toBeInTheDocument();
     expect(screen.getByText("Strengthen Physics")).toBeInTheDocument();
     expect(screen.getByText("high priority")).toBeInTheDocument();
+    expect(screen.getByText("Question-level performance")).toBeInTheDocument();
+    expect(screen.getByText("Question #41 · Physics")).toBeInTheDocument();
+    expect(screen.getByText("20% accuracy")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute(
       "aria-valuenow",
       "30"
