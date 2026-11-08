@@ -336,3 +336,21 @@ model ExamSessionAnswer {
   @@unique([sessionId, examQuestionId])
   @@index([examQuestionId])
 }
+
+
+model RegisteredModel {
+  id          String   @id @default(cuid())
+  modelId     String
+  version     Int
+  algorithm   String
+  task        String
+  dataset     String
+  artifactJson String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  activatedAt DateTime?
+
+  @@unique([modelId, version])
+  @@index([modelId, isActive])
+  @@index([createdAt])
+}
