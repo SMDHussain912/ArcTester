@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
+  const [questionScoring, setQuestionScoring] = useState<Record<number, { marks: number; negativeMarks: number }>>({});
   const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
   const [assignExamId, setAssignExamId] = useState("");
   const [title, setTitle] = useState("");
@@ -66,8 +67,10 @@ export default function AdminPage() {
   }, [questions, search, subjectFilter, difficultyFilter]);
 
   const selectedQuestionRows = useMemo(() => questions.filter((question) => selectedQuestions.includes(question.id)), [questions, selectedQuestions]);
-  const totalMarks = selectedQuestions.length * defaultMarks;
-  const maximumNegativeMarks = selectedQuestions.length * negativeMarks;
+  const totalMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.marks ?? defaultMarks), 0);
+  const maximumNegativeMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.negativeMarks ?? negativeMarks), 0);
+  const questionsWithoutTopic = selectedQuestionRows.filter((question) => !question.topic).length;
+  const questionsWithoutDifficulty = selectedQuestionRows.filter((question) => !question.difficulty).length;
   const selectedSubjects = new Set(selectedQuestionRows.map((question) => question.subject));
   const selectedDifficulties = selectedQuestionRows.reduce<Record<string, number>>((counts, question) => {
     const difficulty = question.difficulty || "Unspecified";
@@ -76,7 +79,32 @@ export default function AdminPage() {
   }, {});
 
   function toggleQuestion(id: number) {
-    setSelectedQuestions((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+    setSelectedQuestions((current) => {
+      if (current.includes(id)) {
+        setQuestionScoring((scoring) => {
+          const next = { ...scoring };
+          delete next[id];
+          return next;
+        });
+        return current.filter((value) => value !== id);
+      }
+      setQuestionScoring((scoring) => ({
+        ...scoring,
+        [id]: { marks: defaultMarks, negativeMarks },
+      }));
+      return [...current, id];
+    });
+  }
+
+  function updateQuestionScoring(id: number, field: "marks" | "negativeMarks", value: number) {
+    setQuestionScoring((current) => ({
+      ...current,
+      [id]: {
+        marks: current[id]?.marks ?? defaultMarks,
+        negativeMarks: current[id]?.negativeMarks ?? negativeMarks,
+        [field]: Math.max(0, Math.min(100, value)),
+      },
+    }));
   }
   function toggleStudent(id: number) {
     setSelectedStudents((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
@@ -92,7 +120,10 @@ export default function AdminPage() {
     if (duration < 1 || duration > 600) { setError("Duration must be between 1 and 600 minutes."); return; }
     if (selectedQuestions.length === 0) { setError("Select at least one question."); return; }
     if (selectedQuestions.length > 500) { setError("An exam cannot contain more than 500 questions."); return; }
-    if (negativeMarks > defaultMarks) { setError("Negative marks should not exceed marks awarded for a correct answer."); return; }
+    if (selectedQuestions.some((id) => (questionScoring[id]?.negativeMarks ?? negativeMarks) > (questionScoring[id]?.marks ?? defaultMarks))) {
+      setError("A question cannot have more negative marks than its correct-answer marks.");
+      return;
+    }
     setBusy(true); setError(""); setNotice("");
     try {
       const result = await api.createAdminExam({
@@ -100,12 +131,12 @@ export default function AdminPage() {
         shuffleQuestions, shuffleOptions,
         questions: selectedQuestions.map((questionId) => ({
           questionId,
-          marks: defaultMarks,
-          negativeMarks,
+          marks: questionScoring[questionId]?.marks ?? defaultMarks,
+          negativeMarks: questionScoring[questionId]?.negativeMarks ?? negativeMarks,
         })),
       });
       setNotice("Draft exam created. Publish it from the Exams tab when it is ready.");
-      setTitle(""); setDescription(""); setSelectedQuestions([]);
+      setTitle(""); setDescription(""); setSelectedQuestions([]); setQuestionScoring({});
       await load(); setTab("exams");
       setAssignExamId(result.exam.id);
     } catch (e) { showError(e, "Could not create the exam."); }
@@ -126,6 +157,10 @@ export default function AdminPage() {
     event.preventDefault();
     if (!assignExamId) { setError("Choose a published exam."); return; }
     if (selectedStudents.length === 0) { setError("Select at least one student."); return; }
+    if (availableFrom && dueAt && new Date(dueAt).getTime() <= new Date(availableFrom).getTime()) {
+      setError("The exam deadline must be later than its availability time.");
+      return;
+    }
     setBusy(true); setError(""); setNotice("");
     try {
       await api.assignAdminExam(assignExamId, {
@@ -341,8 +376,16 @@ export default function AdminPage() {
             <div className="row" style={{ justifyContent: "space-between", marginTop: 10, flexWrap: "wrap" }}>
               <span className="mute">Showing {filteredQuestions.length} questions · {selectedQuestions.length} selected overall</span>
               <div className="row">
-                <button type="button" className="button button-secondary button-small" onClick={() => setSelectedQuestions((current) => [...new Set([...current, ...filteredQuestions.map((question) => question.id)])])}>Select visible</button>
-                <button type="button" className="button button-quiet button-small" onClick={() => setSelectedQuestions([])}>Clear selection</button>
+                <button type="button" className="button button-secondary button-small" onClick={() => {
+                  const visibleIds = filteredQuestions.map((question) => question.id);
+                  setSelectedQuestions((current) => [...new Set([...current, ...visibleIds])]);
+                  setQuestionScoring((current) => {
+                    const next = { ...current };
+                    for (const id of visibleIds) next[id] ??= { marks: defaultMarks, negativeMarks };
+                    return next;
+                  });
+                }}>Select visible</button>
+                <button type="button" className="button button-quiet button-small" onClick={() => { setSelectedQuestions([]); setQuestionScoring({}); }}>Clear selection</button>
               </div>
             </div>
             <div style={{ maxHeight: 430, overflowY: "auto", marginTop: 12, border: "1px solid var(--line)", borderRadius: 10, padding: 8 }}>
@@ -356,7 +399,17 @@ export default function AdminPage() {
               <div className="panel-header"><h3>Paper composition</h3><span className="pill">{selectedQuestions.length} questions</span></div>
               <p className="mute">{Object.entries(selectedDifficulties).map(([difficulty, count]) => `${difficulty}: ${count}`).join(" · ")}</p>
               <p className="mute">Selected subjects: {[...selectedSubjects].join(", ")}</p>
-              <p className="mute">The selected questions are included in the order shown in the bank. Enable shuffle if students should receive a randomized order.</p>
+              {questionsWithoutTopic || questionsWithoutDifficulty ? <p className="warn">{questionsWithoutTopic} selected questions have no topic and {questionsWithoutDifficulty} have no difficulty label. Review the question bank before publishing if paper balance matters.</p> : null}
+              <p className="mute">Set marks individually. The final paper preview uses these values for scoring and negative marking.</p>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {selectedQuestionRows.map((question) => (
+                  <div key={question.id} className="row" style={{ justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
+                    <span style={{ flex: "2 1 260px" }}><strong>#{question.id} · {question.subject}</strong><br /><span className="mute">{question.text}</span></span>
+                    <label style={{ width: 100 }}>Marks<input type="number" min={0} max={100} step="0.25" value={questionScoring[question.id]?.marks ?? defaultMarks} onChange={(event) => updateQuestionScoring(question.id, "marks", Number(event.target.value) || 0)} /></label>
+                    <label style={{ width: 110 }}>Wrong answer<input type="number" min={0} max={100} step="0.25" value={questionScoring[question.id]?.negativeMarks ?? negativeMarks} onChange={(event) => updateQuestionScoring(question.id, "negativeMarks", Number(event.target.value) || 0)} /></label>
+                  </div>
+                ))}
+              </div>
             </section> : null}
             <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
               <span className="mute">{selectedQuestions.length} questions · {duration} minutes · {totalMarks} marks</span>
