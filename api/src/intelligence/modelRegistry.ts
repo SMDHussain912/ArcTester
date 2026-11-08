@@ -43,6 +43,11 @@ const registryArtifactSchema = z.object({
   if (new Set(names).size !== names.length) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["featureSchema"], message: "Feature names must be unique" });
   }
+  for (const [index, feature] of artifact.featureSchema.entries()) {
+    if (feature.type === "categorical" && new Set(feature.categories).size !== feature.categories.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["featureSchema", index], message: "Feature categories must be unique" });
+    }
+  }
 });
 type RegistryArtifact = z.infer<typeof registryArtifactSchema>;
 
@@ -212,7 +217,8 @@ export class ModelRegistry {
     const versions = await this.list(modelId);
     if (versions.length < 2) throw new Error("No previous model version is available for rollback");
     const active = await this.readActiveVersion(modelId);
-    const previous = versions.filter((item) => item.version < active).at(-1) ?? versions.at(-2)!;
+    const previous = versions.filter((item) => item.version < active).at(-1);
+    if (!previous) throw new Error("No earlier model version is available for rollback");
     await this.activate(modelId, previous.version);
     return previous.version;
   }
@@ -265,7 +271,11 @@ export class ModelRegistry {
     let parsed: unknown;
     try { parsed = JSON.parse(raw); }
     catch { throw new Error("Registered model artifact contains invalid JSON"); }
-    return validateArtifact(parsed);
+    const artifact = validateArtifact(parsed);
+    if (artifact.modelId !== modelId || artifact.version !== version) {
+      throw new Error("Registered model identity does not match its storage location");
+    }
+    return artifact;
   }
 
   private async readActiveVersion(modelId: string): Promise<number> {
