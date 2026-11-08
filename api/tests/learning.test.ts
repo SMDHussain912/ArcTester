@@ -26,6 +26,39 @@ describe("offline learning package", () => {
     expect(response.status).toBe(403);
   });
 
+  it("searches curated concepts and returns grounded learning fields", async () => {
+    const { status, json } = await api.get("/learning/concepts?q=fifo");
+    expect(status).toBe(200);
+    const body = json as { total: number; concepts: { slug: string; title: string; definition: string; examples: string[]; commonMistakes: string[] }[] };
+    expect(body.total).toBe(1);
+    expect(body.concepts[0]).toMatchObject({
+      slug: "queue",
+      title: "Queue",
+      examples: expect.arrayContaining(["Printer job scheduling"]),
+    });
+    expect(body.concepts[0].definition).toContain("first-in, first-out");
+    expect(body.concepts[0].commonMistakes.length).toBeGreaterThan(0);
+  });
+
+  it("filters concepts by subject and supports direct concept lookup", async () => {
+    const filtered = await api.get("/learning/concepts?subject=Physics&limit=1");
+    expect(filtered.status).toBe(200);
+    expect((filtered.json as { concepts: { subject: string }[] }).concepts).toHaveLength(1);
+    expect((filtered.json as { concepts: { subject: string }[] }).concepts[0].subject).toBe("Physics");
+
+    const detail = await api.get("/learning/concepts/ohms-law");
+    expect(detail.status).toBe(200);
+    expect(detail.json).toMatchObject({ slug: "ohms-law", title: "Ohm's Law" });
+
+    const missing = await api.get("/learning/concepts/not-a-real-concept");
+    expect(missing.status).toBe(404);
+  });
+
+  it("validates concept search parameters", async () => {
+    const response = await api.get("/learning/concepts?limit=1000");
+    expect(response.status).toBe(400);
+  });
+
   it("exports a versioned study package without exposing the question-bank answer key", async () => {
     const { status, json } = await api.get("/learning/package");
     expect(status).toBe(200);
