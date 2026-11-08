@@ -808,7 +808,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       if (!exam) return next(notFound("Exam not found."));
       const version = exam.versions[0];
-      if (!version) return res.json({ ok: true, report: { title: exam.title, version: null, assigned: 0, started: 0, submitted: 0, averagePercentage: null, subjects: [], questions: [] } });
+      if (!version) return res.json({ ok: true, report: { title: exam.title, version: null, assigned: 0, started: 0, active: 0, submitted: 0, reviewRequired: 0, averagePercentage: null, subjects: [], questions: [] } });
       const submitted = version.assignments.filter((assignment) => assignment.submission !== null);
       const graded = submitted.filter((assignment) => assignment.submission?.status === "GRADED" && assignment.submission.maximumScore && assignment.submission.score !== null);
       const averagePercentage = graded.length ? graded.reduce((sum, assignment) => sum + (assignment.submission!.score! / assignment.submission!.maximumScore!) * 100, 0) / graded.length : null;
