@@ -15,7 +15,8 @@ function AssignmentList() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.assignedExams()
+    api
+      .assignedExams()
       .then((response) => setAssignments(response.assignments))
       .catch((cause: unknown) => {
         setError(cause instanceof ApiError ? cause.message : "Could not load your assigned exams.");
@@ -30,28 +31,44 @@ function AssignmentList() {
       <div className="page-intro">
         <p className="eyebrow">Student workspace</p>
         <h1>My assigned exams</h1>
-        <p className="muted">Exams assigned by your administrator appear here. Open an available exam to begin.</p>
+        <p className="muted">
+          Exams assigned by your administrator appear here. Open an available exam to begin.
+        </p>
       </div>
-      {error ? <p className="error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       {loading ? <p className="mute">Loading assigned exams…</p> : null}
       {!loading && !error && assignments.length === 0 ? (
         <section className="panel">
           <h2>No exams assigned yet</h2>
-          <p className="muted">When an administrator assigns an exam to your account, it will show up here.</p>
-          <Link className="button button-secondary" href="/">Back to dashboard</Link>
+          <p className="muted">
+            When an administrator assigns an exam to your account, it will show up here.
+          </p>
+          <Link className="button button-secondary" href="/">
+            Back to dashboard
+          </Link>
         </section>
       ) : null}
       <div className="stack">
         {assignments.map((assignment) => {
           const submitted = Boolean(assignment.submission);
           const notYetAvailable = Boolean(
-            assignment.availableFrom && new Date(assignment.availableFrom).getTime() > now,
+            assignment.availableFrom && new Date(assignment.availableFrom).getTime() > now
           );
           const expired = Boolean(assignment.dueAt && new Date(assignment.dueAt).getTime() < now);
           const canStart = !submitted && !notYetAvailable && !expired;
           const status = submitted
-            ? assignment.submission?.status === "REVIEW_REQUIRED" ? "Submitted · review pending" : "Submitted"
-            : notYetAvailable ? "Not available yet" : expired ? "Deadline passed" : "Ready";
+            ? assignment.submission?.status === "REVIEW_REQUIRED"
+              ? "Submitted · review pending"
+              : "Submitted"
+            : notYetAvailable
+              ? "Not available yet"
+              : expired
+                ? "Deadline passed"
+                : "Ready";
           return (
             <article className="panel" key={assignment.id}>
               <div className="panel-header">
@@ -61,7 +78,9 @@ function AssignmentList() {
                 </div>
                 <span className="pill">{status}</span>
               </div>
-              {assignment.exam.description ? <p className="muted">{assignment.exam.description}</p> : null}
+              {assignment.exam.description ? (
+                <p className="muted">{assignment.exam.description}</p>
+              ) : null}
               <div className="row muted">
                 <span>{assignment.questionCount} questions</span>
                 <span>·</span>
@@ -75,11 +94,20 @@ function AssignmentList() {
               </div>
               <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
                 {submitted ? (
-                  <Link className="button button-secondary" href={"/assignments/" + assignment.id + "/result"}>View result</Link>
+                  <Link
+                    className="button button-secondary"
+                    href={"/assignments/" + assignment.id + "/result"}
+                  >
+                    View result
+                  </Link>
                 ) : canStart ? (
-                  <Link className="button button-primary" href={"/assignments/" + assignment.id}>Open exam →</Link>
+                  <Link className="button button-primary" href={"/assignments/" + assignment.id}>
+                    Open exam →
+                  </Link>
                 ) : (
-                  <button className="button button-secondary" disabled>{notYetAvailable ? "Not available yet" : "Unavailable"}</button>
+                  <button className="button button-secondary" disabled>
+                    {notYetAvailable ? "Not available yet" : "Unavailable"}
+                  </button>
                 )}
               </div>
               {assignment.submission?.score !== null && assignment.submission?.maximumScore ? (
@@ -96,5 +124,9 @@ function AssignmentList() {
 }
 
 export default function AssignmentsPage() {
-  return <RequireSession><AssignmentList /></RequireSession>;
+  return (
+    <RequireSession>
+      <AssignmentList />
+    </RequireSession>
+  );
 }
