@@ -113,6 +113,7 @@ export default function App() {
   const [assignmentClock, setAssignmentClock] = useState(Date.now());
   const [assignmentAutoSubmitTriggered, setAssignmentAutoSubmitTriggered] = useState(false);
   const [examTitle, setExamTitle] = useState("");
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [examDescription, setExamDescription] = useState("");
   const [examInstructions, setExamInstructions] = useState("");
   const [examDuration, setExamDuration] = useState(180);
@@ -595,6 +596,29 @@ export default function App() {
     setError(picked.length ? `Generated a ${picked.length}-question paper from your subject, topic and difficulty rules.` : "No questions matched the current blueprint. Check subject quotas and topic filters.");
   }
 
+  async function editExam(examId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request<{ exam: { id: string; title: string; description: string; version: { instructions: string; durationMinutes: number; shuffleQuestions: boolean; shuffleOptions: boolean; questions: { questionId: number | null; marks: number; negativeMarks: number }[] } | null } }>(`/admin/exams/${examId}`);
+      const exam = response.exam;
+      setEditingExamId(exam.id);
+      setExamTitle(exam.title);
+      setExamDescription(exam.description);
+      setExamInstructions(exam.version?.instructions ?? "");
+      setExamDuration(exam.version?.durationMinutes ?? 180);
+      setShuffleExamQuestions(exam.version?.shuffleQuestions ?? false);
+      setShuffleExamOptions(exam.version?.shuffleOptions ?? false);
+      setSelectedQuestionIds((exam.version?.questions ?? []).flatMap((question) => question.questionId === null ? [] : [question.questionId]));
+      const firstQuestion = exam.version?.questions[0];
+      setExamMarks(firstQuestion?.marks ?? 1);
+      setExamNegativeMarks(firstQuestion?.negativeMarks ?? 0);
+      setActivePage("exams");
+      document.getElementById("exam-management")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
   async function createExam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (selectedQuestionIds.length === 0) {
@@ -604,8 +628,8 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      await request("/admin/exams", {
-        method: "POST",
+      await request(editingExamId ? `/admin/exams/${editingExamId}` : "/admin/exams", {
+        method: editingExamId ? "PATCH" : "POST",
         body: JSON.stringify({
           title: examTitle.trim(),
           description: examDescription.trim(),
@@ -620,6 +644,7 @@ export default function App() {
       setExamDescription("");
       setExamInstructions("");
       setSelectedQuestionIds([]);
+      setEditingExamId(null);
       await refreshAdminExams();
     } catch (cause) {
       setError((cause as Error).message);
@@ -942,7 +967,7 @@ export default function App() {
           </section>
           <section hidden={activePage !== "exams"} id="exam-management">
             <div className="section-head">
-              <div><p className="eyebrow">EXAM DELIVERY</p><h2>Create a mock test</h2></div>
+              <div><p className="eyebrow">EXAM DELIVERY</p><h2>{editingExamId ? `Create new version · ${examTitle}` : "Create a mock test"}</h2><p className="muted">Editing creates a new immutable version; already assigned versions remain unchanged.</p></div>
             </div>
             <form className="panel admin-form exam-builder" onSubmit={(event) => void createExam(event)}>
               <label>Exam title
@@ -987,7 +1012,7 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              <button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : `Create draft (${selectedQuestionIds.length} questions)`}</button>
+              <button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : editingExamId ? `Save new version (${selectedQuestionIds.length} questions)` : `Create draft (${selectedQuestionIds.length} questions)`}</button>
             </form>
             <div className="section-head"><div><p className="eyebrow">EXAM LIBRARY</p><h2>Drafts and published exams</h2></div></div>
             <div className="admin-exam-list">
@@ -997,6 +1022,7 @@ export default function App() {
                 return <article className="panel admin-exam-card" key={exam.id}>
                   <div className="admin-exam-meta"><div><strong>{exam.title}</strong><p className="muted">{exam.description || "No description"} · {version?._count.questions ?? 0} questions · {version?.durationMinutes ?? 0} min</p></div><span className={exam.status === "ARCHIVED" ? "status status-expired" : published ? "status status-used" : "status status-pending"}>{exam.status === "ARCHIVED" ? "ARCHIVED" : published ? "PUBLISHED" : "DRAFT"}</span></div>
                   <div className="admin-exam-actions">
+                    {exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy} onClick={() => void editExam(exam.id)}>Edit / new version</button>}
                     <button className="ghost" disabled={busy} onClick={() => void cloneExam(exam.id)}>Duplicate exam</button>
                     {exam.status !== "ARCHIVED" && <button className="ghost danger-action" disabled={busy} onClick={() => void archiveExam(exam.id)}>Archive</button>}
                     {!published && exam.status !== "ARCHIVED" && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
