@@ -473,6 +473,12 @@ describe("analytics", () => {
       basedOnAttempts: number;
       minimumAnswers: number;
       weakAccuracyThreshold: number;
+      performanceExplanation: {
+        headline: string;
+        details: string[];
+        answeredQuestions: number;
+        incorrectAnswers: number;
+      };
       recommendations: {
         id: string;
         priority: string;
@@ -494,6 +500,10 @@ describe("analytics", () => {
     expect(body.basedOnAttempts).toBeGreaterThanOrEqual(2);
     expect(body.minimumAnswers).toBe(5);
     expect(body.weakAccuracyThreshold).toBe(0.6);
+    expect(body.performanceExplanation.answeredQuestions).toBeGreaterThanOrEqual(5);
+    expect(body.performanceExplanation.incorrectAnswers).toBeGreaterThanOrEqual(0);
+    expect(body.performanceExplanation.headline).toContain("Graphs");
+    expect(body.performanceExplanation.details.join(" ")).toContain("answered questions");
     const evidenced = body.recommendations.find((item) => item.evidence !== null);
     expect(evidenced).toMatchObject({
       id: expect.stringContaining("revise-topic-"),
