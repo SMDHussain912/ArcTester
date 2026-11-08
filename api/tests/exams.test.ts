@@ -296,6 +296,14 @@ describe("versioned exam management", () => {
     expect(admin.status).toBe(200);
     const body = admin.json as {
       totals: { students: number; exams: number; assignments: number; submissions: number; averagePercentage: number | null };
+      practice: {
+        questionPerformance: {
+          minimumAnswers: number;
+          weakAccuracyThreshold: number;
+          insufficientSampleCount: number;
+          questions: { questionId: number; sampleSize: number; sufficientData: boolean; weak: boolean }[];
+        };
+      };
       exams: { title: string; assigned: number; submitted: number; averagePercentage: number | null }[];
       recentSubmissions: {
         submissionId: string;
@@ -310,6 +318,11 @@ describe("versioned exam management", () => {
     expect(body.totals.assignments).toBe(1);
     expect(body.totals.submissions).toBe(1);
     expect(body.totals.averagePercentage).toBe(100);
+    expect(body.practice.questionPerformance).toMatchObject({
+      minimumAnswers: 5,
+      weakAccuracyThreshold: 0.6,
+      questions: [],
+    });
     expect(body.exams[0].title).toBe("Offline Systems Test");
     expect(body.exams[0].submitted).toBe(1);
     expect(body.recentSubmissions[0].studentEmail).toBe("exam-student@arctester.test");
