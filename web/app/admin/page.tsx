@@ -80,9 +80,16 @@ export default function AdminPage() {
   );
   const totalMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.marks ?? defaultMarks), 0);
   const maximumNegativeMarks = selectedQuestions.reduce((sum, id) => sum + (questionScoring[id]?.negativeMarks ?? negativeMarks), 0);
-  const questionsWithoutTopic = selectedQuestionRows.filter((question) => !question.topic).length;
   const questionsWithoutDifficulty = selectedQuestionRows.filter((question) => !question.difficulty).length;
   const selectedSubjects = new Set(selectedQuestionRows.map((question) => question.subject));
+  const subjectBreakdown = [...selectedSubjects].sort().map((subject) => {
+    const rows = selectedQuestionRows.filter((question) => question.subject === subject);
+    return {
+      subject,
+      questions: rows.length,
+      marks: rows.reduce((sum, question) => sum + (questionScoring[question.id]?.marks ?? defaultMarks), 0),
+    };
+  });
   const selectedDifficulties = selectedQuestionRows.reduce<Record<string, number>>((counts, question) => {
     const difficulty = question.difficulty || "Unspecified";
     counts[difficulty] = (counts[difficulty] || 0) + 1;
@@ -421,9 +428,20 @@ export default function AdminPage() {
             {selectedQuestions.length > 0 ? <section className="panel" style={{ marginTop: 14 }}>
               <div className="panel-header"><h3>Paper composition</h3><span className="pill">{selectedQuestions.length} questions</span></div>
               <p className="mute">{Object.entries(selectedDifficulties).map(([difficulty, count]) => `${difficulty}: ${count}`).join(" · ")}</p>
-              <p className="mute">Selected subjects: {[...selectedSubjects].join(", ")}</p>
-              {questionsWithoutTopic || questionsWithoutDifficulty ? <p className="warn">{questionsWithoutTopic} selected questions have no topic and {questionsWithoutDifficulty} have no difficulty label. Review the question bank before publishing if paper balance matters.</p> : null}
-              <p className="mute">Set marks individually. The final paper preview uses these values for scoring and negative marking.</p>
+              <h4>Subject-wise paper blueprint</h4>
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead><tr><th>Subject</th><th>Questions</th><th>Marks</th><th>Share</th></tr></thead>
+                  <tbody>{subjectBreakdown.map((row) => (
+                    <tr key={row.subject}>
+                      <td>{row.subject}</td><td>{row.questions}</td><td>{row.marks}</td>
+                      <td>{selectedQuestions.length ? Math.round((row.questions / selectedQuestions.length) * 100) : 0}%</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              {questionsWithoutDifficulty ? <p className="warn">{questionsWithoutDifficulty} selected questions have no difficulty label. Topic tagging is optional; subject allocation controls the paper structure.</p> : null}
+              <p className="mute">Topics are descriptive metadata, not mandatory paper sections. Set marks individually; the final preview uses these values for scoring and negative marking.</p>
               <div style={{ maxHeight: 300, overflowY: "auto" }}>
                 {selectedQuestionRows.map((question) => (
                   <div key={question.id} className="row" style={{ justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
