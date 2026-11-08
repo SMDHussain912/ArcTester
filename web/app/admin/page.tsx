@@ -180,14 +180,26 @@ export default function AdminPage() {
     }
     setBusy(true); setError(""); setNotice("");
     try {
-      const result = await api.createAdminExam({
-        title, description, instructions, durationMinutes: duration,
-        shuffleQuestions, shuffleOptions,
+      const paper = {
+        durationMinutes: duration,
         questions: selectedQuestions.map((questionId) => ({
           questionId,
           marks: questionScoring[questionId]?.marks ?? defaultMarks,
           negativeMarks: questionScoring[questionId]?.negativeMarks ?? negativeMarks,
         })),
+      };
+      const validation = await api.validateAdminPaper(paper);
+      if (!validation.valid) {
+        setError(validation.errors.join(" "));
+        return;
+      }
+      if (validation.warnings.length && !window.confirm(
+        "Paper blueprint warnings:\\n\\n" + validation.warnings.map((warning) => "• " + warning).join("\\n") + "\\n\\nContinue and create this draft?"
+      )) return;
+      const result = await api.createAdminExam({
+        title, description, instructions, durationMinutes: duration,
+        shuffleQuestions, shuffleOptions,
+        questions: paper.questions,
       });
       setNotice("Draft exam created. Publish it from the Exams tab when it is ready.");
       setTitle(""); setDescription(""); setSelectedQuestions([]); setQuestionScoring({});
