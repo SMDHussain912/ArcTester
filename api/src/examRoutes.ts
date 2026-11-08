@@ -1024,6 +1024,28 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/exams/catalog", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const exams = await db.exam.findMany({
+        where: { status: "PUBLISHED", versions: { some: { publishedAt: { not: null } } } },
+        orderBy: { updatedAt: "desc" },
+        include: { versions: {
+          where: { publishedAt: { not: null } }, orderBy: { version: "desc" }, take: 1,
+          include: {
+            _count: { select: { questions: true } },
+            assignments: { where: { studentId: req.user!.id }, select: { id: true, availableFrom: true, dueAt: true, submission: { select: { id: true, status: true } } } },
+          },
+        } },
+      });
+      res.json({ ok: true, catalog: exams.flatMap((exam) => exam.versions.map((version) => ({
+        examId: exam.id, title: exam.title, description: exam.description,
+        version: version.version, durationMinutes: version.durationMinutes,
+        questionCount: version._count.questions, publishedAt: version.publishedAt,
+        assignment: version.assignments[0] ?? null,
+      }))) });
+    } catch (error) { next(error); }
+  });
+
   router.get("/exams/assigned", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const assignments = await db.examAssignment.findMany({
