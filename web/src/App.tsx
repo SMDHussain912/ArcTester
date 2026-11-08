@@ -4,6 +4,7 @@ import AdminWorkspace from "./AdminWorkspace";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
+type Announcement = { id:string; title:string; message:string; expiresAt:string|null };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
 type Invitation = {
   id: string;
@@ -75,6 +76,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [activeAnnouncements, setActiveAnnouncements] = useState<Announcement[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [register, setRegister] = useState(false);
@@ -112,6 +114,25 @@ export default function App() {
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== "STUDENT") {
+      setActiveAnnouncements([]);
+      return;
+    }
+    request<{ announcements: Announcement[] }>("/announcements/active")
+      .then(({ announcements }) => setActiveAnnouncements(announcements))
+      .catch((cause) => setError((cause as Error).message));
+  }, [user]);
+
+  async function dismissAnnouncement(id: string) {
+    try {
+      await request("/announcements/" + id + "/seen", { method: "POST" });
+      setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
+    } catch (cause) {
+      setError((cause as Error).message);
+    }
+  }
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
@@ -522,6 +543,19 @@ export default function App() {
         )}
         {error && <p className="error">{error}</p>}
       </main>
+      {activeAnnouncements[0] && (
+        <div className="student-announcement-backdrop">
+          <section className="student-announcement panel" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+            <div className="announcement-mark">!</div>
+            <p className="eyebrow">IMPORTANT ANNOUNCEMENT</p>
+            <h2 id="announcement-title">{activeAnnouncements[0].title}</h2>
+            <p className="announcement-message">{activeAnnouncements[0].message}</p>
+            {activeAnnouncements[0].expiresAt && <small className="muted">Expires {new Date(activeAnnouncements[0].expiresAt).toLocaleString()}</small>}
+            <button className="primary full" onClick={() => void dismissAnnouncement(activeAnnouncements[0].id)}>Got it</button>
+            <small className="muted">This announcement will not pop up again after you acknowledge it.</small>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
