@@ -378,6 +378,7 @@ export default function App() {
       await request(`/admin/questions/${question.id}`, { method: "DELETE" });
       setAdminQuestions((current) => current.filter((item) => item.id !== question.id));
       setSelectedQuestionIds((current) => current.filter((id) => id !== question.id));
+      setSelectedBankQuestionIds((current) => current.filter((id) => id !== question.id));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -1012,7 +1013,7 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              <button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : editingExamId ? `Save new version (${selectedQuestionIds.length} questions)` : `Create draft (${selectedQuestionIds.length} questions)`}</button>
+              <div className="row-actions"><button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : editingExamId ? `Save new version (${selectedQuestionIds.length} questions)` : `Create draft (${selectedQuestionIds.length} questions)`}</button>{editingExamId && <button type="button" className="ghost" disabled={busy} onClick={() => { setEditingExamId(null); setExamTitle(""); setExamDescription(""); setExamInstructions(""); setSelectedQuestionIds([]); }}>Cancel editing</button>}</div>
             </form>
             <div className="section-head"><div><p className="eyebrow">EXAM LIBRARY</p><h2>Drafts and published exams</h2></div></div>
             <div className="admin-exam-list">
