@@ -124,3 +124,26 @@ Admin-only endpoints (session cookie or bearer token):
 - `POST /admin/models/:modelId/predict` — run inference against the active validated artifact using `{ "features": { ... } }`.
 
 Model registration and promotion revalidate the artifact and its preprocessing schema. The API does not expose filesystem paths or raw artifact JSON in list responses. These endpoints are administrator-only while the model lifecycle is being validated; no student-facing readiness predictions are enabled. A real learner model still requires appropriately consented, de-identified training data and chronological/grouped evaluation.
+
+
+## Model governance and audit history
+
+The database-backed admin model registry records governance events in
+`ModelRegistryAudit`. Registration, first-version activation, manual activation,
+and rollback are written in the same database transaction as the model change,
+so an audit event cannot claim an activation that failed to commit.
+
+Admin endpoint:
+
+- `GET /admin/models/:modelId/audit` — returns the latest 200 governance events,
+  including actor ID, version, action, details, and timestamp.
+
+SQLite also enforces a partial unique index allowing at most one active version
+per model ID. This protects the invariant even if a future route or maintenance
+script bypasses the application-level transaction. Audit history is append-only
+through the current API; there is no API for editing or deleting events.
+
+This is governance traceability, not model-quality approval. Candidate evaluation
+and evidence-based promotion gates are still separate work; the current activation
+endpoint does not yet establish that a model is accurate or suitable for real
+student-facing predictions.
