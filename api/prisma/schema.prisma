@@ -348,6 +348,7 @@ model RegisteredModel {
   algorithm   String
   task        String
   dataset     String
+  trainingDatasetId String?
   artifactJson String
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -411,4 +412,18 @@ model ModelDataset {
 
   @@index([name, createdAt])
   @@index([createdById, createdAt])
+}
+
+
+model ModelDriftBucket {
+  id          String   @id @default(cuid())
+  modelId     String
+  version     Int
+  featureName String
+  bucket      String
+  periodStart DateTime
+  count       Int      @default(0)
+
+  @@unique([modelId, version, featureName, bucket, periodStart])
+  @@index([modelId, version, periodStart])
 }
