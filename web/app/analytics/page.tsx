@@ -246,13 +246,13 @@ function AnalyticsDashboard() {
 
       <section className="panel">
         <div className="panel-header">
-          <h2>Question-level performance</h2>
+          <h2>Practice question-level performance</h2>
           {questionPerformance ? <span className="pill">{questionPerformance.questions.length} questions tracked</span> : null}
         </div>
         {questionPerformance ? (
           <>
             <p className="muted">
-              A question is flagged as difficult only after at least {questionPerformance.minimumAnswers} answered attempts
+              Practice questions are flagged as difficult only after at least {questionPerformance.minimumAnswers} answered attempts
               and accuracy below {Math.round(questionPerformance.weakAccuracyThreshold * 100)}%.
               {questionPerformance.insufficientSampleCount > 0 ? ` ${questionPerformance.insufficientSampleCount} questions do not have enough evidence yet.` : ""}
             </p>
