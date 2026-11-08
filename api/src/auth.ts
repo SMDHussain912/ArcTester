@@ -203,7 +203,7 @@ export function authRouter(db: PrismaClient): Router {
           email,
           tokenHash: sha256(rawToken),
           expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
-          createdById: req.user!.id,
+          createdById: (req as AuthedRequest).user!.id,
         },
         select: { id: true, email: true, expiresAt: true, createdAt: true },
       });

@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach } from "vitest";
@@ -11,6 +12,8 @@ import type { Express } from "express";
  * builds the app against it, and serves on a random port. Tests use plain
  * global fetch — no new libraries (no supertest).
  */
+
+const testDatabases = new Map<string, PrismaClient>();
 
 export interface TestServer {
   baseUrl: string;
@@ -41,13 +44,17 @@ export async function startTestServer(
   });
   const port = (server.address() as AddressInfo).port;
 
+  const baseUrl = `http://127.0.0.1:${port}`;
+  testDatabases.set(baseUrl, db);
+
   const close = async () => {
+    testDatabases.delete(baseUrl);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.$disconnect();
     rmSync(dir, { recursive: true, force: true });
   };
 
-  return { baseUrl: `http://127.0.0.1:${port}`, db, close };
+  return { baseUrl, db, close };
 }
 
 export async function postJson(
@@ -82,6 +89,25 @@ export function sessionCookie(res: Response): string {
   return found.split(";")[0];
 }
 
+/** Create an invitation directly in the isolated test database. */
+export async function issueTestInvitation(db: PrismaClient, email: string): Promise<string> {
+  const admin = await db.user.upsert({
+    where: { email: "test-admin@arctester.invalid" },
+    create: { email: "test-admin@arctester.invalid", passwordHash: "test-only", role: "ADMIN" },
+    update: { role: "ADMIN" },
+  });
+  const token = randomBytes(32).toString("base64url");
+  await db.invitation.create({
+    data: {
+      email: email.trim().toLowerCase(),
+      tokenHash: createHash("sha256").update(token).digest("hex"),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      createdById: admin.id,
+    },
+  });
+  return token;
+}
+
 /**
  * Register a brand-new account and sign it in. Returns the session cookie
  * plus the new user's id, so tests can scope expectations to one account.
@@ -91,10 +117,13 @@ export async function signUp(
   email: string,
   password = "correct-horse-battery"
 ): Promise<{ cookie: string; userId: number }> {
+  const db = testDatabases.get(baseUrl);
+  if (!db) throw new Error("No test database is registered for this server.");
+  const invitationToken = await issueTestInvitation(db, email);
   const reg = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, invitationToken }),
   });
   if (reg.status !== 201) {
     throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);
