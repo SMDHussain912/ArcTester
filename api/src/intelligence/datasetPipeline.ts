@@ -1,17 +1,17 @@
 import {
-  evaluateDecisionTree, fitDecisionTree, predictDecisionTreeClass,
+  evaluateDecisionTree, fitDecisionTree,
 } from "./decisionTree.js";
 import {
-  evaluateKnn, fitKnn, predictKnnClass,
+  evaluateKnn, fitKnn,
 } from "./knn.js";
 import {
-  evaluateLogisticRegression, fitLogisticRegression, predictLogisticClass,
+  evaluateLogisticRegression, fitLogisticRegression,
 } from "./logisticRegression.js";
 import {
-  evaluateNaiveBayes, fitNaiveBayes, predictNaiveBayesClass,
+  evaluateNaiveBayes, fitNaiveBayes,
 } from "./naiveBayes.js";
 import {
-  evaluateLinearRegression, fitLinearRegression, predictLinearRegression,
+  evaluateLinearRegression, fitLinearRegression,
   type RegressionSample,
 } from "./linearRegression.js";
 import type { BinaryTrainingSample } from "./classificationValidation.js";
