@@ -321,6 +321,14 @@ export interface StudyRecommendationsReport {
   basedOnAttempts: number;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
+  performanceExplanation: {
+    headline: string;
+    details: string[];
+    answeredQuestions: number;
+    incorrectAnswers: number;
+    evidenceThreshold: number;
+    weakAccuracyThreshold: number;
+  };
   recommendations: StudyRecommendation[];
 }
 
