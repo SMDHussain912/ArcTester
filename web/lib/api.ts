@@ -498,7 +498,7 @@ export const api = {
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
-  adminQuestions: () => request<{ ok: true; questions: AdminQuestion[] }>("/admin/question-bank"),
+  adminQuestions: (page = 1, pageSize = 200) => request<{ ok: true; questions: AdminQuestion[]; page: number; pages: number; total: number }>(`/admin/question-bank?page=${page}&pageSize=${pageSize}`),
   createAdminQuestion: (body: { subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; difficulty: string; source: string }) => request<{ ok: true; question: AdminQuestion }>("/admin/questions", json(body)),
   importAdminCsv: (content: string) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/csv", json({ content })),
   importAdminJson: (questions: unknown[]) => request<{ ok: true; report: QuestionImportReport }>("/admin/questions/import/json", json({ questions })),
