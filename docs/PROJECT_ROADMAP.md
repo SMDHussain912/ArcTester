@@ -17,9 +17,10 @@ Tracking rule: **Update this file in every development commit.** A task is only 
 - [ ] All existing features confirmed working.
 - [ ] All known backend and frontend bugs fixed.
 - [ ] PostgreSQL migration completed and tested.
-- [ ] Full regression suite and GitHub Actions green.
+- [x] Latest main-branch ArcTester CI run succeeded for commit `9ed21dc` (PR #13); this is a baseline check, not full end-to-end confirmation.
+- [ ] Full regression suite for the stabilization branch and all feature workflows green.
 
-**Important:** Previous development messages reported that many existing features were implemented and that earlier test runs passed. Those reports are not a substitute for a fresh verification against the current repository. The latest audit was a static source review; no fixes or fresh full test run have yet been completed as part of this roadmap.
+**Important:** Previous development messages reported that many existing features were implemented and that earlier test runs passed. Those reports are not a substitute for a fresh verification against the current repository. The latest audit is still in progress. The latest `main` commit (`8c752c7`) has a successful ArcTester CI run, but that run does not verify every feature end-to-end. No application fixes have yet been committed on this stabilization branch.
 
 ## Existing feature areas to re-verify
 
@@ -46,7 +47,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Replace or repair SQLite-specific raw analytics SQL for PostgreSQL (quoted identifiers, boolean expressions, numeric result types).
 - [ ] Create a PostgreSQL-compatible Prisma migration baseline and a safe SQLite-to-PostgreSQL data migration plan; preserve IDs and relations.
 - [ ] Resolve cross-site authentication cookie behavior between Vercel and Render; prefer a same-origin API proxy or implement secure cross-site cookies with CSRF/origin protections.
-- [ ] Verify the actual web build stack and remove the unused Next.js dependency if the app remains Vite-based.
+- [ ] Resolve the dual frontend structure: package scripts currently run Vite (`web/src/main.tsx`), while a separate Next.js `web/app` tree and `next` dependency also exist. Decide which is canonical from deployment/configuration evidence before removing or migrating anything.
 
 ### High priority correctness and reliability
 
@@ -137,4 +138,5 @@ A task can be checked off only when:
 
 | Date | Commit | Summary | Verification |
 |---|---|---|---|
-| 2026-11-09 | Planning commit | Added this roadmap and initial honest status baseline. | Documentation-only; application tests not run. |
+| 2026-11-09 | `6da9d670` | Added this roadmap and initial honest status baseline. | Documentation-only; application tests not run. |
+| 2026-11-09 | Baseline verification | Confirmed latest `main` CI run succeeded and found both Vite scripts and a Next.js app tree. | CI run `42534604301` passed on PR #13; feature-level end-to-end verification remains pending. |
