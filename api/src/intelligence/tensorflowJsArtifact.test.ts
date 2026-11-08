@@ -100,6 +100,6 @@ describe("TensorFlow.js artifact contract", () => {
         splitMethod: "grouped-student-holdout",
         datasetKind: "real-anonymized",
       },
-    }))).toThrow("too_small");
+    }))).toThrow("Invalid TensorFlow.js model artifact");
   });
 });
