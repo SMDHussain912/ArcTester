@@ -84,9 +84,9 @@ function AnalyticsDashboard() {
           <div className="stat-caption">Submitted practice sessions</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Questions answered</div>
+          <div className="stat-label">Question items</div>
           <div className="stat-value">{loading ? "—" : totalQuestions}</div>
-          <div className="stat-caption">Across your recorded attempts</div>
+          <div className="stat-caption">{overview ? `${overview.practice.correct} correct · ${overview.practice.incorrect} incorrect · ${overview.practice.unanswered} unanswered` : "Across completed practice attempts"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Overall accuracy</div>
