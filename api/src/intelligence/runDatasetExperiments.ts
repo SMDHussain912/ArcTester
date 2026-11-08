@@ -3,7 +3,7 @@ import path from "node:path";
 import { generateSyntheticDatasets } from "./datasetFactory.js";
 import { SYNTHETIC_DATASET_DEFINITIONS } from "./datasetQuality.js";
 import {
-  prepareDataset, runClassifierExperiments, runRegressionExperiment,
+  prepareDataset, runTunedClassifierExperiments, runRegressionExperiment,
   serializeExperimentArtifact,
 } from "./datasetPipeline.js";
 
@@ -32,14 +32,14 @@ async function main(): Promise<void> {
     const definition = SYNTHETIC_DATASET_DEFINITIONS[key];
     const prepared = prepareDataset(datasets[key], definition, { seed });
     if (definition.task === "binary-classification") {
-      const results = runClassifierExperiments(prepared.train, prepared.test);
+      const results = runTunedClassifierExperiments(prepared.train, prepared.test, { folds: 5, seed });
       reports[name] = {
         task: definition.task,
         trainRows: prepared.trainRows,
         testRows: prepared.testRows,
         featureNames: prepared.featureNames,
         targetColumn: definition.targetColumn,
-        models: results.map(({ algorithm, metrics }) => ({ algorithm, metrics })),
+        models: results.map(({ algorithm, parameters, crossValidation, metrics }) => ({ algorithm, parameters, crossValidation, heldOutMetrics: metrics })),
       };
       for (const result of results) {
         await writeFile(
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
         testRows: prepared.testRows,
         featureNames: prepared.featureNames,
         targetColumn: definition.targetColumn,
-        models: [{ algorithm: result.algorithm, metrics: result.metrics }],
+        models: [{ algorithm: result.algorithm, heldOutMetrics: result.metrics }],
       };
       await writeFile(
         path.join(outputDirectory, "models", `${name}-${result.algorithm}.json`),
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
     synthetic: true,
     seed,
     rowsPerDataset,
-    split: "deterministic row-level holdout; preprocessing fitted on training rows only",
+    split: "deterministic row-level holdout; preprocessing fitted on training rows only; classifier tuning uses stratified cross-validation within training rows",
     warning: "Metrics from synthetic data are for pipeline verification only, not evidence of real-world predictive performance.",
     experiments: reports,
   }, null, 2)}\n`, "utf8");
