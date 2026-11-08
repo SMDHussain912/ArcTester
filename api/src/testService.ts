@@ -65,6 +65,8 @@ export interface CreatedTest {
 export interface AttemptRow {
   id: number;
   subject: string;
+  topic: string | null;
+  difficulty: string;
 }
 
 export interface SubmitSummary {
@@ -137,9 +139,19 @@ export async function createTest(
   now: Date = new Date()
 ): Promise<CreatedTest> {
   const all = await db.question.findMany({
-    select: { id: true, subject: { select: { name: true } } },
+    select: {
+      id: true,
+      difficulty: true,
+      subject: { select: { name: true } },
+      topic: { select: { name: true } },
+    },
   });
-  const candidates: AttemptRow[] = all.map((row) => ({ id: row.id, subject: row.subject.name }));
+  const candidates: AttemptRow[] = all.map((row) => ({
+    id: row.id,
+    subject: row.subject.name,
+    topic: row.topic?.name ?? null,
+    difficulty: row.difficulty,
+  }));
   const stats = await loadStats(
     db,
     userId,
@@ -199,6 +211,9 @@ export async function createTest(
         questionId: question.id,
         chosen: null,
         isCorrect: false,
+        subjectSnapshot: question.subject,
+        topicSnapshot: question.topic,
+        difficultySnapshot: question.difficulty,
       })),
     });
     return created;
