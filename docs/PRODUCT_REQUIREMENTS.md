@@ -33,9 +33,9 @@ The application must remain usable on modest hardware (including 8 GB RAM system
 
 1. Paper creation is subject-first: students select subjects before creating a paper.
 2. Multiple subjects may be selected in one paper.
-3. Topic selection is optional. When enabled, topic filters apply only inside the selected subjects.
+3. Topic selection is optional and independent per subject. For each selected subject, leaving all topics unchecked includes every topic in that subject; selecting one or more topics restricts only that subject. Subjects without a topic restriction remain unrestricted.
 4. Support all-topic, include-selected-topic, and exclude-selected-topic modes where available.
-5. Support configurable question count and difficulty selection.
+5. Support configurable question count (1–200) and difficulty selection (any, easy, medium, hard). Distribute the requested count as evenly as possible across selected subjects, then report subject-level shortfalls.
 6. Subject quotas must be explicit and validated; the AP ECET blueprint may be offered as a preset, not as a hard-coded restriction on custom papers.
 7. If a subject/topic/difficulty pool cannot satisfy its requested quota, use the available questions and show a warning naming the affected subject and requested/available counts.
 8. Switching application tabs must change the visible workspace. An in-progress practice session may remain in memory when navigating away and should reappear when returning to Practice; navigation must not silently force the test view over every other tab.
