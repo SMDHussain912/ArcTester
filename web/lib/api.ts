@@ -58,7 +58,7 @@ export interface TestResult {
   }[];
 }
 export interface BankInfo {
-  subjects: { subject: string; count: number }[];
+  subjects: { subject: string; count: number; topics: { topic: string; count: number }[] }[];
   total: number;
   serverNow: string;
 }
@@ -451,7 +451,7 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 export const api = {
   bank: () => request<BankInfo>("/bank"),
   offlineLearningPackage: () => request<OfflineLearningPackage>("/learning/package"),
-  createTest: (body: { mode: string; subject?: string; count?: number }) =>
+  createTest: (body: { mode: string; subject?: string; subjects?: string[]; topics?: string[]; count?: number }) =>
     request<CreatedTest>("/tests", json(body)),
   getAttempt: (id: number) => request<AttemptView>(`/tests/${id}`),
   submit: (id: number, answers: SubmitAnswer[]) =>
