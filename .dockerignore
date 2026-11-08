@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.db
+**/*.db-journal
+.env
+.env.*
+**/.env
+**/.env.*

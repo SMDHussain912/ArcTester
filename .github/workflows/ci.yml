@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build, test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=api
+        env:
+          DATABASE_URL: file:./dev.db
+
+      - name: Build API and web
+        run: npm run build
+        env:
+          DATABASE_URL: file:./dev.db
+
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: file:./dev.db
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Check formatting of changed files
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git fetch origin "$BASE_REF"
+            changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
+          elif [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            changed_files="$(git ls-files)"
+          else
+            changed_files="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
+          fi
+
+          format_files="$(printf '%s\n' "$changed_files" | grep -E '\.(css|html|js|jsx|json|md|mdx|scss|ts|tsx|yaml|yml)$' || true)"
+          if [[ -z "$format_files" ]]; then
+            echo "No changed Prettier-supported files to check."
+          else
+            printf '%s\n' "$format_files" | xargs npx prettier --check
+          fi
+
+  docker-build:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build API and web images
+        run: docker compose build
+        env:
+          JWT_SECRET: ci-only-secret-for-image-build
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          CORS_ORIGINS: http://localhost:3000

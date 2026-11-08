@@ -1,0 +1,9 @@
+node_modules
+.next
+dist
+build
+coverage
+*.db
+legacy/
+ecet-mock.html
+README.md

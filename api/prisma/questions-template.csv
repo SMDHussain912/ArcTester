@@ -1,0 +1,4 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Maths,Algebra,"What is the value of x if 2x + 6 = 14?",3,4,5,6,1,"Subtract 6 then divide by 2.",example,medium
+Java,OOP,"Which keyword declares a constant in Java?",const,final,static,volatile,0,"`const` fixes the value at compile time.",example,easy
+Data Structures,Complexity,"What is the average time complexity of binary search on a sorted array?",O(1),O(n),O(log n),O(n log n),2,"Halves the search space each step.",example,medium

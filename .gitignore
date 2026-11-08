@@ -1,0 +1,26 @@
+# deps
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# prisma / sqlite (local only, never commit real db or local env)
+*.db
+*.db-journal
+/api/.env
+/api/.env
+
+# env
+.env
+.env.local
+.env*.local
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# vitest
+test-results/
