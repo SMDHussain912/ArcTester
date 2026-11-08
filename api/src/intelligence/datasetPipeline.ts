@@ -29,8 +29,15 @@ export interface DatasetSplitOptions {
   seed?: number;
 }
 
+export interface DatasetFeatureEncoder {
+  name: string;
+  type: "numeric" | "categorical";
+  categories?: string[];
+}
+
 export interface EncodedDataset {
   featureNames: string[];
+  featureSchema: DatasetFeatureEncoder[];
   train: Array<{ features: number[]; target: number }>;
   test: Array<{ features: number[]; target: number }>;
   trainRows: number;
@@ -132,7 +139,7 @@ function encodeFeatures(
   trainRows: DatasetRow[],
   testRows: DatasetRow[],
   definition: DatasetDefinition,
-): { train: number[][]; test: number[][]; featureNames: string[] } {
+): { train: number[][]; test: number[][]; featureNames: string[]; featureSchema: DatasetFeatureEncoder[] } {
   const encoders = definition.featureColumns.map((column) => {
     const values = trainRows.map((row) => row[column]);
     if (values.every((value) => typeof value === "number")) return { column, type: "numeric" as const, categories: [] as string[] };
@@ -153,7 +160,10 @@ function encodeFeatures(
     if (typeof value !== "string") throw new Error(`Feature ${encoder.column} must be categorical`);
     return [...encoder.categories.map((category) => Number(value === category)), Number(!encoder.categories.includes(value))];
   }));
-  return { train: transform(trainRows), test: transform(testRows), featureNames };
+  const featureSchema: DatasetFeatureEncoder[] = encoders.map((encoder) => encoder.type === "numeric"
+    ? { name: encoder.column, type: "numeric" }
+    : { name: encoder.column, type: "categorical", categories: encoder.categories });
+  return { train: transform(trainRows), test: transform(testRows), featureNames, featureSchema };
 }
 
 /** Splits first, then learns categorical vocabulary from training rows only. */
@@ -172,7 +182,7 @@ export function prepareDataset(
   const target = (row: DatasetRow) => Number(row[definition.targetColumn]);
   const train = split.train.map((row, index) => ({ features: encoded.train[index], target: target(row) }));
   const test = split.test.map((row, index) => ({ features: encoded.test[index], target: target(row) }));
-  return { featureNames: encoded.featureNames, train, test, trainRows: train.length, testRows: test.length };
+  return { featureNames: encoded.featureNames, featureSchema: encoded.featureSchema, train, test, trainRows: train.length, testRows: test.length };
 }
 
 export interface ClassifierExperiment {
@@ -259,6 +269,7 @@ export function runRegressionExperiment(
 export function serializeExperimentArtifact(input: {
   dataset: string;
   featureNames: string[];
+  featureSchema: DatasetFeatureEncoder[];
   targetColumn: string;
   task: DatasetDefinition["task"];
   model: unknown;
@@ -269,6 +280,7 @@ export function serializeExperimentArtifact(input: {
     dataset: input.dataset,
     task: input.task,
     featureNames: input.featureNames,
+    featureSchema: input.featureSchema,
     targetColumn: input.targetColumn,
     model: input.model,
   }, null, 2);
