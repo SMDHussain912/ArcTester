@@ -52,3 +52,20 @@ jobs:
 
       - name: Check formatting
         run: npm run format:check
+
+  docker-build:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    needs: verify
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build API and web images
+        run: docker compose build
+        env:
+          JWT_SECRET: ci-only-secret-for-image-build
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          CORS_ORIGINS: http://localhost:3000
