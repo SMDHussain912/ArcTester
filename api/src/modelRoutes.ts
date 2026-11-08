@@ -81,6 +81,36 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+const STUDENT_POPULATION_FEATURES = [
+  "completed_attempts",
+  "previous_accuracy",
+  "recent_average_accuracy",
+  "overall_average_accuracy",
+  "previous_question_count",
+] as const;
+
+function validateStudentPopulationDataset(
+  featureSchema: Array<{ name: string; type: "numeric" | "categorical" }>,
+  samples: Array<{ features: Record<string, number | string>; target: number }>,
+): void {
+  const actual = featureSchema.map((feature) => feature.name);
+  if (featureSchema.some((feature) => feature.type !== "numeric") ||
+      actual.length !== STUDENT_POPULATION_FEATURES.length ||
+      STUDENT_POPULATION_FEATURES.some((name) => !actual.includes(name))) {
+    throw new Error("student-score-population requires exactly the five registered student inference features");
+  }
+  for (const [index, sample] of samples.entries()) {
+    const values = sample.features;
+    if (!Number.isInteger(values.completed_attempts) || (values.completed_attempts as number) < 3 ||
+        !Number.isInteger(values.previous_question_count) || (values.previous_question_count as number) < 1 ||
+        ![values.previous_accuracy, values.recent_average_accuracy, values.overall_average_accuracy]
+          .every((value) => typeof value === "number" && value >= 0 && value <= 1) ||
+        sample.target < 0 || sample.target > 1) {
+      throw new Error(`student-score-population sample ${index + 1} has invalid counts or accuracy fractions; targets must be between 0 and 1`);
+    }
+  }
+}
+
 const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 const VersionSchema = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
@@ -289,9 +319,8 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (featureSchema.some((feature) => feature.type !== "numeric")) {
         return next(badRequest("TensorFlow.js training requires numeric-only feature schemas."));
       }
-      const samples = JSON.parse(dataset.samplesJson) as Array<{
-        features: Record<string, number | string>; target: number; groupId?: string;
-      }>;
+      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
+      if (input.modelId === "student-score-population") validateStudentPopulationDataset(featureSchema, samples);
       if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
         return next(badRequest("TensorFlow.js training requires a SHA-256 pseudonymous groupId on every sample."));
       }
