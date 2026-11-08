@@ -44,6 +44,9 @@ export interface ExportPayload {
     questionId: number;
     chosen: number | null;
     isCorrect: boolean;
+    subjectSnapshot: string;
+    topicSnapshot: string | null;
+    difficultySnapshot: string;
   }[];
 }
 
@@ -415,7 +418,15 @@ export async function exportProgress(
     attemptIds.length > 0
       ? await db.attemptAnswer.findMany({
           where: { attemptId: { in: attemptIds } },
-          select: { attemptId: true, questionId: true, chosen: true, isCorrect: true },
+          select: {
+            attemptId: true,
+            questionId: true,
+            chosen: true,
+            isCorrect: true,
+            subjectSnapshot: true,
+            topicSnapshot: true,
+            difficultySnapshot: true,
+          },
         })
       : [];
 
@@ -433,6 +444,9 @@ export async function exportProgress(
       questionId: a.questionId,
       chosen: a.chosen,
       isCorrect: a.isCorrect,
+      subjectSnapshot: a.subjectSnapshot,
+      topicSnapshot: a.topicSnapshot,
+      difficultySnapshot: a.difficultySnapshot,
     })),
   };
 }
@@ -459,6 +473,9 @@ const ImportAnswerSchema = z.object({
   questionId: z.number().int().positive(),
   chosen: z.number().int().min(0).max(3).nullable(),
   isCorrect: z.boolean(),
+  subjectSnapshot: z.string().trim().max(80).optional(),
+  topicSnapshot: z.string().trim().max(80).nullable().optional(),
+  difficultySnapshot: z.enum(["easy", "medium", "hard"]).optional(),
 });
 
 const ImportPayloadSchema = z.object({
@@ -590,9 +607,11 @@ export async function importProgress(
         questionId: ans.questionId,
         chosen: ans.chosen,
         isCorrect: ans.isCorrect,
-        subjectSnapshot: questionById.get(ans.questionId)!.subject.name,
-        topicSnapshot: questionById.get(ans.questionId)!.topic?.name ?? null,
-        difficultySnapshot: questionById.get(ans.questionId)!.difficulty,
+        subjectSnapshot: ans.subjectSnapshot ?? questionById.get(ans.questionId)!.subject.name,
+        topicSnapshot: ans.topicSnapshot !== undefined
+          ? ans.topicSnapshot
+          : questionById.get(ans.questionId)!.topic?.name ?? null,
+        difficultySnapshot: ans.difficultySnapshot ?? questionById.get(ans.questionId)!.difficulty,
       },
     });
   }
