@@ -126,6 +126,7 @@ export default function App() {
   const [importReport, setImportReport] = useState<{ added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);
   const [importPreviewReady, setImportPreviewReady] = useState(false);
   const [importPreviewError, setImportPreviewError] = useState("");
+  const [importPreviewDetails, setImportPreviewDetails] = useState<{ valid: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [bankSubjectFilter, setBankSubjectFilter] = useState("all");
   const [bankSearch, setBankSearch] = useState("");
@@ -372,20 +373,26 @@ export default function App() {
     setImportPreviewReady(false);
   }
 
-  function previewQuestionImport() {
+  async function previewQuestionImport() {
     setImportPreviewError("");
+    setImportPreviewDetails(null);
+    setImportBusy(true);
     try {
-      if (importFormat === "json") {
-        const parsed: unknown = JSON.parse(importText);
-        if (!Array.isArray(parsed)) throw new Error("JSON must contain an array of question rows.");
-      } else {
-        const header = importText.toLowerCase().split(/\r?\n/, 1)[0];
-        if (!header.includes("subject") || !header.includes("correctindex")) throw new Error("CSV header must include subject and correctIndex columns.");
-      }
-      setImportPreviewReady(true);
+      const payload = importFormat === "csv"
+        ? { format: "csv", content: importText }
+        : { format: "json", questions: JSON.parse(importText) };
+      const response = await request<{ preview: { valid: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } }>("/admin/questions/import/preview", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setImportPreviewDetails(response.preview);
+      setImportPreviewReady(response.preview.valid > 0);
+      if (response.preview.valid === 0) setImportPreviewError("No valid new questions found. Fix the invalid rows or remove duplicates before importing.");
     } catch (cause) {
       setImportPreviewError((cause as Error).message);
       setImportPreviewReady(false);
+    } finally {
+      setImportBusy(false);
     }
   }
 
@@ -835,7 +842,7 @@ export default function App() {
               <label>Paste question data<textarea rows={8} value={importText} onChange={(event) => { setImportText(event.target.value); setImportReport(null); setImportPreviewReady(false); }} placeholder={importFormat === "csv" ? "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty" : '[["Computer Science","Question text",["A","B","C","D"],1,"Explanation"]]'} /></label>
               <div className="import-footer"><span className="muted">{importText.trim() ? "Data loaded — preview before import" : "No data loaded yet"}</span><div className="import-confirm-actions"><button className="ghost" type="button" disabled={!importText.trim() || importBusy} onClick={previewQuestionImport}>Preview import</button><button className="primary" type="button" disabled={importBusy || !importPreviewReady} onClick={() => void importQuestions()}>{importBusy ? "Importing…" : "Confirm & import"}</button></div></div>
               {importPreviewError && <p className="error">{importPreviewError}</p>}
-              {importPreviewReady && <div className="import-preview"><strong>Import preview ready</strong><span>Format structure checked. Duplicate detection and row validation will be reported after confirmation.</span><pre>{importText.split(/\r?\n/).slice(0, 6).join("\n")}</pre></div>}
+              {importPreviewReady && <div className="import-preview"><strong>Preflight complete</strong><div className="import-report"><div><strong>{importPreviewDetails?.valid ?? 0}</strong><span>Valid new questions</span></div><div><strong>{importPreviewDetails?.duplicates ?? 0}</strong><span>Duplicates</span></div><div><strong>{importPreviewDetails?.invalid.length ?? 0}</strong><span>Invalid rows</span></div><div><strong>{importPreviewDetails?.total ?? 0}</strong><span>Total rows</span></div></div>{Boolean(importPreviewDetails?.invalid.length) && <details><summary>Review invalid rows before import</summary>{importPreviewDetails?.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
               {importReport && <div className="import-report" role="status"><div><strong>{importReport.added}</strong><span>Added</span></div><div><strong>{importReport.duplicates}</strong><span>Duplicates skipped</span></div><div><strong>{importReport.invalid.length}</strong><span>Invalid rows</span></div><div><strong>{importReport.total}</strong><span>Rows processed</span></div>{importReport.invalid.length > 0 && <details><summary>Review invalid rows</summary>{importReport.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
             </section>
             <div className="section-head">
