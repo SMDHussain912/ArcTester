@@ -1663,12 +1663,12 @@ export default function App() {
                     <div className="practice-subject-grid">
                       {(bank?.subjects ?? []).map((item) => <label className={practiceSubjects.includes(item.subject) ? "practice-subject-choice selected" : "practice-subject-choice"} key={item.subject}>
                         <input type="checkbox" checked={practiceSubjects.includes(item.subject)} onChange={(event) => {
-                          setPracticeSubjects((current) => {
-                            if (!event.target.checked) return current.filter((name) => name !== item.subject);
-                            if (current.length >= 30) { setError("You can select up to 30 subjects in one practice paper."); return current; }
-                            setError("");
-                            return [...current, item.subject];
-                          });
+                          if (event.target.checked && practiceSubjects.length >= 30) {
+                            setError("You can select up to 30 subjects in one practice paper.");
+                            return;
+                          }
+                          setError("");
+                          setPracticeSubjects((current) => event.target.checked ? [...current, item.subject] : current.filter((name) => name !== item.subject));
                           if (!event.target.checked) setPracticeTopicKeys((current) => current.filter((key) => { try { return (JSON.parse(key) as [string, string])[0] !== item.subject; } catch { return false; } }));
                         }} />
                         <span><strong>{item.subject}</strong><small>{item.count} questions available</small></span>
