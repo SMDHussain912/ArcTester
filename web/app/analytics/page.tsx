@@ -8,6 +8,7 @@ import {
   type StudyHistoryItem,
   type StudyRecommendationsReport,
   type WeakTopicsReport,
+  type PerformanceOverview,
 } from "../../lib/api";
 import { useSession } from "../../lib/session";
 
@@ -16,17 +17,19 @@ function AnalyticsDashboard() {
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [history, setHistory] = useState<StudyHistoryItem[]>([]);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
+  const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
-    Promise.all([api.weakTopics(), api.studyHistory()])
-      .then(([weak, attempts]) => {
+    Promise.all([api.weakTopics(), api.studyHistory(), api.performanceOverview()])
+      .then(([weak, attempts, performance]) => {
         if (cancelled) return;
         setWeakTopics(weak);
         setHistory(attempts);
+        setOverview(performance);
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -58,9 +61,11 @@ function AnalyticsDashboard() {
   }
 
   const completed = history.filter((item) => item.total > 0);
-  const totalCorrect = completed.reduce((sum, item) => sum + item.score, 0);
-  const totalQuestions = completed.reduce((sum, item) => sum + item.total, 0);
-  const averageAccuracy = totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : null;
+  const totalCorrect = overview?.practice.correct ?? completed.reduce((sum, item) => sum + item.score, 0);
+  const totalQuestions = overview?.practice.questions ?? completed.reduce((sum, item) => sum + item.total, 0);
+  const averageAccuracy = overview
+    ? overview.practice.accuracy === null ? null : Math.round(overview.practice.accuracy * 100)
+    : totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : null;
 
   return (
     <div className="stack">
@@ -89,6 +94,68 @@ function AnalyticsDashboard() {
           <div className="stat-caption">Correct answers / answered questions</div>
         </div>
       </section>
+
+      {overview ? (
+        <section className="panel" aria-labelledby="formal-performance-title">
+          <div className="panel-header">
+            <h2 id="formal-performance-title">Formal exam performance</h2>
+            <span className="pill">{overview.formalExams.submissions} submissions</span>
+          </div>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="stat-label">Verified graded exams</div>
+              <div className="stat-value">{overview.formalExams.graded}</div>
+              <div className="stat-caption">Review-required exams are excluded</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Score percentage</div>
+              <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
+              <div className="stat-caption">{overview.formalExams.score.toFixed(2)} / {overview.formalExams.maximumScore.toFixed(2)} marks</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Needs review</div>
+              <div className="stat-value">{overview.formalExams.reviewRequired}</div>
+              <div className="stat-caption">Not included in verified score totals</div>
+            </div>
+          </div>
+          <p className="muted">
+            Verified answers: {overview.formalExams.correct} correct, {overview.formalExams.incorrect} incorrect,
+            {" "}{overview.formalExams.unanswered} unanswered. Formal exam marks are kept separate from practice accuracy.
+          </p>
+          {overview.formalExams.subjects.length ? (
+            <div className="stack">
+              {overview.formalExams.subjects.map((item) => (
+                <div key={item.subject} className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                  <strong>{item.subject}</strong>
+                  <span className="pill">
+                    {item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "% accuracy"}
+                    {" · "}{item.awardedMarks.toFixed(2)} / {item.maximumMarks.toFixed(2)} marks
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No verified formal exam results yet.</p>
+          )}
+        </section>
+      ) : null}
+
+      {overview?.practice.trend.length ? (
+        <section className="panel" aria-labelledby="practice-trend-title">
+          <h2 id="practice-trend-title">Recent practice trend</h2>
+          <div className="stack">
+            {overview.practice.trend.map((item, index) => (
+              <div key={item.attemptId} className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                <span>Attempt {index + 1} · {new Date(item.finishedAt).toLocaleDateString()}</span>
+                <span className="pill">
+                  {item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "% accuracy"}
+                  {" · "}{item.correct}/{item.total} correct
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {recommendations ? (
         <section className="panel" aria-labelledby="study-recommendations-title">
@@ -127,7 +194,7 @@ function AnalyticsDashboard() {
         {weakTopics?.weakest ? (
           <p className="warn">
             Focus next on <strong>{weakTopics.weakest.topic || weakTopics.weakest.subject}</strong>
-            {" "}in {weakTopics.weakest.subject} — {Math.round(weakTopics.weakest.accuracy * 100)}% accuracy across {weakTopics.weakest.seen} attempts.
+            {" "}in {weakTopics.weakest.subject} — {weakTopics.weakest.accuracy === null ? "not enough answered questions" : Math.round(weakTopics.weakest.accuracy * 100) + "% accuracy"} across {weakTopics.weakest.seen} answered questions.
           </p>
         ) : null}
         <div className="stack">
@@ -135,7 +202,7 @@ function AnalyticsDashboard() {
             <div key={item.subject}>
               <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
                 <strong>{item.subject}</strong>
-                <span className="pill">{Math.round(item.accuracy * 100)}% · {item.seen} questions</span>
+                <span className="pill">{item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "%"} · {item.seen} answered</span>
               </div>
               <div
                 role="progressbar"
