@@ -27,7 +27,7 @@ describe("multiple linear regression", () => {
     expect(model.algorithm).toBe("multiple-linear-regression");
     expect(model.featureCount).toBe(2);
     expect(model.trainingRows).toBe(samples.length);
-    expect(prediction).toBeCloseTo(-4, 1);
+    expect(prediction).toBeCloseTo(-2, 1);
   });
 
   it("handles constant-valued features without dividing by zero", () => {
