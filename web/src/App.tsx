@@ -115,7 +115,7 @@ export default function App() {
   const [questionSaved, setQuestionSaved] = useState(false);
   const [importText, setImportText] = useState("");
   const [importFormat, setImportFormat] = useState<"csv" | "json">("csv");
-  const [importReport, setImportReport] = useState<{ added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);
+  const [importReport, setImportReport] = useState<{ added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);\n  const [importPreviewReady, setImportPreviewReady] = useState(false);\n  const [importPreviewError, setImportPreviewError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [bankSubjectFilter, setBankSubjectFilter] = useState("all");
   const [bankSearch, setBankSearch] = useState("");
@@ -258,7 +258,7 @@ export default function App() {
       const response = await request<{ report: { added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } }>(endpoint, {
         method: "POST", body: JSON.stringify(payload),
       });
-      setImportReport(response.report);
+      setImportReport(response.report);\n      setImportPreviewReady(false);
       const refreshed = await request<{ questions: AdminQuestion[] }>("/admin/question-bank");
       setAdminQuestions(refreshed.questions);
       const bankInfo = await request<Bank>("/bank");
