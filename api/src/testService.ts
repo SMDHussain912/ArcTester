@@ -177,15 +177,21 @@ export async function createTest(
   } else if (input.mode === "practice") {
     const chosenSubjects = input.subjects ?? (input.subject ? [input.subject] : []);
     const topicFilter = new Set(input.topics ?? []);
-    const topicPairs = new Set((input.topicFilters ?? []).map((item) => JSON.stringify([item.subject, item.topic])));
-    const hasScopedTopicFilter = topicPairs.size > 0;
-    const pool = candidates.filter((question) =>
-      chosenSubjects.includes(question.subject) &&
-      (input.difficulty === "any" || question.difficulty === input.difficulty) &&
-      (hasScopedTopicFilter
-        ? question.topic !== null && topicPairs.has(JSON.stringify([question.subject, question.topic]))
-        : topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic)))
-    );
+    const topicsBySubject = new Map<string, Set<string>>();
+    for (const item of input.topicFilters ?? []) {
+      const topics = topicsBySubject.get(item.subject) ?? new Set<string>();
+      topics.add(item.topic);
+      topicsBySubject.set(item.subject, topics);
+    }
+    const pool = candidates.filter((question) => {
+      if (!chosenSubjects.includes(question.subject)) return false;
+      if (input.difficulty !== "any" && question.difficulty !== input.difficulty) return false;
+      const selectedTopicsForSubject = topicsBySubject.get(question.subject);
+      if (selectedTopicsForSubject) {
+        return selectedTopicsForSubject.size === 0 || (question.topic !== null && selectedTopicsForSubject.has(question.topic));
+      }
+      return topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic));
+    });
     const requested = input.count ?? 20;
     const selectedById = new Set<number>();
     selected = [];
