@@ -40,9 +40,10 @@ test. The API runs on :4000 and the web app talks to it at
 ### Running on a phone (same Wi-Fi)
 
 Both servers bind to all interfaces by default, so a phone on the same
-network can reach them — but the API's CORS allowlist only accepts
-`localhost` origins, and the web app's API URL is hard-coded to
-`localhost:4000`, which on a phone points at the phone itself.
+network can reach them. The API allows localhost origins by default; add
+your web app's LAN origin to `CORS_ORIGINS` to allow a phone to connect.
+The web app's API URL defaults to `localhost:4000`, so set it to your
+computer's LAN IP when opening the web app from a phone.
 
 To make it work from a real device:
 
