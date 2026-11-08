@@ -71,6 +71,51 @@ Before implementation, inspect the Prisma schema, routes, and tests for:
 
 Map the actual database fields before designing new tables or migrations. Prefer derived analytics queries over storing duplicate aggregates. Add persisted aggregates only if query performance requires them and their refresh strategy is defined.
 
+### Phase 0 audit — current repository findings (2026-11-08)
+
+The audit inspected the Prisma schema, API route registration, practice-test service, analytics service/routes, formal exam routes, relevant API tests, and the student analytics page.
+
+#### Existing data map
+
+| Data | Authoritative current source | Fields / limitations |
+|---|---|---|
+| Practice attempts | `Attempt` | `userId`, `mode`, `startedAt`, `deadline`, `finishedAt`, `expired`. No per-question timing. |
+| Practice answers | `AttemptAnswer` | `attemptId`, `questionId`, `chosen`, `isCorrect`. Rows are created when a test starts, initially unanswered. |
+| Per-question aggregate | `Stat` | `userId`, `questionId`, `seen`, `wrong`, `lastSeen`. The `wrong` field is a changing wrongness/debt counter, not a cumulative count of incorrect answers. |
+| Current question metadata | `Question`, `Subject`, `Topic` | Subject/topic/difficulty/explanation are joined from the current question bank. Practice answers do not snapshot this metadata. |
+| Formal exam submissions | `ExamSubmission` + `ExamAssignment` | Score, maximum score, started/submitted/received timestamps, status and student ownership. |
+| Formal exam answers | `ExamSubmissionAnswer` | Selected option, correctness and awarded marks. |
+| Immutable formal exam metadata | `ExamVersionQuestion` | Subject, topic, difficulty is not currently snapshotted, question content, marks and negative marks. Subject/topic/content remain stable for that exam version. |
+| Existing student analytics | `analytics.ts` + `analyticsRoutes.ts` | Weak topics, history, recommendations, export/import. |
+| Existing admin analytics | `GET /admin/analytics/overview` in `examRoutes.ts` | Aggregate counts and formal exam submission summaries. |
+| Existing student UI | `web/app/analytics/page.tsx` | Reads weak topics, practice history and deterministic study recommendations. |
+
+#### Confirmed correctness and coverage issues
+
+1. **Weak-topic accuracy is currently unsuitable as a true accuracy metric.** `nextStat()` in `selection.ts` increments `wrong` for both wrong and unanswered outcomes, and reduces `wrong` after a correct answer. `getWeakTopics()` calculates `(seen - wrong) / seen`. This is a selection-priority signal, not cumulative actual wrong answers or defensible accuracy. Do not use this counter as an ML target or label.
+2. **Practice history includes unfinished attempts.** `getHistory()` queries all attempts without filtering `finishedAt != null`; it counts initially-created answer rows, so an unfinished attempt can appear as a zero-score history item.
+3. **Student analytics currently covers practice only.** `getHistory()`, `getWeakTopics()`, and `getStudyRecommendations()` read practice `Attempt`/`AttemptAnswer`/`Stat` data. Formal `ExamSubmission` data is not included in this student analytics flow. The admin overview separately reads formal exam assignments/submissions.
+4. **Practice historical classification can drift.** Practice answers reference the mutable question bank. Editing a question's subject/topic can change how old answers are grouped. Deleting a question cascades to its practice answers and Stat rows, potentially removing historical practice evidence.
+5. **Timing analytics are limited.** Practice attempts have start/deadline/finish timestamps, but no per-question duration. Formal exam start/submitted timestamps are client-supplied; `receivedAt` is server-generated. Do not infer precise per-question time or treat client timestamps as trusted telemetry.
+6. **Formal exam grading needs status-aware treatment.** Submissions may be `GRADED` or `REVIEW_REQUIRED`. Analytics must preserve this distinction and must not present review-required results as fully verified outcomes without an explicit policy.
+7. **Existing privacy boundary is a useful foundation.** Student analytics routes pass the authenticated user's ID into service functions. New student queries must continue to scope all practice and formal exam records to that user. Admin aggregates must not expose raw private student-level data unnecessarily.
+
+#### Phase 1 data and metric decisions
+
+- Use completed practice attempts only (`finishedAt != null`) for completed-attempt history and performance metrics.
+- Derive practice correct / incorrect / unanswered counts from `AttemptAnswer.chosen` and `AttemptAnswer.isCorrect`, not from `Stat.wrong`.
+- Define answered accuracy as `correct / (correct + incorrect)`; report unanswered separately. If no questions were answered, accuracy is `null`, not zero.
+- Keep practice and formal exam results identifiable as separate assessment sources. Compare percentages only where the scoring denominator is valid; never add raw practice scores to weighted exam marks.
+- For formal exams, include submission status and distinguish review-required records from verified graded results.
+- Use immutable `ExamVersionQuestion` metadata for formal exam topic analysis.
+- For practice topic analysis, document that historical subject/topic is based on current question metadata until a snapshot strategy is implemented. Consider snapshotting subject/topic/difficulty on `AttemptAnswer` in a migration before relying on long-term topic trend training.
+- Treat `Stat` as a question-selection aid only until its semantics are redesigned or replaced; do not delete it as part of the analytics work.
+- Keep time-based insights coarse and explicitly labeled until trustworthy timing events exist.
+
+#### Phase 0 outcome
+
+**Audit complete.** The current schema and routes are sufficient to begin a corrected analytics foundation without immediately introducing an ML-specific database or a new tracking subsystem. A practice-answer metadata snapshot migration is a design decision to settle during Phase 1 before historical topic analytics are treated as stable.
+
 ### Analytics metrics
 
 Per student:
@@ -401,7 +446,7 @@ This file is the durable source of truth for the ArcTester Intelligence workstre
 
 - [x] Intelligence architecture and constraints documented.
 - [x] Initial algorithms, use cases, and phases defined.
-- [ ] Phase 0 — repository/data audit.
+- [x] Phase 0 — repository/data audit (completed 2026-11-08; findings recorded above).
 - [ ] Phase 1 — analytics foundation.
 - [ ] Phase 2 — weak-area detection.
 - [ ] Phase 3 — regression engine.
