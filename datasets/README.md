@@ -103,9 +103,8 @@ const versions = await registry.list("exam-readiness-logistic-regression");
 await registry.activate("exam-readiness-logistic-regression", versions.at(-1)!.version);
 
 // Inference loads the active artifact and reuses its saved feature encoding.
-const result = await registry.predict("exam-readiness-logistic-regression", {
-  // Supply the original, unencoded feature names and their numeric/string values.
-});
+const featureValues: Record<string, number | string> = obtainValidatedFeatureValues();
+const result = await registry.predict("exam-readiness-logistic-regression", featureValues);
 ```
 
 The registry validates model artifacts on save and load, checks model/preprocessing feature counts, rejects unsafe model IDs, writes JSON through temporary files followed by atomic rename, caches loaded active versions, and supports explicit rollback. Predictions reject missing, extra, or incorrectly typed features. Unknown categorical values use the training-time unknown bucket.
