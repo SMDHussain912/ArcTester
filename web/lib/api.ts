@@ -33,7 +33,12 @@ export interface AttemptView {
   questions: PublicQuestion[];
   saved: { questionId: number; selectedIndex: number | null }[];
 }
-export interface SubmitSummary { attemptId: number; score: number; total: number; expired: boolean }
+export interface SubmitSummary {
+  attemptId: number;
+  score: number;
+  total: number;
+  expired: boolean;
+}
 export interface TestResult {
   attemptId: number; mode: string; score: number; total: number; expired: boolean;
   breakdown: { subject: string; correct: number; total: number }[];
@@ -42,7 +47,11 @@ export interface TestResult {
     selectedIndex: number | null; correctIndex: number; isCorrect: boolean; explanation: string;
   }[];
 }
-export interface BankInfo { subjects: { subject: string; count: number }[]; total: number; serverNow: string }
+export interface BankInfo {
+  subjects: { subject: string; count: number }[];
+  total: number;
+  serverNow: string;
+}
 export interface AuthUser { id: number; email: string; role: "ADMIN" | "STUDENT" }
 export interface AuthSession { ok: boolean; user: AuthUser }
 export type AdminQuestion = PublicQuestion;
@@ -64,7 +73,10 @@ export interface AdminOverview {
 /** Thrown for any non-2xx; `.message` is always UI-safe. */
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
 }
 export function isAuthError(error: unknown): error is ApiError {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
@@ -81,7 +93,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const text = await response.text();
   let body: unknown = null;
-  if (text) { try { body = JSON.parse(text); } catch { body = null; } }
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
   if (!response.ok) {
     const serverMessage = body && typeof body === "object" && "error" in body
       ? String((body as { error: unknown }).error) : "";
@@ -101,7 +119,8 @@ export const api = {
   result: (id: number) => request<TestResult>(`/tests/${id}/result`),
   register: (email: string, password: string) =>
     request<{ ok: boolean; message: string }>("/auth/register", json({ email, password })),
-  login: (email: string, password: string) => request<AuthSession>("/auth/login", json({ email, password })),
+  login: (email: string, password: string) =>
+    request<AuthSession>("/auth/login", json({ email, password })),
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
   me: () => request<AuthSession>("/auth/me"),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
