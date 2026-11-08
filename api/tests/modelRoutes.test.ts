@@ -127,6 +127,38 @@ describe("admin model registry API", () => {
     expect((audit.body.events as Array<{ action: string }>).map((event) => event.action)).toContain("TRAINED");
   });
 
+  it("requires privacy-preserving learner groups for TensorFlow.js training", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index * 1.5 + (index % 3),
+    }));
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "tensorflow-missing-groups",
+      task: "regression",
+      targetColumn: "next_score",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples,
+      sourceDescription: "Synthetic fixture for TensorFlow group validation.",
+      sourceAttested: true,
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const rejected = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
+      modelId: "tensorflow-fixture",
+    });
+    expect(rejected.status).toBe(400);
+    expect(String(rejected.body.error ?? rejected.body.message)).toContain("SHA-256 pseudonymous groupId");
+  });
+
+  it("rejects TensorFlow.js training for classification datasets", async () => {
+    const datasetId = await registerEvaluationDataset("tensorflow-classification-rejected");
+    const rejected = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
+      modelId: "tensorflow-classification",
+    });
+    expect(rejected.status).toBe(400);
+    expect(String(rejected.body.error ?? rejected.body.message)).toContain("regression datasets only");
+  });
+
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
     const datasetId = await registerEvaluationDataset("dataset-registry-test");
     const listed = await request("/admin/model-datasets");
