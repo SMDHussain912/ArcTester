@@ -222,7 +222,12 @@ describe("admin model registry API", () => {
     expect(active[0]?.version).toBe(1);
   });
 
-  it("runs inference only from the active, validated model", async () => {
+  it("runs inference, returns confidence and records privacy-preserving drift buckets", async () => {
+    const driftDatasetId = await registerEvaluationDataset("drift-inference-baseline");
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId: "exam-readiness-demo", version: 1 } },
+      data: { trainingDatasetId: driftDatasetId },
+    });
     const prediction = await request("/admin/models/exam-readiness-demo/predict", "POST", {
       features: { practice_score: 10 },
     });
@@ -235,6 +240,18 @@ describe("admin model registry API", () => {
       confidenceLevel: expect.stringMatching(/^(high|moderate|low)$/),
     });
     expect((prediction.body.prediction as { confidence: number }).confidence).toBeGreaterThanOrEqual(0.5);
+
+    await Promise.all(Array.from({ length: 12 }, () => request("/admin/models/exam-readiness-demo/predict", "POST", {
+      features: { practice_score: 10 },
+    })));
+    const drift = await request("/admin/models/exam-readiness-demo/1/drift");
+    expect(drift.status).toBe(200);
+    expect(drift.body).toMatchObject({ modelId: "exam-readiness-demo", version: 1, baselineDataset: "drift-inference-baseline", windowDays: 30 });
+    expect((drift.body.features as Array<{ sampleCount: number }>)[0]?.sampleCount).toBe(13);
+
+    const buckets = await server.db.modelDriftBucket.findMany({ where: { modelId: "exam-readiness-demo", version: 1 } });
+    expect(buckets.length).toBeGreaterThan(0);
+    expect(buckets.every((bucket) => !bucket.bucket.includes("10"))).toBe(true);
 
     const invalid = await request("/admin/models/exam-readiness-demo/predict", "POST", {
       features: { wrong_feature: 10 },
