@@ -999,6 +999,7 @@ export function examRouter(db: PrismaClient): Router {
             topic: question.topic,
             text: question.text,
             options: optionOrder.map((index) => originalOptions[index]),
+            optionOrder,
             marks: question.marks,
             negativeMarks: question.negativeMarks,
           };
