@@ -50,6 +50,25 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/exams/:id/preview", async (req, res, next) => {
+    try {
+      const exam = await db.exam.findUnique({
+        where: { id: req.params.id },
+        include: { versions: { orderBy: { version: "desc" }, take: 1,
+          include: { questions: { orderBy: { position: "asc" } } } } },
+      });
+      if (!exam || !exam.versions[0]) return next(notFound("Exam not found."));
+      const version = exam.versions[0];
+      res.json({ ok: true, exam: { id: exam.id, title: exam.title, description: exam.description,
+        status: exam.status, version: version.version, instructions: version.instructions,
+        durationMinutes: version.durationMinutes, shuffleQuestions: version.shuffleQuestions,
+        shuffleOptions: version.shuffleOptions, publishedAt: version.publishedAt,
+        questions: version.questions.map(q => ({ id: q.id, position: q.position, subject: q.subject,
+          topic: q.topic, text: q.text, options: JSON.parse(q.options), correctIndex: q.correctIndex,
+          explanation: q.explanation, marks: q.marks, negativeMarks: q.negativeMarks })) } });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/students", async (_req, res, next) => {
     try {
       const students = await db.user.findMany({
