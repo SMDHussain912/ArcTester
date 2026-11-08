@@ -321,6 +321,7 @@ export default function App() {
       setQuestionCorrectIndex(0);
       setQuestionExplanation("");
       setQuestionSaved(true);
+      await refreshSubjects();
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -418,6 +419,7 @@ export default function App() {
       setAdminQuestions(refreshed.questions);
       const bankInfo = await request<Bank>("/bank");
       setBank(bankInfo);
+      await refreshSubjects();
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -1134,7 +1136,7 @@ export default function App() {
         </div>
       </header>
 
-      {user.role === "STUDENT" && !test && !result && announcements.some((item) => !item.seenAt) ? (() => {
+      {user.role === "STUDENT" && !test && !result && !activeAssignmentPackage && announcements.some((item) => !item.seenAt) ? (() => {
         const notice = announcements.find((item) => !item.seenAt)!;
         return (
           <div className="announcement-overlay">
