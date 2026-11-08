@@ -300,6 +300,13 @@ describe("versioned exam management", () => {
     const activeSession = liveSessions.find((item) => item.assignmentId === assignmentId)!;
     const paused = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "PAUSE", reason: "Test pause" }, adminCookie);
     expect(paused.status).toBe(200);
+    const firstPausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } });
+    const firstPausedAt = firstPausedState.pausedAt?.getTime();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const repeatedPause = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "PAUSE", reason: "Repeated pause should not reset the timer." }, adminCookie);
+    expect(repeatedPause.status).toBe(200);
+    const repeatedPausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } });
+    expect(repeatedPausedState.pausedAt?.getTime()).toBe(firstPausedAt);
     const blockedResume = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
     expect(blockedResume.status).toBe(409);
     const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME" }, adminCookie);

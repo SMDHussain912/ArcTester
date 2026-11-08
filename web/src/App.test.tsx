@@ -168,7 +168,7 @@ describe("live Vite application", () => {
       if (path.endsWith("/tests/42")) return Promise.resolve(response(200, {
         attemptId: 42,
         mode: "practice",
-        deadline: "2026-11-08T12:00:00.000Z",
+        deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         serverNow: "2026-11-08T11:00:00.000Z",
         questions: [{ id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] }],
         saved: [{ questionId: 7, selectedIndex: null }],

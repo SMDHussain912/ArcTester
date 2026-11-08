@@ -126,6 +126,24 @@ describe("admin announcements", () => {
     expect(expired.status).toBe(400);
   });
 
+  it("returns announcements newest first for the student dashboard", async () => {
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "announcement-admin@arctester.test" },
+      select: { id: true },
+    });
+    const older = new Date(Date.now() - 60_000);
+    const newer = new Date(Date.now() - 10_000);
+    await server.db.announcement.createMany({
+      data: [
+        { title: "Older notice", message: "Older", publishedAt: older, createdById: admin.id },
+        { title: "Newest notice", message: "Newest", publishedAt: newer, createdById: admin.id },
+      ],
+    });
+    const feed = await request("/announcements", "GET", undefined, studentCookie);
+    const announcements = feed.json.announcements as Array<{ title: string }>;
+    expect(announcements.slice(0, 2).map((item) => item.title)).toEqual(["Newest notice", "Older notice"]);
+  });
+
   it("supports incremental feeds and excludes expired announcements", async () => {
     const cursor = new Date().toISOString();
     await new Promise((resolve) => setTimeout(resolve, 5));
