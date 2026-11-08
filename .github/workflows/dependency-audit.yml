@@ -12,6 +12,7 @@ on:
       - "web/package.json"
       - "api/package.json"
       - "mobile/package.json"
+      - ".github/workflows/dependency-audit.yml"
 
 permissions:
   contents: read
