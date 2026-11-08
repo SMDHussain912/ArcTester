@@ -407,6 +407,9 @@ export async function getHistory(db: PrismaClient, userId: number): Promise<Hist
   });
 }
 
+export const RECOMMENDATION_MINIMUM_ANSWERS = 5;
+export const RECOMMENDATION_WEAK_ACCURACY = 0.6;
+
 export interface StudyRecommendation {
   id: string;
   priority: "high" | "medium" | "low";
@@ -416,17 +419,27 @@ export interface StudyRecommendation {
   topic: string | null;
   mode: "practice" | "mistakes" | "mock";
   questionCount: number;
+  evidence: {
+    answeredQuestions: number;
+    incorrectAnswers: number;
+    accuracy: number | null;
+    minimumAnswers: number;
+    weakAccuracyThreshold: number;
+  } | null;
 }
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
   basedOnAttempts: number;
+  minimumAnswers: number;
+  weakAccuracyThreshold: number;
   recommendations: StudyRecommendation[];
 }
 
 /**
- * Turns a learner's own attempt statistics into transparent next steps.
- * This is deterministic guidance, not an AI-generated diagnosis.
+ * Turns a learner's own completed practice answers into transparent next steps.
+ * Weak-topic recommendations require a minimum sample; low-sample data only
+ * produces a baseline-building action. This is deterministic guidance.
  */
 export async function getStudyRecommendations(
   db: PrismaClient,
@@ -437,60 +450,73 @@ export async function getStudyRecommendations(
     getHistory(db, userId),
   ]);
   const recommendations: StudyRecommendation[] = [];
-  const weakestSubject = weakTopics.subjects.find((subject) => subject.accuracy !== null);
+  const evidencedWeakTopics = weakTopics.topics
+    .filter((row) =>
+      row.accuracy !== null &&
+      row.seen >= RECOMMENDATION_MINIMUM_ANSWERS &&
+      row.accuracy < RECOMMENDATION_WEAK_ACCURACY
+    )
+    .slice(0, 3);
 
-  if (weakestSubject) {
-    const accuracy = Math.round((weakestSubject.accuracy ?? 0) * 100);
+  for (const row of evidencedWeakTopics) {
+    const accuracy = Math.round((row.accuracy ?? 0) * 100);
+    const target = row.topic ?? "Unassigned topic";
+    const evidence = {
+      answeredQuestions: row.seen,
+      incorrectAnswers: row.incorrect,
+      accuracy: row.accuracy,
+      minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
+      weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
+    };
+    const key = encodeURIComponent(`${row.subject}:${target}`);
     recommendations.push({
-      id: "strengthen-weakest-subject",
-      priority: accuracy < 55 ? "high" : "medium",
-      title: `Strengthen ${weakestSubject.subject}`,
-      reason: `${accuracy}% accuracy across ${weakestSubject.seen} answered questions. Focused practice will help close this gap.`,
-      subject: weakestSubject.subject,
-      topic: null,
+      id: `revise-topic-${key}`,
+      priority: accuracy < 40 || row.seen >= 10 ? "high" : "medium",
+      title: `Revise ${target}`,
+      reason: `${accuracy}% accuracy across ${row.seen} answered practice questions in ${row.subject}. This meets the minimum evidence threshold; focus practice here before another full mock.`,
+      subject: row.subject,
+      topic: row.topic,
       mode: "practice",
       questionCount: 15,
+      evidence,
     });
-
-    if (weakestSubject.wrong > 0) {
+    if (row.incorrect >= 3) {
       recommendations.push({
-        id: "review-mistakes",
+        id: `review-topic-mistakes-${key}`,
         priority: "medium",
-        title: "Revisit incorrect answers",
-        reason: `You have ${weakestSubject.wrong} incorrect answers in ${weakestSubject.subject}. Review mistakes before taking another timed mock.`,
-        subject: weakestSubject.subject,
-        topic: null,
+        title: `Review mistakes in ${target}`,
+        reason: `${row.incorrect} incorrect answers are recorded for this topic. Revisit their explanations, then retry related questions.`,
+        subject: row.subject,
+        topic: row.topic,
         mode: "mistakes",
-        questionCount: 10,
+        questionCount: Math.min(10, row.incorrect),
+        evidence,
       });
     }
-  } else if (history.length > 0) {
+  }
+
+  if (recommendations.length === 0) {
+    const hasAnsweredEvidence = weakTopics.topics.some((row) => row.seen > 0);
     recommendations.push({
-      id: "build-subject-baseline",
-      priority: "medium",
-      title: "Build a subject performance baseline",
-      reason: "Complete a focused subject session so your next study plan can target the areas that need attention.",
-      subject: null,
-      topic: null,
-      mode: "practice",
-      questionCount: 15,
-    });
-  } else {
-    recommendations.push({
-      id: "start-diagnostic-practice",
+      id: history.length > 0 ? "build-subject-baseline" : "start-diagnostic-practice",
       priority: "low",
-      title: "Start with a diagnostic practice session",
-      reason: "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
+      title: history.length > 0 ? "Build a stronger topic baseline" : "Start with a diagnostic practice session",
+      reason: history.length > 0
+        ? `No topic currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
+        : "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
       subject: null,
       topic: null,
       mode: "practice",
-      questionCount: 10,
+      questionCount: history.length > 0 ? 15 : 10,
+      evidence: null,
     });
   }
 
   return {
     generatedAt: new Date().toISOString(),
     basedOnAttempts: history.length,
+    minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
+    weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
     recommendations,
   };
 }
