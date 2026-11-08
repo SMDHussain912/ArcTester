@@ -1,6 +1,6 @@
 # ArcTester Intelligence — Development Roadmap
 
-**Status:** Planning / implementation not started  
+**Status:** Phase 1 analytics foundation implemented; Phase 2 intelligence work in progress  
 **Project:** ArcTester — AP ECET CSE mock-test platform  
 **Backend:** Node.js + TypeScript  
 **Primary constraint:** No self-hosted LLM, no Python inference server, and no GPU dependency. Intelligence features must run within the existing Node.js backend and current server resource limits.
@@ -73,7 +73,7 @@ Map the actual database fields before designing new tables or migrations. Prefer
 
 ### Phase 1 implementation log — 2026-11-08
 
-**Implemented and pushed (not yet locally verified):**
+**Implemented and pushed:**
 
 - Replaced weak-topic accuracy derived from `Stat.wrong` with aggregation from completed `AttemptAnswer` records.
 - Accuracy now uses `correct / (correct + incorrect)`; unanswered answers are counted separately and do not reduce answered accuracy. Accuracy is `null` when there are no answered questions.
@@ -87,11 +87,11 @@ Map the actual database fields before designing new tables or migrations. Prefer
 
 **Important limitations still open in Phase 1:**
 
-- Practice subject/topic history still joins mutable current question metadata. A snapshot migration is still needed before treating long-term topic trends as historically stable.
+- Practice answer snapshots now preserve subject, topic, difficulty, question text, options, correct answer and explanation. The migration backfills existing rows from the question bank as it existed at migration time; metadata changes made before that migration cannot be reconstructed.
 - Formal exam analytics currently count only `GRADED` answer outcomes in verified score and subject metrics. `REVIEW_REQUIRED` submissions are counted separately and excluded from those metrics.
 - No trustworthy per-question timing data exists; no time-spent metric is exposed.
 - Admin cohort analytics and deeper question-level analysis are not yet implemented.
-- Automated tests, TypeScript checks, lint, formatting and production builds have not been run in this environment. GitHub status checks for the latest commit returned no statuses, so CI is not verified.
+- CI is now running through GitHub Actions. The last fully verified run (`42505842339`) passed API/web tests, lint, production builds, Prisma migration verification and mobile typecheck. Later analytics UI changes are being verified in a newer run.
 
 **Commits in this implementation batch:**
 
@@ -117,9 +117,9 @@ The audit inspected the Prisma schema, API route registration, practice-test ser
 | Data | Authoritative current source | Fields / limitations |
 |---|---|---|
 | Practice attempts | `Attempt` | `userId`, `mode`, `startedAt`, `deadline`, `finishedAt`, `expired`. No per-question timing. |
-| Practice answers | `AttemptAnswer` | `attemptId`, `questionId`, `chosen`, `isCorrect`. Rows are created when a test starts, initially unanswered. |
+| Practice answers | `AttemptAnswer` | `attemptId`, `questionId`, `chosen`, `isCorrect`, plus snapshots of subject, topic, difficulty, question text, options, correct answer and explanation. Rows are created when a test starts, initially unanswered. |
 | Per-question aggregate | `Stat` | `userId`, `questionId`, `seen`, `wrong`, `lastSeen`. The `wrong` field is a changing wrongness/debt counter, not a cumulative count of incorrect answers. |
-| Current question metadata | `Question`, `Subject`, `Topic` | Subject/topic/difficulty/explanation are joined from the current question bank. Practice answers do not snapshot this metadata. |
+| Question-bank metadata | `Question`, `Subject`, `Topic` | Used when a practice attempt is created. `AttemptAnswer` snapshots preserve the metadata used for that attempt; legacy rows were backfilled by migration. |
 | Formal exam submissions | `ExamSubmission` + `ExamAssignment` | Score, maximum score, started/submitted/received timestamps, status and student ownership. |
 | Formal exam answers | `ExamSubmissionAnswer` | Selected option, correctness and awarded marks. |
 | Immutable formal exam metadata | `ExamVersionQuestion` | Subject, topic, difficulty is not currently snapshotted, question content, marks and negative marks. Subject/topic/content remain stable for that exam version. |
@@ -132,7 +132,7 @@ The audit inspected the Prisma schema, API route registration, practice-test ser
 1. **Weak-topic accuracy is currently unsuitable as a true accuracy metric.** `nextStat()` in `selection.ts` increments `wrong` for both wrong and unanswered outcomes, and reduces `wrong` after a correct answer. `getWeakTopics()` calculates `(seen - wrong) / seen`. This is a selection-priority signal, not cumulative actual wrong answers or defensible accuracy. Do not use this counter as an ML target or label.
 2. **Practice history includes unfinished attempts.** `getHistory()` queries all attempts without filtering `finishedAt != null`; it counts initially-created answer rows, so an unfinished attempt can appear as a zero-score history item.
 3. **Student analytics currently covers practice only.** `getHistory()`, `getWeakTopics()`, and `getStudyRecommendations()` read practice `Attempt`/`AttemptAnswer`/`Stat` data. Formal `ExamSubmission` data is not included in this student analytics flow. The admin overview separately reads formal exam assignments/submissions.
-4. **Practice historical classification can drift.** Practice answers reference the mutable question bank. Editing a question's subject/topic can change how old answers are grouped. Deleting a question cascades to its practice answers and Stat rows, potentially removing historical practice evidence.
+4. **Practice historical classification is now snapshotted.** New attempts retain the question metadata that was used when the attempt was created. Existing rows were backfilled from the question bank during migration, so any edits made before that migration cannot be recovered. The answer-to-question relation also prevents deleting a referenced question.
 5. **Timing analytics are limited.** Practice attempts have start/deadline/finish timestamps, but no per-question duration. Formal exam start/submitted timestamps are client-supplied; `receivedAt` is server-generated. Do not infer precise per-question time or treat client timestamps as trusted telemetry.
 6. **Formal exam grading needs status-aware treatment.** Submissions may be `GRADED` or `REVIEW_REQUIRED`. Analytics must preserve this distinction and must not present review-required results as fully verified outcomes without an explicit policy.
 7. **Existing privacy boundary is a useful foundation.** Student analytics routes pass the authenticated user's ID into service functions. New student queries must continue to scope all practice and formal exam records to that user. Admin aggregates must not expose raw private student-level data unnecessarily.
@@ -145,7 +145,7 @@ The audit inspected the Prisma schema, API route registration, practice-test ser
 - Keep practice and formal exam results identifiable as separate assessment sources. Compare percentages only where the scoring denominator is valid; never add raw practice scores to weighted exam marks.
 - For formal exams, include submission status and distinguish review-required records from verified graded results.
 - Use immutable `ExamVersionQuestion` metadata for formal exam topic analysis.
-- For practice topic analysis, document that historical subject/topic is based on current question metadata until a snapshot strategy is implemented. Consider snapshotting subject/topic/difficulty on `AttemptAnswer` in a migration before relying on long-term topic trend training.
+- For practice topic analysis, use the `AttemptAnswer` subject/topic/difficulty snapshots. Treat pre-migration history as best-effort because its backfill reflects the question bank at migration time.
 - Treat `Stat` as a question-selection aid only until its semantics are redesigned or replaced; do not delete it as part of the analytics work.
 - Keep time-based insights coarse and explicitly labeled until trustworthy timing events exist.
 
