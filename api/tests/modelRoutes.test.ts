@@ -186,6 +186,29 @@ describe("admin model registry API", () => {
     expect(String(rejected.body.error ?? rejected.body.message)).toContain("SHA-256 pseudonymous groupId");
   });
 
+  it("persists explicit model dataset provenance and defaults old-style uploads to synthetic", async () => {
+    const realSamples = Array.from({ length: 30 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index * 1.25,
+      groupId: index.toString(16).padStart(64, "0"),
+    }));
+    const created = await request("/admin/model-datasets", "POST", {
+      name: "real-anonymized-provenance-fixture",
+      task: "regression",
+      targetColumn: "next_score",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: realSamples,
+      sourceDescription: "Anonymized and consented historical practice outcomes for model validation.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.dataset).toMatchObject({ datasetKind: "real-anonymized", sourceAttested: true });
+    const id = (created.body.dataset as { id: string }).id;
+    const stored = await server.db.modelDataset.findUnique({ where: { id } });
+    expect(stored?.datasetKind).toBe("real-anonymized");
+  });
+
   it("rejects TensorFlow.js training for classification datasets", async () => {
     const datasetId = await registerEvaluationDataset("tensorflow-classification-rejected");
     const rejected = await request(`/admin/model-datasets/${datasetId}/train-tensorflow`, "POST", {
