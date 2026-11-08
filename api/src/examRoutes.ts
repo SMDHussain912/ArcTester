@@ -67,6 +67,15 @@ const SubmitExamSchema = z
     path: ["answers"],
   });
 
+function stableOptionOrder(assignmentId: string, questionId: string, optionCount: number): number[] {
+  const order = Array.from({ length: optionCount }, (_, index) => index);
+  return order.sort((left, right) => {
+    const leftKey = createHash("sha256").update(assignmentId + ":" + questionId + ":" + left).digest("hex");
+    const rightKey = createHash("sha256").update(assignmentId + ":" + questionId + ":" + right).digest("hex");
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
 function parseOptions(raw: string): string[] {
   const value: unknown = JSON.parse(raw);
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
@@ -987,14 +996,9 @@ export function examRouter(db: PrismaClient): Router {
         serverTime: new Date(now).toISOString(),
         questions: paperQuestions.map((question, position) => {
           const originalOptions = parseOptions(question.options);
-          const optionOrder = originalOptions.map((_, index) => index);
-          if (assignment.examVersion.shuffleOptions) {
-            optionOrder.sort((left, right) => {
-              const leftKey = createHash("sha256").update(assignment.id + ":" + question.id + ":" + left).digest("hex");
-              const rightKey = createHash("sha256").update(assignment.id + ":" + question.id + ":" + right).digest("hex");
-              return leftKey.localeCompare(rightKey);
-            });
-          }
+          const optionOrder = assignment.examVersion.shuffleOptions
+            ? stableOptionOrder(assignment.id, question.id, originalOptions.length)
+            : originalOptions.map((_, index) => index);
           return {
             id: question.id,
             position,
@@ -1063,7 +1067,11 @@ export function examRouter(db: PrismaClient): Router {
         input.answers.map((answer) => [answer.examQuestionId, answer.selectedIndex])
       );
       const answerRows = questions.map((question) => {
-        const selectedIndex = answersByQuestion.get(question.id) ?? null;
+        const displayedIndex = answersByQuestion.get(question.id) ?? null;
+        const optionOrder = assignment.examVersion.shuffleOptions
+          ? stableOptionOrder(assignment.id, question.id, parseOptions(question.options).length)
+          : parseOptions(question.options).map((_, index) => index);
+        const selectedIndex = displayedIndex === null ? null : optionOrder[displayedIndex];
         const isCorrect = selectedIndex !== null && selectedIndex === question.correctIndex;
         const awardedMarks = isCorrect
           ? question.marks
