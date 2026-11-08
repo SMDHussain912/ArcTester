@@ -62,6 +62,23 @@ export interface BankInfo {
   total: number;
   serverNow: string;
 }
+
+export interface OfflineLearningPackage {
+  schemaVersion: 1;
+  exportedAt: string;
+  total: number;
+  subjects: string[];
+  questions: {
+    id: number;
+    subject: string;
+    topic: string | null;
+    text: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+    difficulty: string;
+  }[];
+}
 export interface AuthUser {
   id: number;
   email: string;
@@ -297,6 +314,7 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 
 export const api = {
   bank: () => request<BankInfo>("/bank"),
+  offlineLearningPackage: () => request<OfflineLearningPackage>("/learning/package"),
   createTest: (body: { mode: string; subject?: string; count?: number }) =>
     request<CreatedTest>("/tests", json(body)),
   getAttempt: (id: number) => request<AttemptView>(`/tests/${id}`),
