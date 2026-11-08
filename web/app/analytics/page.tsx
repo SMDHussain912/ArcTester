@@ -445,6 +445,7 @@ function AnalyticsDashboard() {
         ) : null}
       </section>
       <div className="row">
+        <Link className="button button-secondary" href="/learning">Open concept library</Link>
         <Link className="button button-secondary" href="/">Back to study dashboard</Link>
         {user?.role === "ADMIN" ? <Link className="button button-secondary" href="/admin">Admin workspace</Link> : null}
       </div>
