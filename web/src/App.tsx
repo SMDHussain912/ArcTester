@@ -227,7 +227,7 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
     const savedAttemptId = localStorage.getItem("arctester-active-practice-attempt");
-    if (savedAttemptId && /^\\d+$/.test(savedAttemptId)) {
+    if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
         setTest(restored);
         setAnswers(Object.fromEntries(restored.saved.flatMap((answer) => answer.selectedIndex === null ? [] : [[answer.questionId, answer.selectedIndex]])));
