@@ -1610,7 +1610,7 @@ export default function App() {
             <div className="panel">
               <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered datasets</h2></div></div>
               <div className="form-grid">
-                <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={56} pattern="[a-z0-9][a-z0-9-]{0,55}" /></label>
+                <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={48} pattern="[a-z0-9][a-z0-9-]{0,47}" /></label>
               </div>
               {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button></td></tr>)}</tbody></table></div>}
               <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
