@@ -1386,11 +1386,40 @@ export function examRouter(db: PrismaClient): Router {
         return next(conflict("An attempt has already been submitted for this assignment."));
       }
 
-      if (!assignment.session || assignment.session.status !== "ACTIVE" || !assignment.session.startedAt) {
-        return next(conflict("Start or resume the server exam session before submitting."));
-      }
       const serverSubmittedAt = new Date();
-      const serverStartedAt = assignment.session.startedAt;
+      let examSession = assignment.session;
+      if (!examSession) {
+        // Offline attempts cannot create a live server session while disconnected.
+        // Reconcile the locally recorded start time when the queued submission arrives.
+        const claimedStartedAt = new Date(input.startedAt);
+        if (!Number.isFinite(claimedStartedAt.getTime()) || claimedStartedAt.getTime() > serverSubmittedAt.getTime() + 60_000) {
+          return next(badRequest("The offline exam start time is invalid."));
+        }
+        if (assignment.availableFrom && claimedStartedAt < assignment.availableFrom) {
+          return next(forbidden("The exam was started before its availability window."));
+        }
+        examSession = await db.examSession.create({
+          data: {
+            assignmentId: assignment.id,
+            studentId: req.user!.id,
+            status: "ACTIVE",
+            startedAt: claimedStartedAt,
+            lastHeartbeatAt: serverSubmittedAt,
+            lastActivityAt: serverSubmittedAt,
+            events: {
+              create: {
+                actorId: req.user!.id,
+                type: "OFFLINE_SESSION_RECONCILED",
+                detail: "An offline exam attempt was reconciled when the device reconnected.",
+              },
+            },
+          },
+        });
+      }
+      if (examSession.status !== "ACTIVE" || !examSession.startedAt) {
+        return next(conflict("The exam session is not active. Resume it before submitting."));
+      }
+      const serverStartedAt = examSession.startedAt;
       if (assignment.dueAt && serverSubmittedAt > assignment.dueAt) {
         return next(forbidden("The examination submission deadline has passed."));
       }
@@ -1434,9 +1463,9 @@ export function examRouter(db: PrismaClient): Router {
       // Server-owned session timestamps prevent candidates from extending time by editing browser clocks.
       const startedAt = serverStartedAt;
       const submittedAt = serverSubmittedAt;
-      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + assignment.session.pausedDurationMs;
-      const staleHeartbeat = !assignment.session.lastHeartbeatAt ||
-        serverSubmittedAt.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
+      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + examSession.pausedDurationMs;
+      const staleHeartbeat = !examSession.lastHeartbeatAt ||
+        serverSubmittedAt.getTime() - examSession.lastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
         serverSubmittedAt.getTime() > startedAt.getTime() + durationMs + 60000 ||
         staleHeartbeat ||
@@ -1487,11 +1516,11 @@ export function examRouter(db: PrismaClient): Router {
           data: { status: "SUBMITTED" },
         });
         await tx.examSession.update({
-          where: { id: assignment.session!.id },
+          where: { id: examSession.id },
           data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
         });
         await tx.examSessionEvent.create({
-          data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
+          data: { sessionId: examSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
         });
         return created;
       });

@@ -494,6 +494,48 @@ describe("versioned exam management", () => {
     expect(forbiddenDetail.status).toBe(403);
   });
 
+  it("accepts a queued offline submission when no live server session was created", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const offlineAssignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: version.id,
+        studentId: secondStudent.id,
+        assignedById: (await server.db.user.findUniqueOrThrow({
+          where: { email: "exam-admin@arctester.test" },
+          select: { id: true },
+        })).id,
+      },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: version.id },
+    });
+    const startedAt = new Date().toISOString();
+    const submitted = await request(
+      `/exams/assignments/${offlineAssignment.id}/submission`,
+      "POST",
+      {
+        attemptUuid: "8d4bd8a4-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt,
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: null }],
+      },
+      secondStudentCookie
+    );
+    expect(submitted.status).toBe(201);
+    expect((submitted.json.submission as { status: string }).status).toBe("GRADED");
+    const session = await server.db.examSession.findUniqueOrThrow({
+      where: { assignmentId: offlineAssignment.id },
+    });
+    expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
+  });
+
   it("prevents another student from reading a submission result", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/result`,
