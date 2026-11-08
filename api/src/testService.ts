@@ -245,6 +245,26 @@ export async function createTest(
 
   if (selected.length === 0) throw badRequest("No questions available for this choice yet.");
 
+  // Capture the exact question version before creating the attempt. Later bank edits
+  // must not change what the student saw or which answer is considered correct.
+  const details = await db.question.findMany({
+    where: { id: { in: selected.map((question) => question.id) } },
+    select: {
+      id: true,
+      text: true,
+      options: true,
+      correctIndex: true,
+      explanation: true,
+      difficulty: true,
+      subject: { select: { name: true } },
+      topic: { select: { name: true } },
+    },
+  });
+  const byId = new Map(details.map((question) => [question.id, question]));
+  if (byId.size !== selected.length) {
+    throw conflict("The question bank changed while this test was being created. Please try again.");
+  }
+
   const attempt = await db.$transaction(async (tx) => {
     const created = await tx.attempt.create({
       data: {
@@ -255,30 +275,25 @@ export async function createTest(
       },
     });
     await tx.attemptAnswer.createMany({
-      data: selected.map((question) => ({
-        attemptId: created.id,
-        questionId: question.id,
-        chosen: null,
-        isCorrect: false,
-        subjectSnapshot: question.subject,
-        topicSnapshot: question.topic,
-        difficultySnapshot: question.difficulty,
-      })),
+      data: selected.map((question) => {
+        const snapshot = byId.get(question.id)!;
+        return {
+          attemptId: created.id,
+          questionId: question.id,
+          chosen: null,
+          isCorrect: false,
+          subjectSnapshot: snapshot.subject.name,
+          topicSnapshot: snapshot.topic?.name ?? null,
+          difficultySnapshot: snapshot.difficulty,
+          textSnapshot: snapshot.text,
+          optionsSnapshot: snapshot.options,
+          correctIndexSnapshot: snapshot.correctIndex,
+          explanationSnapshot: snapshot.explanation,
+        };
+      }),
     });
     return created;
   });
-
-  const details = await db.question.findMany({
-    where: { id: { in: selected.map((s) => s.id) } },
-    select: {
-      id: true,
-      text: true,
-      options: true,
-      subject: { select: { name: true } },
-      topic: { select: { name: true } },
-    },
-  });
-  const byId = new Map(details.map((d) => [d.id, d]));
 
   return {
     attemptId: attempt.id,
@@ -310,7 +325,7 @@ export async function submitTest(
 ): Promise<SubmitSummary> {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, userId },
-    include: { answers: { select: { id: true, questionId: true } } },
+    include: { answers: { select: { id: true, questionId: true, correctIndexSnapshot: true } } },
   });
   if (!attempt) throw notFound("Test not found.");
   if (attempt.finishedAt) throw conflict("This test was already submitted.");
@@ -325,11 +340,7 @@ export async function submitTest(
     }
   }
 
-  const questions = await db.question.findMany({
-    where: { id: { in: [...memberIds] } },
-    select: { id: true, correctIndex: true },
-  });
-  const correctById = new Map(questions.map((row) => [row.id, row.correctIndex]));
+  const correctById = new Map(attempt.answers.map((answer) => [answer.questionId, answer.correctIndexSnapshot]));
   const chosenById = new Map(input.answers.map((a) => [a.questionId, a.selectedIndex]));
 
   let score = 0;
@@ -414,22 +425,7 @@ export async function getResult(
 ): Promise<TestResult> {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, userId },
-    include: {
-      answers: {
-        include: {
-          question: {
-            select: {
-              id: true,
-              text: true,
-              options: true,
-              correctIndex: true,
-              explanation: true,
-              subject: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
+    include: { answers: true },
   });
   if (!attempt) throw notFound("Test not found.");
   if (!attempt.finishedAt) throw forbidden("Submit the test before viewing the result.");
@@ -438,19 +434,20 @@ export async function getResult(
   let score = 0;
   const questions: ResultQuestion[] = attempt.answers.map((a) => {
     if (a.isCorrect) score += 1;
-    const entry = breakdown.get(a.question.subject.name) ?? { correct: 0, total: 0 };
+    const subject = a.subjectSnapshot;
+    const entry = breakdown.get(subject) ?? { correct: 0, total: 0 };
     entry.total += 1;
     if (a.isCorrect) entry.correct += 1;
-    breakdown.set(a.question.subject.name, entry);
+    breakdown.set(subject, entry);
     return {
-      questionId: a.question.id,
-      subject: a.question.subject.name,
-      text: a.question.text,
-      options: decodeOptions(a.question.options),
+      questionId: a.questionId,
+      subject,
+      text: a.textSnapshot,
+      options: decodeOptions(a.optionsSnapshot),
       selectedIndex: a.chosen,
-      correctIndex: a.question.correctIndex,
+      correctIndex: a.correctIndexSnapshot,
       isCorrect: a.isCorrect,
-      explanation: a.question.explanation,
+      explanation: a.explanationSnapshot,
     };
   });
 
@@ -484,21 +481,7 @@ export async function getAttemptView(
 ): Promise<AttemptView> {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, userId },
-    include: {
-      answers: {
-        include: {
-          question: {
-            select: {
-              id: true,
-              text: true,
-              options: true,
-              subject: { select: { name: true } },
-              topic: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
+    include: { answers: true },
   });
   if (!attempt) throw notFound("Test not found.");
   if (attempt.finishedAt) {
@@ -511,13 +494,13 @@ export async function getAttemptView(
     mode: attempt.mode as TestMode,
     deadline: attempt.deadline.toISOString(),
     serverNow: now.toISOString(),
-    questions: attempt.answers.map((a) =>
+    questions: attempt.answers.map((answer) =>
       toPublicQuestion({
-        id: a.question.id,
-        subject: a.question.subject.name,
-        topic: a.question.topic?.name ?? null,
-        text: a.question.text,
-        options: a.question.options,
+        id: answer.questionId,
+        subject: answer.subjectSnapshot,
+        topic: answer.topicSnapshot,
+        text: answer.textSnapshot,
+        options: answer.optionsSnapshot,
       })
     ),
     saved: attempt.answers.map((a) => ({

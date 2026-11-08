@@ -266,6 +266,44 @@ describe("submit + result", () => {
     expect(again.status).toBe(409);
   });
 
+  it("keeps the original question wording, options and answer key after the bank question is edited", async () => {
+    const created = (await api.post("/tests", {
+      mode: "practice",
+      subject: "Physics",
+      count: 1,
+    })) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
+    const questionId = created.json.questions[0].id;
+    const original = await server.db.question.findUniqueOrThrow({ where: { id: questionId } });
+    const originalOptions = JSON.parse(original.options) as string[];
+
+    await server.db.question.update({
+      where: { id: questionId },
+      data: {
+        text: "Edited after the attempt started",
+        options: JSON.stringify(["new A", "new B", "new C", "new D"]),
+        correctIndex: (original.correctIndex + 1) % 4,
+        explanation: "New explanation",
+      },
+    });
+
+    const submitted = await api.post(`/tests/${created.json.attemptId}/submit`, {
+      answers: [{ questionId, selectedIndex: original.correctIndex }],
+    });
+    expect(submitted.status).toBe(200);
+    expect(submitted.json).toMatchObject({ score: 1, total: 1 });
+
+    const result = await api.get(`/tests/${created.json.attemptId}/result`);
+    expect(result.status).toBe(200);
+    expect(result.json.questions[0]).toMatchObject({
+      questionId,
+      text: original.text,
+      options: originalOptions,
+      correctIndex: original.correctIndex,
+      explanation: original.explanation,
+      isCorrect: true,
+    });
+  });
+
   it("rejects answers for foreign questions", async () => {
     const created = (await api.post(`/tests`, {
       mode: "practice",
@@ -280,6 +318,17 @@ describe("submit + result", () => {
     });
     expect(res.status).toBe(400);
     expect((res.json as { error: string }).error).toContain("not in this test");
+  });
+
+  it("prevents deleting questions referenced by student history", async () => {
+    const created = (await api.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 1,
+    })) as { json: { attemptId: number; questions: { id: number }[] } };
+    const questionId = created.json.questions[0].id;
+    await expect(server.db.question.delete({ where: { id: questionId } })).rejects.toMatchObject({ code: "P2003" });
+    expect(await server.db.question.findUnique({ where: { id: questionId } })).not.toBeNull();
   });
 
   it("counts unanswered as wrong in stats", async () => {

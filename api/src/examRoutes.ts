@@ -307,7 +307,12 @@ export function examRouter(db: PrismaClient): Router {
       if (!question) return next(notFound("Question not found."));
       await db.question.delete({ where: { id } });
       res.json({ ok: true, deleted: id });
-    } catch (error) { next(error); }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2003") {
+        return next(conflict("This question is already used in practice history or student progress and cannot be deleted."));
+      }
+      next(error);
+    }
   });
 
   router.get("/admin/students", requireAuth, requireAdmin(db), async (_req, res, next) => {
