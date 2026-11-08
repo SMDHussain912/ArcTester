@@ -34,6 +34,43 @@ export function testRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/learning/package", requireAuth, async (_req, res, next) => {
+    try {
+      const rows = await db.question.findMany({
+        orderBy: [{ subject: { name: "asc" } }, { topic: { name: "asc" } }, { id: "asc" }],
+        select: {
+          id: true,
+          text: true,
+          options: true,
+          correctIndex: true,
+          explanation: true,
+          difficulty: true,
+          subject: { select: { name: true } },
+          topic: { select: { name: true } },
+        },
+      });
+      const questions = rows.map((row) => ({
+        id: row.id,
+        subject: row.subject.name,
+        topic: row.topic?.name ?? null,
+        text: row.text,
+        options: JSON.parse(row.options) as string[],
+        correctIndex: row.correctIndex,
+        explanation: row.explanation,
+        difficulty: row.difficulty,
+      }));
+      res.json({
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        total: questions.length,
+        subjects: [...new Set(questions.map((question) => question.subject))],
+        questions,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post(
     "/tests",
     requireAuth,
