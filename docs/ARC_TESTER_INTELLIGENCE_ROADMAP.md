@@ -611,3 +611,35 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - Commit: `48a82cf` — `fix(admin): honor mock exam creation settings`.
 
 **Verification status:** The 173 passing tests apply to commit `7e462b7`, before the admin UI payload fix. The new fix has been pushed but still requires local test, lint and build verification. Desktop/mobile admin UI review remains open; Phase 1 is not closed.
+
+### Phase 2 — evidence-based weak-area recommendations (implementation batch) — 2026-11-08
+
+**Implemented and pushed**
+- Replaced the previous "weakest subject wins" recommendation rule. A low-accuracy subject or topic with only one or two answers is no longer presented as a confirmed learning gap.
+- Recommendations now use completed practice-answer topic aggregates only; formal exam outcomes remain separate.
+- A topic recommendation requires both:
+  - At least **5 answered questions**.
+  - Accuracy below **60%**.
+- Up to three eligible weak topics can produce focused practice recommendations, ordered by the existing weakest-topic ranking.
+- When a topic has at least 3 incorrect answers, a separate mistake-review action is included.
+- Priority is deterministic: below 40% accuracy or at least 10 answered questions is high; otherwise medium.
+- Every evidence-backed recommendation returns answered count, incorrect count, accuracy, and the configured threshold values. The student dashboard displays that evidence.
+- When no topic meets both thresholds, the system gives a low-priority baseline-building or diagnostic action instead of asserting that the weakest observed result is a reliable weakness.
+- Added tests for low-sample suppression, minimum-sample weak-topic recommendations, evidence metadata, and mistake-review actions.
+
+**Files changed**
+- `api/src/analytics.ts`
+- `api/tests/analytics.test.ts`
+- `web/lib/api.ts`
+- `web/app/analytics/page.tsx`
+
+**Verification**
+- These changes are pushed but have not yet been run in the user's environment.
+- Existing user-confirmed 173/173 test results apply to the preceding commit, not this Phase 2 batch.
+- The rules are transparent heuristics, not trained ML predictions and not claims of statistical significance.
+
+**Next**
+1. Run API/web tests, lint and production builds for this batch.
+2. Fix any failures before expanding recommendation behavior.
+3. Add safeguards against repeatedly recommending the same topic after recent practice, if the existing data can support this without introducing misleading recency assumptions.
+4. Review recommendation interactions and responsive layout.
