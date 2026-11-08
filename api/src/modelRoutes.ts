@@ -192,6 +192,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             targetColumn: dataset.targetColumn,
             featureSchema,
             model: result.model,
+            ...(result.uncertainty ? { uncertainty: result.uncertainty } : {}),
             createdAt: new Date().toISOString(),
           });
           const model = await tx.registeredModel.create({
@@ -209,7 +210,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
                 datasetId, datasetFingerprint: dataset.fingerprint,
                 trainRows: result.trainRows, testRows: result.testRows,
                 heldOutMetrics: result.metrics, crossValidation: result.crossValidation ?? null,
-                parameters: result.parameters ?? null, seed: input.seed,
+                parameters: result.parameters ?? null, uncertainty: result.uncertainty ?? null, seed: input.seed,
               }),
             },
           });
@@ -221,6 +222,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             heldOutMetrics: result.metrics,
             crossValidation: result.crossValidation ?? null,
             parameters: result.parameters ?? null,
+            uncertainty: result.uncertainty ?? null,
           });
         }
         return models;
