@@ -191,3 +191,29 @@ data was genuine, prevent an administrator from registering fabricated data,
 or establish real-world model quality. Synthetic data is not production
 validation. A future trusted ingestion workflow must verify provenance and
 separate training, validation, and final holdout splits before production use.
+
+
+## Training from registered datasets
+
+The admin Model Lab can train candidates directly from a registered dataset:
+
+- `POST /admin/model-datasets/:datasetId/train`
+- Body: `{ "modelId": "ecet-readiness", "seed": 42 }`
+- The dataset's stored task, target column, and feature schema are used; the request
+  cannot override them.
+- Training requires 30–5,000 rows. Binary classification requires at least 10
+  examples of each class and runs stratified five-fold hyperparameter tuning
+  on the training partition.
+- The pipeline creates a deterministic 80/20 holdout split. Preprocessing
+  categories are taken from the registered schema, and held-out metrics are
+  reported separately from cross-validation metrics.
+- Classification trains logistic regression, KNN, decision tree, and Gaussian
+  Naive Bayes. Regression trains multiple linear regression.
+- Each candidate artifact is validated and stored in the database registry.
+  Candidates are always created inactive; training never promotes a model.
+- The training event records the dataset ID and fingerprint, split sizes,
+  metrics, tuning parameters, and random seed in the model audit history.
+
+Candidates must still pass the separate registered-dataset baseline evaluation
+before activation. Training and evaluation on synthetic data are pipeline
+checks only, not evidence that a model is suitable for real student decisions.
