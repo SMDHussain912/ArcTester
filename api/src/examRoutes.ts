@@ -1355,17 +1355,35 @@ export function examRouter(db: PrismaClient): Router {
       if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(session.status)) return next(conflict("This exam session is already closed."));
       const now = new Date();
       const status = input.action === "PAUSE" ? "PAUSED" : input.action === "RESUME" ? "ACTIVE" : "TERMINATED";
-      const updated = await db.examSession.update({
-        where: { id: session.id },
-        data: {
-          status, lastActivityAt: now,
-          ...(input.action === "PAUSE" && session.status !== "PAUSED" ? { pausedAt: now } : {}),
-          ...(input.action === "RESUME" && session.pausedAt ? { pausedDurationMs: { increment: now.getTime() - session.pausedAt.getTime() }, pausedAt: null } : {}),
-          ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
-        },
-      });
-      await db.examSessionEvent.create({
-        data: { sessionId: session.id, actorId: req.user!.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+      const updated = await db.$transaction(async (tx) => {
+        const current = await tx.examSession.findUnique({ where: { id: session.id } });
+        if (!current) throw notFound("Exam session not found.");
+        if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(current.status)) {
+          throw conflict("This exam session is already closed.");
+        }
+        if (input.action === "PAUSE" && current.status === "PAUSED") {
+          throw conflict("This exam session is already paused.");
+        }
+        if (input.action === "RESUME" && current.status !== "PAUSED") {
+          throw conflict("This exam session is not paused.");
+        }
+        const changed = await tx.examSession.updateMany({
+          where: { id: current.id, status: current.status },
+          data: {
+            status, lastActivityAt: now,
+            ...(input.action === "PAUSE" ? { pausedAt: now } : {}),
+            ...(input.action === "RESUME" && current.pausedAt ? { pausedDurationMs: { increment: now.getTime() - current.pausedAt.getTime() }, pausedAt: null } : {}),
+            ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
+          },
+        });
+        if (changed.count !== 1) throw conflict("The exam session changed concurrently. Refresh and try again.");
+        await tx.examSessionEvent.create({
+          data: { sessionId: current.id, actorId: req.user!.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+        });
+        return tx.examSession.findUniqueOrThrow({
+          where: { id: current.id },
+          select: { id: true, status: true, endedAt: true },
+        });
       });
       res.json({ ok: true, session: { id: updated.id, status: updated.status, endedAt: updated.endedAt } });
     } catch (error) { next(error); }
