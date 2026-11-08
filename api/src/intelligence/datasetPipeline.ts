@@ -17,6 +17,7 @@ import {
 import type { BinaryTrainingSample } from "./classificationValidation.js";
 import type { DatasetRow } from "./datasetFactory.js";
 import type { DatasetDefinition } from "./datasetQuality.js";
+import { tuneClassifierHyperparameters, type CrossValidationOptions } from "./modelValidation.js";
 
 export interface CsvTable {
   headers: string[];
@@ -206,6 +207,43 @@ export function runClassifierExperiments(
     { algorithm: "decision-tree", model: tree, metrics: evaluateDecisionTree(tree, test) },
     { algorithm: "gaussian-naive-bayes", model: naiveBayes, metrics: evaluateNaiveBayes(naiveBayes, test) },
   ];
+}
+
+
+export interface TunedClassifierExperiment extends ClassifierExperiment {
+  crossValidation: ReturnType<typeof tuneClassifierHyperparameters>["bestMetrics"];
+  parameters: Record<string, number>;
+}
+
+/** Tunes on training data only, then evaluates the selected model once on untouched test rows. */
+export function runTunedClassifierExperiments(
+  trainRows: Array<{ features: number[]; target: number }>,
+  testRows: Array<{ features: number[]; target: number }>,
+  options: CrossValidationOptions = {},
+): TunedClassifierExperiment[] {
+  const train: BinaryTrainingSample[] = trainRows.map((row) => ({ features: row.features, label: row.target as 0 | 1 }));
+  const test: BinaryTrainingSample[] = testRows.map((row) => ({ features: row.features, label: row.target as 0 | 1 }));
+  if (train.some((row) => row.label !== 0 && row.label !== 1) || test.some((row) => row.label !== 0 && row.label !== 1)) {
+    throw new Error("Classifier experiment requires binary targets");
+  }
+  const algorithms = ["logistic-regression", "knn", "decision-tree", "gaussian-naive-bayes"] as const;
+  return algorithms.map((algorithm) => {
+    const tuned = tuneClassifierHyperparameters(train, algorithm, options);
+    if (algorithm === "logistic-regression") {
+      const model = fitLogisticRegression(train, tuned.bestParameters);
+      return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateLogisticRegression(model, test) };
+    }
+    if (algorithm === "knn") {
+      const model = fitKnn(train, tuned.bestParameters);
+      return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateKnn(model, test) };
+    }
+    if (algorithm === "decision-tree") {
+      const model = fitDecisionTree(train, tuned.bestParameters);
+      return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateDecisionTree(model, test) };
+    }
+    const model = fitNaiveBayes(train, tuned.bestParameters);
+    return { algorithm, model, parameters: tuned.bestParameters, crossValidation: tuned.bestMetrics, metrics: evaluateNaiveBayes(model, test) };
+  });
 }
 
 export function runRegressionExperiment(
