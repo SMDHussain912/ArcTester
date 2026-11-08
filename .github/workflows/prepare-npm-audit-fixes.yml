@@ -1,6 +1,7 @@
 name: Prepare semver-safe npm audit fixes
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
