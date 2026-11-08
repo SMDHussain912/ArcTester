@@ -23,7 +23,8 @@
     "build:mobile": "npm --prefix mobile exec expo export -- --platform all",
     "build:desktop:win": "npm --prefix desktop run dist:win",
     "install:mobile": "npm install --prefix mobile",
-    "install:desktop": "npm install --prefix desktop"
+    "install:desktop": "npm install --prefix desktop",
+    "admin:bootstrap": "npm run admin:bootstrap --workspace=api"
   },
   "devDependencies": {
     "prettier": "^3.3.3"
