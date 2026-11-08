@@ -19,6 +19,7 @@ type Announcement = { id: string; title: string; message: string; createdAt: str
 type AdminQuestion = { id: number; subject: string; topic: string | null; text: string; options: string[]; correctIndex?: number; explanation?: string; source?: string; difficulty?: string };
 type AdminSubject = { id: number; name: string; questionCount: number; topics: { id: number; name: string }[] };
 type AdminStudent = { id: number; email: string };
+type ReviewRequiredSubmission = { submissionId: string; assignmentId: string; studentId: number; studentEmail: string; examTitle: string; submittedAt: string; receivedAt: string; score: number | null; maximumScore: number | null };
 type AssignedExam = { id: string; status: string; assignedAt: string; availableFrom: string | null; dueAt: string | null; exam: { id: string; title: string; description: string }; version: number; durationMinutes: number; questionCount: number; submission: { id: string; status: string; score: number | null; maximumScore: number | null; submittedAt: string } | null };
 type AssignedExamPackage = { assignmentId: string; title: string; description: string; version: number; instructions: string; durationMinutes: number; availableFrom: string | null; dueAt: string | null; serverTime: string; questions: { id: string; position: number; subject: string; topic: string | null; text: string; options: string[]; marks: number; negativeMarks: number }[] };
 type AssignedExamResult = { submissionId: string; status: string; score: number | null; maximumScore: number | null; submittedAt: string; questions: { id: string; position: number; text: string; options: string[]; correctIndex: number; explanation: string; selectedIndex: number | null; isCorrect: boolean; awardedMarks: number; marks: number; negativeMarks: number }[] };
@@ -30,7 +31,7 @@ type AdminExam = {
   versions: { id: string; version: number; publishedAt: string | null; durationMinutes: number; _count: { questions: number; assignments: number } }[];
 };
 type AdminAnalytics = {
-  totals: { students: number; exams: number; assignments: number; submissions: number; submissionRate: number; averagePercentage: number | null };
+  totals: { students: number; exams: number; assignments: number; submissions: number; reviewRequired: number; submissionRate: number; averagePercentage: number | null };
   exams: { examId: string; title: string; assigned: number; submitted: number; submissionRate: number; averagePercentage: number | null }[];
   recentSubmissions: { submissionId: string; studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
 };
@@ -134,6 +135,16 @@ export default function App() {
   const [assignmentAvailableFrom, setAssignmentAvailableFrom] = useState("");
   const [assignmentDueAt, setAssignmentDueAt] = useState("");
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
+  const [adminStudentPage, setAdminStudentPage] = useState(1);
+  const [adminStudentSearch, setAdminStudentSearch] = useState("");
+  const [adminStudentTotal, setAdminStudentTotal] = useState(0);
+  const [reviewQueue, setReviewQueue] = useState<ReviewRequiredSubmission[]>([]);
+  const [reviewQueuePage, setReviewQueuePage] = useState(1);
+  const [reviewQueueTotal, setReviewQueueTotal] = useState(0);
+  const [liveSessionsPage, setLiveSessionsPage] = useState(1);
+  const [liveSessionsTotal, setLiveSessionsTotal] = useState(0);
+  const [attendancePage, setAttendancePage] = useState(1);
+  const [attendanceTotal, setAttendanceTotal] = useState(0);
   const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
   const [assignedExams, setAssignedExams] = useState<AssignedExam[]>([]);
   const [assignmentResult, setAssignmentResult] = useState<AssignedExamResult | null>(null);
@@ -203,7 +214,7 @@ export default function App() {
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "announcements" | "invitations" | "assigned-exams">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "review-queue" | "announcements" | "invitations" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -363,9 +374,6 @@ export default function App() {
     request<{ subjects: AdminSubject[] }>("/admin/subjects")
       .then(({ subjects }) => { const items = subjects ?? []; setAdminSubjects(items); if (items[0]) setNewTopicSubjectId(items[0].id); })
       .catch((cause) => setError((cause as Error).message));
-    request<{ students: AdminStudent[] }>("/admin/students")
-      .then(({ students }) => setAdminStudents(students))
-      .catch((cause) => setError((cause as Error).message));
     request<{ exams: AdminExam[] }>("/admin/exams")
       .then(({ exams }) => setAdminExams(exams))
       .catch((cause) => setError((cause as Error).message));
@@ -377,6 +385,16 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.role !== "ADMIN") return;
+    void refreshAdminStudents();
+  }, [user, adminStudentPage, adminStudentSearch]);
+
+  useEffect(() => {
+    if (user?.role !== "ADMIN" || activePage !== "review-queue") return;
+    void refreshReviewQueue();
+  }, [user, activePage, reviewQueuePage]);
+
+  useEffect(() => {
     if (user?.role !== "ADMIN" || !["live-sessions", "attendance"].includes(activePage)) return;
     const refresh = () => {
       if (activePage === "live-sessions") void refreshLiveSessions();
@@ -385,7 +403,7 @@ export default function App() {
     refresh();
     const interval = window.setInterval(refresh, 15_000);
     return () => window.clearInterval(interval);
-  }, [user, activePage]);
+  }, [user, activePage, liveSessionsPage, attendancePage]);
 
   async function refreshAssignedExams() {
     const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
@@ -568,6 +586,7 @@ export default function App() {
       await request(`/admin/submissions/${submissionId}/release`, { method: "POST", body: JSON.stringify({}) });
       const refreshed = await request<AdminAnalytics>("/admin/analytics/overview");
       setAdminAnalytics(refreshed);
+      await refreshReviewQueue();
       setNotice("Submission approved. The student can now view the result.");
     } catch (cause) {
       setNotice("");
@@ -577,17 +596,38 @@ export default function App() {
     }
   }
 
-  async function refreshLiveSessions() {
+  async function refreshAdminStudents(page = adminStudentPage, search = adminStudentSearch) {
     try {
-      const response = await request<{ sessions: LiveSession[] }>("/admin/exams/live-sessions");
-      setLiveSessions(response.sessions ?? []);
+      const params = new URLSearchParams({ page: String(page), limit: "50" });
+      if (search.trim()) params.set("search", search.trim());
+      const response = await request<{ students: AdminStudent[]; total: number }>(`/admin/students?${params.toString()}`);
+      setAdminStudents(response.students ?? []);
+      setAdminStudentTotal(response.total ?? 0);
     } catch (cause) { setError((cause as Error).message); }
   }
 
-  async function refreshExamAttendance() {
+  async function refreshReviewQueue(page = reviewQueuePage) {
     try {
-      const response = await request<{ attendance: ExamAttendance[] }>("/admin/exams/attendance");
+      const response = await request<{ submissions: ReviewRequiredSubmission[]; total: number }>(`/admin/submissions/review-required?page=${page}&limit=25`);
+      setReviewQueue(response.submissions ?? []);
+      setReviewQueueTotal(response.total ?? 0);
+      if ((response.submissions?.length ?? 0) === 0 && page > 1 && page > Math.ceil((response.total ?? 0) / 25)) setReviewQueuePage(Math.max(1, Math.ceil((response.total ?? 0) / 25)));
+    } catch (cause) { setError((cause as Error).message); }
+  }
+
+  async function refreshLiveSessions(page = liveSessionsPage) {
+    try {
+      const response = await request<{ sessions: LiveSession[]; total: number }>(`/admin/exams/live-sessions?page=${page}&limit=25`);
+      setLiveSessions(response.sessions ?? []);
+      setLiveSessionsTotal(response.total ?? 0);
+    } catch (cause) { setError((cause as Error).message); }
+  }
+
+  async function refreshExamAttendance(page = attendancePage) {
+    try {
+      const response = await request<{ attendance: ExamAttendance[]; total: number }>(`/admin/exams/attendance?page=${page}&limit=25`);
       setExamAttendance(response.attendance ?? []);
+      setAttendanceTotal(response.total ?? 0);
     } catch (cause) { setError((cause as Error).message); }
   }
 
@@ -1338,6 +1378,7 @@ export default function App() {
             <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
             <button className={activePage === "live-sessions" ? "nav-active" : "nav-button"} onClick={() => setActivePage("live-sessions")}>Live invigilation</button>
             <button className={activePage === "attendance" ? "nav-active" : "nav-button"} onClick={() => setActivePage("attendance")}>Attendance</button>
+            <button className={activePage === "review-queue" ? "nav-active" : "nav-button"} onClick={() => setActivePage("review-queue")}>Review queue{adminAnalytics?.totals.reviewRequired ? ` · ${adminAnalytics.totals.reviewRequired}` : ""}</button>
             <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
             <button className={activePage === "subjects" ? "nav-active" : "nav-button"} onClick={() => setActivePage("subjects")}>Subjects & topics</button>
             <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
@@ -1378,6 +1419,7 @@ export default function App() {
               <article className="panel stat"><span className="muted">Assignments</span><strong>{adminAnalytics?.totals.assignments ?? "—"}</strong><span className="muted">Student exam assignments</span></article>
               <article className="panel stat"><span className="muted">Submissions</span><strong>{adminAnalytics?.totals.submissions ?? "—"}</strong><span className="muted">{Math.round((adminAnalytics?.totals.submissionRate ?? 0) * 100)}% submission rate</span></article>
               <article className="panel stat"><span className="muted">Average score</span><strong>{adminAnalytics?.totals.averagePercentage === null || adminAnalytics?.totals.averagePercentage === undefined ? "—" : `${adminAnalytics.totals.averagePercentage.toFixed(1)}%`}</strong><span className="muted">Across scored submissions</span></article>
+              <article className="panel stat"><span className="muted">Needs review</span><strong>{adminAnalytics?.totals.reviewRequired ?? "—"}</strong><span className="muted">Awaiting invigilator approval</span></article>
             </div>
             <div className="section-head"><div><p className="eyebrow">EXAM BREAKDOWN</p><h2>Performance by exam</h2></div></div>
             <div className="panel analytics-table-wrap">
@@ -1460,13 +1502,16 @@ export default function App() {
                     <button className="ghost" disabled={busy} onClick={() => void cloneExam(exam.id)}>Duplicate exam</button>
                     {exam.status !== "ARCHIVED" && <button className="ghost danger-action" disabled={busy} onClick={() => void archiveExam(exam.id)}>Archive</button>}
                     {!published && exam.status !== "ARCHIVED" && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
-                    {published && exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy || adminStudents.length === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); setAssignmentAvailableFrom(""); setAssignmentDueAt(""); }}>Assign to students</button>}
+                    {published && exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy || adminStudentTotal === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); setAssignmentAvailableFrom(""); setAssignmentDueAt(""); }}>Assign to students</button>}
                     {published && <span className="muted">{version?._count.assignments ?? 0} assignments</span>}
                   </div>
                   {assigningExamId === exam.id && <div className="student-picker">
                     <strong>Select students</strong>
+                    <label>Search students<input type="search" value={adminStudentSearch} onChange={(event) => { setAdminStudentSearch(event.target.value); setAdminStudentPage(1); }} placeholder="Search email address…" /></label>
+                    <p className="muted">{adminStudentTotal} matching student account(s) · {selectedStudentIds.length} selected across pages</p>
                     <div className="question-editor-grid assignment-schedule"><label>Available from<input type="datetime-local" value={assignmentAvailableFrom} onChange={(event) => setAssignmentAvailableFrom(event.target.value)} /></label><label>Due date<input type="datetime-local" value={assignmentDueAt} onChange={(event) => setAssignmentDueAt(event.target.value)} /></label></div>
-                    {adminStudents.length === 0 ? <p className="muted">No student accounts are registered yet.</p> : adminStudents.map((student) => <label className="student-pick" key={student.id}><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} />{student.email}</label>)}
+                    {adminStudents.length === 0 ? <p className="muted">{adminStudentTotal === 0 ? "No matching student accounts." : "Loading students…"}</p> : adminStudents.map((student) => <label className="student-pick" key={student.id}><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} />{student.email}</label>)}
+                    <div className="row-actions"><button type="button" className="ghost" disabled={adminStudentPage <= 1} onClick={() => setAdminStudentPage((page) => Math.max(1, page - 1))}>Previous students</button><span className="muted">Page {adminStudentPage} of {Math.max(1, Math.ceil(adminStudentTotal / 50))}</span><button type="button" className="ghost" disabled={adminStudentPage >= Math.ceil(adminStudentTotal / 50)} onClick={() => setAdminStudentPage((page) => page + 1)}>Next students</button></div>
                     <button className="primary" disabled={busy || selectedStudentIds.length === 0} onClick={() => void assignExam(exam.id)}>Assign to {selectedStudentIds.length} student(s)</button>
                   </div>}
                 </article>;
@@ -1488,12 +1533,19 @@ export default function App() {
               <div className="live-session-metrics"><span><b>{session.heartbeatCount}</b> heartbeats</span><span><b>{session.focusLossCount}</b> focus losses</span><span><b>{session.disconnectCount}</b> reconnects</span><span>Last signal: {session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "Never"}</span></div>
               <div className="live-session-actions">{session.status === "ACTIVE" ? <button className="ghost" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "PAUSE")}>Pause</button> : session.status === "PAUSED" ? <button className="primary" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "RESUME")}>Resume</button> : null}<button className="ghost danger-action" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "TERMINATE")}>Terminate</button><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(session.assignmentId)}>View audit trail</button></div>
             </article>)}</div>}
+            <div className="row-actions"><span className="muted">{liveSessionsTotal} live or interrupted session(s) · page {liveSessionsPage} of {Math.max(1, Math.ceil(liveSessionsTotal / 25))}</span><button className="ghost" disabled={liveSessionsPage <= 1} onClick={() => setLiveSessionsPage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={liveSessionsPage >= Math.ceil(liveSessionsTotal / 25)} onClick={() => setLiveSessionsPage((page) => page + 1)}>Next</button></div>
             {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><div className="session-audit-summary"><span>Status: <b>{sessionAudit.session?.status ?? "NOT STARTED"}</b></span><span>Heartbeats: <b>{sessionAudit.session?.heartbeatCount ?? 0}</b></span><span>Focus losses: <b>{sessionAudit.session?.focusLossCount ?? 0}</b></span><span>Reconnects: <b>{sessionAudit.session?.disconnectCount ?? 0}</b></span></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
           </section>
           <section hidden={activePage !== "attendance"} id="admin-exam-attendance">
             <div className="section-head"><div><p className="eyebrow">EXAM REGISTER</p><h2>Candidate attendance</h2><p className="muted">Assignment, session, connectivity and submission records.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshExamAttendance()}>Refresh now</button></div>
             <div className="panel analytics-table-wrap"><table className="analytics-table attendance-table"><thead><tr><th>Candidate</th><th>Examination</th><th>Attendance</th><th>Connection</th><th>Started</th><th>Submitted</th><th>Score</th><th>Audit</th></tr></thead><tbody>{examAttendance.map((item) => <tr key={item.assignmentId}><td>{item.candidate.email}</td><td>{item.exam.title} · v{item.version}</td><td><span className={`status status-${item.attendanceStatus.toLowerCase()}`}>{item.attendanceStatus.replaceAll("_", " ")}</span></td><td>{item.connectivity.replaceAll("_", " ")}</td><td>{item.session?.startedAt ? new Date(item.session.startedAt).toLocaleString() : "—"}</td><td>{item.submission?.submittedAt ? new Date(item.submission.submittedAt).toLocaleString() : "—"}</td><td>{item.submission ? `${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}` : "—"}</td><td><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(item.assignmentId)}>View</button></td></tr>)}</tbody></table>{examAttendance.length === 0 && <p className="empty-state">No exam assignments have been created yet.</p>}</div>
+            <div className="row-actions"><span className="muted">{attendanceTotal} assignments · page {attendancePage} of {Math.max(1, Math.ceil(attendanceTotal / 25))}</span><button className="ghost" disabled={attendancePage <= 1} onClick={() => setAttendancePage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={attendancePage >= Math.ceil(attendanceTotal / 25)} onClick={() => setAttendancePage((page) => page + 1)}>Next</button></div>
             {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
+          </section>
+          <section hidden={activePage !== "review-queue"} id="admin-review-queue">
+            <div className="section-head"><div><p className="eyebrow">INVIGILATOR WORKFLOW</p><h2>Submissions awaiting review</h2><p className="muted">These submissions need approval before students can see their scores and answer review.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshReviewQueue()}>Refresh</button></div>
+            <div className="panel analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Received by server</th><th>Score</th><th>Action</th></tr></thead><tbody>{reviewQueue.map((item) => <tr key={item.submissionId}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{new Date(item.receivedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending review" : `${item.score} / ${item.maximumScore}`}</td><td><button className="primary" disabled={busy} onClick={() => void releaseSubmission(item.submissionId)}>Approve & release</button></td></tr>)}{reviewQueue.length === 0 && <tr><td colSpan={6} className="muted">No submissions are waiting for review.</td></tr>}</tbody></table></div>
+            <div className="row-actions"><span className="muted">{reviewQueueTotal} submission(s) · page {reviewQueuePage} of {Math.max(1, Math.ceil(reviewQueueTotal / 25))}</span><button className="ghost" disabled={reviewQueuePage <= 1} onClick={() => setReviewQueuePage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={reviewQueuePage >= Math.ceil(reviewQueueTotal / 25)} onClick={() => setReviewQueuePage((page) => page + 1)}>Next</button></div>
           </section>
           <section hidden={activePage !== "subjects"} id="admin-subjects-topics">
             <div className="section-head"><div><p className="eyebrow">QUESTION TAXONOMY</p><h2>Subjects and topics</h2><p className="muted">Organise the question bank before building exam blueprints.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshSubjects()}>Refresh</button></div>
