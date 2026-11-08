@@ -83,6 +83,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     if (syncLock.current) return;
     syncLock.current = true;
     setSyncing(true);
+    setError("");
     try {
       const pending = await getPendingSubmissions();
       if (pending.length > 0) {
@@ -106,7 +107,14 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
 
     const load = async () => {
       try {
-        await Promise.all([refreshAssignments(), refreshLocalState()]);
+        await refreshLocalState();
+        try {
+          await refreshAssignments();
+        } catch (cause) {
+          if (mounted) {
+            setError(cause instanceof Error ? cause.message : "Could not load assigned exams.");
+          }
+        }
         const state = await NetInfo.fetch();
         if (mounted && state.isConnected && state.isInternetReachable !== false) {
           setOnline(true);
@@ -214,7 +222,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
       setError(cause instanceof Error ? cause.message : "Could not save this submission.");
       setBusyId(null);
     }
-  }, [activeAttemptUuid, activePackage, refreshAssignments, refreshLocalState, syncOutbox]);
+  }, [activeAttemptUuid, activePackage, refreshLocalState, syncOutbox]);
 
   useEffect(() => {
     if (activePackage && remainingSeconds === 0 && !autoSubmitStarted.current) {
