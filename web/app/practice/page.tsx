@@ -50,7 +50,7 @@ function PracticePaperChooser() {
   const availableCount = useMemo(() => {
     if (selectedSubjects.length === 0) return 0;
     if (selectedTopics.length === 0) return chosenSubjectRows.reduce((sum, subject) => sum + subject.count, 0);
-    return chosenSubjectRows.reduce((sum, subject) => sum + subject.topics.filter((topic) => selectedTopics.includes(topic.topic)).reduce((n, topic) => n + topic.count, 0), 0);
+    return chosenSubjectRows.reduce((sum, subject) => sum + (subject.topics ?? []).filter((topic) => selectedTopics.includes(topic.topic)).reduce((n, topic) => n + topic.count, 0), 0);
   }, [chosenSubjectRows, selectedSubjects, selectedTopics]);
   const questionCount = mode === "mock" ? 200 : mode === "mistakes" ? count : Math.min(count, availableCount);
   const durationMinutes = mode === "mock" ? 180 : Math.max(5, Math.round(questionCount * 0.9));
