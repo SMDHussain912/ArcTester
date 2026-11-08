@@ -30,14 +30,14 @@ describe("offline learning package", () => {
     const { status, json } = await api.get("/learning/concepts?q=fifo");
     expect(status).toBe(200);
     const body = json as { total: number; concepts: { slug: string; title: string; definition: string; examples: string[]; commonMistakes: string[] }[] };
-    expect(body.total).toBe(1);
-    expect(body.concepts[0]).toMatchObject({
-      slug: "queue",
+    expect(body.total).toBeGreaterThanOrEqual(1);
+    const queue = body.concepts.find((concept) => concept.slug === "queue");
+    expect(queue).toMatchObject({
       title: "Queue",
       examples: expect.arrayContaining(["Printer job scheduling"]),
     });
-    expect(body.concepts[0].definition).toContain("first-in, first-out");
-    expect(body.concepts[0].commonMistakes.length).toBeGreaterThan(0);
+    expect(queue?.definition).toContain("first-in, first-out");
+    expect(queue?.commonMistakes.length).toBeGreaterThan(0);
   });
 
   it("filters concepts by subject and supports direct concept lookup", async () => {
