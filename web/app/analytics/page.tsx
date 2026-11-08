@@ -104,12 +104,10 @@ function AnalyticsDashboard() {
     );
   }
 
-  const completed = history.filter((item) => item.total > 0);
-  const totalCorrect = overview?.practice.correct ?? completed.reduce((sum, item) => sum + item.score, 0);
-  const totalQuestions = overview?.practice.questions ?? completed.reduce((sum, item) => sum + item.total, 0);
-  const averageAccuracy = overview
-    ? overview.practice.accuracy === null ? null : Math.round(overview.practice.accuracy * 100)
-    : totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : null;
+  const totalQuestions = overview?.practice.questions ?? null;
+  const averageAccuracy = overview?.practice.accuracy === null || overview?.practice.accuracy === undefined
+    ? null
+    : Math.round(overview.practice.accuracy * 100);
 
   return (
     <div className="stack">
@@ -129,7 +127,7 @@ function AnalyticsDashboard() {
         </div>
         <div className="stat-card">
           <div className="stat-label">Question items</div>
-          <div className="stat-value">{loading ? "—" : totalQuestions}</div>
+          <div className="stat-value">{loading || totalQuestions === null ? "—" : totalQuestions}</div>
           <div className="stat-caption">{overview ? `${overview.practice.correct} correct · ${overview.practice.incorrect} incorrect · ${overview.practice.unanswered} unanswered` : "Across completed practice attempts"}</div>
         </div>
         <div className="stat-card">
@@ -347,7 +345,7 @@ function AnalyticsDashboard() {
               </div>
               <div style={{ textAlign: "right" }}>
                 <strong>{item.score} / {item.total}</strong>
-                <p className="mute">{accuracy}% accuracy{item.expired ? " · Time expired" : ""}</p>
+                <p className="mute">{accuracy}% score{item.expired ? " · Time expired" : ""}</p>
               </div>
             </div>
           );
