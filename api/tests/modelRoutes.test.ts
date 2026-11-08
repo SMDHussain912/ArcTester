@@ -232,7 +232,9 @@ describe("admin model registry API", () => {
       version: 1,
       task: "binary-classification",
       prediction: 1,
+      confidenceLevel: expect.stringMatching(/^(high|moderate|low)$/),
     });
+    expect((prediction.body.prediction as { confidence: number }).confidence).toBeGreaterThanOrEqual(0.5);
 
     const invalid = await request("/admin/models/exam-readiness-demo/predict", "POST", {
       features: { wrong_feature: 10 },
