@@ -214,9 +214,14 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
     try {
       // Flush in-flight writes, then persist the latest full answer map before submission.
       await answerSaveQueue.current.catch(() => undefined);
-      for (const question of activePackage.questions) {
-        await saveOfflineAnswer(activePackage.assignmentId, question.id, answers[question.id] ?? null);
+      const storedAttempt = await getOfflineAttempt(activePackage.assignmentId);
+      if (!storedAttempt || storedAttempt.syncStatus === "IN_PROGRESS") {
+        for (const question of activePackage.questions) {
+          await saveOfflineAnswer(activePackage.assignmentId, question.id, answers[question.id] ?? null);
+        }
       }
+      // PENDING/SYNC_ERROR attempts already have an immutable queued answer set;
+      // retry their upload without trying to write into a submitted attempt.
       const submission = await queueOfflineSubmission(activePackage.assignmentId);
       setMessage("Attempt saved on this device");
       if (online) {
