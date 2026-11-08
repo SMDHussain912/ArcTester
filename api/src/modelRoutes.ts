@@ -10,6 +10,7 @@ import {
   type RegisterModelInput,
 } from "./intelligence/modelRegistry.js";
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
+import { assessFeatureDrift, driftBucket, expectedDriftCounts } from "./intelligence/modelDrift.js";
 import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
@@ -198,7 +199,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           const model = await tx.registeredModel.create({
             data: {
               modelId, version, algorithm: result.algorithm, task: dataset.task,
-              dataset: dataset.name, artifactJson: JSON.stringify(artifact),
+              dataset: dataset.name, trainingDatasetId: dataset.id, artifactJson: JSON.stringify(artifact),
               isActive: false, activatedAt: null,
             },
             select: { modelId: true, version: true, algorithm: true, task: true, dataset: true, isActive: true, createdAt: true },
@@ -479,6 +480,37 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/models/:modelId/:version/drift", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const version = VersionSchema.parse(req.params.version);
+      const model = await db.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } });
+      if (!model) return next(notFound("Model version was not found."));
+      if (!model.trainingDatasetId) return next(conflict("This model has no registered training dataset baseline for drift monitoring."));
+      const baseline = await db.modelDataset.findUnique({ where: { id: model.trainingDatasetId } });
+      if (!baseline) return next(conflict("The model training dataset baseline is unavailable."));
+      const featureSchema = JSON.parse(baseline.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
+      const baselineSamples = JSON.parse(baseline.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const stored = await db.modelDriftBucket.findMany({
+        where: { modelId, version, periodStart: { gte: since } },
+        select: { featureName: true, bucket: true, count: true },
+      });
+      const assessments = featureSchema.map((feature) => {
+        const observed: Record<string, number> = {};
+        for (const row of stored.filter((item) => item.featureName === feature.name)) observed[row.bucket] = (observed[row.bucket] ?? 0) + row.count;
+        return assessFeatureDrift(feature.name, expectedDriftCounts(feature, baselineSamples), observed);
+      });
+      const statuses = assessments.map((item) => item.status);
+      const overall = statuses.includes("HIGH") ? "HIGH" : statuses.includes("MODERATE") ? "MODERATE" : statuses.every((status) => status === "NO_DATA") ? "NO_DATA" : "LOW";
+      res.json({ ok: true, modelId, version, baselineDataset: baseline.name, windowDays: 30, overall, features: assessments });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
   router.post("/admin/models/:modelId/predict", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
@@ -487,6 +519,28 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (!active) return next(notFound("No active model version is registered."));
       const artifact = validateRegistryArtifact(JSON.parse(active.artifactJson));
       const prediction = predictWithRegistryArtifact(artifact, features);
+      if (active.trainingDatasetId) {
+        const baseline = await db.modelDataset.findUnique({
+          where: { id: active.trainingDatasetId },
+          select: { featureSchemaJson: true, samplesJson: true },
+        });
+        if (baseline) {
+          const featureSchema = JSON.parse(baseline.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
+          const baselineSamples = JSON.parse(baseline.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+          const periodStart = new Date();
+          periodStart.setUTCHours(0, 0, 0, 0);
+          await db.$transaction(featureSchema.map((feature) => {
+            const bucket = driftBucket(feature, features[feature.name]!, baselineSamples);
+            return db.modelDriftBucket.upsert({
+              where: { modelId_version_featureName_bucket_periodStart: {
+                modelId, version: active.version, featureName: feature.name, bucket, periodStart,
+              } },
+              create: { modelId, version: active.version, featureName: feature.name, bucket, periodStart, count: 1 },
+              update: { count: { increment: 1 } },
+            });
+          }));
+        }
+      }
       res.json({ ok: true, prediction });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
