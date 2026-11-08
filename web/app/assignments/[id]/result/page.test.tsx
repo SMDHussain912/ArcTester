@@ -81,7 +81,7 @@ describe("assigned exam result page", () => {
       </SessionProvider>
     );
 
-    await waitFor(() => expect(screen.getByText("8 / 10")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
     expect(screen.getByText("What is 2 + 2?")).toBeInTheDocument();
     expect(screen.getByText("Two plus two equals four.")).toBeInTheDocument();
     expect(screen.getByText("Correct answer")).toBeInTheDocument();
