@@ -1100,7 +1100,7 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.session?.status === "PAUSED") {
         return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
       }
-      if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + 60000) {
+      if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
         await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
         return next(conflict("The exam duration has expired. Contact the invigilator."));
       }
@@ -1117,7 +1117,8 @@ export function examRouter(db: PrismaClient): Router {
             },
           });
       if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
-      res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now } });
+      const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
+      res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
     } catch (error) { next(error); }
   });
 
@@ -1132,6 +1133,15 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment.session || assignment.session.status !== "ACTIVE") return next(conflict("There is no active exam session."));
       if (assignment.submission) return next(conflict("This exam has already been submitted."));
       const now = new Date();
+      const deadline = assignment.session.startedAt
+        ? new Date(assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs)
+        : null;
+      if (deadline && now.getTime() > deadline.getTime() + 60000) {
+        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
+        await db.examSessionEvent.create({ data: { sessionId: assignment.session.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." } });
+        return next(conflict("The examination time has expired."));
+      }
+      if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
       const session = await db.examSession.update({
         where: { id: assignment.session.id },
@@ -1146,8 +1156,8 @@ export function examRouter(db: PrismaClient): Router {
           data: { sessionId: session.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
         });
       }
-      const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000) : null;
-      res.json({ ok: true, serverTime: now, deadline, sessionStatus: session.status });
+      const effectiveDeadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
+      res.json({ ok: true, serverTime: now, deadline: effectiveDeadline, sessionStatus: session.status });
     } catch (error) { next(error); }
   });
 
@@ -1208,7 +1218,12 @@ export function examRouter(db: PrismaClient): Router {
       const status = input.action === "PAUSE" ? "PAUSED" : input.action === "RESUME" ? "ACTIVE" : "TERMINATED";
       const updated = await db.examSession.update({
         where: { id: session.id },
-        data: { status, lastActivityAt: now, ...(input.action === "TERMINATE" ? { endedAt: now } : {}) },
+        data: {
+          status, lastActivityAt: now,
+          ...(input.action === "PAUSE" ? { pausedAt: now } : {}),
+          ...(input.action === "RESUME" && session.pausedAt ? { pausedDurationMs: { increment: now.getTime() - session.pausedAt.getTime() }, pausedAt: null } : {}),
+          ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
+        },
       });
       await db.examSessionEvent.create({
         data: { sessionId: session.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
@@ -1367,7 +1382,7 @@ export function examRouter(db: PrismaClient): Router {
       // Server-owned session timestamps prevent candidates from extending time by editing browser clocks.
       const startedAt = serverStartedAt;
       const submittedAt = serverSubmittedAt;
-      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000;
+      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + assignment.session.pausedDurationMs;
       const staleHeartbeat = !assignment.session.lastHeartbeatAt ||
         serverSubmittedAt.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
