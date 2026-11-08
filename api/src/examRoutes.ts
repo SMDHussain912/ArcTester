@@ -277,9 +277,14 @@ export function examRouter(db: PrismaClient): Router {
       if (!assignment) return next(notFound("Exam assignment not found."));
       const now = Date.now();
       if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
+      if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
+        return next(forbidden("This exam is not available yet."));
+      }
       if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
       }
+      const orderedQuestions = [...assignment.examVersion.questions];
+      if (assignment.examVersion.shuffleQuestions) orderedQuestions.sort(() => Math.random() - 0.5);
       const packageBody = {
         assignmentId: assignment.id,
         examId: assignment.examVersion.exam.id,
@@ -291,16 +296,22 @@ export function examRouter(db: PrismaClient): Router {
         availableFrom: assignment.availableFrom,
         dueAt: assignment.dueAt,
         serverTime: new Date(now).toISOString(),
-        questions: assignment.examVersion.questions.map((question) => ({
-          id: question.id,
-          position: question.position,
-          subject: question.subject,
-          topic: question.topic,
-          text: question.text,
-          options: parseOptions(question.options),
-          marks: question.marks,
-          negativeMarks: question.negativeMarks,
-        })),
+        questions: orderedQuestions.map((question) => {
+          const originalOptions = parseOptions(question.options);
+          const optionOrder = [0, 1, 2, 3];
+          if (assignment.examVersion.shuffleOptions) optionOrder.sort(() => Math.random() - 0.5);
+          return {
+            id: question.id,
+            position: question.position,
+            subject: question.subject,
+            topic: question.topic,
+            text: question.text,
+            options: optionOrder.map((index) => originalOptions[index]),
+            optionOrder,
+            marks: question.marks,
+            negativeMarks: question.negativeMarks,
+          };
+        }),
       };
       const digest = createHash("sha256").update(JSON.stringify(packageBody)).digest("hex");
       res.json({ ok: true, package: packageBody, sha256: digest });
