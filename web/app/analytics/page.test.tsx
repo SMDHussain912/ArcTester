@@ -50,7 +50,11 @@ describe("student analytics page", () => {
         )
       ).toBeInTheDocument()
     );
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))).toBe(false);
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("/analytics/")
+      )
+    ).toBe(false);
   });
 
   it("shows accuracy, weak subjects and recent practice history", async () => {
@@ -68,10 +72,28 @@ describe("student analytics page", () => {
         return Promise.resolve(
           jsonResponse(200, {
             subjects: [
-              { subject: "Physics", topic: null, seen: 10, wrong: 7, accuracy: 0.3 },
-              { subject: "Maths", topic: null, seen: 10, wrong: 2, accuracy: 0.8 },
+              {
+                subject: "Physics",
+                topic: null,
+                seen: 10,
+                wrong: 7,
+                accuracy: 0.3,
+              },
+              {
+                subject: "Maths",
+                topic: null,
+                seen: 10,
+                wrong: 2,
+                accuracy: 0.8,
+              },
             ],
-            weakest: { subject: "Physics", topic: "Mechanics", seen: 10, wrong: 7, accuracy: 0.3 },
+            weakest: {
+              subject: "Physics",
+              topic: "Mechanics",
+              seen: 10,
+              wrong: 7,
+              accuracy: 0.3,
+            },
           })
         );
       }
@@ -99,9 +121,7 @@ describe("student analytics page", () => {
       </SessionProvider>
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("80%")).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(
       screen.getByText(
