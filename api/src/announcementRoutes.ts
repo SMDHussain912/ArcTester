@@ -75,6 +75,34 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   );
 
+
+  router.post("/announcements/:id/read", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const announcement = await db.announcement.findFirst({
+        where: {
+          id: req.params.id,
+          publishedAt: { lte: new Date() },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+        select: { id: true },
+      });
+      if (!announcement) return next(badRequest("This announcement is no longer available."));
+      await db.announcementRead.upsert({
+        where: {
+          announcementId_studentId: {
+            announcementId: announcement.id,
+            studentId: req.user!.id,
+          },
+        },
+        create: { announcementId: announcement.id, studentId: req.user!.id },
+        update: { seenAt: new Date() },
+      });
+      res.json({ ok: true, seenAt: new Date().toISOString() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/announcements", requireAuth, async (req, res, next) => {
     try {
       const parsedAfter = AfterSchema.safeParse(req.query.after);
@@ -85,6 +113,7 @@ export function announcementRouter(db: PrismaClient): Router {
         where: {
           publishedAt: { lte: now, ...(after ? { gt: after } : {}) },
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          reads: { none: { studentId: req.user!.id } },
         },
         orderBy: { publishedAt: "asc" },
         take: 200,
