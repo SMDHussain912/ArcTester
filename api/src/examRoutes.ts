@@ -397,8 +397,8 @@ export function examRouter(db: PrismaClient): Router {
             SUM(ea."awardedMarks") AS "awardedMarks", SUM(eq.marks) AS "maximumMarks"
           FROM "ExamSubmissionAnswer" ea
           INNER JOIN "ExamSubmission" es ON es.id = ea."submissionId"
-          INNER JOIN "ExamAssignment" ass ON ass.id = es.assignmentId
-          INNER JOIN "User" u ON u.id = ass.studentId
+          INNER JOIN "ExamAssignment" ass ON ass.id = es."assignmentId"
+          INNER JOIN "User" u ON u.id = ass."studentId"
           INNER JOIN "ExamVersionQuestion" eq ON eq.id = ea."examQuestionId"
           WHERE es.status = 'GRADED' AND u.role = 'STUDENT'
           GROUP BY eq.subject, eq.topic
@@ -412,9 +412,9 @@ export function examRouter(db: PrismaClient): Router {
             AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub."maximumScore" > 0
               THEN (sub.score * 100.0) / sub."maximumScore" ELSE NULL END) AS "averagePercentage"
           FROM "ExamAssignment" ass
-          INNER JOIN "ExamVersion" ev ON ev.id = ass.examVersionId
+          INNER JOIN "ExamVersion" ev ON ev.id = ass."examVersionId"
           INNER JOIN "Exam" e ON e.id = ev."examId"
-          LEFT JOIN "ExamSubmission" sub ON sub.assignmentId = ass.id
+          LEFT JOIN "ExamSubmission" sub ON sub."assignmentId" = ass.id
           GROUP BY ev."examId", e.title
           ORDER BY assigned DESC
         `,
@@ -434,8 +434,8 @@ export function examRouter(db: PrismaClient): Router {
         db.$queryRaw<Array<{ averagePercentage: number | null }>>`
           SELECT AVG((sub.score * 100.0) / sub."maximumScore") AS "averagePercentage"
           FROM "ExamSubmission" sub
-          INNER JOIN "ExamAssignment" ass ON ass.id = sub.assignmentId
-          INNER JOIN "User" u ON u.id = ass.studentId
+          INNER JOIN "ExamAssignment" ass ON ass.id = sub."assignmentId"
+          INNER JOIN "User" u ON u.id = ass."studentId"
           WHERE u.role = 'STUDENT' AND sub.status = 'GRADED'
             AND sub.score IS NOT NULL AND sub."maximumScore" > 0
         `,
@@ -495,7 +495,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       const averagePercentage = averageRows[0]?.averagePercentage == null ? null : Number(averageRows[0].averagePercentage);
       const recent = recentSubmissions.map((item) => ({
-        submissionId: item.id, studentId: item.assignment.studentId,
+        submissionId: item.id, studentId: item.assignment."studentId",
         studentEmail: item.assignment.student.email,
         examTitle: item.assignment.examVersion.exam.title,
         submittedAt: item.submittedAt, score: item.score,
@@ -568,7 +568,7 @@ export function examRouter(db: PrismaClient): Router {
       res.json({
         ok: true,
         submissions: items.map((item) => ({
-          submissionId: item.id, assignmentId: item.assignment.id, studentId: item.assignment.studentId,
+          submissionId: item.id, assignmentId: item.assignment.id, studentId: item.assignment."studentId",
           studentEmail: item.assignment.student.email, examTitle: item.assignment.examVersion.exam.title,
           submittedAt: item.submittedAt, receivedAt: item.receivedAt,
           score: item.score, maximumScore: item.maximumScore,
@@ -668,7 +668,7 @@ export function examRouter(db: PrismaClient): Router {
         ok: true, serverTime: new Date(now),
         sessions: sessions.map((session) => ({
           id: session.id, status: session.status, student: session.student,
-          exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
+          exam: session.assignment.examVersion.exam, assignmentId: session."assignmentId",
           startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
           connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
           heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
