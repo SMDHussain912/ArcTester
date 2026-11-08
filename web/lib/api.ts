@@ -344,7 +344,7 @@ export interface AdminLiveSession {
   focusLossCount: number;
   disconnectCount: number;
   submission: { id: string; status: string } | null;
-  events: { id: string; type: string; detail: string; createdAt: string }[];
+  events: { id: string; type: string; detail: string; createdAt: string; actor: { email: string; role: string } | null }[];
 }
 
 export interface AdminSubmission {
