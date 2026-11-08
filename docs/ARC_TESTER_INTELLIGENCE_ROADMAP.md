@@ -552,3 +552,37 @@ The user's local run exposed issues after the Phase 1 analytics batch. Fixes pus
 - Updated the empty-state analytics mock to return an empty topic collection.
 
 **Verification:** fixes are pushed, but they have not been executed in this environment. The user's next local run is required to confirm all tests and lint pass.
+
+
+### Question-level analytics — 2026-11-08 (implementation in progress)
+
+**Implemented in this batch**
+- Added authenticated `GET /analytics/question-performance` for the current student only.
+- Per-question practice metrics include subject/topic/difficulty snapshots, answered sample size, correct/incorrect/unanswered counts and accuracy.
+- Added a minimum evidence threshold of **5 answered attempts**. A question is flagged weak only when it has at least 5 answered attempts and accuracy below **60%**.
+- Unanswered attempts are reported but do not inflate the accuracy sample size.
+- Added a student dashboard section explaining the threshold and displaying only evidence-qualified weak questions.
+- Added cohort-level question performance to the admin analytics endpoint and dashboard. Only completed practice attempts from STUDENT accounts are aggregated; no student identity or per-student rows are exposed.
+- Added tests for the minimum-sample boundary, the student dashboard display, and the admin response contract.
+
+**Files changed**
+- `api/src/analytics.ts`
+- `api/src/analyticsRoutes.ts`
+- `api/src/examRoutes.ts`
+- `api/tests/analytics.test.ts`
+- `api/tests/exams.test.ts`
+- `web/lib/api.ts`
+- `web/app/analytics/page.tsx`
+- `web/app/analytics/page.test.tsx`
+- `web/app/admin/page.tsx`
+
+**Verification**
+- Implementation and regression tests have been pushed, but this batch has not yet been run locally.
+- The 5-answer / below-60% rule is a transparent heuristic, not a statistical significance claim.
+- Question-level cohort metrics currently cover practice answers. Formal exam subject/topic analytics remain available separately; per-question formal exam cohort aggregation can be added after this pass is verified.
+
+**Next**
+1. Run API and web tests, lint and production builds.
+2. Fix any TypeScript/Prisma/test issues reported by the local run.
+3. Review student and admin analytics layouts on desktop and mobile.
+4. Only then close Phase 1 and proceed to Phase 2 weak-area detection/recommendation safeguards.
