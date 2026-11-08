@@ -91,3 +91,48 @@ jobs:
           JWT_SECRET: ci-only-secret-for-image-build
           NEXT_PUBLIC_API_URL: http://localhost:4000
           CORS_ORIGINS: http://localhost:3000
+
+  mobile-typecheck:
+    name: Mobile TypeScript check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install mobile dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck mobile app
+        run: npm run typecheck
+
+  mobile-typecheck:
+    name: Mobile offline foundation typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck mobile app
+        working-directory: mobile
+        run: npm run typecheck

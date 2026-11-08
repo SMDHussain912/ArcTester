@@ -91,4 +91,12 @@ Endpoints:
 - `POST /exams/assignments/:id/submission`
 - `GET /exams/assignments/:id/result`
 
-The local client outbox, persistent autosave, sync retry scheduler, and background notification flow remain upcoming.
+ The mobile offline persistence foundation now lives in `mobile/src/offline/examStore.ts`:
+
+- SQLite stores downloaded exam packages and local attempt state across app restarts.
+- Downloaded package SHA-256 digests are verified with Expo Crypto before the package is cached.
+- The package server timestamp is used to estimate a local clock offset for availability/deadline checks. This is a usability guard, not a security boundary.
+- Attempts receive a stable UUID, answers are persisted as they change, and submission payloads are moved into a durable pending outbox.
+- Pending submissions can be retried with the same attempt UUID; successful sync and sync errors have explicit persisted states.
+
+The next mobile slice is wiring this store into the exam-taking UI and reconnect synchronization. Background notification delivery remains separate.
