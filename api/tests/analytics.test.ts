@@ -71,6 +71,33 @@ describe("analytics", () => {
     expect(physics?.wrong).toBe(1);
   });
 
+  it("GET /analytics/recommendations returns actions based on the learner's results", async () => {
+    const { status, json } = await api.get("/analytics/recommendations");
+    expect(status).toBe(200);
+    const body = json as {
+      generatedAt: string;
+      basedOnAttempts: number;
+      recommendations: {
+        id: string;
+        priority: string;
+        title: string;
+        subject: string | null;
+        mode: string;
+        questionCount: number;
+      }[];
+    };
+    expect(new Date(body.generatedAt).getTime()).toBeGreaterThan(0);
+    expect(body.basedOnAttempts).toBeGreaterThanOrEqual(2);
+    expect(body.recommendations[0]).toMatchObject({
+      id: "strengthen-weakest-subject",
+      priority: "high",
+      subject: "Physics",
+      mode: "practice",
+      questionCount: 15,
+    });
+    expect(body.recommendations.some((item) => item.id === "review-mistakes")).toBe(true);
+  });
+
   it("GET /analytics/history lists submitted attempts", async () => {
     const { status, json } = await api.get(`/analytics/history`);
     expect(status).toBe(200);
