@@ -46,13 +46,21 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const [stats, examData, studentData, questionData] = await Promise.all([
-      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(),
+    const [stats, examData, studentData, firstQuestionPage] = await Promise.all([
+      api.adminOverview(), api.adminExams(), api.adminStudents(), api.adminQuestions(1, 200),
     ]);
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, firstQuestionPage.pages - 1) }, (_, index) =>
+        api.adminQuestions(index + 2, 200)
+      )
+    );
     setOverview(stats);
     setExams(examData.exams);
     setStudents(studentData.students);
-    setQuestions(questionData.questions);
+    setQuestions([
+      ...firstQuestionPage.questions,
+      ...remainingPages.flatMap((page) => page.questions),
+    ]);
   }, []);
 
   useEffect(() => {
