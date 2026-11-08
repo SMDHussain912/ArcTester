@@ -832,3 +832,25 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 - Phase 7 architecture, portable artifact validation and grouped-student split foundation are committed.
 - TensorFlow.js runtime dependencies, training, browser inference and API artifact delivery are not yet implemented.
 - CI verification for the current artifact and grouped-split foundation is pending.
+
+
+### Phase 7 — dataset training integration and browser inference — 2026-11-09
+
+**Implemented and pushed**
+- Added a separate admin-only `POST /admin/model-datasets/:datasetId/train-tensorflow` workflow. The existing multi-algorithm training endpoint remains unchanged.
+- TensorFlow training currently accepts regression datasets with numeric-only feature schemas and requires a SHA-256 pseudonymous learner group ID on every row. Raw learner identifiers are rejected by the route format check.
+- Reuses grouped-student holdout splitting and the statistical linear-regression baseline. A candidate is persisted only when it beats or ties both baseline MAE and RMSE; all candidates remain inactive.
+- Records training metrics, split sizes, group counts and rejection reasons in the model registry audit log.
+- Added authenticated `GET /models/:modelId/active/tensorflow`, which returns only the approved artifact, never dataset rows. The response is private/no-store.
+- Added a production activation gate for TensorFlow.js artifacts. Synthetic artifacts cannot be activated or delivered to students.
+- Added a browser inference adapter with feature-schema checks, normalization, artifact validation, tensor/model disposal and version metadata.
+- Added API tests for missing pseudonymous groups, classification rejection, unauthenticated artifact access, missing active artifact and synthetic-artifact promotion blocking.
+
+**Important remaining provenance work**
+- The dataset table does not yet persist an explicit `datasetKind` field. Therefore the current route deliberately labels TensorFlow training output as synthetic/experiment-only. This is a safe restriction, not a claim that real-anonymized datasets have been qualified.
+- Next, add explicit dataset provenance to the Prisma model and migration, require admins to attest the source category, and then pass the stored category into the trainer. Real-anonymized provenance must still pass the held-out baseline gate before activation.
+- The browser adapter is implemented but not yet connected to the student prediction UI. The existing statistical prediction remains the active student-facing path and fallback.
+
+**Verification**
+- CI run #617 passed the TensorFlow trainer type fix and tests.
+- The dataset-route, artifact-delivery, promotion-gate and browser-inference changes are pushed; the latest CI run is pending/in progress and must pass before this batch is considered verified.
