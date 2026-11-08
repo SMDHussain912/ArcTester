@@ -116,7 +116,8 @@ export default function App() {
   const [importText, setImportText] = useState("");
   const [importFormat, setImportFormat] = useState<"csv" | "json">("csv");
   const [importReport, setImportReport] = useState<{ added: number; duplicates: number; invalid: { row: number; reason: string }[]; total: number } | null>(null);
-  const [importPreviewReady, setImportPreviewReady] = useState(false);\n  const [importPreviewError, setImportPreviewError] = useState("");
+  const [importPreviewReady, setImportPreviewReady] = useState(false);
+  const [importPreviewError, setImportPreviewError] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [bankSubjectFilter, setBankSubjectFilter] = useState("all");
   const [bankSearch, setBankSearch] = useState("");
