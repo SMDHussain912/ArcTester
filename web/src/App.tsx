@@ -560,11 +560,11 @@ export default function App() {
           </section>
           <section hidden={activePage !== "exams"} id="exam-management">
             <div className="section-head">
-              <div><p className="eyebrow">EXAM DELIVERY</p><h2>Create and publish an exam</h2></div>
+              <div><p className="eyebrow">EXAM DELIVERY</p><h2>Create a mock test</h2></div>
             </div>
             <form className="panel admin-form exam-builder" onSubmit={(event) => void createExam(event)}>
               <label>Exam title
-                <input required minLength={2} maxLength={120} value={examTitle} onChange={(event) => setExamTitle(event.target.value)} placeholder="CSE Unit Test 01" />
+                <input required minLength={2} maxLength={120} value={examTitle} onChange={(event) => setExamTitle(event.target.value)} placeholder="AP ECET CSE Mock Test 01" />
               </label>
               <label>Description
                 <input maxLength={2000} value={examDescription} onChange={(event) => setExamDescription(event.target.value)} placeholder="Optional exam description" />
