@@ -220,3 +220,35 @@
 .import-preview { display:grid; gap:8px; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); }
 .import-preview span { color:var(--muted); font-size:12px; }
 .import-preview pre { max-height:180px; overflow:auto; margin:0; padding:12px; border-radius:8px; background:var(--bg); color:var(--ink); font:11px/1.5 ui-monospace,monospace; white-space:pre-wrap; }
+
+
+.bank-filter-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(240px, 1.4fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.bank-filter-toolbar label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.bank-filter-toolbar select,
+.bank-filter-toolbar input {
+  width: 100%;
+}
+.bank-filter-toolbar > span {
+  padding: 10px 0;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .bank-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .bank-filter-toolbar > span {
+    padding: 0;
+  }
+}
