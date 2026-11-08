@@ -32,7 +32,9 @@ export function buildNextAttemptScoreSamples(
   attempts: CompletedAttemptScore[],
 ): RegressionSample[] {
   const ordered = attempts.map((attempt, index) => {
-    const finishedAt = new Date(attempt.finishedAt).getTime();
+    const finishedAt = attempt.finishedAt instanceof Date
+      ? attempt.finishedAt.getTime()
+      : new Date(attempt.finishedAt).getTime();
     if (!Number.isFinite(finishedAt)) throw new Error(`Attempt ${index} has an invalid finishedAt`);
     if (!Number.isInteger(attempt.correct) || !Number.isInteger(attempt.total) ||
       attempt.total <= 0 || attempt.correct < 0 || attempt.correct > attempt.total) {
