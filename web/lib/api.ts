@@ -292,6 +292,22 @@ export interface StudyRecommendationsReport {
   recommendations: StudyRecommendation[];
 }
 
+export interface AdminLiveSession {
+  id: string;
+  status: string;
+  student: { id: number; email: string };
+  exam: { id: string; title: string };
+  assignmentId: string;
+  startedAt: string | null;
+  lastHeartbeatAt: string | null;
+  connectivity: "CONNECTED" | "STALE";
+  heartbeatCount: number;
+  focusLossCount: number;
+  disconnectCount: number;
+  submission: { id: string; status: string } | null;
+  events: { id: string; type: string; detail: string; createdAt: string }[];
+}
+
 export interface AdminSubmission {
   id: string;
   status: string;
@@ -467,6 +483,20 @@ export const api = {
   assignedExamPackage: (id: string) =>
     request<{ ok: true; package: AssignedExamPackage; sha256: string }>(
       `/exams/assignments/${id}/package`
+    ),
+  startAssignedExamSession: (id: string) =>
+    request<{ ok: true; session: { id: string; status: string; startedAt: string; serverTime: string } }>(
+      `/exams/assignments/${id}/session/start`, json({})
+    ),
+  heartbeatAssignedExamSession: (id: string, event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED" = "HEARTBEAT") =>
+    request<{ ok: true; serverTime: string; deadline: string | null; sessionStatus: string }>(
+      `/exams/assignments/${id}/session/heartbeat`, json({ event })
+    ),
+  adminLiveSessions: () =>
+    request<{ ok: true; serverTime: string; sessions: AdminLiveSession[] }>("/admin/exams/live-sessions"),
+  adminSessionAction: (id: string, action: "PAUSE" | "RESUME" | "TERMINATE", reason = "") =>
+    request<{ ok: true; session: { id: string; status: string; endedAt: string | null } }>(
+      `/admin/exams/sessions/${id}/action`, json({ action, reason })
     ),
   submitAssignedExam: (
     id: string,
