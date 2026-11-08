@@ -571,6 +571,56 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.get("/admin/submissions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const submission = await db.examSubmission.findUnique({
+        where: { id: req.params.id },
+        include: {
+          assignment: {
+            include: {
+              student: { select: { id: true, email: true } },
+              examVersion: {
+                include: {
+                  exam: { select: { id: true, title: true } },
+                  questions: { orderBy: { position: "asc" } },
+                },
+              },
+            },
+          },
+          answers: true,
+        },
+      });
+      if (!submission) return next(notFound("Submission not found."));
+      const answers = new Map(submission.answers.map((answer) => [answer.examQuestionId, answer]));
+      res.json({
+        ok: true,
+        submission: {
+          id: submission.id, status: submission.status, score: submission.score,
+          maximumScore: submission.maximumScore, startedAt: submission.startedAt,
+          submittedAt: submission.submittedAt, receivedAt: submission.receivedAt,
+          student: submission.assignment.student,
+          exam: {
+            ...submission.assignment.examVersion.exam,
+            version: submission.assignment.examVersion.version,
+            durationMinutes: submission.assignment.examVersion.durationMinutes,
+          },
+          availableFrom: submission.assignment.availableFrom, dueAt: submission.assignment.dueAt,
+          questions: submission.assignment.examVersion.questions.map((question) => {
+            const answer = answers.get(question.id);
+            return {
+              id: question.id, position: question.position, subject: question.subject,
+              topic: question.topic, text: question.text, options: parseOptions(question.options),
+              correctIndex: question.correctIndex, explanation: question.explanation,
+              marks: question.marks, negativeMarks: question.negativeMarks,
+              selectedIndex: answer?.selectedIndex ?? null, isCorrect: answer?.isCorrect ?? false,
+              awardedMarks: answer?.awardedMarks ?? 0,
+            };
+          }),
+        },
+      });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/submissions/:id/release", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const submission = await db.examSubmission.findUnique({

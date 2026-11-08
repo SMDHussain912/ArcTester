@@ -488,16 +488,16 @@ export async function getStudyRecommendations(
   if (recommendations.length === 0) {
     const hasAnsweredEvidence = weakTopics.topics.some((row) => row.seen > 0);
     recommendations.push({
-      id: history.length > 0 ? "build-subject-baseline" : "start-diagnostic-practice",
+      id: history.total > 0 ? "build-subject-baseline" : "start-diagnostic-practice",
       priority: "low",
-      title: history.length > 0 ? "Build a stronger topic baseline" : "Start with a diagnostic practice session",
-      reason: history.length > 0
+      title: history.total > 0 ? "Build a stronger topic baseline" : "Start with a diagnostic practice session",
+      reason: history.total > 0
         ? `No topic currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
         : "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
       subject: null,
       topic: null,
       mode: "practice",
-      questionCount: history.length > 0 ? 15 : 10,
+      questionCount: history.total > 0 ? 15 : 10,
       evidence: null,
     });
   }
@@ -519,7 +519,12 @@ export async function exportProgress(
     where: { userId },
     select: { questionId: true, seen: true, wrong: true, lastSeen: true },
   });
-  const history = await getHistory(db, userId);
+  const firstHistoryPage = await getHistory(db, userId, 1, 50);
+  const history = [...firstHistoryPage.items];
+  for (let page = 2; page <= firstHistoryPage.totalPages; page += 1) {
+    const nextPage = await getHistory(db, userId, page, 50);
+    history.push(...nextPage.items);
+  }
   const attemptIds = history.map((h) => h.attemptId);
   const answers =
     attemptIds.length > 0
