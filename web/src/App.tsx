@@ -137,6 +137,8 @@ export default function App() {
   const [importBusy, setImportBusy] = useState(false);
   const [bankSubjectFilter, setBankSubjectFilter] = useState("all");
   const [bankSearch, setBankSearch] = useState("");
+  const [selectedBankQuestionIds, setSelectedBankQuestionIds] = useState<number[]>([]);
+  const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [subjectQuotas, setSubjectQuotas] = useState<Record<string, number>>({});
   const [difficultyMix, setDifficultyMix] = useState<"any" | "balanced" | "easy" | "medium" | "hard">("any");
   const [topicSelectionMode, setTopicSelectionMode] = useState<"all" | "include" | "exclude">("all");
@@ -355,6 +357,37 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function bulkDeleteQuestions() {
+    if (!selectedBankQuestionIds.length) return;
+    if (!window.confirm(`Delete ${selectedBankQuestionIds.length} selected questions? Linked practice history for these questions will also be removed.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request("/admin/questions/bulk", { method: "DELETE", body: JSON.stringify({ ids: selectedBankQuestionIds }) });
+      const removed = new Set(selectedBankQuestionIds);
+      setAdminQuestions((current) => current.filter((question) => !removed.has(question.id)));
+      setSelectedBankQuestionIds([]);
+      setSelectedQuestionIds((current) => current.filter((id) => !removed.has(id)));
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function bulkUpdateQuestionDifficulty() {
+    if (!selectedBankQuestionIds.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request("/admin/questions/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ ids: selectedBankQuestionIds, difficulty: bulkDifficulty }),
+      });
+      const selected = new Set(selectedBankQuestionIds);
+      setAdminQuestions((current) => current.map((question) => selected.has(question.id) ? { ...question, difficulty: bulkDifficulty } : question));
+      setSelectedBankQuestionIds([]);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function refreshSubjects() {
@@ -1034,11 +1067,19 @@ export default function App() {
               </label>
               <span className="muted">{adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length} matching</span>
             </div>
+            <div className="bulk-question-toolbar">
+              <span className="muted">{selectedBankQuestionIds.length} selected</span>
+              <button type="button" className="ghost" disabled={busy} onClick={() => setSelectedBankQuestionIds(adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => question.id))}>Select filtered</button>
+              <button type="button" className="ghost" disabled={busy || !selectedBankQuestionIds.length} onClick={() => setSelectedBankQuestionIds([])}>Clear</button>
+              <label>Set difficulty<select value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as typeof bulkDifficulty)}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
+              <button type="button" className="ghost" disabled={busy || !selectedBankQuestionIds.length} onClick={() => void bulkUpdateQuestionDifficulty()}>Apply to selected</button>
+              <button type="button" className="ghost danger-action" disabled={busy || !selectedBankQuestionIds.length} onClick={() => void bulkDeleteQuestions()}>Delete selected</button>
+            </div>
             <div className="panel admin-question-list">
               {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => (
                 <article className="admin-question-row" key={question.id}>
                   <div><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><p>{question.text}</p><small className="muted">{question.difficulty ?? "medium"} · {question.options.length} options</small></div>
-                  <div className="question-row-actions"><span className="status status-used">#{question.id}</span><button type="button" className="ghost" disabled={busy} onClick={() => editQuestion(question)}>Edit</button><button type="button" className="ghost danger-action" disabled={busy} onClick={() => void deleteQuestion(question)}>Delete</button></div>
+                  <div className="question-row-actions"><label className="bank-question-select"><input type="checkbox" checked={selectedBankQuestionIds.includes(question.id)} onChange={(event) => setSelectedBankQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />Select</label><span className="status status-used">#{question.id}</span><button type="button" className="ghost" disabled={busy} onClick={() => editQuestion(question)}>Edit</button><button type="button" className="ghost danger-action" disabled={busy} onClick={() => void deleteQuestion(question)}>Delete</button></div><details className="question-bank-preview"><summary>Preview answer & explanation</summary><p><strong>Correct answer:</strong> {question.options[question.correctIndex ?? 0]}</p><p><strong>Explanation:</strong> {question.explanation || "No explanation supplied."}</p></details>
                 </article>
               ))}
               {adminQuestions.length > 0 && adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length === 0 && <p className="muted">No questions match these filters.</p>}
