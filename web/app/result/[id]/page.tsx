@@ -71,7 +71,7 @@ function ResultLoader() {
       <section className="panel result-summary">
         <div className="result-score">
           <span className="mute">Your score</span>
-          <strong>{result.score}<span> / {result.total}</span></strong>
+          <strong>{result.score} / {result.total}</strong>
           <span className="pill pill-accent">{percent}% correct</span>
         </div>
         <div className="result-breakdown">
