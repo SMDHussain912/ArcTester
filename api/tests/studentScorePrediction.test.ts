@@ -102,6 +102,44 @@ describe("student score prediction endpoint", () => {
     expect(response.json.modelMae).toBeLessThan(response.json.baselineMae);
   });
 
+  it("withholds predictions when a constant history cannot beat the baseline", async () => {
+    const learner = await signUp(server.baseUrl, "prediction-constant@example.com");
+    const questionIds = (await server.db.question.findMany({
+      orderBy: { id: "asc" },
+      select: { id: true },
+    })).map((question) => question.id);
+
+    for (let index = 0; index < 30; index += 1) {
+      await server.db.attempt.create({
+        data: {
+          userId: learner.userId,
+          mode: "practice",
+          startedAt: new Date(Date.UTC(2026, 3, index + 1)),
+          finishedAt: new Date(Date.UTC(2026, 3, index + 1, 1)),
+          answers: {
+            create: questionIds.map((id, questionIndex) => ({
+              questionId: id,
+              chosen: questionIndex < 5 ? 0 : 1,
+              isCorrect: questionIndex < 5,
+            })),
+          },
+        },
+      });
+    }
+
+    const learnerApi = bindSession(server.baseUrl, learner.cookie);
+    const response = await learnerApi.get("/analytics/score-prediction");
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({
+      status: "baseline_not_beaten",
+      completedAttempts: 30,
+      evaluationSamples: 7,
+      modelMae: 0,
+      baselineMae: 0,
+    });
+    expect(response.json).not.toHaveProperty("predictedScorePercent");
+  });
+
   it("keeps prediction history isolated to the authenticated student", async () => {
     const other = await signUp(server.baseUrl, "prediction-other@example.com");
     const otherApi = bindSession(server.baseUrl, other.cookie);
