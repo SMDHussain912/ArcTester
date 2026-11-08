@@ -235,13 +235,13 @@ export default function App() {
   const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([]);
   const [modelDatasetName, setModelDatasetName] = useState("ecet-holdout-v1");
   const [modelDatasetTask, setModelDatasetTask] = useState<"regression" | "binary-classification">("binary-classification");
+  const [modelDatasetTargetColumn, setModelDatasetTargetColumn] = useState("target_readiness_label");
   const [modelFeatureSchemaJson, setModelFeatureSchemaJson] = useState('[{"name":"practice_score","type":"numeric"}]');
   const [modelSamplesJson, setModelSamplesJson] = useState('[{"features":{"practice_score":2},"target":0},{"features":{"practice_score":8},"target":1}]');
   const [modelDatasetSource, setModelDatasetSource] = useState("");
   const [modelDatasetAttested, setModelDatasetAttested] = useState(false);
   const [modelCandidateId, setModelCandidateId] = useState("");
   const [trainingModelPrefix, setTrainingModelPrefix] = useState("ecet-readiness");
-  const [trainingTargetColumn, setTrainingTargetColumn] = useState("target_readiness_label");
   const [trainingDatasetId, setTrainingDatasetId] = useState("");
   const [modelCandidateVersion, setModelCandidateVersion] = useState("2");
   const [modelBaselineVersion, setModelBaselineVersion] = useState("1");
@@ -475,6 +475,7 @@ export default function App() {
         body: JSON.stringify({
           name: modelDatasetName,
           task: modelDatasetTask,
+          targetColumn: modelDatasetTargetColumn,
           featureSchema,
           samples,
           sourceDescription: modelDatasetSource,
@@ -501,7 +502,7 @@ export default function App() {
         `/admin/model-datasets/${encodeURIComponent(datasetId)}/train`,
         {
           method: "POST",
-          body: JSON.stringify({ modelId: trainingModelPrefix, targetColumn: trainingTargetColumn, seed: 42 }),
+          body: JSON.stringify({ modelId: trainingModelPrefix, seed: 42 }),
         },
       );
       setModelLabNotice(`Training completed: ${response.models.length} inactive candidates registered. Review and evaluate them before promotion.`);
@@ -1576,6 +1577,7 @@ export default function App() {
               <form className="stack-form" onSubmit={registerModelDataset}>
                 <label>Dataset name<input value={modelDatasetName} onChange={(event) => setModelDatasetName(event.target.value)} required maxLength={120}/></label>
                 <label>Task<select value={modelDatasetTask} onChange={(event) => setModelDatasetTask(event.target.value as "regression" | "binary-classification")}><option value="binary-classification">Binary classification</option><option value="regression">Regression</option></select></label>
+                <label>Target column<input value={modelDatasetTargetColumn} onChange={(event) => setModelDatasetTargetColumn(event.target.value)} required maxLength={120}/></label>
                 <label>Feature schema JSON<textarea rows={3} value={modelFeatureSchemaJson} onChange={(event) => setModelFeatureSchemaJson(event.target.value)} required /></label>
                 <label>Holdout samples JSON<textarea rows={6} value={modelSamplesJson} onChange={(event) => setModelSamplesJson(event.target.value)} required /></label>
                 <label>Dataset source / provenance<input value={modelDatasetSource} onChange={(event) => setModelDatasetSource(event.target.value)} required minLength={10} maxLength={500} placeholder="Where this holdout data came from"/></label>
@@ -1609,9 +1611,8 @@ export default function App() {
               <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered datasets</h2></div></div>
               <div className="form-grid">
                 <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={56} pattern="[a-z0-9][a-z0-9-]{0,55}" /></label>
-                <label>Target column name<input value={trainingTargetColumn} onChange={(event) => setTrainingTargetColumn(event.target.value)} maxLength={120} required /></label>
               </div>
-              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim() || !trainingTargetColumn.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button></td></tr>)}</tbody></table></div>}
+              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button></td></tr>)}</tbody></table></div>}
               <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
             </div>
           </section>
