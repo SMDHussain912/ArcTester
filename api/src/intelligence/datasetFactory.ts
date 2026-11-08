@@ -60,8 +60,7 @@ function createStudentPerformance(rows: number, random: () => number): DatasetRo
       recent_accuracy: round(recentAccuracy),
       subjects_covered: subjectsCovered,
       questions_answered: questionsAnswered,
-      formal_score_percentage: formalScore,
-      passed_threshold: formalScore >= 60,
+      target_formal_score_percentage: formalScore,
     };
   });
 }
@@ -70,9 +69,10 @@ function createTopicMastery(rows: number, random: () => number): DatasetRow[] {
   return Array.from({ length: rows }, (_, index) => {
     const attempted = 5 + Math.floor(random() * 96);
     const ability = 0.15 + random() * 0.8;
-    const accuracy = clamp(ability + (random() - 0.5) * 0.16, 0, 1);
+    const accuracy = clamp(ability + (random() - 0.5) * 0.2, 0, 1);
     const correct = Math.round(attempted * accuracy);
     const measuredAccuracy = correct / attempted;
+    const latentMastery = ability + (random() - 0.5) * 0.3 >= 0.7 ? 1 : 0;
     return {
       student_id: studentId(index),
       subject: SUBJECTS[Math.floor(random() * SUBJECTS.length)],
@@ -80,7 +80,7 @@ function createTopicMastery(rows: number, random: () => number): DatasetRow[] {
       questions_attempted: attempted,
       questions_correct: correct,
       accuracy: round(measuredAccuracy),
-      mastery_label: attempted >= 10 && measuredAccuracy >= 0.8 ? 1 : 0,
+      target_mastery_label: latentMastery,
     };
   });
 }
@@ -104,8 +104,7 @@ function createExamReadiness(rows: number, random: () => number): DatasetRow[] {
       overall_accuracy: round(overallAccuracy),
       prior_questions_answered: priorQuestions,
       subject_count: subjectCount,
-      formal_exam_score_percentage: scorePercentage,
-      readiness_label: scorePercentage >= 60 ? 1 : 0,
+      target_readiness_label: scorePercentage >= 60 ? 1 : 0,
     };
   });
 }
@@ -119,6 +118,7 @@ function createLearningBehaviour(rows: number, random: () => number): DatasetRow
     const completionRate = clamp(0.25 + random() * 0.75, 0, 1);
     const consistency = clamp((studyDays / 30) * 0.6 + (streakDays / 21) * 0.4, 0, 1);
     const engagementScore = consistency * 0.45 + completionRate * 0.35 + Math.min(averageSessionMinutes / 90, 1) * 0.2;
+    const engagementLabel = engagementScore + (random() - 0.5) * 0.3 >= 0.58 ? 1 : 0;
     return {
       student_id: studentId(index),
       study_days_last_30: studyDays,
@@ -127,7 +127,7 @@ function createLearningBehaviour(rows: number, random: () => number): DatasetRow
       longest_current_streak_days: streakDays,
       completion_rate: round(completionRate),
       study_consistency: round(consistency),
-      engagement_label: engagementScore >= 0.58 ? 1 : 0,
+      target_engagement_label: engagementLabel,
     };
   });
 }
@@ -147,7 +147,7 @@ function createScorePrediction(rows: number, random: () => number): DatasetRow[]
       recent_accuracy: round(recentAccuracy),
       historical_average_accuracy: round(averageAccuracy),
       questions_answered_before_prediction: questionsAnswered,
-      next_attempt_accuracy: round(nextScore),
+      target_next_attempt_accuracy: round(nextScore),
     };
   });
 }
