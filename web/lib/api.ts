@@ -63,6 +63,17 @@ export interface BankInfo {
   serverNow: string;
 }
 
+export interface LearningConcept {
+  slug: string;
+  title: string;
+  subject: string;
+  topic: string;
+  definition: string;
+  examples: string[];
+  relatedConcepts: string[];
+  commonMistakes: string[];
+}
+
 export interface OfflineLearningPackage {
   schemaVersion: 1;
   exportedAt: string;
@@ -545,6 +556,16 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 export const api = {
   bank: () => request<BankInfo>("/bank"),
   offlineLearningPackage: () => request<OfflineLearningPackage>("/learning/package"),
+  learningConcepts: (query = "", subject = "") => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (subject.trim()) params.set("subject", subject.trim());
+    const suffix = params.toString();
+    return request<{ total: number; concepts: LearningConcept[] }>(
+      "/learning/concepts" + (suffix ? "?" + suffix : "")
+    );
+  },
+  learningConcept: (slug: string) => request<LearningConcept>("/learning/concepts/" + encodeURIComponent(slug)),
   createTest: (body: { mode: string; subject?: string; subjects?: string[]; topics?: string[]; count?: number }) =>
     request<CreatedTest>("/tests", json(body)),
   getAttempt: (id: number) => request<AttemptView>(`/tests/${id}`),
