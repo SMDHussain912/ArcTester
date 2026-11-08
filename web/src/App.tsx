@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
-type User = { id: number; email: string };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
+type Invitation = {
+  id: string;
+  email: string;
+  expiresAt: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
+};
+type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Question = {
   id: number;
   subject: string;
@@ -62,6 +72,9 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -97,6 +110,48 @@ export default function App() {
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== "ADMIN") return;
+    request<{ invitations: Invitation[] }>("/auth/invitations")
+      .then(({ invitations: items }) => setInvitations(items))
+      .catch((cause) => setError((cause as Error).message));
+  }, [user]);
+
+  async function createInvitation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setCreatedInvitation(null);
+    try {
+      const response = await request<{ invitation: CreatedInvitation }>("/auth/invitations", {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      setCreatedInvitation(response.invitation);
+      setInviteEmail("");
+      const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
+      setInvitations(refreshed.invitations);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeInvitation(id: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/auth/invitations/${id}/revoke`, { method: "POST" });
+      const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
+      setInvitations(refreshed.invitations);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function authenticate() {
     setBusy(true);

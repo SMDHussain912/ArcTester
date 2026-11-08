@@ -61,6 +61,14 @@ describe("identity foundation", () => {
     expect(response.status).toBe(400);
   });
 
+  it("lists invitations only for administrators", async () => {
+    const anonymous = await request("/auth/invitations", "GET");
+    expect(anonymous.status).toBe(403);
+    const response = await request("/auth/invitations", "GET", undefined, adminCookie);
+    expect(response.status).toBe(200);
+    expect(response.json.invitations).toBeInstanceOf(Array);
+  });
+
   it("requires an administrator to create invitations", async () => {
     const anonymous = await request("/auth/invitations", "POST", {
       email: "student@arctester.test",
@@ -87,11 +95,35 @@ describe("identity foundation", () => {
     expect(invitation.email).toBe("student@arctester.test");
     expect(invitation.token).toHaveLength(43);
 
+    const listed = await request("/auth/invitations", "GET", undefined, adminCookie);
+    const listedInvitations = listed.json.invitations as Array<{ id: string; status: string }>;
+    expect(listedInvitations.find((item) => item.id === invitationId)?.status).toBe("PENDING");
+
     const stored = await server.db.invitation.findUniqueOrThrow({
       where: { id: invitationId },
     });
     expect(stored.tokenHash).not.toBe(invitationToken);
     expect(stored.tokenHash).toHaveLength(64);
+  });
+
+  it("allows administrators to revoke an unused invitation", async () => {
+    const response = await request(
+      "/auth/invitations",
+      "POST",
+      { email: "revoke@arctester.test" },
+      adminCookie
+    );
+    const invitation = response.json.invitation as { id: string };
+    const revoked = await request(
+      `/auth/invitations/${invitation.id}/revoke`,
+      "POST",
+      undefined,
+      adminCookie
+    );
+    expect(revoked.status).toBe(200);
+    const listed = await request("/auth/invitations", "GET", undefined, adminCookie);
+    const entries = listed.json.invitations as Array<{ id: string; status: string }>;
+    expect(entries.find((item) => item.id === invitation.id)?.status).toBe("REVOKED");
   });
 
   it("binds an invitation to its email and permits only one registration", async () => {

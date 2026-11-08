@@ -193,6 +193,39 @@ function clearSessionCookie(res: Response): void {
 export function authRouter(db: PrismaClient): Router {
   const router = Router();
 
+  router.get("/invitations", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const invitations = await db.invitation.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          email: true,
+          expiresAt: true,
+          usedAt: true,
+          revokedAt: true,
+          createdAt: true,
+        },
+      });
+      const now = Date.now();
+      res.json({
+        ok: true,
+        invitations: invitations.map((invitation) => ({
+          ...invitation,
+          status: invitation.usedAt
+            ? "USED"
+            : invitation.revokedAt
+              ? "REVOKED"
+              : invitation.expiresAt.getTime() <= now
+                ? "EXPIRED"
+                : "PENDING",
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/invitations", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const { email } = InvitationSchema.parse(req.body);
