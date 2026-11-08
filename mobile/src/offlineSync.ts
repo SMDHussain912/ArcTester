@@ -31,7 +31,7 @@ export async function syncPendingSubmissions(
   for (const attempt of pending) {
     try {
       const response = await fetch(
-        `${apiUrl.replace(/\\/+$/, "")}/exams/assignments/${encodeURIComponent(attempt.assignmentId)}/submission`,
+        `${apiUrl.replace(/\/+$/, "")}/exams/assignments/${encodeURIComponent(attempt.assignmentId)}/submission`,
         {
           method: "POST",
           headers: {
