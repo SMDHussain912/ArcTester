@@ -65,7 +65,6 @@ describe("student score prediction endpoint", () => {
   it("returns a ready prediction when a student's improving history beats the baseline", async () => {
     const learner = await signUp(server.baseUrl, "prediction-ready@example.com");
     const questionIds = (await server.db.question.findMany({
-      where: { subject: "Prediction" },
       orderBy: { id: "asc" },
       select: { id: true },
     })).map((question) => question.id);
