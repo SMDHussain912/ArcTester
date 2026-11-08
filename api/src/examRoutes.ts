@@ -1139,7 +1139,7 @@ export function examRouter(db: PrismaClient): Router {
         : null;
       if (deadline && now.getTime() > deadline.getTime() + 60000) {
         await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
-        await db.examSessionEvent.create({ data: { sessionId: assignment.session.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." } });
+        await db.examSessionEvent.create({ data: { sessionId: assignment.session.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." } });
         return next(conflict("The examination time has expired."));
       }
       if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
