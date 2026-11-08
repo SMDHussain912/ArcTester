@@ -1,4 +1,5 @@
 // Mock-test engine service: DB access + Phase 2 selection glued together.
+import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
 import type { PrismaClient } from "@prisma/client";
@@ -403,6 +404,8 @@ export interface ResultBreakdown {
 export interface ResultQuestion {
   questionId: number;
   subject: string;
+  topic: string | null;
+  relatedConcepts: { slug: string; title: string }[];
   text: string;
   options: string[];
   selectedIndex: number | null;
@@ -446,6 +449,8 @@ export async function getResult(
     return {
       questionId: a.questionId,
       subject,
+      topic: a.topicSnapshot,
+      relatedConcepts: getLearningConceptsForTopic(a.topicSnapshot),
       text: a.textSnapshot,
       options: decodeOptions(a.optionsSnapshot),
       selectedIndex: a.chosen,
