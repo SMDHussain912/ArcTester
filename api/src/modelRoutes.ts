@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
@@ -41,18 +42,120 @@ const PredictionSchema = z.object({
 
 const EvaluationSchema = z.object({
   baselineVersion: z.number().int().positive(),
-  evaluationDataset: z.string().trim().min(1).max(120),
-  samples: z.array(z.object({
-    features: z.record(z.union([z.number().finite(), z.string().max(500)])),
-    target: z.number().finite(),
-  }).strict()).min(10).max(5000),
+  datasetId: z.string().min(1).max(64),
 }).strict();
+
+const DatasetSampleSchema = z.object({
+  features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+  target: z.number().finite(),
+}).strict();
+
+const DatasetRegistrationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  task: z.enum(["regression", "binary-classification"]),
+  featureSchema: z.array(FeatureSchema).min(1).max(100),
+  samples: z.array(DatasetSampleSchema).min(10).max(5000),
+  sourceDescription: z.string().trim().min(10).max(500),
+  sourceAttested: z.literal(true),
+}).strict();
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
 
 const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 const VersionSchema = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
 export function modelRegistryRouter(db: PrismaClient): Router {
   const router = Router();
+
+  router.get("/admin/model-datasets", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const datasets = await db.modelDataset.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true, name: true, task: true, featureSchemaJson: true,
+          rowCount: true, sourceDescription: true, sourceAttested: true,
+          fingerprint: true, createdById: true, createdAt: true,
+        },
+      });
+      res.json({ ok: true, datasets: datasets.map((dataset) => ({
+        ...dataset, featureSchema: JSON.parse(dataset.featureSchemaJson),
+      })) });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/model-datasets", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const input = DatasetRegistrationSchema.parse(req.body);
+      const payload = {
+        name: input.name,
+        task: input.task,
+        featureSchema: input.featureSchema,
+        samples: input.samples,
+      };
+      if (Buffer.byteLength(JSON.stringify(payload), "utf8") > 8 * 1024 * 1024) {
+        return next(badRequest("Dataset payload exceeds the 8 MB limit."));
+      }
+      const names = input.featureSchema.map((feature) => feature.name);
+      if (new Set(names).size !== names.length) return next(badRequest("Dataset feature names must be unique."));
+      for (const [index, sample] of input.samples.entries()) {
+        const keys = Object.keys(sample.features).sort();
+        if (keys.join("\\0") !== [...names].sort().join("\\0")) {
+          return next(badRequest(`Dataset sample ${index + 1} must contain exactly the declared features.`));
+        }
+        for (const feature of input.featureSchema) {
+          const value = sample.features[feature.name];
+          if (feature.type === "numeric" && typeof value !== "number") {
+            return next(badRequest(`Dataset feature ${feature.name} must be numeric.`));
+          }
+          if (feature.type === "categorical" && typeof value !== "string") {
+            return next(badRequest(`Dataset feature ${feature.name} must be categorical.`));
+          }
+        }
+      }
+      if (input.task === "binary-classification") {
+        if (input.samples.some((sample) => sample.target !== 0 && sample.target !== 1)) {
+          return next(badRequest("Classification targets must be binary."));
+        }
+        if (new Set(input.samples.map((sample) => sample.target)).size !== 2) {
+          return next(badRequest("Classification evaluation datasets must contain both classes."));
+        }
+      }
+      const fingerprint = createHash("sha256").update(canonicalJson(payload)).digest("hex");
+      const created = await db.modelDataset.create({
+        data: {
+          createdById: req.user!.id,
+          name: input.name,
+          task: input.task,
+          featureSchemaJson: JSON.stringify(input.featureSchema),
+          samplesJson: JSON.stringify(input.samples),
+          rowCount: input.samples.length,
+          sourceDescription: input.sourceDescription,
+          sourceAttested: true,
+          fingerprint,
+        },
+        select: {
+          id: true, name: true, task: true, rowCount: true, sourceDescription: true,
+          sourceAttested: true, fingerprint: true, createdById: true, createdAt: true,
+        },
+      });
+      res.status(201).json({ ok: true, dataset: { ...created, featureSchema: input.featureSchema } });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error && "code" in error && error.code === "P2002") {
+        return next(conflict("This exact dataset version has already been registered."));
+      }
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
 
   router.get("/admin/models", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
@@ -155,14 +258,22 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const version = VersionSchema.parse(req.params.version);
       const input = EvaluationSchema.parse(req.body);
       if (input.baselineVersion === version) return next(badRequest("Candidate and baseline versions must differ."));
-      const [candidateRow, baselineRow] = await Promise.all([
+      const [candidateRow, baselineRow, dataset] = await Promise.all([
         db.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } }),
         db.registeredModel.findUnique({ where: { modelId_version: { modelId, version: input.baselineVersion } } }),
+        db.modelDataset.findUnique({ where: { id: input.datasetId } }),
       ]);
       if (!candidateRow || !baselineRow) return next(notFound("Candidate or baseline model version was not found."));
+      if (!dataset) return next(notFound("Registered evaluation dataset was not found."));
+      if (!dataset.sourceAttested) return next(conflict("Dataset source has not been attested."));
       const candidate = validateRegistryArtifact(JSON.parse(candidateRow.artifactJson));
       const baseline = validateRegistryArtifact(JSON.parse(baselineRow.artifactJson));
-      const report = evaluateRegistryCandidate(candidate, baseline, input.samples, input.evaluationDataset);
+      const datasetFeatures = JSON.parse(dataset.featureSchemaJson);
+      if (dataset.task !== candidate.task || JSON.stringify(datasetFeatures) !== JSON.stringify(candidate.featureSchema)) {
+        return next(badRequest("Evaluation dataset task or feature schema does not match the model."));
+      }
+      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+      const report = evaluateRegistryCandidate(candidate, baseline, samples, dataset.name);
       await db.$transaction(async (tx) => {
         await tx.modelEvaluation.create({
           data: {
@@ -170,6 +281,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             modelId,
             candidateVersion: version,
             baselineVersion: input.baselineVersion,
+            datasetId: dataset.id,
             evaluationDataset: report.evaluationDataset,
             datasetFingerprint: report.datasetFingerprint,
             sampleCount: report.sampleCount,
@@ -188,6 +300,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               status: report.status,
               baselineVersion: report.baselineVersion,
               evaluationDataset: report.evaluationDataset,
+              datasetId: dataset.id,
               datasetFingerprint: report.datasetFingerprint,
               sampleCount: report.sampleCount,
             }),
