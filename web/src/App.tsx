@@ -69,6 +69,7 @@ type Test = {
   warnings: string[];
 };
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
+function practiceAnswersKey(attemptId: number | string): string { return `arctester-practice-answers-${attemptId}`; }
 type Result = {
   attemptId: number;
   score: number;
@@ -230,7 +231,17 @@ export default function App() {
     if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
         setTest({ ...restored, warnings: restored.warnings ?? [] });
-        setAnswers(Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const)));
+        const serverAnswers = Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const));
+        let localAnswers: Record<number, number> = {};
+        try {
+          const cached = JSON.parse(localStorage.getItem(practiceAnswersKey(restored.attemptId)) ?? "{}") as Record<string, unknown>;
+          const validQuestionIds = new Set(restored.questions.map((question) => question.id));
+          localAnswers = Object.fromEntries(Object.entries(cached).flatMap(([id, value]) => {
+            const questionId = Number(id);
+            return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
+          }));
+        } catch { localStorage.removeItem(practiceAnswersKey(restored.attemptId)); }
+        setAnswers({ ...serverAnswers, ...localAnswers });
         setActivePage("practice");
       }).catch(() => localStorage.removeItem("arctester-active-practice-attempt"));
     }
@@ -1002,8 +1013,11 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ mode, ...(subject ? { subject } : {}), ...(practiceConfig ? { subjects: practiceConfig.subjects, topicFilters: practiceConfig.topicFilters, count: practiceConfig.count, difficulty: practiceConfig.difficulty } : mode === "practice" ? { count: 10 } : {}) }),
       });
+      const previousAttemptId = localStorage.getItem("arctester-active-practice-attempt");
+      if (previousAttemptId) localStorage.removeItem(practiceAnswersKey(previousAttemptId));
       setTest(created);
       localStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
+      localStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
       setAnswers({});
     } catch (cause) {
       setError((cause as Error).message);
@@ -1018,6 +1032,15 @@ export default function App() {
       catch { return []; }
     });
     void startTest("practice", undefined, { subjects: practiceSubjects, topicFilters, count: practiceQuestionCount, difficulty: practiceDifficulty });
+  }
+
+  function selectPracticeAnswer(questionId: number, selectedIndex: number) {
+    if (!test) return;
+    setAnswers((current) => {
+      const next = { ...current, [questionId]: selectedIndex };
+      try { localStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next)); } catch { setError("Your browser could not save the local answer backup. Submit before closing this tab."); }
+      return next;
+    });
   }
 
   async function submitTest() {
@@ -1037,6 +1060,7 @@ export default function App() {
       const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
       localStorage.removeItem("arctester-active-practice-attempt");
+      localStorage.removeItem(practiceAnswersKey(test.attemptId));
       setTest(null);
     } catch (cause) {
       setError((cause as Error).message);
@@ -1049,6 +1073,8 @@ export default function App() {
     void request("/auth/logout", { method: "POST" }).catch(() => undefined);
     setUser(null);
     setBank(null);
+    const activePracticeId = localStorage.getItem("arctester-active-practice-attempt");
+    if (activePracticeId) localStorage.removeItem(practiceAnswersKey(activePracticeId));
     localStorage.removeItem("arctester-active-practice-attempt");
     setTest(null);
     setResult(null);
@@ -1578,7 +1604,7 @@ export default function App() {
                           answers[question.id] === optionIndex ? "option selected" : "option"
                         }
                         onClick={() =>
-                          setAnswers((current) => ({ ...current, [question.id]: optionIndex }))
+                          selectPracticeAnswer(question.id, optionIndex)
                         }
                       >
                         <span>{String.fromCharCode(65 + optionIndex)}</span>
