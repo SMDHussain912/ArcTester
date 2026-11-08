@@ -77,6 +77,12 @@ describe("admin model registry API", () => {
     const rollback = await request("/admin/models/exam-readiness-demo/rollback", "POST", {});
     expect(rollback.status).toBe(200);
     expect(rollback.body.model).toMatchObject({ version: 1, isActive: true });
+
+    const audit = await request("/admin/models/exam-readiness-demo/audit");
+    expect(audit.status).toBe(200);
+    expect((audit.body.events as Array<{ action: string; actorId: number | null }>).map((event) => event.action))
+      .toEqual(["ROLLED_BACK", "ACTIVATED", "ACTIVATED", "REGISTERED", "REGISTERED"]);
+    expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
   });
 
   it("runs inference only from the active, validated model", async () => {
