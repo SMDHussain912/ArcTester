@@ -1,5 +1,4 @@
 import {
-  evaluateLinearRegression,
   fitLinearRegression,
   predictLinearRegression,
   type RegressionMetrics,
@@ -61,24 +60,6 @@ export function buildNextAttemptScoreSamples(
     });
   }
   return samples;
-}
-
-function evaluateMeanBaseline(
-  training: RegressionSample[],
-  testing: RegressionSample[],
-): RegressionMetrics {
-  const mean = training.reduce((sum, sample) => sum + sample.target, 0) / training.length;
-  const errors = testing.map((sample) => sample.target - mean);
-  const mae = errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length;
-  const squared = errors.reduce((sum, error) => sum + error ** 2, 0);
-  const targetMean = testing.reduce((sum, sample) => sum + sample.target, 0) / testing.length;
-  const totalSquared = testing.reduce((sum, sample) => sum + (sample.target - targetMean) ** 2, 0);
-  return {
-    rows: testing.length,
-    mae,
-    rmse: Math.sqrt(squared / testing.length),
-    rSquared: totalSquared > 0 ? 1 - squared / totalSquared : null,
-  };
 }
 
 function aggregateMetrics(targets: number[], predictions: number[]): RegressionMetrics {
