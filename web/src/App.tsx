@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { xlsxToCsv } from "./xlsx";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
+import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -397,12 +398,15 @@ export default function App() {
       } catch (cause) {
         if (disposed) return;
         const message = (cause as Error).message;
-        if (message.toLowerCase().includes("no active exam session")) {
+        const failure = classifyAssignmentHeartbeatFailure(message);
+        if (failure === "paused") {
           setAssignmentSessionPaused(true);
           setError("Your exam session is paused or locked by the invigilator. Your timer is on hold until the session is resumed.");
-        } else if (message.toLowerCase().includes("time has expired") || message.toLowerCase().includes("deadline has passed")) {
+        } else if (failure === "deadline") {
+          // Do not pause the timer here. The deadline effect must submit the
+          // locally saved answers; the API retains late submissions for review.
           setError(message);
-          setAssignmentSessionPaused(true);
+          setAssignmentSessionPaused(false);
         }
       }
     };
