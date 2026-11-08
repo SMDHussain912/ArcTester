@@ -274,11 +274,20 @@ export interface StudyRecommendation {
   topic: string | null;
   mode: "practice" | "mistakes" | "mock";
   questionCount: number;
+  evidence: {
+    answeredQuestions: number;
+    incorrectAnswers: number;
+    accuracy: number | null;
+    minimumAnswers: number;
+    weakAccuracyThreshold: number;
+  } | null;
 }
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
   basedOnAttempts: number;
+  minimumAnswers: number;
+  weakAccuracyThreshold: number;
   recommendations: StudyRecommendation[];
 }
 
