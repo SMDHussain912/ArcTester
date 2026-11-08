@@ -182,12 +182,12 @@ export default function HomePage() {
           </section>
 
           <section id="question-bank" className="panel">
-            <div className="panel-header">
-              <h2>Question bank by subject</h2>
-              <span className="pill">{bank ? bank.subjects.length : "…"}</span>
-            </div>
             {bank ? (
               <>
+                <div className="panel-header">
+                  <h2>Question bank by subject</h2>
+                  <span className="pill">{bank.subjects.length}</span>
+                </div>
                 <p className="muted">Questions currently available in the shared library.</p>
                 <div>
                   {bank.subjects.map((s) => (
