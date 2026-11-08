@@ -27,6 +27,8 @@ export interface CsvTable {
 export interface DatasetSplitOptions {
   testFraction?: number;
   seed?: number;
+  /** Hold out every row for selected groups (for example, student IDs) together. */
+  groupColumn?: string;
 }
 
 export interface DatasetFeatureEncoder {
@@ -121,6 +123,38 @@ export function splitDatasetRows<T>(
   };
 }
 
+/** Deterministic group holdout: no group can appear in both training and test rows. */
+export function splitDatasetRowsByGroup<T extends Record<string, unknown>>(
+  rows: T[],
+  groupColumn: string,
+  options: DatasetSplitOptions = {},
+): { train: T[]; test: T[] } {
+  const testFraction = options.testFraction ?? 0.2;
+  const seed = options.seed ?? 42;
+  if (!groupColumn.trim()) throw new Error("groupColumn is required");
+  if (!Number.isFinite(testFraction) || testFraction <= 0 || testFraction >= 0.5) {
+    throw new Error("testFraction must be greater than 0 and less than 0.5");
+  }
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error("seed is invalid");
+  if (rows.some((row) => typeof row[groupColumn] !== "string" || !(row[groupColumn] as string).trim())) {
+    throw new Error(`Every row must contain a non-empty string group in ${groupColumn}`);
+  }
+  const groups = [...new Set(rows.map((row) => row[groupColumn] as string))];
+  if (groups.length < 5) throw new Error("At least five unique groups are required for a grouped holdout");
+  const shuffled = groups.slice();
+  const random = randomGenerator(seed);
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  const testGroupCount = Math.max(1, Math.floor(groups.length * testFraction));
+  const testGroups = new Set(shuffled.slice(0, testGroupCount));
+  return {
+    train: rows.filter((row) => !testGroups.has(row[groupColumn] as string)),
+    test: rows.filter((row) => testGroups.has(row[groupColumn] as string)),
+  };
+}
+
 function validateRow(row: DatasetRow, definition: DatasetDefinition, index: number): void {
   for (const column of [definition.idColumn, ...definition.featureColumns, definition.targetColumn]) {
     const value = row[column];
@@ -176,8 +210,12 @@ export function prepareDataset(
   if (rows.length < 5) throw new Error("At least five dataset rows are required");
   rows.forEach((row, index) => validateRow(row, definition, index));
   const ids = rows.map((row) => String(row[definition.idColumn]));
-  if (new Set(ids).size !== ids.length) throw new Error("Dataset identifiers must be unique before splitting");
-  const split = splitDatasetRows(rows, options);
+  if (options.groupColumn !== definition.idColumn && new Set(ids).size !== ids.length) {
+    throw new Error("Dataset identifiers must be unique unless the identifier is used for grouped splitting");
+  }
+  const split = options.groupColumn
+    ? splitDatasetRowsByGroup(rows, options.groupColumn, options)
+    : splitDatasetRows(rows, options);
   const encoded = encodeFeatures(split.train, split.test, definition);
   const target = (row: DatasetRow) => Number(row[definition.targetColumn]);
   const train = split.train.map((row, index) => ({ features: encoded.train[index], target: target(row) }));
