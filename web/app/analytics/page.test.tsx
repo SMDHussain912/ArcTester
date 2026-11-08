@@ -43,7 +43,13 @@ describe("student analytics page", () => {
       </SessionProvider>
     );
 
-    await waitFor(() => expect(screen.getByText("Sign in to see your progress, recent attempts and areas to revise.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Sign in to see your progress, recent attempts and areas to revise."
+        )
+      ).toBeInTheDocument()
+    );
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/analytics/"))).toBe(false);
   });
 
@@ -93,7 +99,9 @@ describe("student analytics page", () => {
       </SessionProvider>
     );
 
-    await waitFor(() => expect(screen.getByText("80%")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("80%")).toBeInTheDocument()
+    );
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -103,6 +111,8 @@ describe("student analytics page", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("8 / 10")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Physics accuracy" })).toHaveAttribute("aria-valuenow", "30");
+    expect(
+      screen.getByRole("progressbar", { name: "Physics accuracy" })
+    ).toHaveAttribute("aria-valuenow", "30");
   });
 });
