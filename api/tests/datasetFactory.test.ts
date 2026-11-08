@@ -19,16 +19,17 @@ describe("synthetic dataset factory", () => {
     for (const row of datasets.studentPerformance) {
       expect(row.average_accuracy).toBeGreaterThanOrEqual(0);
       expect(row.average_accuracy).toBeLessThanOrEqual(1);
-      expect(row.formal_score_percentage).toBeGreaterThanOrEqual(0);
-      expect(row.formal_score_percentage).toBeLessThanOrEqual(100);
-      expect(row.passed_threshold).toBe(row.formal_score_percentage >= 60);
+      expect(row.target_formal_score_percentage).toBeGreaterThanOrEqual(0);
+      expect(row.target_formal_score_percentage).toBeLessThanOrEqual(100);
+      expect(row).not.toHaveProperty("passed_threshold");
     }
     for (const row of datasets.topicMastery) {
       expect(row.questions_correct).toBeLessThanOrEqual(row.questions_attempted);
       expect(row.accuracy).toBe(Number((Number(row.questions_correct) / Number(row.questions_attempted)).toFixed(4)));
     }
     for (const row of datasets.examReadiness) {
-      expect(row.readiness_label).toBe(Number(row.formal_exam_score_percentage) >= 60 ? 1 : 0);
+      expect([0, 1]).toContain(row.target_readiness_label);
+      expect(row).not.toHaveProperty("formal_exam_score_percentage");
     }
   });
 
