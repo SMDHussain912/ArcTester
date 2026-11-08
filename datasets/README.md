@@ -147,3 +147,35 @@ This is governance traceability, not model-quality approval. Candidate evaluatio
 and evidence-based promotion gates are still separate work; the current activation
 endpoint does not yet establish that a model is accurate or suitable for real
 student-facing predictions.
+
+
+## Candidate evaluation and promotion gates
+
+Admin endpoint:
+
+- `POST /admin/models/:modelId/:version/evaluate` — evaluates a candidate and
+  an explicit baseline version on the same held-out samples.
+- Request body: `baselineVersion`, `evaluationDataset`, and `samples`
+  containing feature objects and numeric targets. Evaluation accepts 10–5,000
+  rows and classification data must contain both classes.
+- `GET /admin/models/:modelId/audit` includes the resulting `EVALUATED` event.
+
+Acceptance rules are deliberately conservative and explicit:
+
+- Binary classification: candidate F1 **and** accuracy must be no worse than
+  the baseline.
+- Regression: candidate MAE **and** RMSE must both be no worse than baseline.
+
+The API computes both metric sets server-side against the exact same samples,
+stores an immutable evaluation report, and records a SHA-256 fingerprint of the
+submitted sample payload. A candidate version above version 1 cannot be manually
+activated unless its latest evaluation report has status `PASSED`. Rollback
+only selects an earlier version that was activated before, so it cannot
+accidentally promote an unreviewed failed candidate.
+
+**Evidence limitation:** the current evaluation endpoint accepts holdout rows
+from an administrator. The fingerprint detects later payload differences; it
+does not prove dataset provenance, prevent a dishonest admin from submitting
+fabricated data, or establish real-world model quality. Reports must be treated
+as operator-supplied evaluation evidence until a trusted dataset ingestion and
+versioning workflow is implemented. Synthetic data is not production validation.
