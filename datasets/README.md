@@ -79,3 +79,35 @@ The runner prepares all five datasets, makes a deterministic row-level holdout s
 Binary classification experiments compare Logistic Regression, KNN, Decision Tree, and Gaussian Naive Bayes. Each classifier now gets stratified cross-validation and a small deterministic hyperparameter search (logistic iterations/rate, KNN k, tree depth, and Naive Bayes variance smoothing). The selected configuration is retrained on the full training partition and evaluated once against the untouched holdout. The report stores tuning parameters, cross-validation metrics, and held-out metrics separately. Regression experiments use Multiple Linear Regression. Categorical columns are one-hot encoded; categories absent from training are mapped to an explicit unknown bucket. Student identifiers and target columns are never model features.
 
 This initial holdout split is appropriate for checking the synthetic pipeline. Cross-validation and hyperparameter selection use only the training partition; the final holdout is not used for tuning. It is not a substitute for grouped-by-student or chronological evaluation on real learner histories. Do not interpret model rankings or metrics from generated data as real ECET prediction performance.
+
+
+## Model registry and inference
+
+The experiment runner also writes versioned model packages to:
+
+`models/registry/<model-id>/versions/<version>.json`
+
+Each package contains the validated model artifact, task/algorithm metadata, dataset and target names, and the fitted preprocessing schema. The schema records numeric columns and categorical vocabularies, including the reserved unknown-category bucket. Model packages contain no student identifiers or raw training rows except where an algorithm intrinsically requires its training vectors (KNN).
+
+The registry maintains an `active.json` pointer per model. The first registered version becomes active automatically. Later experiment runs create a new version but **do not promote it automatically**; this prevents an unreviewed experiment from silently replacing the active model. Promotion and rollback are explicit operations.
+
+Example use from API code:
+
+```ts
+import { ModelRegistry } from "./modelRegistry.js";
+
+const registry = new ModelRegistry(process.env.ARCTESTER_MODEL_REGISTRY_DIR ?? "./model-registry");
+
+// List versions and explicitly promote a reviewed version.
+const versions = await registry.list("exam-readiness-logistic-regression");
+await registry.activate("exam-readiness-logistic-regression", versions.at(-1)!.version);
+
+// Inference loads the active artifact and reuses its saved feature encoding.
+const result = await registry.predict("exam-readiness-logistic-regression", {
+  // Supply the original, unencoded feature names and their numeric/string values.
+});
+```
+
+The registry validates model artifacts on save and load, checks model/preprocessing feature counts, rejects unsafe model IDs, writes JSON through temporary files followed by atomic rename, caches loaded active versions, and supports explicit rollback. Predictions reject missing, extra, or incorrectly typed features. Unknown categorical values use the training-time unknown bucket.
+
+**Storage limitation:** this version uses a filesystem-backed registry. Point it at a persistent mounted directory before using it in a deployed service; ephemeral container filesystems can lose model versions during redeploy/restart. It is not yet wired to a student-facing prediction endpoint. Synthetic models remain for pipeline verification only and must not be promoted as real ECET learner models.
