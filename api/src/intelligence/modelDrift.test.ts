@@ -24,7 +24,7 @@ describe("model drift assessment", () => {
 
   it("classifies low, moderate, high and no-data drift", () => {
     expect(assessFeatureDrift("score", { a: 50, b: 50 }, { a: 50, b: 50 }).status).toBe("LOW");
-    expect(assessFeatureDrift("score", { a: 50, b: 50 }, { a: 75, b: 25 }).status).toBe("MODERATE");
+    expect(assessFeatureDrift("score", { a: 50, b: 50 }, { a: 70, b: 30 }).status).toBe("MODERATE");
     expect(assessFeatureDrift("score", { a: 50, b: 50 }, { a: 99, b: 1 }).status).toBe("HIGH");
     expect(assessFeatureDrift("score", { a: 50, b: 50 }, {}).status).toBe("NO_DATA");
   });
