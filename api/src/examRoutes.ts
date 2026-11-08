@@ -662,6 +662,29 @@ export function examRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/admin/submissions/:id/release", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const submission = await db.examSubmission.findUnique({
+        where: { id: req.params.id },
+        select: { id: true, status: true },
+      });
+      if (!submission) return next(notFound("Submission not found."));
+      if (submission.status === "GRADED") {
+        return res.json({ ok: true, submissionId: submission.id, status: "GRADED", alreadyReleased: true });
+      }
+      if (submission.status !== "REVIEW_REQUIRED") {
+        return next(conflict("Only submissions awaiting review can be released."));
+      }
+      await db.examSubmission.update({
+        where: { id: submission.id },
+        data: { status: "GRADED" },
+      });
+      res.json({ ok: true, submissionId: submission.id, status: "GRADED" });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const sessions = await db.examSession.findMany({
@@ -1547,6 +1570,7 @@ export function examRouter(db: PrismaClient): Router {
         return next(notFound("This exam has not been submitted yet."));
       }
 
+      const released = assignment.submission.status === "GRADED";
       const answersByQuestion = new Map(
         assignment.submission.answers.map((answer) => [answer.examQuestionId, answer])
       );
@@ -1555,11 +1579,11 @@ export function examRouter(db: PrismaClient): Router {
         result: {
           submissionId: assignment.submission.id,
           status: assignment.submission.status,
-          score: assignment.submission.score,
-          maximumScore: assignment.submission.maximumScore,
+          score: released ? assignment.submission.score : null,
+          maximumScore: released ? assignment.submission.maximumScore : null,
           submittedAt: assignment.submission.submittedAt,
           receivedAt: assignment.submission.receivedAt,
-          questions: assignment.examVersion.questions.map((question) => {
+          questions: released ? assignment.examVersion.questions.map((question) => {
             const answer = answersByQuestion.get(question.id);
             return {
               id: question.id,
@@ -1576,7 +1600,7 @@ export function examRouter(db: PrismaClient): Router {
               isCorrect: answer?.isCorrect ?? false,
               awardedMarks: answer?.awardedMarks ?? 0,
             };
-          }),
+          }) : [],
         },
       });
     } catch (error) {

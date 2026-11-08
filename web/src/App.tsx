@@ -32,7 +32,7 @@ type AdminExam = {
 type AdminAnalytics = {
   totals: { students: number; exams: number; assignments: number; submissions: number; submissionRate: number; averagePercentage: number | null };
   exams: { examId: string; title: string; assigned: number; submitted: number; submissionRate: number; averagePercentage: number | null }[];
-  recentSubmissions: { studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
+  recentSubmissions: { submissionId: string; studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
 };
 type LiveSession = {
   id: string; status: string; student: { id: number; email: string }; exam: { id: string; title: string };
@@ -512,6 +512,22 @@ export default function App() {
   async function refreshAdminExams() {
     const refreshed = await request<{ exams: AdminExam[] }>("/admin/exams");
     setAdminExams(refreshed.exams);
+  }
+
+  async function releaseSubmission(submissionId: string) {
+    if (!window.confirm("Approve this submission and release its score and answer review to the student?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await request(`/admin/submissions/${submissionId}/release`, { method: "POST", body: JSON.stringify({}) });
+      const refreshed = await request<AdminAnalytics>("/admin/analytics/overview");
+      setAdminAnalytics(refreshed);
+      setError("Submission approved. The student can now view the result.");
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function refreshLiveSessions() {
@@ -1326,9 +1342,9 @@ export default function App() {
             <div className="section-head"><div><p className="eyebrow">LATEST ACTIVITY</p><h2>Recent submissions</h2></div></div>
             <div className="panel analytics-table-wrap">
               <table className="analytics-table">
-                <thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Score</th></tr></thead>
-                <tbody>{adminAnalytics?.recentSubmissions.map((item, index) => <tr key={`${item.studentEmail}-${item.examTitle}-${index}`}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending" : `${item.score} / ${item.maximumScore}`}</td></tr>)}
-                {adminAnalytics && adminAnalytics.recentSubmissions.length === 0 && <tr><td colSpan={4} className="muted">No submissions received yet.</td></tr>}</tbody>
+                <thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Score</th><th>Status / action</th></tr></thead>
+                <tbody>{adminAnalytics?.recentSubmissions.map((item, index) => <tr key={item.submissionId || `${item.studentEmail}-${item.examTitle}-${index}`}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending" : `${item.score} / ${item.maximumScore}`}</td><td>{item.status === "REVIEW_REQUIRED" ? <button className="primary" disabled={busy} onClick={() => void releaseSubmission(item.submissionId)}>Approve & release</button> : <span className="status status-used">{item.status}</span>}</td></tr>)}
+                {adminAnalytics && adminAnalytics.recentSubmissions.length === 0 && <tr><td colSpan={5} className="muted">No submissions received yet.</td></tr>}</tbody>
               </table>
             </div>
           </section>
@@ -1747,7 +1763,7 @@ export default function App() {
               return <article className="panel assigned-exam-card" key={item.id}>
                 <div className="admin-exam-meta"><div><strong>{item.exam.title}</strong><p className="muted">{item.exam.description || "No description"} · Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div><span className={item.submission ? "status status-used" : expired ? "status status-expired" : "status status-pending"}>{item.submission ? "SUBMITTED" : expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span></div>
                 <div className="assigned-exam-dates"><small>Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</small><small>Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</small></div>
-                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · Score: {item.submission.score ?? "Pending"} / {item.submission.maximumScore ?? "—"} · {item.submission.status}</p><button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p><strong>{assignmentResult.score ?? "Pending"} / {assignmentResult.maximumScore ?? "—"}</strong> · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
+                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · {item.submission.status === "REVIEW_REQUIRED" ? "Awaiting administrator review. Your result will appear after approval." : `Score: ${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}`}</p>{item.submission.status !== "REVIEW_REQUIRED" && <button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>}{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p><strong>{assignmentResult.score ?? "Pending"} / {assignmentResult.maximumScore ?? "—"}</strong> · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
               </article>;
             })}
           </section>
