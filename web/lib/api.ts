@@ -237,6 +237,14 @@ export interface PerformanceOverview {
     unanswered: number;
     accuracy: number | null;
     subjects: WeakTopicRow[];
+    difficulty: {
+      difficulty: string;
+      correct: number;
+      incorrect: number;
+      unanswered: number;
+      accuracy: number | null;
+      answered: number;
+    }[];
     trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
   };
   formalExams: {
