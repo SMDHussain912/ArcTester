@@ -52,3 +52,25 @@ The Phase 1 identity API now provides:
 The first administrator is provisioned with `npm run admin:bootstrap --workspace=api` after setting `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`. Bootstrap refuses to run when an administrator already exists.
 
 Device revocation currently updates the device registry. Binding access/refresh sessions to device IDs so revocation also terminates that device's sessions is a remaining authentication-hardening task.
+
+## Exam management foundation
+
+The exam schema and API now support a generic exam workflow:
+
+- Admins create a draft exam from selected question-bank entries.
+- Creating a draft snapshots question text, options, answer key, explanation, subject/topic, and per-question positive/negative marks into an immutable version record.
+- Admins publish the current version and assign it to student accounts with optional availability and due dates.
+- Students can list their assignments and download a versioned exam package.
+- The student package deliberately excludes answer keys and explanations. The API returns a SHA-256 digest for package integrity checks.
+- Assignment creation is idempotent for the same student and published exam version.
+
+API endpoints:
+
+- `GET /admin/exams`
+- `POST /admin/exams`
+- `POST /admin/exams/:id/publish`
+- `POST /admin/exams/:id/assign`
+- `GET /exams/assigned`
+- `GET /exams/assignments/:id/package`
+
+Offline attempt submission, server-side scoring, and durable sync outbox processing are still upcoming. The package digest detects accidental corruption; it is not a guarantee against a modified client or a malicious student device.
