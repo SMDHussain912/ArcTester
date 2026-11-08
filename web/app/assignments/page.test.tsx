@@ -59,6 +59,9 @@ describe("assigned exams page", () => {
           })
         );
       }
+      if (String(url).endsWith("/exams/catalog")) {
+        return Promise.resolve(jsonResponse(200, { ok: true, catalog: [] }));
+      }
       if (String(url).endsWith("/exams/assigned")) {
         return Promise.resolve(
           jsonResponse(200, {
