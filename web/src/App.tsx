@@ -21,6 +21,7 @@ type AdminSubject = { id: number; name: string; questionCount: number; topics: {
 type AdminStudent = { id: number; email: string };
 type AssignedExam = { id: string; status: string; assignedAt: string; availableFrom: string | null; dueAt: string | null; exam: { id: string; title: string; description: string }; version: number; durationMinutes: number; questionCount: number; submission: { id: string; status: string; score: number | null; maximumScore: number | null; submittedAt: string } | null };
 type AssignedExamPackage = { assignmentId: string; title: string; description: string; version: number; instructions: string; durationMinutes: number; availableFrom: string | null; dueAt: string | null; serverTime: string; questions: { id: string; position: number; subject: string; topic: string | null; text: string; options: string[]; marks: number; negativeMarks: number }[] };
+type AssignedExamResult = { submissionId: string; status: string; score: number | null; maximumScore: number | null; submittedAt: string; questions: { id: string; position: number; text: string; options: string[]; correctIndex: number; explanation: string; selectedIndex: number | null; isCorrect: boolean; awardedMarks: number; marks: number; negativeMarks: number }[] };
 type AdminExam = {
   id: string;
   title: string;
@@ -107,6 +108,8 @@ export default function App() {
   const [adminStudents, setAdminStudents] = useState<AdminStudent[]>([]);
   const [adminExams, setAdminExams] = useState<AdminExam[]>([]);
   const [assignedExams, setAssignedExams] = useState<AssignedExam[]>([]);
+  const [assignmentResult, setAssignmentResult] = useState<AssignedExamResult | null>(null);
+  const [assignmentResultForId, setAssignmentResultForId] = useState<string | null>(null);
   const [activeAssignmentPackage, setActiveAssignmentPackage] = useState<AssignedExamPackage | null>(null);
   const [assignmentAnswers, setAssignmentAnswers] = useState<Record<string, number>>({});
   const [assignmentStartedAt, setAssignmentStartedAt] = useState<string | null>(null);
@@ -251,6 +254,17 @@ export default function App() {
   async function refreshAssignedExams() {
     const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
     setAssignedExams(response.assignments);
+  }
+
+  async function reviewAssignedExam(assignmentId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request<{ result: AssignedExamResult }>(`/exams/assignments/${assignmentId}/result`);
+      setAssignmentResult(response.result);
+      setAssignmentResultForId(assignmentId);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function startAssignedExam(assignmentId: string) {
@@ -1352,7 +1366,7 @@ export default function App() {
               return <article className="panel assigned-exam-card" key={item.id}>
                 <div className="admin-exam-meta"><div><strong>{item.exam.title}</strong><p className="muted">{item.exam.description || "No description"} · Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div><span className={item.submission ? "status status-used" : expired ? "status status-expired" : "status status-pending"}>{item.submission ? "SUBMITTED" : expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span></div>
                 <div className="assigned-exam-dates"><small>Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</small><small>Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</small></div>
-                {item.submission ? <p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · Score: {item.submission.score ?? "Pending"} / {item.submission.maximumScore ?? "—"} · {item.submission.status}</p> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
+                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · Score: {item.submission.score ?? "Pending"} / {item.submission.maximumScore ?? "—"} · {item.submission.status}</p><button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p><strong>{assignmentResult.score ?? "Pending"} / {assignmentResult.maximumScore ?? "—"}</strong> · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
               </article>;
             })}
           </section>
