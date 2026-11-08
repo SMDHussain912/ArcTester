@@ -37,7 +37,7 @@ describe("live Vite application", () => {
         }));
       }
       if (path.endsWith("/bank")) {
-        return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1 }] }));
+        return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1, topics: [{ topic: "Algebra", count: 1 }] }] }));
       }
       if (path.endsWith("/announcements/notice-1/read")) {
         return Promise.resolve(response(200, { ok: true, seenAt: "2026-11-08T09:00:00.000Z" }));
@@ -151,6 +151,47 @@ describe("live Vite application", () => {
       title: "CSE Mock Test 01",
       durationMinutes: 90,
       questions: [{ questionId: 91, marks: 2, negativeMarks: 0.5 }],
+    });
+  });
+
+
+  it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
+    let paperPayload: Record<string, unknown> | null = null;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, { user: { id: 4, email: "student@example.com", role: "STUDENT" } }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, {
+        total: 5,
+        subjects: [
+          { subject: "Maths", count: 3, topics: [{ topic: "Algebra", count: 2 }, { topic: "Calculus", count: 1 }] },
+          { subject: "Physics", count: 2, topics: [{ topic: "Algebra", count: 2 }] },
+        ],
+      }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/tests") && init?.method === "POST") {
+        paperPayload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Promise.resolve(response(201, { attemptId: 12, mode: "practice", deadline: null, warnings: [], questions: [{ id: 1, subject: "Maths", topic: "Algebra", text: "Question?", options: ["A", "B", "C", "D"] }] }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(screen.getByLabelText(/Maths/));
+    fireEvent.click(screen.getByLabelText(/Physics/));
+    fireEvent.click(screen.getByLabelText("Algebra", { selector: "input" }));
+    fireEvent.change(screen.getByLabelText("Number of questions"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "easy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create 5-question paper" }));
+
+    await waitFor(() => expect(paperPayload).not.toBeNull());
+    expect(paperPayload).toMatchObject({
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topicFilters: [{ subject: "Maths", topic: "Algebra" }],
+      count: 5,
+      difficulty: "easy",
     });
   });
 
