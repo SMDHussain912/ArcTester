@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
-import { badRequest, notFound } from "./errors.js";
+import { badRequest, conflict, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import {
   predictWithRegistryArtifact,
   validateRegistryArtifact,
   type RegisterModelInput,
 } from "./intelligence/modelRegistry.js";
+import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().trim().min(1).max(120), type: z.literal("numeric") }).strict(),
@@ -36,6 +37,15 @@ const RegisterSchema = z.object({
 
 const PredictionSchema = z.object({
   features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+}).strict();
+
+const EvaluationSchema = z.object({
+  baselineVersion: z.number().int().positive(),
+  evaluationDataset: z.string().trim().min(1).max(120),
+  samples: z.array(z.object({
+    features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+    target: z.number().finite(),
+  }).strict()).min(10).max(5000),
 }).strict();
 
 const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
@@ -139,6 +149,59 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/admin/models/:modelId/:version/evaluate", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const version = VersionSchema.parse(req.params.version);
+      const input = EvaluationSchema.parse(req.body);
+      if (input.baselineVersion === version) return next(badRequest("Candidate and baseline versions must differ."));
+      const [candidateRow, baselineRow] = await Promise.all([
+        db.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } }),
+        db.registeredModel.findUnique({ where: { modelId_version: { modelId, version: input.baselineVersion } } }),
+      ]);
+      if (!candidateRow || !baselineRow) return next(notFound("Candidate or baseline model version was not found."));
+      const candidate = validateRegistryArtifact(JSON.parse(candidateRow.artifactJson));
+      const baseline = validateRegistryArtifact(JSON.parse(baselineRow.artifactJson));
+      const report = evaluateRegistryCandidate(candidate, baseline, input.samples, input.evaluationDataset);
+      await db.$transaction(async (tx) => {
+        await tx.modelEvaluation.create({
+          data: {
+            actorId: req.user!.id,
+            modelId,
+            candidateVersion: version,
+            baselineVersion: input.baselineVersion,
+            evaluationDataset: report.evaluationDataset,
+            datasetFingerprint: report.datasetFingerprint,
+            sampleCount: report.sampleCount,
+            metricsJson: JSON.stringify({
+              candidate: report.candidateMetrics,
+              baseline: report.baselineMetrics,
+              acceptanceRule: report.acceptanceRule,
+            }),
+            status: report.status,
+          },
+        });
+        await tx.modelRegistryAudit.create({
+          data: {
+            actorId: req.user!.id, modelId, version, action: "EVALUATED",
+            details: JSON.stringify({
+              status: report.status,
+              baselineVersion: report.baselineVersion,
+              evaluationDataset: report.evaluationDataset,
+              datasetFingerprint: report.datasetFingerprint,
+              sampleCount: report.sampleCount,
+            }),
+          },
+        });
+      });
+      res.json({ ok: true, report });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
   router.post("/admin/models/:modelId/:version/activate", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
@@ -149,6 +212,15 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         });
         if (!target) return null;
         validateRegistryArtifact(JSON.parse(target.artifactJson));
+        if (version > 1) {
+          const evaluation = await tx.modelEvaluation.findFirst({
+            where: { modelId, candidateVersion: version },
+            orderBy: { evaluatedAt: "desc" },
+          });
+          if (!evaluation || evaluation.status !== "PASSED") {
+            return { error: "evaluation-required" as const };
+          }
+        }
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
         const model = await tx.registeredModel.update({
           where: { id: target.id },
@@ -161,6 +233,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         return model;
       });
       if (!activated) return next(notFound("Model version was not found."));
+      if ("error" in activated) return next(conflict("This model version needs a passing evaluation against a baseline before activation."));
       res.json({ ok: true, model: activated });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
@@ -176,7 +249,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         const active = await tx.registeredModel.findFirst({ where: { modelId, isActive: true } });
         if (!active) return { error: "missing-active" as const };
         const previous = await tx.registeredModel.findFirst({
-          where: { modelId, version: { lt: active.version } },
+          where: { modelId, version: { lt: active.version }, activatedAt: { not: null } },
           orderBy: { version: "desc" },
         });
         if (!previous) return { error: "missing-previous" as const };
