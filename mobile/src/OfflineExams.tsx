@@ -4,7 +4,6 @@ import NetInfo from "@react-native-community/netinfo";
 import {
   getPendingSubmissions,
   getRemainingSeconds,
-  getCachedExamPackage,
   listCachedExamPackages,
   queueOfflineSubmission,
   restoreActiveAttempt,
@@ -51,6 +50,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
 
   const [assignments, setAssignments] = useState<AssignedExam[]>([]);
   const [cachedIds, setCachedIds] = useState<string[]>([]);
+  const [cachedPackages, setCachedPackages] = useState<OfflineExamPackage[]>([]);
   const [activePackage, setActivePackage] = useState<OfflineExamPackage | null>(null);
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -70,6 +70,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
       getPendingSubmissions(),
     ]);
     setCachedIds(packages.map((item) => item.assignmentId));
+    setCachedPackages(packages);
     setPendingCount(pending.length);
   }, []);
 
@@ -198,7 +199,6 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setError("");
     try {
       await queueOfflineSubmission(activePackage.assignmentId);
-      const submittedAssignmentId = activePackage.assignmentId;
       setActivePackage(null);
       setActiveAttemptUuid("");
       setAnswers({});
@@ -209,12 +209,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
       } else {
         setSyncMessage("Submission saved on this device. It will upload when internet returns.");
       }
-      await refreshAssignments();
-      setSyncMessage((current) =>
-        current || "Submission saved on this device. It will upload when internet returns.",
-      );
       setBusyId(null);
-      void getCachedExamPackage(submittedAssignmentId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save this submission.");
       setBusyId(null);
@@ -297,7 +292,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
         {pendingCount === 1 ? "" : "s"}
       </Text>
       {!!syncMessage && <Text style={styles.syncMessage}>{syncMessage}</Text>}
-      {assignments.length === 0 ? (
+      {assignments.length === 0 && cachedPackages.length === 0 ? (
         <Text style={styles.empty}>No exams have been assigned to this account yet.</Text>
       ) : (
         assignments.map((assignment) => {
@@ -337,6 +332,23 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
           );
         })
       )}
+      {cachedPackages
+        .filter((examPackage) => !assignments.some((assignment) => assignment.id === examPackage.assignmentId))
+        .map((examPackage) => (
+          <View key={examPackage.assignmentId} style={styles.assignment}>
+            <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
+            <Text style={styles.muted}>
+              {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes · Saved offline
+            </Text>
+            <TouchableOpacity
+              disabled={busyId !== null}
+              onPress={() => void startExam(examPackage.assignmentId)}
+              style={[styles.primarySmall, { alignSelf: "flex-start", marginTop: 12 }]}
+            >
+              <Text style={styles.primaryText}>Start / Resume offline</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
       {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
