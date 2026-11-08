@@ -379,6 +379,11 @@ describe("versioned exam management", () => {
     expect(data.assigned).toBe(1);
     expect(data.submitted).toBe(1);
     expect(data.questions[0]).toMatchObject({ correct: 1, responses: 1 });
+    const audit = await request(`/admin/exams/assignments/${assignmentId}/audit`, "GET", undefined, adminCookie);
+    expect(audit.status).toBe(200);
+    const auditBody = audit.json.audit as { events: Array<{ type: string; actor: { email: string } | null }> };
+    expect(auditBody.events.some((event) => event.type === "INVIGILATOR_PAUSE" && event.actor?.email === "exam-admin@arctester.test")).toBe(true);
+    expect(auditBody.events.some((event) => event.type === "SUBMITTED" && event.actor?.email === "exam-student@arctester.test")).toBe(true);
     const student = await request(`/admin/exams/${examId}/report`, "GET", undefined, studentCookie);
     expect(student.status).toBe(403);
   });
