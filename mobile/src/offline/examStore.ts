@@ -207,6 +207,18 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
   const cached = await getCachedExam(assignmentId);
   if (!cached) throw new Error("Download this exam before starting it.");
 
+  const db = await database();
+  const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
+    "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
+    assignmentId
+  );
+  // A started attempt must remain resumable after the assignment deadline so
+  // the app can restore its answers and submit the expired attempt.
+  if (existing) {
+    if (existing.sync_status === "IN_PROGRESS") return existing.attempt_uuid;
+    throw new Error("An attempt already exists for this assignment.");
+  }
+
   const trustedNow = Date.now() + cached.serverOffsetMs;
   const availableFrom = cached.package.availableFrom
     ? new Date(cached.package.availableFrom).getTime()
@@ -218,16 +230,6 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
   }
   if (dueAt !== null && trustedNow > dueAt) {
     throw new Error("The deadline for this exam has passed.");
-  }
-
-  const db = await database();
-  const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
-    "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId
-  );
-  if (existing) {
-    if (existing.sync_status === "IN_PROGRESS") return existing.attempt_uuid;
-    throw new Error("An attempt already exists for this assignment.");
   }
 
   const attemptUuid = Crypto.randomUUID();
