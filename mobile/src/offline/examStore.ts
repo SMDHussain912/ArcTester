@@ -48,6 +48,16 @@ export type PendingSubmission = {
   answers: OfflineAnswer[];
 };
 
+export type StoredOfflineAttempt = {
+  assignmentId: string;
+  attemptUuid: string;
+  startedAt: string;
+  submittedAt: string | null;
+  answers: OfflineAnswer[];
+  syncStatus: "IN_PROGRESS" | "PENDING" | "SYNC_ERROR" | "SYNCED";
+  lastError: string | null;
+};
+
 type AttemptRow = {
   assignment_id: string;
   attempt_uuid: string;
@@ -219,6 +229,37 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
     now
   );
   return attemptUuid;
+}
+
+
+export async function getOfflineAttempt(
+  assignmentId: string
+): Promise<StoredOfflineAttempt | null> {
+  const db = await database();
+  const row = await db.getFirstAsync<{
+    assignment_id: string;
+    attempt_uuid: string;
+    started_at: string;
+    submitted_at: string | null;
+    answers_json: string;
+    sync_status: StoredOfflineAttempt["syncStatus"];
+    last_error: string | null;
+  }>(
+    `SELECT assignment_id, attempt_uuid, started_at, submitted_at, answers_json,
+            sync_status, last_error
+     FROM offline_attempts WHERE assignment_id = ?`,
+    assignmentId
+  );
+  if (!row) return null;
+  return {
+    assignmentId: row.assignment_id,
+    attemptUuid: row.attempt_uuid,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at,
+    answers: JSON.parse(row.answers_json) as OfflineAnswer[],
+    syncStatus: row.sync_status,
+    lastError: row.last_error,
+  };
 }
 
 export async function saveOfflineAnswer(
