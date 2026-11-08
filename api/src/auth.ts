@@ -216,25 +216,18 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post(
-    "/invitations/:id/revoke",
-    requireAuth,
-    requireAdmin(db),
-    async (req, res, next) => {
-      try {
-        const result = await db.invitation.updateMany({
-          where: { id: req.params.id, usedAt: null, revokedAt: null },
-          data: { revokedAt: new Date() },
-        });
-        if (result.count === 0) {
-          return next(notFound("Invitation not found or already used."));
-        }
-        res.json({ ok: true });
-      } catch (error) {
-        next(error);
-      }
+  router.post("/invitations/:id/revoke", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const result = await db.invitation.updateMany({
+        where: { id: req.params.id, usedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (result.count === 0) return next(notFound("Invitation not found or already used."));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
     }
-  );
+  });
 
   router.post("/register", async (req, res, next) => {
     try {

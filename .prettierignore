@@ -8,7 +8,3 @@ legacy/
 ecet-mock.html
 README.md
 
-# Existing compact client shells will be reformatted during the UI redesign.
-web/src/App.tsx
-mobile/App.tsx
-api/src/auth.ts
