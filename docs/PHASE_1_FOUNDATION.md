@@ -39,3 +39,16 @@ The repository currently uses SQLite for its local/test database and its existin
 5. Create or reactivate a device record after successful authentication.
 6. Revoke devices independently; do not invalidate other devices belonging to the same student.
 7. Keep secrets and invitation tokens out of logs and API error messages.
+
+## Implemented identity API slice
+
+The Phase 1 identity API now provides:
+
+- `POST /auth/invitations`: administrator-only invitation creation. The raw token is returned once; only its SHA-256 hash is stored.
+- `POST /auth/invitations/:id/revoke`: administrator-only revocation of unused invitations.
+- `POST /auth/register`: requires a valid, unexpired, unused invitation bound to the same normalized email. Invitation consumption and student creation run in one transaction.
+- `POST /auth/devices/register`, `GET /auth/devices`, and `DELETE /auth/devices/:id`: per-account device registration, listing, reactivation, and independent revocation.
+
+The first administrator is provisioned with `npm run admin:bootstrap --workspace=api` after setting `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`. Bootstrap refuses to run when an administrator already exists.
+
+Device revocation currently updates the device registry. Binding access/refresh sessions to device IDs so revocation also terminates that device's sessions is a remaining authentication-hardening task.

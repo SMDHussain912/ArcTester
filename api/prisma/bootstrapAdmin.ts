@@ -1,30 +1,36 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/auth.js";
 
-const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
-const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+async function main(): Promise<void> {
+  const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 
-if (!email || !password || password.length < 12) {
-  throw new Error(
-    "Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD (at least 12 characters)."
-  );
-}
-
-const db = new PrismaClient();
-
-try {
-  const existingAdmins = await db.user.count({ where: { role: "ADMIN" } });
-  if (existingAdmins > 0) {
-    throw new Error("An administrator already exists. Bootstrap is one-time only.");
+  if (!email || !password || password.length < 12) {
+    throw new Error(
+      "Set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD (at least 12 characters)."
+    );
   }
 
-  await db.user.upsert({
-    where: { email },
-    create: { email, passwordHash: hashPassword(password), role: "ADMIN" },
-    update: { passwordHash: hashPassword(password), role: "ADMIN" },
-  });
+  const db = new PrismaClient();
+  try {
+    const existingAdmins = await db.user.count({ where: { role: "ADMIN" } });
+    if (existingAdmins > 0) {
+      throw new Error("An administrator already exists. Bootstrap is one-time only.");
+    }
 
-  console.log(`Administrator account provisioned for ${email}.`);
-} finally {
-  await db.$disconnect();
+    await db.user.upsert({
+      where: { email },
+      create: { email, passwordHash: hashPassword(password), role: "ADMIN" },
+      update: { passwordHash: hashPassword(password), role: "ADMIN" },
+    });
+
+    console.log(`Administrator account provisioned for ${email}.`);
+  } finally {
+    await db.$disconnect();
+  }
 }
+
+void main().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : "Administrator bootstrap failed.");
+  process.exitCode = 1;
+});
