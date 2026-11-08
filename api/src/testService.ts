@@ -196,7 +196,7 @@ export async function createTest(
       active = active.filter((entry) => entry.pool.some((question) => !selectedById.has(question.id)));
     }
     if (selected.length < requested) {
-      warnings = ["Requested " + requested + " questions, but only " + selected.length + " match the selected subjects" + (topicFilter.size ? " and topics." : ".")];
+      warnings = [`Requested ${requested} questions, but only ${selected.length} match the selected subjects: ${chosenSubjects.join(", ")}${topicFilter.size ? " and selected topics" : ""}.`];
     }
   } else {
     // "mistakes" only surfaces questions THIS user has got wrong before.
