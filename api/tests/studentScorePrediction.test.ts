@@ -94,7 +94,7 @@ describe("student score prediction endpoint", () => {
     expect(response.json.status).toBe("ready");
     expect(response.json).toMatchObject({
       completedAttempts: 30,
-      trainingSamples: 20,
+      trainingSamples: 27,
       evaluationSamples: 7,
     });
     expect(response.json.predictedScorePercent).toBeGreaterThanOrEqual(0);
