@@ -821,3 +821,8 @@ input[type="radio"]:disabled { opacity: .45; cursor: not-allowed; }
 
 .admin-question-row{flex-wrap:wrap}
 .question-bank-preview{flex-basis:100%}
+
+
+.assigned-result-review{display:grid;gap:12px;padding:16px;margin-top:12px;border:1px solid var(--border);border-radius:14px;background:var(--bg)}
+.question-review-row{padding:12px 0;border-top:1px solid var(--border)}
+.question-review-row p{margin:7px 0;font-size:13px}
