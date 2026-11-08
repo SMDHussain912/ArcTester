@@ -418,6 +418,9 @@ describe("analytics", () => {
     };
     expect(report.practice).toMatchObject({ completedAttempts: 0, questions: 0, accuracy: null });
     expect(report.formalExams.submissions).toBe(0);
+    const questionPerformance = await otherApi.get("/analytics/question-performance");
+    expect(questionPerformance.status).toBe(200);
+    expect((questionPerformance.json as { questions: unknown[] }).questions).toEqual([]);
   });
 
   it("GET /analytics/recommendations returns actions based on the learner's results", async () => {
