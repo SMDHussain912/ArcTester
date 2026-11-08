@@ -12,16 +12,23 @@ describe("student analytics page", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("shows a sign-in prompt when the visitor is signed out", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: false,
-      status: 403,
-      text: async () => JSON.stringify({ error: "Not signed in." }),
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({ error: "Not signed in." }),
+      })
+    );
 
-    render(<SessionProvider><AnalyticsPage /></SessionProvider>);
+    render(
+      <SessionProvider>
+        <AnalyticsPage />
+      </SessionProvider>
+    );
 
-    expect(await screen.findByText(
-      "Sign in to see your progress, recent attempts and areas to revise."
-    )).toBeInTheDocument();
+    expect(
+      await screen.findByText("Sign in to see your progress, recent attempts and areas to revise.")
+    ).toBeInTheDocument();
   });
 });
