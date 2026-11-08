@@ -316,6 +316,16 @@ export interface AdminExamReport {
   questions: { questionId: string; position: number; subject: string; topic: string | null; responses: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null }[];
 }
 
+export interface AdminExamAudit {
+  assignmentId: string;
+  candidate: { id: number; email: string };
+  exam: { title: string };
+  version: number;
+  session: { id: string; status: string; startedAt: string | null; lastHeartbeatAt: string | null; endedAt: string | null; heartbeatCount: number; focusLossCount: number; disconnectCount: number } | null;
+  submission: { id: string; status: string; submittedAt: string; receivedAt: string; score: number | null; maximumScore: number | null } | null;
+  events: { id: string; type: string; detail: string; createdAt: string; actor: { id: number; email: string; role: string } | null }[];
+}
+
 export interface AdminAttendanceRow {
   assignmentId: string;
   candidate: { id: number; email: string };
@@ -536,6 +546,8 @@ export const api = {
     request<{ ok: true; serverTime: string; sessions: AdminLiveSession[] }>("/admin/exams/live-sessions"),
   adminExamAttendance: () =>
     request<{ ok: true; serverTime: string; attendance: AdminAttendanceRow[] }>("/admin/exams/attendance"),
+  adminExamAudit: (assignmentId: string) =>
+    request<{ ok: true; audit: AdminExamAudit }>(`/admin/exams/assignments/${assignmentId}/audit`),
   adminSessionAction: (id: string, action: "PAUSE" | "RESUME" | "TERMINATE", reason = "") =>
     request<{ ok: true; session: { id: string; status: string; endedAt: string | null } }>(
       `/admin/exams/sessions/${id}/action`, json({ action, reason })
