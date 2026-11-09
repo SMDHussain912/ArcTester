@@ -4,7 +4,7 @@ import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
-import StudentProgress from "./StudentProgress";
+import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
@@ -1039,6 +1039,7 @@ export default function App() {
                 <strong>{announcements[0].title}</strong><p>{announcements[0].message}</p><small className="muted">{new Date(announcements[0].publishedAt).toLocaleString()}</small>
               </section>
             ) : null}
+            {activePage === "dashboard" ? <DashboardProgressSummary onOpenProgress={() => setActivePage("progress")} /> : null}
             {activePage === "dashboard" && assignedExams.some((item) => !item.submission) ? (
               <section className="panel student-notice-preview" aria-labelledby="upcoming-exams-title">
                 <div className="section-head">
