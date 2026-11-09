@@ -175,4 +175,7 @@ A task can be checked off only when:
 - 2026-11-09: Fixed logout token replay. JWTs now carry a user session-version claim, and every protected API route checks it against PostgreSQL. Logout increments the version, invalidating previously issued browser-cookie and bearer tokens. Legacy tokens without the claim are treated as version 0 until logout. Per-device revocation remains separate work. A follow-up commit also ensures database failures during logout revocation are returned to the client; run CI against the final branch head before merge.
 
 
-- 2026-11-09: Expanded the production Vite application's own UI regression suite to verify that a student can leave a mock-test tab, open Announcements, return to Practice, and retain the selected answer and progress. The updated Vite UI suite must pass on the PR head before this item is considered verified.
+- 2026-11-09: Expanded the production Vite application's own UI regression suite to verify that a student can leave a mock-test tab, open Announcements, return to Practice, and retain the selected answer and progress. The first new UI test run exposed a test setup error (the mock-test launch control lives on the Practice page); corrected to navigate there first, and CI must pass on the final PR head before this item is considered verified.
+
+
+- 2026-11-09: Corrected the mock-test navigation regression test to enter the Practice page before clicking the mock-test launcher; the test now asserts answer retention after switching to Announcements and back.

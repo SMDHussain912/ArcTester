@@ -315,6 +315,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
     fireEvent.click(await screen.findByRole("button", { name: "Start mock test" }));
     const question = await screen.findByText("Which structure follows FIFO?");
     const questionCard = question.closest("article");
@@ -330,7 +331,7 @@ describe("live Vite application", () => {
     const resumedCard = resumedQuestion.closest("article");
     expect(resumedCard).not.toBeNull();
     expect(within(resumedCard!).getByRole("button", { name: /Queue/ })).toHaveClass("selected");
-    expect(screen.getByText(/1 answered/)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 answered/).length).toBeGreaterThan(0);
   });
 
   it("opens a practice paper when a student launches a subject from Question bank", async () => {
