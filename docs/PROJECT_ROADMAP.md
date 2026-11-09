@@ -187,4 +187,4 @@ A task can be checked off only when:
 - 2026-11-09: Verified the final auth + UI stabilization changes in CI run `42541320090`: API 36 files / 290 tests, web 22 files / 84 tests, PostgreSQL migrations, migration utility tests, TensorFlow dataset checks, mobile typecheck, lint and production builds all passed. The API-confirmed sign-out behavior passed full CI run `42541320090`.
 
 
-- 2026-11-09: Made one-time admin bootstrap concurrency-safe with a PostgreSQL advisory transaction lock and added a regression test that runs two different bootstrap requests concurrently; exactly one administrator can be created.
+- 2026-11-09: Made one-time admin bootstrap concurrency-safe with a PostgreSQL advisory transaction lock and added a regression test that runs two different bootstrap requests concurrently; exactly one administrator can be created. The new PostgreSQL concurrency regression test must pass on the current PR head.
