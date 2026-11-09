@@ -202,3 +202,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Added a Vercel + Render deployment guide with Vite build/output settings, Docker context, PostgreSQL/JWT/CORS/cookie environment variables, and the third-party-cookie limitation. Actual provider configuration and browser testing remain pending; the deployment-guide documentation should be included in the next CI run.
+
+
+- 2026-11-09: Hardened exam assignment against concurrent duplicate requests: a uniqueness race now returns HTTP 409 instead of an unhandled 500. Added a PostgreSQL-backed integration regression that sends two assignment requests simultaneously and asserts exactly one assignment row. This change is awaiting CI verification.
