@@ -121,6 +121,40 @@ describe("versioned exam management", () => {
     expect((bank.json.questions as Array<{ text: string }>).some((item) => item.text === payload.text)).toBe(true);
   });
 
+  it("returns a conflict when bulk deletion targets a question used by an attempt", async () => {
+    const question = await server.db.question.findFirstOrThrow({
+      where: { text: "Which structure follows FIFO?" },
+    });
+    const attempt = await server.db.attempt.create({
+      data: { userId: studentId, mode: "practice" },
+    });
+    await server.db.attemptAnswer.create({
+      data: {
+        attemptId: attempt.id,
+        questionId: question.id,
+        chosen: null,
+        isCorrect: false,
+        subjectSnapshot: "Computer Science",
+        topicSnapshot: "Data Structures",
+        difficultySnapshot: "easy",
+        textSnapshot: question.text,
+        optionsSnapshot: question.options,
+        correctIndexSnapshot: question.correctIndex,
+        explanationSnapshot: question.explanation,
+      },
+    });
+
+    const deleted = await request("/admin/questions/bulk", "DELETE", { ids: [question.id] }, adminCookie);
+    expect(deleted.status).toBe(409);
+    expect((deleted.json.error as string)).toContain("already used");
+    expect(await server.db.question.findUnique({ where: { id: question.id } })).not.toBeNull();
+  });
+
+  it("rejects non-integer question bank pagination", async () => {
+    const response = await request("/admin/question-bank?page=1.5", "GET", undefined, adminCookie);
+    expect(response.status).toBe(400);
+  });
+
   it("validates paper duplicates, subject blueprint and difficulty balance", async () => {
     const question = await server.db.question.findFirstOrThrow();
     const duplicate = await request("/admin/exams/validate-paper", "POST", {
