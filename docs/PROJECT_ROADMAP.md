@@ -63,6 +63,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [ ] Verify invalid exam submissions are rejected before session reconciliation; the new regression currently awaits CI.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
+- [ ] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; regression added, awaiting CI.
 
 ### Frontend quality
 
@@ -209,3 +210,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Exam submission audit found that offline session reconciliation happened before validating submitted question IDs and option indexes. Invalid payloads could therefore leave a session row despite returning HTTP 400. Moved full answer-set validation ahead of session creation, added per-question option bounds checks, and added a regression proving invalid offline submissions do not create a session. Awaiting CI verification for this follow-up.
+
+
+- 2026-11-09: Hardened answer autosave against a state race: the save transaction now requires the exam session to remain ACTIVE and started, not merely to exist. Added coverage that a paused session rejects an answer save without advancing its revision, then resumes normally. Awaiting CI verification.

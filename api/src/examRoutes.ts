@@ -1280,6 +1280,8 @@ export function examRouter(db: PrismaClient): Router {
         const bumped = await tx.examSession.updateMany({
           where: {
             id: assignment.session!.id,
+            status: "ACTIVE",
+            startedAt: { not: null },
             ...(input.revision === undefined ? {} : { answersRevision: input.revision }),
           },
           data: { answersRevision: { increment: 1 }, lastActivityAt: now },
