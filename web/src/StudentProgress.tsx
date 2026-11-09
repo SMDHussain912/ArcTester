@@ -139,7 +139,14 @@ export function DashboardProgressSummary({ onOpenProgress }: { onOpenProgress: (
   useEffect(() => {
     let cancelled = false;
     loadOverview()
-      .then((data) => { if (!cancelled) setOverview(data); })
+      .then((data) => {
+        if (cancelled) return;
+        if (!data || !data.practice || !data.formalExams) {
+          setError("Progress data is temporarily unavailable.");
+          return;
+        }
+        setOverview(data);
+      })
       .catch((cause) => { if (!cancelled) setError((cause as Error).message); });
     return () => { cancelled = true; };
   }, []);
