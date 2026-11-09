@@ -229,3 +229,23 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Hardened submission finalization against an invigilator state race. The transaction now conditionally completes only an ACTIVE session with the same server-owned start timestamp observed before submission; if the session was paused or terminated concurrently, the transaction returns HTTP 409 and rolls back the submission. Added a regression proving a paused session cannot be submitted and remains paused; awaiting CI.
+
+
+### TensorFlow.js durable training jobs — 2026-11-09
+
+**Implemented on main; CI verification pending**
+- Added PostgreSQL `ModelTrainingJob` persistence with QUEUED/RUNNING/SUCCEEDED/FAILED states, progress, result/error payloads, timestamps, worker identity and expiring worker leases.
+- Added migration `20261109210000_model_training_jobs`.
+- Added admin-only queue submission, list and status endpoints:
+  - `POST /admin/model-datasets/:datasetId/tensorflow-jobs`
+  - `GET /admin/model-training-jobs`
+  - `GET /admin/model-training-jobs/:jobId`
+- Added a polling worker that atomically claims queued or expired-lease jobs, renews its lease while training, records inactive model candidates and audit events, and persists terminal failures.
+- The API starts the worker outside test mode. The active Vite Model Lab can queue TensorFlow.js jobs and refresh their persisted progress/results.
+- Added API integration coverage for admin authorization, queue/status behavior, worker execution and invalid dataset rejection.
+
+**Important limitations / next verification**
+- Existing synchronous TensorFlow endpoint remains for compatibility; the Vite Model Lab now exposes the durable queue path.
+- Worker progress currently reports lifecycle milestones, not per-epoch training percentage.
+- Expired leases permit recovery after a worker disappears; verify multi-instance lease behavior and long-running training under deployment conditions.
+- Run PostgreSQL migration deployment, API/web tests, lint and production builds in GitHub Actions. Do not mark this slice complete until the latest main commit has a successful CI run.
