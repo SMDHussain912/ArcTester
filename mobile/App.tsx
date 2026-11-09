@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -48,6 +50,30 @@ export default function App() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const entrance = useRef(new Animated.Value(0)).current;
+  const statsEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    entrance.setValue(0);
+    statsEntrance.setValue(0);
+    Animated.parallel([
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(110),
+        Animated.spring(statsEntrance, {
+          toValue: 1,
+          speed: 16,
+          bounciness: 5,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [entrance, statsEntrance, user, test, showExams]);
 
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
@@ -225,7 +251,7 @@ export default function App() {
         </View>
 
         {!user ? (
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <Text style={styles.heading}>{register ? "Create your account" : "Welcome back"}</Text>
             <Text style={styles.muted}>
               {register
@@ -312,7 +338,7 @@ export default function App() {
           </View>
         ) : (
           <>
-            <View style={styles.hero}>
+            <Animated.View style={[styles.hero, animatedEntrance(entrance)]}>
               <Text style={styles.muted}>SIGNED IN AS</Text>
               <Text style={styles.heading}>{user.email}</Text>
               <Text style={styles.muted}>Your next focused session starts here.</Text>
@@ -341,7 +367,7 @@ export default function App() {
               </View>
             ) : (
               announcements.map((announcement) => (
-                <View key={announcement.id} style={styles.announcementCard}>
+                <Animated.View key={announcement.id} style={[styles.announcementCard, animatedEntrance(entrance)]}>
                   <Text style={styles.announcementTitle}>{announcement.title}</Text>
                   <Text style={styles.announcementMessage}>{announcement.message}</Text>
                   <Text style={styles.announcementDate}>
@@ -388,6 +414,16 @@ export default function App() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function animatedEntrance(value: Animated.Value) {
+  return {
+    opacity: value,
+    transform: [
+      { translateY: value.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) },
+      { scale: value.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+    ],
+  };
 }
 
 const styles = StyleSheet.create({
