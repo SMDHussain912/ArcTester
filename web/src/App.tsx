@@ -385,6 +385,34 @@ export default function App() {
     void submitAssignedExam(true);
   }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused, assignmentRemainingSeconds, assignmentAutoSubmitTriggered, busy]);
 
+  // Keep assigned-exam answers in sync when the same session is open in another tab.
+  useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    const answerKey = assignedAnswersKey(activeAssignmentPackage.assignmentId);
+    const validQuestions = new Map(activeAssignmentPackage.questions.map((question) => [question.id, question]));
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== answerKey || !event.newValue) return;
+      try {
+        const parsed: unknown = JSON.parse(event.newValue);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+        const incoming = Object.fromEntries(
+          Object.entries(parsed).flatMap(([questionId, value]) => {
+            const question = validQuestions.get(questionId);
+            if (!question || !Number.isInteger(value) || Number(value) < 0 || Number(value) >= question.options.length) {
+              return [];
+            }
+            return [[questionId, Number(value)] as const];
+          }),
+        );
+        setAssignmentAnswers((current) => ({ ...current, ...incoming }));
+      } catch {
+        // Ignore malformed updates; the current tab's answers remain available.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [activeAssignmentPackage, assignmentStartedAt]);
+
   useEffect(() => {
     if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
     const assignmentId = activeAssignmentPackage.assignmentId;
@@ -405,11 +433,32 @@ export default function App() {
         });
         assignmentAnswersRevisionRef.current = saved.revision;
         if (assignmentSaveSequenceRef.current === saveVersion) setAssignmentSaveStatus("saved");
-      }).catch((cause) => {
-        if (assignmentSaveSequenceRef.current === saveVersion) {
-          setAssignmentSaveStatus("error");
-          setError(`Server autosave failed: ${(cause as Error).message}. Your local backup is still available.`);
+      }).catch(async (cause) => {
+        if (assignmentSaveSequenceRef.current !== saveVersion) return;
+        const message = (cause as Error).message;
+        if (message.includes("changed in another session")) {
+          try {
+            const latest = await request<{ revision: number; answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
+              `/exams/assignments/${encodeURIComponent(assignmentId)}/answers`,
+            );
+            if (assignmentSaveSequenceRef.current !== saveVersion) return;
+            assignmentAnswersRevisionRef.current = latest.revision;
+            const serverAnswers = Object.fromEntries(
+              latest.answers.flatMap((answer) => answer.selectedIndex === null
+                ? []
+                : [[answer.examQuestionId, answer.selectedIndex] as const]),
+            );
+            const mergedAnswers = { ...serverAnswers, ...assignmentAnswers };
+            safeStorage.setItem(assignedAnswersKey(assignmentId), JSON.stringify(mergedAnswers));
+            setAssignmentAnswers(mergedAnswers);
+            setAssignmentSaveStatus("saving");
+            return;
+          } catch (recoveryError) {
+            setError(`Autosave conflict recovery failed: ${(recoveryError as Error).message}. Your local backup is still available.`);
+          }
         }
+        setAssignmentSaveStatus("error");
+        setError(`Server autosave failed: ${message}. Your local backup is still available.`);
       });
       assignmentSaveQueueRef.current = save.then(() => undefined);
     }, 450);
