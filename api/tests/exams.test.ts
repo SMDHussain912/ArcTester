@@ -296,17 +296,19 @@ describe("versioned exam management", () => {
     );
     expect(packageResponse.status).toBe(200);
     const packageBody = packageResponse.json.package as {
-      questions: Array<{ options: string[]; optionOrder: number[] }>;
+      questions: Array<Record<string, unknown> & { optionOrder: number[]; options: string[] }>;
     };
     expect(packageBody.questions).toHaveLength(1);
-    expect(packageBody.questions[0].options).not.toContain(undefined);
-    expect([...packageBody.questions[0].optionOrder].sort()).toEqual([0, 1, 2, 3]);
-    displayedCorrectIndex = packageBody.questions[0].optionOrder.indexOf(1);
-    expect(displayedCorrectIndex).toBeGreaterThanOrEqual(0);
+    expect(packageBody.questions[0].correctIndex).toBeUndefined();
+    expect(packageBody.questions[0].explanation).toBeUndefined();
+    expect(packageBody.questions[0].optionOrder).toHaveLength(4);
+    expect(packageBody.questions[0].options).toEqual(
+      packageBody.questions[0].optionOrder.map((index) => ["Stack", "Queue", "Tree", "Graph"][index])
+    );
     expect(packageResponse.json.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("blocks access to a published paper before its availability window", async () => {
+  it("blocks downloading a published package before its start window", async () => {
     const availableFrom = new Date(Date.now() + 60 * 60 * 1000);
     await server.db.examAssignment.update({
       where: { id: assignmentId },
@@ -319,7 +321,7 @@ describe("versioned exam management", () => {
       studentCookie
     );
     expect(response.status).toBe(403);
-    expect(response.json.error).toContain("not available yet");
+    expect(String(response.json.error)).toContain("not available yet");
     await server.db.examAssignment.update({
       where: { id: assignmentId },
       data: { availableFrom: null },

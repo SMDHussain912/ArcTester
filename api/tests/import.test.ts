@@ -30,6 +30,48 @@ describe("importFromJson", () => {
     expect(await db.question.count()).toBe(2);
   });
 
+  it("previews imports without writing and counts repeated rows as duplicates", async () => {
+    const db = await testDb();
+    const report = await importFromJson(db, [
+      ["Maths", "Preview only?", ["a", "b", "c", "d"], 0, ""],
+      ["Maths", "Preview only?", ["a", "b", "c", "d"], 0, ""],
+    ], { dryRun: true });
+    expect(report).toMatchObject({ added: 1, duplicates: 1, total: 2 });
+    expect(await db.question.count()).toBe(0);
+  });
+
+  it("imports rich JSON objects with topic, difficulty, source and explanation", async () => {
+    const db = await testDb();
+    const report = await importFromJson(db, [{
+      subject: "Computer Science",
+      topic: "Data Structures",
+      text: "Which structure follows FIFO?",
+      options: ["Stack", "Queue", "Tree", "Graph"],
+      correctIndex: 1,
+      explanation: "A queue is first-in, first-out.",
+      source: "ECET 2025",
+      difficulty: "easy",
+    }]);
+    expect(report).toMatchObject({ added: 1, duplicates: 0, total: 1 });
+    const saved = await db.question.findFirst({ include: { subject: true, topic: true } });
+    expect(saved?.subject.name).toBe("Computer Science");
+    expect(saved?.topic?.name).toBe("Data Structures");
+    expect(saved?.source).toBe("ECET 2025");
+    expect(saved?.difficulty).toBe("easy");
+  });
+
+  it("continues after an invalid legacy tuple in a mixed JSON import", async () => {
+    const db = await testDb();
+    const report = await importFromJson(db, [
+      ["Maths", "Valid question?", ["a", "b", "c", "d"], 0, ""],
+      ["Maths", "Invalid options?", ["a", "b"], 0, ""],
+      { subject: "Physics", topic: "Motion", text: "Valid object?", options: ["a", "b", "c", "d"], correctIndex: 2 },
+    ]);
+    expect(report.added).toBe(2);
+    expect(report.invalid).toHaveLength(1);
+    expect(report.invalid[0].row).toBe(2);
+  });
+
   it("skips duplicates by normalized hash (case/spacing-insensitive)", async () => {
     const db = await testDb();
     await importFromJson(db, VALID_JSON);

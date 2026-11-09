@@ -4,11 +4,7 @@ import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
-import { announcementRouter } from "./announcementRoutes.js";
-import { modelRegistryRouter } from "./modelRoutes.js";
-import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
-import { startModelTrainingWorker } from "./modelTrainingWorker.js";
-import { isTrustedCookieMutation } from "./csrf.js";
+import { questionAdminRouter } from "./questionAdminRoutes.js";
 
 const db = new PrismaClient();
 
@@ -34,7 +30,7 @@ function localCors(
   if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     // "authorization" is needed by native/mobile clients that send a bearer
     // token instead of relying on the cookie.
     res.setHeader("Access-Control-Allow-Headers", "content-type,authorization");
@@ -82,9 +78,6 @@ function cookieCsrfGuard(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
-  // Authentication middleware reads the database attached to this app instance,
-  // so test servers and production use the same session-version check.
-  app.locals.db = database;
   app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
   app.use(cookieCsrfGuard);
@@ -96,9 +89,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
   app.use(examRouter(database));
-  app.use(announcementRouter(database));
-  app.use(modelTrainingJobsRouter(database));
-  app.use(modelRegistryRouter(database));
+  app.use(questionAdminRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);

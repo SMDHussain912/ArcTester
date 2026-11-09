@@ -67,6 +67,9 @@ export async function testDb(): Promise<PrismaClient> {
 
 afterEach(async () => {
   if (db) {
+    // Wipe between tests so each test starts from an empty bank.
+    await db.announcementView.deleteMany();
+    await db.announcement.deleteMany();
     await db.attemptAnswer.deleteMany();
     await db.attempt.deleteMany();
     await db.stat.deleteMany();

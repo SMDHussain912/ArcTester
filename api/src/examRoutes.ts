@@ -20,6 +20,10 @@ const CreateExamSchema = z.object({
   durationMinutes: z.number().int().min(1).max(600),
   shuffleQuestions: z.boolean().default(false),
   shuffleOptions: z.boolean().default(false),
+  subjectRules: z.record(z.object({
+    marks: z.number().finite().min(0).max(100),
+    negativeMarks: z.number().finite().min(0).max(100),
+  })).default({}),
   questions: z.array(
     z.object({
       questionId: z.number().int().positive(),
@@ -833,8 +837,8 @@ export function examRouter(db: PrismaClient): Router {
           options: JSON.stringify(parseOptions(question.options)),
           correctIndex: question.correctIndex,
           explanation: question.explanation,
-          marks: selection.marks,
-          negativeMarks: selection.negativeMarks,
+          marks: input.subjectRules[question.subject.name]?.marks ?? selection.marks,
+          negativeMarks: input.subjectRules[question.subject.name]?.negativeMarks ?? selection.negativeMarks,
         };
       });
 
@@ -1483,17 +1487,11 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
         return next(forbidden("This exam is not available yet."));
       }
-      if (assignment.dueAt && assignment.dueAt.getTime() <= now) {
+      if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
       }
-      const paperQuestions = [...assignment.examVersion.questions];
-      if (assignment.examVersion.shuffleQuestions) {
-        paperQuestions.sort((left, right) => {
-          const leftKey = createHash("sha256").update(assignment.id + ":" + left.id).digest("hex");
-          const rightKey = createHash("sha256").update(assignment.id + ":" + right.id).digest("hex");
-          return leftKey.localeCompare(rightKey);
-        });
-      }
+      const orderedQuestions = [...assignment.examVersion.questions];
+      if (assignment.examVersion.shuffleQuestions) orderedQuestions.sort(() => Math.random() - 0.5);
       const packageBody = {
         assignmentId: assignment.id,
         examId: assignment.examVersion.exam.id,
@@ -1505,14 +1503,13 @@ export function examRouter(db: PrismaClient): Router {
         availableFrom: assignment.availableFrom,
         dueAt: assignment.dueAt,
         serverTime: new Date(now).toISOString(),
-        questions: paperQuestions.map((question, position) => {
+        questions: orderedQuestions.map((question) => {
           const originalOptions = parseOptions(question.options);
-          const optionOrder = assignment.examVersion.shuffleOptions
-            ? stableOptionOrder(assignment.id, question.id, originalOptions.length)
-            : originalOptions.map((_, index) => index);
+          const optionOrder = [0, 1, 2, 3];
+          if (assignment.examVersion.shuffleOptions) optionOrder.sort(() => Math.random() - 0.5);
           return {
             id: question.id,
-            position,
+            position: question.position,
             subject: question.subject,
             topic: question.topic,
             text: question.text,

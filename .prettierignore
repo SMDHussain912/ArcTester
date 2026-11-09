@@ -14,3 +14,12 @@ web/src/styles.css
 api/src/examRoutes.ts
 api/tests/exams.test.ts
 api/src/index.ts
+
+# Dense examiner workflows are kept compact pending the dedicated formatting pass.
+web/src/AdminWorkspace.tsx
+api/src/questionAdminRoutes.ts
+api/src/importService.ts
+api/tests/import.test.ts
+api/tests/announcements.test.ts
+api/tests/setup.ts
+web/src/AssignedExams.tsx

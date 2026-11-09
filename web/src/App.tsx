@@ -4,10 +4,13 @@ import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
+import AdminWorkspace from "./AdminWorkspace";
+import AssignedExams from "./AssignedExams";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number; topics: { topic: string; count: number }[] }[] };
+type Announcement = { id:string; title:string; message:string; expiresAt:string|null };
+type Bank = { total: number; subjects: { subject: string; count: number }[] };
 type Invitation = {
   id: string;
   email: string;
@@ -160,6 +163,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [activeAnnouncements, setActiveAnnouncements] = useState<Announcement[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
@@ -319,124 +323,23 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (user?.role !== "STUDENT") return;
-    let active = true;
-    const savedAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
-    if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
-      request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
-        if (!active) return;
-        setTest({ ...restored, warnings: restored.warnings ?? [] });
-        practiceAutoSubmitRef.current = null;
-        setPracticeClock(Date.now());
-        const serverAnswers = Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const));
-        let localAnswers: Record<number, number> = {};
-        try {
-          const cached = JSON.parse(safeStorage.getItem(practiceAnswersKey(restored.attemptId)) ?? "{}") as Record<string, unknown>;
-          const validQuestionIds = new Set(restored.questions.map((question) => question.id));
-          localAnswers = Object.fromEntries(Object.entries(cached).flatMap(([id, value]) => {
-            const questionId = Number(id);
-            return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
-          }));
-        } catch { safeStorage.removeItem(practiceAnswersKey(restored.attemptId)); }
-        setAnswers({ ...serverAnswers, ...localAnswers });
-        setActivePage("practice");
-      }).catch(() => {
-        if (active) {
-          safeStorage.removeItem(practiceAnswersKey(savedAttemptId));
-          safeStorage.removeItem("arctester-active-practice-attempt");
-        }
-      });
+    if (user?.role !== "STUDENT") {
+      setActiveAnnouncements([]);
+      return;
     }
-    request<{ assignments: AssignedExam[] }>("/exams/assigned")
-      .then(({ assignments }) => { if (active) setAssignedExams(assignments ?? []); })
-      .catch((cause) => { if (active) setError((cause as Error).message); });
-    const loadAnnouncements = () => request<{ announcements: Announcement[] }>("/announcements")
-      .then(({ announcements: items }) => { if (active) setAnnouncements(items); })
-      .catch((cause) => { if (active) setError((cause as Error).message); });
-    void loadAnnouncements();
-    const interval = window.setInterval(() => { void loadAnnouncements(); }, 60_000);
-    return () => { active = false; window.clearInterval(interval); };
+    request<{ announcements: Announcement[] }>("/announcements/active")
+      .then(({ announcements }) => setActiveAnnouncements(announcements))
+      .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
-  useEffect(() => {
-    if (!test?.deadline) return;
-    setPracticeClock(Date.now());
-    const interval = window.setInterval(() => setPracticeClock(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [test?.attemptId, test?.deadline]);
-
-  const practiceRemainingSeconds = test?.deadline && Number.isFinite(Date.parse(test.deadline))
-    ? Math.max(0, Math.ceil((Date.parse(test.deadline) - practiceClock) / 1000))
-    : null;
-
-  useEffect(() => {
-    if (!test || practiceRemainingSeconds === null || practiceRemainingSeconds > 0 || busy || practiceAutoSubmitRef.current === test.attemptId) return;
-    practiceAutoSubmitRef.current = test.attemptId;
-    void submitTest();
-  }, [test, practiceRemainingSeconds, busy]);
-
-  useEffect(() => {
-    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused) return;
-    const interval = window.setInterval(() => setAssignmentClock(performance.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused]);
-
-  const assignmentRemainingSeconds = activeAssignmentPackage && assignmentDeadline
-    ? Math.max(0, Math.min(
-        Math.floor((new Date(assignmentDeadline).getTime() - (assignmentClock + assignmentServerOffset)) / 1000),
-        activeAssignmentPackage.dueAt ? Math.floor((new Date(activeAssignmentPackage.dueAt).getTime() - (assignmentClock + assignmentServerOffset)) / 1000) : Number.POSITIVE_INFINITY,
-      ))
-    : 0;
-
-  useEffect(() => {
-    if (!activeAssignmentPackage || !assignmentStartedAt) return;
-    let disposed = false;
-    const heartbeat = async (event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED" = "HEARTBEAT") => {
-      try {
-        const response = await request<{ serverTime: string; deadline: string | null; sessionStatus: string }>(
-          `/exams/assignments/${activeAssignmentPackage.assignmentId}/session/heartbeat`,
-          { method: "POST", body: JSON.stringify({ event }) },
-        );
-        if (disposed) return;
-        setAssignmentServerOffset(new Date(response.serverTime).getTime() - performance.now());
-        if (response.deadline) setAssignmentDeadline(response.deadline);
-        setAssignmentSessionPaused(response.sessionStatus !== "ACTIVE");
-        if (response.sessionStatus === "ACTIVE") setError((current) => current.includes("paused or locked by the invigilator") ? "" : current);
-      } catch (cause) {
-        if (disposed) return;
-        const message = (cause as Error).message;
-        const failure = classifyAssignmentHeartbeatFailure(message);
-        if (failure === "paused") {
-          setAssignmentSessionPaused(true);
-          setError("Your exam session is paused or locked by the invigilator. Your timer is on hold until the session is resumed.");
-        } else if (failure === "deadline") {
-          // Do not pause the timer here. The deadline effect must submit the
-          // locally saved answers; the API retains late submissions for review.
-          setError(message);
-          setAssignmentSessionPaused(false);
-        }
-      }
-    };
-    const onVisibilityChange = () => { void heartbeat(document.hidden ? "FOCUS_LOST" : "FOCUS_RESTORED"); };
-    const onOnline = () => { void heartbeat("CONNECTION_RESTORED"); };
-    void heartbeat();
-    const interval = window.setInterval(() => { void heartbeat(); }, 15_000);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("online", onOnline);
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("online", onOnline);
-    };
-  }, [activeAssignmentPackage, assignmentStartedAt]);
-
-  useEffect(() => {
-    if (activeAssignmentPackage && assignmentStartedAt && !assignmentSessionPaused && assignmentRemainingSeconds === 0 && !busy && !assignmentAutoSubmitTriggered) {
-      setAssignmentAutoSubmitTriggered(true);
-      void submitAssignedExam(true);
+  async function dismissAnnouncement(id: string) {
+    try {
+      await request("/announcements/" + id + "/seen", { method: "POST" });
+      setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
+    } catch (cause) {
+      setError((cause as Error).message);
     }
-  }, [activeAssignmentPackage, assignmentStartedAt, assignmentRemainingSeconds, assignmentSessionPaused, busy, assignmentAutoSubmitTriggered]);
+  }
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
@@ -1642,422 +1545,19 @@ export default function App() {
   }
 
   if (user.role === "ADMIN") {
-    return (
-      <div className="app-shell">
-        <header className="topbar">
-          <Brand />
-          <nav aria-label="Admin navigation">
-            <button className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Overview</button>
-            <button className={activePage === "exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("exams")}>Exams</button>
-            <button className={activePage === "live-sessions" ? "nav-active" : "nav-button"} onClick={() => setActivePage("live-sessions")}>Live invigilation</button>
-            <button className={activePage === "attendance" ? "nav-active" : "nav-button"} onClick={() => setActivePage("attendance")}>Attendance</button>
-            <button className={activePage === "review-queue" ? "nav-active" : "nav-button"} onClick={() => setActivePage("review-queue")}>Review queue{adminAnalytics?.totals.reviewRequired ? ` · ${adminAnalytics.totals.reviewRequired}` : ""}</button>
-            <button className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
-            <button className={activePage === "subjects" ? "nav-active" : "nav-button"} onClick={() => setActivePage("subjects")}>Subjects & topics</button>
-            <button className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements</button>
-            <button className={activePage === "invitations" ? "nav-active" : "nav-button"} onClick={() => setActivePage("invitations")}>Invitations</button>
-            <button className={activePage === "model-lab" ? "nav-active" : "nav-button"} onClick={() => setActivePage("model-lab")}>Model lab</button>
-          </nav>
-          <div className="top-actions">
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-              aria-pressed={theme === "dark"}
-              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-            >
-              {theme === "light" ? "☾" : "☀"}
-            </button>
-            <span className="user-email">{user.email}</span>
-            <button className="ghost" disabled={busy} onClick={signOut}>Sign out</button>
-          </div>
-        </header>
-        <main className="main-content">
-          <section hidden={activePage !== "model-lab"}>
-            <div className="section-head">
-              <div><p className="eyebrow">INTELLIGENCE & GOVERNANCE</p><h1>Model lab</h1><p className="muted">Register immutable holdout datasets, compare candidate models, and control promotions.</p></div>
-              <button className="ghost" disabled={modelLabLoading || busy} onClick={() => void refreshModelLab()}>Refresh</button>
-            </div>
-            <div className="stats-row admin-analytics-stats">
-              <article className="panel stat"><span className="muted">Registered datasets</span><strong>{modelDatasets.length}</strong><span className="muted">Immutable dataset versions</span></article>
-              <article className="panel stat"><span className="muted">Model versions</span><strong>{registeredModels.length}</strong><span className="muted">Across registered models</span></article>
-              <article className="panel stat"><span className="muted">Active versions</span><strong>{registeredModels.filter((model) => model.isActive).length}</strong><span className="muted">Production registry pointers</span></article>
-            </div>
-            {modelLabNotice && <p className="success">{modelLabNotice}</p>}
-            <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">DATA GOVERNANCE</p><h2>Register evaluation dataset</h2></div></div>
-              <p className="muted">Register a fixed holdout dataset once. Its fingerprint prevents duplicate versions with identical content. Only upload data you have permission to use.</p>
-              <form className="stack-form" onSubmit={registerModelDataset}>
-                <label>Dataset name<input value={modelDatasetName} onChange={(event) => setModelDatasetName(event.target.value)} required maxLength={120}/></label>
-                <label>Task<select value={modelDatasetTask} onChange={(event) => setModelDatasetTask(event.target.value as "regression" | "binary-classification")}><option value="binary-classification">Binary classification</option><option value="regression">Regression</option></select></label>
-                <label>Target column<input value={modelDatasetTargetColumn} onChange={(event) => setModelDatasetTargetColumn(event.target.value)} required maxLength={120}/></label>
-                <label>Feature schema JSON<textarea rows={3} value={modelFeatureSchemaJson} onChange={(event) => setModelFeatureSchemaJson(event.target.value)} required /></label>
-                <label>Holdout samples JSON<textarea rows={6} value={modelSamplesJson} onChange={(event) => setModelSamplesJson(event.target.value)} required /></label>
-                <label>Dataset source / provenance<input value={modelDatasetSource} onChange={(event) => setModelDatasetSource(event.target.value)} required minLength={10} maxLength={500} placeholder="Where this holdout data came from"/></label>
-                <label className="checkbox-row"><input type="checkbox" checked={modelDatasetAttested} onChange={(event) => setModelDatasetAttested(event.target.checked)} required/> I confirm I have permission to use this data and the source description is accurate.</label>
-                <button className="primary" type="submit" disabled={busy || !modelDatasetAttested}>Register dataset</button>
-              </form>
-            </div>
-            <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">MODEL EVALUATION</p><h2>Compare candidate against baseline</h2></div></div>
-              <form className="stack-form" onSubmit={evaluateModelCandidate}>
-                <label>Model ID<select value={modelCandidateId} onChange={(event) => setModelCandidateId(event.target.value)}><option value="">Select model</option>{[...new Set(registeredModels.map((model) => model.modelId))].map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
-                <div className="form-grid">
-                  <label>Candidate version<input type="number" min="1" value={modelCandidateVersion} onChange={(event) => setModelCandidateVersion(event.target.value)} required/></label>
-                  <label>Baseline version<input type="number" min="1" value={modelBaselineVersion} onChange={(event) => setModelBaselineVersion(event.target.value)} required/></label>
-                </div>
-                <label>Registered holdout dataset<select value={modelEvaluationDatasetId} onChange={(event) => setModelEvaluationDatasetId(event.target.value)}><option value="">Select dataset</option>{modelDatasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.task}</option>)}</select></label>
-                <button className="primary" type="submit" disabled={busy || !modelCandidateId || !modelEvaluationDatasetId}>Run evaluation</button>
-              </form>
-              {modelEvaluationReport && <div className="result-card">
-                <h3>Latest evaluation: {modelEvaluationReport.status}</h3>
-                <p className="muted">{modelEvaluationReport.evaluationDataset} · {modelEvaluationReport.sampleCount} rows · SHA-256 {modelEvaluationReport.datasetFingerprint.slice(0, 16)}…</p>
-                <p>{modelEvaluationReport.acceptanceRule}</p>
-                <div className="form-grid"><div><strong>Candidate</strong><pre>{JSON.stringify(modelEvaluationReport.candidateMetrics, null, 2)}</pre></div><div><strong>Baseline</strong><pre>{JSON.stringify(modelEvaluationReport.baselineMetrics, null, 2)}</pre></div></div>
-              </div>}
-            </div>
-            <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">BACKGROUND WORK</p><h2>TensorFlow.js training jobs</h2></div><button className="ghost" disabled={modelLabLoading || busy} onClick={() => void refreshTrainingJobs()}>Refresh jobs</button></div>
-              {modelTrainingJobs.length === 0 ? <p className="muted">No TensorFlow.js jobs submitted.</p> : <div className="table-wrap"><table><thead><tr><th>Job</th><th>Model</th><th>Status</th><th>Progress</th><th>Submitted</th><th>Details</th></tr></thead><tbody>{modelTrainingJobs.map((job) => <tr key={job.id}><td><code>{job.id.slice(0, 10)}</code></td><td>{job.modelId}</td><td>{job.status}</td><td><progress max={100} value={job.progress}>{job.progress}%</progress> {job.progress}%</td><td>{new Date(job.createdAt).toLocaleString()}</td><td>{job.status === "FAILED" ? job.errorMessage : job.result ? <span>{job.result.reason} {job.result.model ? `Registered v${job.result.model.version}` : "No artifact registered"}</span> : "Waiting for worker…"}</td></tr>)}</tbody></table></div>}
-            </div>
-            <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">VERSION REGISTRY</p><h2>Registered models</h2></div></div>
-              {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td><div className="inline-actions"><button className="ghost" disabled={busy} onClick={() => void loadModelAudit(model.modelId)}>History</button><button className="ghost" disabled={busy || modelDriftLoading} onClick={() => void loadModelDrift(model.modelId, model.version)}>Drift</button>{!model.isActive && <button className="ghost" disabled={busy} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</div></td></tr>)}</tbody></table></div>}
-            </div>
-            {modelDriftReport && <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">FEATURE DRIFT · LAST {modelDriftReport.windowDays} DAYS</p><h2>{modelDriftReport.modelId} v{modelDriftReport.version} · {modelDriftReport.overall}</h2><p className="muted">Baseline: {modelDriftReport.baselineDataset}. PSI is a monitoring signal, not proof of model failure.</p></div><button className="ghost" disabled={modelDriftLoading} onClick={() => void loadModelDrift(modelDriftReport.modelId, modelDriftReport.version)}>Refresh</button></div>
-              {modelDriftLoading ? <p className="muted">Loading drift report…</p> : <div className="table-wrap"><table><thead><tr><th>Feature</th><th>Observed rows</th><th>PSI</th><th>Status</th></tr></thead><tbody>{modelDriftReport.features.map((feature) => <tr key={feature.featureName}><td>{feature.featureName}</td><td>{feature.sampleCount}</td><td>{feature.psi === null ? "—" : feature.psi.toFixed(4)}</td><td>{feature.status}</td></tr>)}</tbody></table></div>}
-              <p className="muted">Only coarse numeric quantile and categorical index buckets are stored. Raw prediction feature values are not retained. Drift reports use the previous 30 days.</p>
-            </div>}
-            {trainedCandidates.length > 0 && <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">TRAINING REPORT</p><h2>Latest trained candidates</h2></div></div>
-              <div className="table-wrap"><table><thead><tr><th>Rank</th><th>Model</th><th>Version</th><th>Algorithm</th><th>Train / holdout</th><th>Holdout metrics</th></tr></thead><tbody>{trainedCandidates.map((candidate) => <tr key={`${candidate.modelId}-${candidate.version}`}><td><strong>#{candidate.rank}</strong>{candidate.rank === 1 ? " · Top" : ""}</td><td>{candidate.modelId}</td><td>{candidate.version}</td><td>{candidate.algorithm}</td><td>{candidate.trainRows} / {candidate.testRows}</td><td><pre>{JSON.stringify(candidate.heldOutMetrics, null, 2)}</pre></td></tr>)}</tbody></table></div>
-              <p className="muted">Candidates are ranked on the same held-out split (classification: F1 then accuracy; regression: RMSE then MAE). This is an experiment leaderboard, not production approval. Evaluate against a registered baseline before activation.</p>
-            </div>}
-            {modelAuditId && <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">GOVERNANCE HISTORY</p><h2>{modelAuditId}</h2></div><button className="ghost" disabled={modelAuditLoading} onClick={() => void loadModelAudit(modelAuditId)}>Refresh history</button></div>
-              {modelAuditLoading ? <p className="muted">Loading audit history…</p> : modelAuditEvents.length === 0 ? <p className="muted">No audit events recorded.</p> : <div className="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Version</th><th>Actor</th><th>Details</th></tr></thead><tbody>{modelAuditEvents.map((event) => <tr key={event.id}><td>{new Date(event.createdAt).toLocaleString()}</td><td>{event.action}</td><td>{event.version}</td><td>{event.actorId ?? "Deleted user"}</td><td><pre>{JSON.stringify(event.details, null, 2)}</pre></td></tr>)}</tbody></table></div>}
-            </div>}
-            <div className="panel">
-              <div className="section-head"><div><p className="eyebrow">DATASET CATALOG</p><h2>Registered datasets</h2></div></div>
-              <div className="form-grid">
-                <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={48} pattern="[a-z0-9][a-z0-9-]{0,47}" /></label>
-              </div>
-              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => { const tensorflowReady = dataset.task === "regression" && dataset.featureSchema.length > 0 && dataset.featureSchema.every((feature) => feature.type === "numeric") && dataset.rowCount >= 30; return <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><div className="inline-actions"><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button>{tensorflowReady && <button className="ghost" disabled={busy || !trainingModelPrefix.trim()} onClick={() => void queueTensorflowTraining(dataset)}>Queue TensorFlow.js</button>}</div></td></tr>; })}</tbody></table></div>}
-              <p className="muted">TensorFlow.js jobs require 30–5000 rows with numeric features and a keyed HMAC-SHA256 groupId on every sample. Jobs are stored in PostgreSQL and processed by the API worker. Synthetic datasets remain ineligible for production activation.</p>
-              <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
-            </div>
-          </section>
-          <section hidden={activePage !== "dashboard"} className="welcome panel" id="admin-dashboard">
-            <div>
-              <p className="eyebrow">ARCTESTER ADMINISTRATION</p>
-              <h1>Manage your students.</h1>
-              <p className="muted">Create invitation codes and control who can join your exam workspace.</p>
-            </div>
-            <div className="welcome-mark">A</div>
-          </section>
-          <section hidden={activePage !== "dashboard"} id="results-analytics">
-            <div className="section-head">
-              <div><p className="eyebrow">RESULTS & PERFORMANCE</p><h2>Exam analytics</h2></div>
-              <button className="ghost" disabled={busy} onClick={() => request<AdminAnalytics>("/admin/analytics/overview").then(setAdminAnalytics).catch((cause) => setError((cause as Error).message))}>Refresh</button>
-            </div>
-            <div className="stats-row admin-analytics-stats">
-              <article className="panel stat"><span className="muted">Students</span><strong>{adminAnalytics?.totals.students ?? "—"}</strong><span className="muted">Registered accounts</span></article>
-              <article className="panel stat"><span className="muted">Exams</span><strong>{adminAnalytics?.totals.exams ?? "—"}</strong><span className="muted">Created exams</span></article>
-              <article className="panel stat"><span className="muted">Assignments</span><strong>{adminAnalytics?.totals.assignments ?? "—"}</strong><span className="muted">Student exam assignments</span></article>
-              <article className="panel stat"><span className="muted">Submissions</span><strong>{adminAnalytics?.totals.submissions ?? "—"}</strong><span className="muted">{Math.round((adminAnalytics?.totals.submissionRate ?? 0) * 100)}% submission rate</span></article>
-              <article className="panel stat"><span className="muted">Average score</span><strong>{adminAnalytics?.totals.averagePercentage === null || adminAnalytics?.totals.averagePercentage === undefined ? "—" : `${adminAnalytics.totals.averagePercentage.toFixed(1)}%`}</strong><span className="muted">Across scored submissions</span></article>
-              <article className="panel stat"><span className="muted">Needs review</span><strong>{adminAnalytics?.totals.reviewRequired ?? "—"}</strong><span className="muted">Awaiting invigilator approval</span></article>
-            </div>
-            <div className="section-head"><div><p className="eyebrow">EXAM BREAKDOWN</p><h2>Performance by exam</h2></div></div>
-            <div className="panel analytics-table-wrap">
-              <table className="analytics-table">
-                <thead><tr><th>Exam</th><th>Assigned</th><th>Submitted</th><th>Completion</th><th>Average</th></tr></thead>
-                <tbody>{adminAnalytics?.exams.map((exam) => <tr key={exam.examId}><td>{exam.title}</td><td>{exam.assigned}</td><td>{exam.submitted}</td><td>{Math.round(exam.submissionRate * 100)}%</td><td>{exam.averagePercentage === null ? "—" : `${exam.averagePercentage.toFixed(1)}%`}</td></tr>)}
-                {adminAnalytics && adminAnalytics.exams.length === 0 && <tr><td colSpan={5} className="muted">No exam assignments yet.</td></tr>}</tbody>
-              </table>
-            </div>
-            <div className="section-head"><div><p className="eyebrow">LATEST ACTIVITY</p><h2>Recent submissions</h2></div></div>
-            <div className="panel analytics-table-wrap">
-              <table className="analytics-table">
-                <thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Score</th><th>Status / action</th></tr></thead>
-                <tbody>{adminAnalytics?.recentSubmissions.map((item, index) => <tr key={item.submissionId || `${item.studentEmail}-${item.examTitle}-${index}`}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending" : `${item.score} / ${item.maximumScore}`}</td><td>{item.status === "REVIEW_REQUIRED" ? <button className="primary" disabled={busy} onClick={() => void releaseSubmission(item.submissionId)}>Approve & release</button> : <span className="status status-used">{item.status}</span>}</td></tr>)}
-                {adminAnalytics && adminAnalytics.recentSubmissions.length === 0 && <tr><td colSpan={5} className="muted">No submissions received yet.</td></tr>}</tbody>
-              </table>
-            </div>
-          </section>
-          <section hidden={activePage !== "exams"} id="exam-management">
-            <div className="section-head">
-              <div><p className="eyebrow">EXAM DELIVERY</p><h2>{editingExamId ? `Create new version · ${examTitle}` : "Create a mock test"}</h2><p className="muted">Editing creates a new immutable version; already assigned versions remain unchanged.</p></div>
-            </div>
-            <form className="panel admin-form exam-builder" onSubmit={(event) => void createExam(event)}>
-              <label>Exam title
-                <input required minLength={2} maxLength={120} value={examTitle} onChange={(event) => setExamTitle(event.target.value)} placeholder="AP ECET CSE Mock Test 01" />
-              </label>
-              <label>Description
-                <input maxLength={2000} value={examDescription} onChange={(event) => setExamDescription(event.target.value)} placeholder="Optional exam description" />
-              </label>
-              <label>Instructions
-                <textarea rows={2} maxLength={5000} value={examInstructions} onChange={(event) => setExamInstructions(event.target.value)} placeholder="Instructions shown before the exam" />
-              </label>
-              <label>Duration (minutes)
-                <input type="number" min={1} max={600} required value={examDuration} onChange={(event) => setExamDuration(Number(event.target.value))} />
-              </label>
-              <div className="question-editor-grid exam-scoring-grid">
-                <label>Marks per question
-                  <input type="number" min={0} max={100} step="0.25" value={examMarks} onChange={(event) => setExamMarks(Number(event.target.value))} />
-                </label>
-                <label>Negative marks per wrong answer
-                  <input type="number" min={0} max={100} step="0.25" value={examNegativeMarks} onChange={(event) => setExamNegativeMarks(Number(event.target.value))} />
-                </label>
-              </div>
-              <div className="exam-settings-row">
-                <label><input type="checkbox" checked={shuffleExamQuestions} onChange={(event) => setShuffleExamQuestions(event.target.checked)} /> Shuffle question order</label>
-                <label><input type="checkbox" checked={shuffleExamOptions} onChange={(event) => setShuffleExamOptions(event.target.checked)} /> Shuffle answer options</label>
-              </div>
-              <section className="subject-quota-builder">
-                <div className="picker-heading"><strong>Examiner paper blueprint</strong><span>Allocate question counts by subject</span></div>
-                <div className="quota-grid">{[...new Set(adminQuestions.map((question) => question.subject))].map((subject) => <label key={subject}>{subject}<span className="muted">{adminQuestions.filter((q) => q.subject === subject).length} available</span><input type="number" min={0} max={adminQuestions.filter((q) => q.subject === subject).length} value={subjectQuotas[subject] ?? 0} onChange={(event) => setSubjectQuotas((current) => ({ ...current, [subject]: Number(event.target.value) }))} /></label>)}</div>
-                <div className="quota-actions"><label>Difficulty distribution<select value={difficultyMix} onChange={(event) => setDifficultyMix(event.target.value as typeof difficultyMix)}><option value="any">Any difficulty</option><option value="balanced">Balanced easy / medium / hard</option><option value="easy">Easy only</option><option value="medium">Medium only</option><option value="hard">Hard only</option></select></label><button type="button" className="ghost" onClick={loadEcetBlueprint}>Load AP ECET blueprint</button><button type="button" className="ghost" onClick={generateSubjectPaper}>Generate paper from quotas</button></div>
-                <div className="topic-blueprint"><label>Topic selection<select value={topicSelectionMode} onChange={(event) => setTopicSelectionMode(event.target.value as typeof topicSelectionMode)}><option value="all">All topics</option><option value="include">Include selected topics only</option><option value="exclude">Exclude selected topics</option></select></label><div className="topic-blueprint-options">{adminSubjects.flatMap((subject) => subject.topics.map((topic) => ({ key: `${subject.name}::${topic.name}`, label: `${subject.name} · ${topic.name}` }))).map((topic) => <label key={topic.key}><input type="checkbox" checked={selectedTopics.includes(topic.key)} onChange={(event) => setSelectedTopics((current) => event.target.checked ? [...current, topic.key] : current.filter((item) => item !== topic.key))} />{topic.label}</label>)}</div><p className="muted">Topic filters are applied independently per subject. A subject with no selected topics keeps all of its topics eligible.</p></div>
-                <p className="muted">The generated selection is editable below. Total selected: {selectedQuestionIds.length} questions.</p>
-              </section>
-              <div className="exam-question-picker">
-                <div className="picker-heading"><strong>Choose questions</strong><span>{selectedQuestionIds.length} selected · {adminQuestions.length} available</span></div>
-                <input className="question-search" type="search" value={examQuestionSearch} onChange={(event) => setExamQuestionSearch(event.target.value)} placeholder="Search by subject, topic or question…" />
-                {adminQuestions.length === 0 ? <p className="muted">No questions yet. Open Question bank to add your first question.</p> : adminQuestions.filter((question) => `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(examQuestionSearch.trim().toLowerCase())).map((question) => (
-                  <div className="pick-row" key={question.id}>
-                    <input type="checkbox" aria-label={`Include question ${question.text}`} checked={selectedQuestionIds.includes(question.id)} onChange={(event) => setSelectedQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />
-                    <span><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><small>{question.text}</small></span>
-                    <div className="exam-question-scoring">
-                      <label>Marks<input type="number" min={0} max={100} step="0.25" aria-label={`Marks for question ${question.id}`} value={examQuestionScoring[question.id]?.marks ?? examMarks} onChange={(event) => setExamQuestionScoring((current) => ({ ...current, [question.id]: { marks: Number(event.target.value), negativeMarks: current[question.id]?.negativeMarks ?? examNegativeMarks } }))} /></label>
-                      <label>Negative<input type="number" min={0} max={100} step="0.25" aria-label={`Negative marks for question ${question.id}`} value={examQuestionScoring[question.id]?.negativeMarks ?? examNegativeMarks} onChange={(event) => setExamQuestionScoring((current) => ({ ...current, [question.id]: { marks: current[question.id]?.marks ?? examMarks, negativeMarks: Number(event.target.value) } }))} /></label>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="row-actions"><button className="primary" disabled={busy || selectedQuestionIds.length === 0}>{busy ? "Saving…" : editingExamId ? `Save new version (${selectedQuestionIds.length} questions)` : `Create draft (${selectedQuestionIds.length} questions)`}</button>{editingExamId && <button type="button" className="ghost" disabled={busy} onClick={() => { setEditingExamId(null); setExamTitle(""); setExamDescription(""); setExamInstructions(""); setSelectedQuestionIds([]); }}>Cancel editing</button>}</div>
-            </form>
-            <div className="section-head"><div><p className="eyebrow">EXAM LIBRARY</p><h2>Drafts and published exams</h2></div></div>
-            <div className="admin-exam-list">
-              {adminExams.length === 0 ? <div className="panel empty-state">No exams created yet.</div> : adminExams.map((exam) => {
-                const version = exam.versions[0];
-                const published = Boolean(version?.publishedAt);
-                return <article className="panel admin-exam-card" key={exam.id}>
-                  <div className="admin-exam-meta"><div><strong>{exam.title}</strong><p className="muted">{exam.description || "No description"} · {version?._count.questions ?? 0} questions · {version?.durationMinutes ?? 0} min</p></div><span className={exam.status === "ARCHIVED" ? "status status-expired" : published ? "status status-used" : "status status-pending"}>{exam.status === "ARCHIVED" ? "ARCHIVED" : published ? "PUBLISHED" : "DRAFT"}</span></div>
-                  <div className="admin-exam-actions">
-                    {exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy} onClick={() => void editExam(exam.id)}>Edit / new version</button>}
-                    <button className="ghost" disabled={busy} onClick={() => void cloneExam(exam.id)}>Duplicate exam</button>
-                    {exam.status !== "ARCHIVED" && <button className="ghost danger-action" disabled={busy} onClick={() => void archiveExam(exam.id)}>Archive</button>}
-                    {!published && exam.status !== "ARCHIVED" && <button className="primary" disabled={busy} onClick={() => void publishExam(exam.id)}>Publish version</button>}
-                    {published && exam.status !== "ARCHIVED" && <button className="ghost" disabled={busy || adminStudentTotal === 0} onClick={() => { setAssigningExamId(assigningExamId === exam.id ? "" : exam.id); setSelectedStudentIds([]); setAssignmentAvailableFrom(""); setAssignmentDueAt(""); }}>Assign to students</button>}
-                    {published && <span className="muted">{version?._count.assignments ?? 0} assignments</span>}
-                  </div>
-                  {assigningExamId === exam.id && <div className="student-picker">
-                    <strong>Select students</strong>
-                    <label>Search students<input type="search" value={adminStudentSearch} onChange={(event) => { setAdminStudentSearch(event.target.value); setAdminStudentPage(1); }} placeholder="Search email address…" /></label>
-                    <p className="muted">{adminStudentTotal} matching student account(s) · {selectedStudentIds.length} selected across pages</p>
-                    <div className="question-editor-grid assignment-schedule"><label>Available from<input type="datetime-local" value={assignmentAvailableFrom} onChange={(event) => setAssignmentAvailableFrom(event.target.value)} /></label><label>Due date<input type="datetime-local" value={assignmentDueAt} onChange={(event) => setAssignmentDueAt(event.target.value)} /></label></div>
-                    {adminStudents.length === 0 ? <p className="muted">{adminStudentTotal === 0 ? "No matching student accounts." : "Loading students…"}</p> : adminStudents.map((student) => <label className="student-pick" key={student.id}><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} />{student.email}</label>)}
-                    <div className="row-actions"><button type="button" className="ghost" disabled={adminStudentPage <= 1} onClick={() => setAdminStudentPage((page) => Math.max(1, page - 1))}>Previous students</button><span className="muted">Page {adminStudentPage} of {Math.max(1, Math.ceil(adminStudentTotal / 50))}</span><button type="button" className="ghost" disabled={adminStudentPage >= Math.ceil(adminStudentTotal / 50)} onClick={() => setAdminStudentPage((page) => page + 1)}>Next students</button></div>
-                    <button className="primary" disabled={busy || selectedStudentIds.length === 0} onClick={() => void assignExam(exam.id)}>Assign to {selectedStudentIds.length} student(s)</button>
-                  </div>}
-                </article>;
-              })}
-            </div>
-          </section>
-          <section hidden={activePage !== "live-sessions"} id="admin-live-sessions">
-            <div className="section-head">
-              <div><p className="eyebrow">REAL-TIME EXAM OPERATIONS</p><h2>Live invigilation</h2><p className="muted">Candidate sessions refresh every 15 seconds. Stale connections need review.</p></div>
-              <button className="ghost" disabled={busy} onClick={() => void refreshLiveSessions()}>Refresh now</button>
-            </div>
-            <div className="stats-row admin-analytics-stats invigilation-stats">
-              <article className="panel stat"><span className="muted">Active sessions</span><strong>{liveSessions.filter((item) => item.status === "ACTIVE").length}</strong><span className="muted">Currently running</span></article>
-              <article className="panel stat"><span className="muted">Paused</span><strong>{liveSessions.filter((item) => item.status === "PAUSED").length}</strong><span className="muted">Awaiting resume</span></article>
-              <article className="panel stat"><span className="muted">Connection alerts</span><strong>{liveSessions.filter((item) => item.connectivity !== "CONNECTED").length}</strong><span className="muted">Stale or disconnected</span></article>
-            </div>
-            {liveSessions.length === 0 ? <div className="panel empty-state"><h3>No live exam sessions</h3><p className="muted">When students start assigned exams, their sessions and connection signals will appear here.</p></div> : <div className="live-session-list">{liveSessions.map((session) => <article className="panel live-session-card" key={session.id}>
-              <div className="live-session-heading"><div><strong>{session.student.email}</strong><p className="muted">{session.exam.title}</p></div><div className="live-session-badges"><span className={`status status-${session.status.toLowerCase()}`}>{session.status}</span><span className={`status ${session.connectivity === "CONNECTED" ? "status-used" : "status-expired"}`}>{session.connectivity}</span></div></div>
-              <div className="live-session-metrics"><span><b>{session.heartbeatCount}</b> heartbeats</span><span><b>{session.focusLossCount}</b> focus losses</span><span><b>{session.disconnectCount}</b> reconnects</span><span>Last signal: {session.lastHeartbeatAt ? new Date(session.lastHeartbeatAt).toLocaleTimeString() : "Never"}</span></div>
-              <div className="live-session-actions">{session.status === "ACTIVE" ? <button className="ghost" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "PAUSE")}>Pause</button> : session.status === "PAUSED" ? <button className="primary" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "RESUME")}>Resume</button> : null}<button className="ghost danger-action" disabled={sessionActionBusy === session.id} onClick={() => void controlExamSession(session.id, "TERMINATE")}>Terminate</button><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(session.assignmentId)}>View audit trail</button></div>
-            </article>)}</div>}
-            <div className="row-actions"><span className="muted">{liveSessionsTotal} live or interrupted session(s) · page {liveSessionsPage} of {Math.max(1, Math.ceil(liveSessionsTotal / 25))}</span><button className="ghost" disabled={liveSessionsPage <= 1} onClick={() => setLiveSessionsPage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={liveSessionsPage >= Math.ceil(liveSessionsTotal / 25)} onClick={() => setLiveSessionsPage((page) => page + 1)}>Next</button></div>
-            {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><div className="session-audit-summary"><span>Status: <b>{sessionAudit.session?.status ?? "NOT STARTED"}</b></span><span>Heartbeats: <b>{sessionAudit.session?.heartbeatCount ?? 0}</b></span><span>Focus losses: <b>{sessionAudit.session?.focusLossCount ?? 0}</b></span><span>Reconnects: <b>{sessionAudit.session?.disconnectCount ?? 0}</b></span></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
-          </section>
-          <section hidden={activePage !== "attendance"} id="admin-exam-attendance">
-            <div className="section-head"><div><p className="eyebrow">EXAM REGISTER</p><h2>Candidate attendance</h2><p className="muted">Assignment, session, connectivity and submission records.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshExamAttendance()}>Refresh now</button></div>
-            <div className="panel analytics-table-wrap"><table className="analytics-table attendance-table"><thead><tr><th>Candidate</th><th>Examination</th><th>Attendance</th><th>Connection</th><th>Started</th><th>Submitted</th><th>Score</th><th>Audit</th></tr></thead><tbody>{examAttendance.map((item) => <tr key={item.assignmentId}><td>{item.candidate.email}</td><td>{item.exam.title} · v{item.version}</td><td><span className={`status status-${item.attendanceStatus.toLowerCase()}`}>{item.attendanceStatus.replaceAll("_", " ")}</span></td><td>{item.connectivity.replaceAll("_", " ")}</td><td>{item.session?.startedAt ? new Date(item.session.startedAt).toLocaleString() : "—"}</td><td>{item.submission?.submittedAt ? new Date(item.submission.submittedAt).toLocaleString() : "—"}</td><td>{item.submission ? `${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}` : "—"}</td><td><button className="ghost" disabled={busy} onClick={() => void loadSessionAudit(item.assignmentId)}>View</button></td></tr>)}</tbody></table>{examAttendance.length === 0 && <p className="empty-state">No exam assignments have been created yet.</p>}</div>
-            <div className="row-actions"><span className="muted">{attendanceTotal} assignments · page {attendancePage} of {Math.max(1, Math.ceil(attendanceTotal / 25))}</span><button className="ghost" disabled={attendancePage <= 1} onClick={() => setAttendancePage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={attendancePage >= Math.ceil(attendanceTotal / 25)} onClick={() => setAttendancePage((page) => page + 1)}>Next</button></div>
-            {sessionAudit && <section className="panel session-audit-panel"><div className="section-head"><div><p className="eyebrow">PERSISTENT EVENT HISTORY</p><h3>{sessionAudit.candidate.email} · {sessionAudit.exam.title}</h3></div><button className="ghost" onClick={() => setSessionAudit(null)}>Close</button></div><ol className="session-event-list">{sessionAudit.events.map((event) => <li key={event.id}><span className="event-dot" /><div><strong>{event.type.replaceAll("_", " ")}</strong><p>{event.detail}</p><small>{new Date(event.createdAt).toLocaleString()} · {event.actor?.email ?? "System"}</small></div></li>)}</ol></section>}
-          </section>
-          <section hidden={activePage !== "review-queue"} id="admin-review-queue">
-            <div className="section-head"><div><p className="eyebrow">INVIGILATOR WORKFLOW</p><h2>Submissions awaiting review</h2><p className="muted">These submissions need approval before students can see their scores and answer review.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshReviewQueue()}>Refresh</button></div>
-            <div className="panel analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Student</th><th>Exam</th><th>Submitted</th><th>Received by server</th><th>Score</th><th>Action</th></tr></thead><tbody>{reviewQueue.map((item) => <tr key={item.submissionId}><td>{item.studentEmail}</td><td>{item.examTitle}</td><td>{new Date(item.submittedAt).toLocaleString()}</td><td>{new Date(item.receivedAt).toLocaleString()}</td><td>{item.score === null || item.maximumScore === null ? "Pending review" : `${item.score} / ${item.maximumScore}`}</td><td><button className="primary" disabled={busy} onClick={() => void releaseSubmission(item.submissionId)}>Approve & release</button></td></tr>)}{reviewQueue.length === 0 && <tr><td colSpan={6} className="muted">No submissions are waiting for review.</td></tr>}</tbody></table></div>
-            <div className="row-actions"><span className="muted">{reviewQueueTotal} submission(s) · page {reviewQueuePage} of {Math.max(1, Math.ceil(reviewQueueTotal / 25))}</span><button className="ghost" disabled={reviewQueuePage <= 1} onClick={() => setReviewQueuePage((page) => Math.max(1, page - 1))}>Previous</button><button className="ghost" disabled={reviewQueuePage >= Math.ceil(reviewQueueTotal / 25)} onClick={() => setReviewQueuePage((page) => page + 1)}>Next</button></div>
-          </section>
-          <section hidden={activePage !== "subjects"} id="admin-subjects-topics">
-            <div className="section-head"><div><p className="eyebrow">QUESTION TAXONOMY</p><h2>Subjects and topics</h2><p className="muted">Organise the question bank before building exam blueprints.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshSubjects()}>Refresh</button></div>
-            <div className="grid two">
-              <form className="panel admin-form" onSubmit={(event) => void createSubject(event)}><label>New subject<input required maxLength={80} value={newSubjectName} onChange={(event) => setNewSubjectName(event.target.value)} placeholder="e.g. Computer Networks" /></label><button className="primary" disabled={busy || !newSubjectName.trim()}>Add subject</button></form>
-              <form className="panel admin-form" onSubmit={(event) => void createTopic(event)}><label>Topic belongs to<select required value={newTopicSubjectId || ""} onChange={(event) => setNewTopicSubjectId(Number(event.target.value))}><option value="" disabled>Select subject</option>{adminSubjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label><label>New topic<input required maxLength={80} value={newTopicName} onChange={(event) => setNewTopicName(event.target.value)} placeholder="e.g. Routing protocols" /></label><button className="primary" disabled={busy || !newTopicSubjectId || !newTopicName.trim()}>Add topic</button></form>
-            </div>
-            <div className="subject-management-list">{adminSubjects.map((subject) => <article className="panel admin-exam-card" key={subject.id}><div className="admin-exam-meta"><div><strong>{subject.name}</strong><p className="muted">{subject.questionCount} questions · {subject.topics.length} topics</p></div></div><div className="topic-chip-list">{subject.topics.map((topic) => <span className="topic-chip" key={topic.id}>{topic.name}<button type="button" aria-label={`Delete ${topic.name}`} disabled={busy} onClick={() => void deleteTopic(topic.id)}>×</button></span>)}{subject.topics.length === 0 && <span className="muted">No topics yet.</span>}</div></article>)}{adminSubjects.length === 0 && <div className="panel empty-state">No subjects yet. Add one above or import questions to create subjects automatically.</div>}</div>
-          </section>
-          <section hidden={activePage !== "question-bank"} id="admin-question-bank">
-            <section className="panel import-workspace">
-              <div className="section-head"><div><p className="eyebrow">BULK QUESTION INGESTION</p><h2>Upload questions</h2><p className="muted">Import AP ECET questions using CSV, JSON or Excel (.xlsx), or paste your dataset.</p></div></div>
-              <div className="import-toolbar">
-                <label className="import-dropzone" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void loadImportFile(event.dataTransfer.files?.[0]); }}>
-                  <strong>Choose a CSV, JSON or Excel file</strong><span>Click to browse or drag a file here · max 8 MB</span>
-                  <input type="file" accept=".csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => void loadImportFile(event.target.files?.[0])} />
-                </label>
-                <div className="import-template-actions"><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("csv")}>Download CSV template</button><button type="button" className="ghost" onClick={() => downloadQuestionTemplate("json")}>Download JSON template</button></div>
-              </div>
-              <div className="import-mode-row"><label>Format<select value={importFormat} onChange={(event) => { setImportFormat(event.target.value as "csv" | "json"); setImportPreviewReady(false); }}><option value="csv">CSV with headers</option><option value="json">JSON question array</option></select></label><span className="muted">Correct answer index: 0 = A, 1 = B, 2 = C, 3 = D.</span></div>
-              <label>Paste question data<textarea rows={8} value={importText} onChange={(event) => { setImportText(event.target.value); setImportReport(null); setImportPreviewReady(false); }} placeholder={importFormat === "csv" ? "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty" : '[["Computer Science","Question text",["A","B","C","D"],1,"Explanation"]]'} /></label>
-              <div className="import-footer"><span className="muted">{importText.trim() ? "Data loaded — preview before import" : "No data loaded yet"}</span><div className="import-confirm-actions"><button className="ghost" type="button" disabled={!importText.trim() || importBusy} onClick={previewQuestionImport}>Preview import</button><button className="primary" type="button" disabled={importBusy || !importPreviewReady} onClick={() => void importQuestions()}>{importBusy ? "Importing…" : "Confirm & import"}</button></div></div>
-              {importPreviewError && <p className="error">{importPreviewError}</p>}
-              {importPreviewReady && <div className="import-preview"><strong>Preflight complete</strong><div className="import-report"><div><strong>{importPreviewDetails?.valid ?? 0}</strong><span>Valid new questions</span></div><div><strong>{importPreviewDetails?.duplicates ?? 0}</strong><span>Duplicates</span></div><div><strong>{importPreviewDetails?.invalid.length ?? 0}</strong><span>Invalid rows</span></div><div><strong>{importPreviewDetails?.total ?? 0}</strong><span>Total rows</span></div></div>{Boolean(importPreviewDetails?.invalid.length) && <details><summary>Review invalid rows before import</summary>{importPreviewDetails?.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
-              {importReport && <div className="import-report" role="status"><div><strong>{importReport.added}</strong><span>Added</span></div><div><strong>{importReport.duplicates}</strong><span>Duplicates skipped</span></div><div><strong>{importReport.invalid.length}</strong><span>Invalid rows</span></div><div><strong>{importReport.total}</strong><span>Rows processed</span></div>{importReport.invalid.length > 0 && <details><summary>Review invalid rows</summary>{importReport.invalid.map((row) => <p key={row.row}>Row {row.row}: {row.reason}</p>)}</details>}</div>}
-            </section>
-            <div className="section-head">
-              <div><p className="eyebrow">QUESTION AUTHORING</p><h2>{editingQuestionId === null ? "Add a question" : `Edit question #${editingQuestionId}`}</h2><p className="muted">Create or update four-option questions in your reusable bank.</p></div>
-            </div>
-            <form id="question-editor-form" className="panel admin-form question-editor" onSubmit={(event) => void createQuestion(event)}>
-              <div className="question-editor-grid">
-                <label>Subject
-                  <input required maxLength={80} value={questionSubject} onChange={(event) => setQuestionSubject(event.target.value)} placeholder="Computer Science" />
-                </label>
-                <label>Topic
-                  <input maxLength={80} value={questionTopic} onChange={(event) => setQuestionTopic(event.target.value)} placeholder="Data Structures" />
-                </label>
-                <label>Difficulty
-                  <select value={questionDifficulty} onChange={(event) => setQuestionDifficulty(event.target.value as "easy" | "medium" | "hard")}>
-                    <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
-                  </select>
-                </label>
-              </div>
-              <label>Question
-                <textarea required rows={3} maxLength={4000} value={questionText} onChange={(event) => setQuestionText(event.target.value)} placeholder="Enter the complete question…" />
-              </label>
-              <div className="question-option-editor">
-                <div className="picker-heading"><strong>Answer options</strong><span>Select the radio button beside the correct answer</span></div>
-                {questionOptions.map((option, index) => (
-                  <div className="question-option-row" key={index}>
-                    <label className="question-correct-choice" title={`Mark option ${String.fromCharCode(65 + index)} as correct`}>
-                      <input type="radio" name="question-correct-answer" checked={questionCorrectIndex === index} onChange={() => setQuestionCorrectIndex(index)} />
-                      <strong>{String.fromCharCode(65 + index)}</strong>
-                    </label>
-                    <input required maxLength={1000} aria-label={`Option ${String.fromCharCode(65 + index)}`} value={option} onChange={(event) => setQuestionOptions((current) => current.map((item, i) => i === index ? event.target.value : item))} placeholder={`Option ${String.fromCharCode(65 + index)}`} />
-                  </div>
-                ))}
-              </div>
-              <label>Explanation <span className="muted">(shown after the student submits)</span>
-                <textarea rows={2} maxLength={3000} value={questionExplanation} onChange={(event) => setQuestionExplanation(event.target.value)} placeholder="Explain why the correct answer is right…" />
-              </label>
-              {questionSaved && <p className="success-message" role="status">Question added to the question bank.</p>}
-              <div className="row-actions"><button className="primary" disabled={busy}>{busy ? "Saving…" : editingQuestionId === null ? "Add question to bank" : "Save question changes"}</button>{editingQuestionId !== null && <button type="button" className="ghost" disabled={busy} onClick={() => { setEditingQuestionId(null); setQuestionText(""); setQuestionOptions(["", "", "", ""]); setQuestionCorrectIndex(0); setQuestionExplanation(""); }}>Cancel edit</button>}</div>
-            </form>
-            <div className="section-head">
-              <div><p className="eyebrow">REUSABLE CONTENT</p><h2>Question bank <span className="muted">({adminQuestions.length})</span></h2></div>
-              <button className="ghost" disabled={busy} onClick={() => void fetchAllAdminQuestions().catch((cause) => setError((cause as Error).message))}>Refresh</button>
-            </div>
-            <div className="bank-filter-toolbar">
-              <label>Filter by subject
-                <select value={bankSubjectFilter} onChange={(event) => setBankSubjectFilter(event.target.value)}>
-                  <option value="all">All subjects</option>
-                  {[...new Set(adminQuestions.map((question) => question.subject))].sort((a, b) => a.localeCompare(b)).map((subject) => <option key={subject} value={subject}>{subject}</option>)}
-                </select>
-              </label>
-              <label>Search questions
-                <input type="search" value={bankSearch} onChange={(event) => setBankSearch(event.target.value)} placeholder="Search question, topic or subject…" />
-              </label>
-              <span className="muted">{adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length} matching</span>
-            </div>
-            <div className="bulk-question-toolbar">
-              <span className="muted">{selectedBankQuestionIds.length} selected</span>
-              <button type="button" className="ghost" disabled={busy} onClick={() => setSelectedBankQuestionIds(adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => question.id))}>Select filtered</button>
-              <button type="button" className="ghost" disabled={busy || !selectedBankQuestionIds.length} onClick={() => setSelectedBankQuestionIds([])}>Clear</button>
-              <label>Set difficulty<select value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as typeof bulkDifficulty)}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
-              <button type="button" className="ghost" disabled={busy || !selectedBankQuestionIds.length} onClick={() => void bulkUpdateQuestionDifficulty()}>Apply to selected</button>
-              <button type="button" className="ghost danger-action" disabled={busy || !selectedBankQuestionIds.length} onClick={() => void bulkDeleteQuestions()}>Delete selected</button>
-            </div>
-            <div className="panel admin-question-list">
-              {adminQuestions.length === 0 ? <p className="muted">No questions yet. Add your first question above.</p> : adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).map((question) => (
-                <article className="admin-question-row" key={question.id}>
-                  <div><strong>{question.subject}{question.topic ? ` · ${question.topic}` : ""}</strong><p>{question.text}</p><small className="muted">{question.difficulty ?? "medium"} · {question.options.length} options</small></div>
-                  <div className="question-row-actions"><label className="bank-question-select"><input type="checkbox" checked={selectedBankQuestionIds.includes(question.id)} onChange={(event) => setSelectedBankQuestionIds((current) => event.target.checked ? [...current, question.id] : current.filter((id) => id !== question.id))} />Select</label><span className="status status-used">#{question.id}</span><button type="button" className="ghost" disabled={busy} onClick={() => editQuestion(question)}>Edit</button><button type="button" className="ghost danger-action" disabled={busy} onClick={() => void deleteQuestion(question)}>Delete</button></div><details className="question-bank-preview"><summary>Preview answer & explanation</summary><p><strong>Correct answer:</strong> {question.options[question.correctIndex ?? 0]}</p><p><strong>Explanation:</strong> {question.explanation || "No explanation supplied."}</p></details>
-                </article>
-              ))}
-              {adminQuestions.length > 0 && adminQuestions.filter((question) => (bankSubjectFilter === "all" || question.subject === bankSubjectFilter) && `${question.subject} ${question.topic ?? ""} ${question.text}`.toLowerCase().includes(bankSearch.trim().toLowerCase())).length === 0 && <p className="muted">No questions match these filters.</p>}
-            </div>
-          </section>
-          <section hidden={activePage !== "announcements"} id="announcements">
-            <div className="section-head">
-              <div><p className="eyebrow">STUDENT COMMUNICATION</p><h2>Send an announcement</h2></div>
-            </div>
-            <form className="panel admin-form announcement-form" onSubmit={(event) => void createAnnouncement(event)}>
-              <label>Title
-                <input required minLength={2} maxLength={120} value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} placeholder="Exam schedule update" />
-              </label>
-              <label>Message
-                <textarea required maxLength={4000} rows={3} value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} placeholder="Write a message for your students…" />
-              </label>
-              <label>Expiry date and time <span className="muted">(optional)</span>
-                <input type="datetime-local" value={announcementExpiresAt} onChange={(event) => setAnnouncementExpiresAt(event.target.value)} />
-              </label>
-              <p className="muted announcement-expiry-help">Leave empty if this notice should not expire. Expired notices are automatically hidden from students.</p>
-              <button className="primary" disabled={busy}>{busy ? "Publishing…" : "Publish announcement"}</button>
-            </form>
-            <div className="panel announcement-list">
-              {announcements.length === 0 ? <p className="muted">No announcements published yet.</p> : announcements.map((item) => (
-                <article className="announcement-row" key={item.id}>
-                  <div className="announcement-admin-title"><strong>{item.title}</strong><span className={item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now() ? "status status-expired" : "status status-used"}>{item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now() ? "EXPIRED" : "ACTIVE"}</span></div>
-                  <p>{item.message}</p>
-                  <small>Published {new Date(item.publishedAt).toLocaleString()} · {item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleString()}` : "No expiry"}</small>
-                </article>
-              ))}
-            </div>
-          </section>
-          <section hidden={activePage !== "invitations"} id="invitations">
-            <div className="section-head">
-              <div><p className="eyebrow">STUDENT ACCESS</p><h2>Invite a student</h2></div>
-            </div>
-            <form className="panel admin-form" onSubmit={(event) => void createInvitation(event)}>
-              <label>Email address
-                <input type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="student@example.com" />
-              </label>
-              <button className="primary" disabled={busy}>{busy ? "Creating…" : "Create invitation"}</button>
-            </form>
-            {createdInvitation && (
-              <article className="panel invite-result">
-                <p className="eyebrow">COPY THIS CODE — IT IS SHOWN ONLY ONCE</p>
-                <strong>{createdInvitation.email}</strong>
-                <code>{createdInvitation.token}</code>
-                <button className="ghost" onClick={() => void navigator.clipboard?.writeText(createdInvitation.token)}>Copy invitation code</button>
-                <p className="muted">Expires {new Date(createdInvitation.expiresAt).toLocaleString()}</p>
-              </article>
-            )}
-            <div className="section-head">
-              <div><p className="eyebrow">ACCESS CONTROL</p><h2>Recent invitations</h2></div>
-              <button className="ghost" onClick={() => request<{ invitations: Invitation[] }>("/auth/invitations").then(({ invitations: items }) => setInvitations(items)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
-            </div>
-            <div className="panel invitation-list">
-              {invitations.length === 0 ? <p className="muted">No invitations created yet.</p> : invitations.map((invitation) => (
-                <article className="invitation-row" key={invitation.id}>
-                  <div><strong>{invitation.email}</strong><small>Expires {new Date(invitation.expiresAt).toLocaleDateString()}</small></div>
-                  <span className={`status status-${invitation.status.toLowerCase()}`}>{invitation.status}</span>
-                  {invitation.status === "PENDING" && <button className="ghost" disabled={busy} onClick={() => void revokeInvitation(invitation.id)}>Revoke</button>}
-                </article>
-              ))}
-            </div>
-          </section>
-          {error && <p className="error">{error}</p>}
-          {notice && <p className="success-message notice" role="status">{notice}</p>}
-        </main>
-      </div>
-    );
+    return <AdminWorkspace
+      email={user.email}
+      theme={theme}
+      setTheme={setTheme}
+      signOut={signOut}
+      invitations={invitations}
+      createInvitation={createInvitation}
+      inviteEmail={inviteEmail}
+      setInviteEmail={setInviteEmail}
+      createdInvitation={createdInvitation}
+      revokeInvitation={revokeInvitation}
+      busy={busy}
+    />;
   }
 
   return (
@@ -2343,15 +1843,28 @@ export default function App() {
                 ))}
               </div>
             </section>
-            <p hidden={activePage !== "dashboard"} className="footnote">
-              Mock test structure currently follows the existing configured AP ECET pattern. Generic
-              exam management is a separate upcoming phase.
+            <AssignedExams />
+            <p className="footnote">
+              Assigned papers published by your examiner will appear above when they are ready.
             </p>
           </>
         )}
         {error && <p className="error">{error}</p>}
         {notice && <p className="success-message notice" role="status">{notice}</p>}
       </main>
+      {activeAnnouncements[0] && (
+        <div className="student-announcement-backdrop">
+          <section className="student-announcement panel" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+            <div className="announcement-mark">!</div>
+            <p className="eyebrow">IMPORTANT ANNOUNCEMENT</p>
+            <h2 id="announcement-title">{activeAnnouncements[0].title}</h2>
+            <p className="announcement-message">{activeAnnouncements[0].message}</p>
+            {activeAnnouncements[0].expiresAt && <small className="muted">Expires {new Date(activeAnnouncements[0].expiresAt).toLocaleString()}</small>}
+            <button className="primary full" onClick={() => void dismissAnnouncement(activeAnnouncements[0].id)}>Got it</button>
+            <small className="muted">This announcement will not pop up again after you acknowledge it.</small>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

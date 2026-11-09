@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { parseCsv } from "./csv.js";
-import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";
+import { insertQuestion } from "./questionRepository.js";
+import { BaseRowSchema, QuestionInputSchema, hashQuestion, type QuestionInput } from "./questions.js";
 
 export type InvalidRow = { row: number; reason: string };
 export type ImportReport = {
@@ -112,7 +113,8 @@ function describeIssue(error: unknown): string {
 }
 
 /** Import BASE/JSON rows: [subject, text, [A,B,C,D], correctIndex, explanation?]. Row numbers are 1-based. */
-export async function importFromJson(db: PrismaClient, payload: unknown): Promise<ImportReport> {
+export async function importFromJson(db: PrismaClient, payload: unknown, options: { dryRun?: boolean } = {}): Promise<ImportReport> {
+  const parsed = BaseRowSchema.array().safeParse(payload);
   const report: ImportReport = {
     added: 0,
     duplicates: 0,
@@ -131,20 +133,17 @@ export async function importFromJson(db: PrismaClient, payload: unknown): Promis
   const valid: { index: number; input: QuestionInput }[] = [];
   rows.forEach((raw, i) => {
     const rowNumber = i + 1;
-    const single = BaseRowSchema.safeParse(raw);
-    if (!single.success) {
-      report.invalid.push(invalidRow(rowNumber, describeIssue(single.error)));
-      return;
+    let normalized: unknown = raw;
+    if (Array.isArray(raw)) {
+      const tuple = BaseRowSchema.safeParse(raw);
+      if (!tuple.success) {
+        report.invalid.push(invalidRow(rowNumber, describeIssue(tuple.error)));
+        return;
+      }
+      const [subject, text, options, correctIndex, explanation] = tuple.data;
+      normalized = { subject, text, options, correctIndex, explanation: explanation ?? "", source: "json" };
     }
-    const [subject, text, options, correctIndex, explanation] = single.data;
-    const checked = QuestionInputSchema.safeParse({
-      subject,
-      text,
-      options,
-      correctIndex,
-      explanation: explanation ?? "",
-      source: "json",
-    });
+    const checked = QuestionInputSchema.safeParse(normalized);
     if (!checked.success) {
       report.invalid.push(invalidRow(rowNumber, describeIssue(checked.error)));
       return;
@@ -152,16 +151,35 @@ export async function importFromJson(db: PrismaClient, payload: unknown): Promis
     valid.push({ index: rowNumber, input: checked.data });
   });
 
-  const imported = await insertValidatedQuestions(db, valid.map((item) => item.input));
-  report.added = imported.added;
-  report.duplicates = imported.duplicates;
+  if (options.dryRun) {
+    const hashes = valid.map((item) => hashQuestion(item.input.text));
+    const existing = await db.question.findMany({
+      where: { questionHash: { in: hashes } },
+      select: { questionHash: true },
+    });
+    const seen = new Set(existing.map((item) => item.questionHash));
+    for (const hash of hashes) {
+      if (seen.has(hash)) report.duplicates += 1;
+      else { report.added += 1; seen.add(hash); }
+    }
+    return report;
+  }
+
+  // One transaction: either all valid rows land, or none do.
+  await db.$transaction(async (tx) => {
+    for (const item of valid) {
+      const outcome = await insertQuestion(tx as PrismaClient, item.input);
+      if (outcome === "inserted") report.added += 1;
+      else report.duplicates += 1;
+    }
+  });
   return report;
 }
 
 /** Import CSV text. Required columns: subject,text,optionA..optionD,correctIndex.
  * Optional: topic,explanation,source,difficulty. Row numbers count the header as row 1.
  */
-export async function importFromCsv(db: PrismaClient, content: string): Promise<ImportReport> {
+export async function importFromCsv(db: PrismaClient, content: string, options: { dryRun?: boolean } = {}): Promise<ImportReport> {
   const report: ImportReport = { added: 0, duplicates: 0, invalid: [], total: 0 };
   let table;
   try {
@@ -207,9 +225,27 @@ export async function importFromCsv(db: PrismaClient, content: string): Promise<
     valid.push(checked.data);
   });
 
-  const imported = await insertValidatedQuestions(db, valid);
-  report.added = imported.added;
-  report.duplicates = imported.duplicates;
+  if (options.dryRun) {
+    const hashes = valid.map((input) => hashQuestion(input.text));
+    const existing = await db.question.findMany({
+      where: { questionHash: { in: hashes } },
+      select: { questionHash: true },
+    });
+    const seen = new Set(existing.map((item) => item.questionHash));
+    for (const hash of hashes) {
+      if (seen.has(hash)) report.duplicates += 1;
+      else { report.added += 1; seen.add(hash); }
+    }
+    return report;
+  }
+
+  await db.$transaction(async (tx) => {
+    for (const input of valid) {
+      const outcome = await insertQuestion(tx as PrismaClient, input);
+      if (outcome === "inserted") report.added += 1;
+      else report.duplicates += 1;
+    }
+  });
   return report;
 }
 
