@@ -1444,7 +1444,11 @@ export function examRouter(db: PrismaClient): Router {
             status, lastActivityAt: now,
             ...(input.action === "PAUSE" ? { pausedAt: now } : {}),
             ...(input.action === "RESUME" && current.pausedAt ? { pausedDurationMs: { increment: now.getTime() - current.pausedAt.getTime() }, pausedAt: null } : {}),
-            ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
+            ...(input.action === "TERMINATE" ? {
+              endedAt: now,
+              pausedAt: null,
+              ...(current.pausedAt ? { pausedDurationMs: { increment: Math.max(0, now.getTime() - current.pausedAt.getTime()) } } : {}),
+            } : {}),
           },
         });
         if (changed.count !== 1) throw conflict("The exam session changed concurrently. Refresh and try again.");

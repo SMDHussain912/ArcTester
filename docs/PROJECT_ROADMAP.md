@@ -66,6 +66,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [x] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression passed CI run `42544630276`.
 - [x] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; paused-session regression passed CI run `42544206972`.
 - [ ] Verify heartbeat updates cannot write activity/counters after a concurrent invigilator pause/termination; paused-session heartbeat regression added, awaiting CI.
+- [ ] Preserve elapsed paused duration when an invigilator terminates a paused session; regression test added, awaiting CI.
 
 ### Frontend quality
 
