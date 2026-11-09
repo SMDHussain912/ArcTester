@@ -70,11 +70,9 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     if (initialLease.count !== 1) {
       throw new Error("Training worker lease was lost before training started.");
     }
-    const latest = await db.registeredModel.aggregate({
-      where: { modelId: job.modelId },
-      _max: { version: true },
-    });
-    const version = (latest._max.version ?? 0) + 1;
+    // The final registry version is allocated inside the commit transaction.
+    // Training only needs a valid positive artifact version; assigning it here
+    // would let concurrent jobs choose the same next version.
     const trained = await trainTensorflowRegressionCandidate(
       samples.map((sample) => ({
         features: featureSchema.map((feature) => sample.features[feature.name] as number),
@@ -83,7 +81,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       })),
       {
         modelId: job.modelId,
-        version,
+        version: 1,
         featureNames: featureSchema.map((feature) => feature.name),
         datasetKind: dataset.datasetKind as "synthetic" | "real-anonymized",
         seed: job.seed,
@@ -117,8 +115,16 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     }
 
     await db.$transaction(async (tx) => {
+      const latest = await tx.registeredModel.aggregate({
+        where: { modelId: job.modelId },
+        _max: { version: true },
+      });
+      const version = (latest._max.version ?? 0) + 1;
+      const versionedArtifact = trained.artifact
+        ? { ...trained.artifact, version }
+        : null;
       let registeredModel = null;
-      if (trained.artifact) {
+      if (versionedArtifact) {
         registeredModel = await tx.registeredModel.create({
           data: {
             modelId: job.modelId,
@@ -127,7 +133,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
             task: "regression",
             dataset: dataset.name,
             trainingDatasetId: dataset.id,
-            artifactJson: JSON.stringify(trained.artifact),
+            artifactJson: JSON.stringify(versionedArtifact),
             isActive: false,
             activatedAt: null,
           },
