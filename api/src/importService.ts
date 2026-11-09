@@ -113,7 +113,6 @@ function describeIssue(error: unknown): string {
 
 /** Import BASE/JSON rows: [subject, text, [A,B,C,D], correctIndex, explanation?]. Row numbers are 1-based. */
 export async function importFromJson(db: PrismaClient, payload: unknown, options: { dryRun?: boolean } = {}): Promise<ImportReport> {
-  const parsed = BaseRowSchema.array().safeParse(payload);
   const report: ImportReport = {
     added: 0,
     duplicates: 0,
