@@ -1,5 +1,7 @@
 name: Prepare and validate npm audit fixes
 
+# Keep the security validation workflow rerunnable after compatibility fixes.
+
 on:
   workflow_dispatch:
   push:
