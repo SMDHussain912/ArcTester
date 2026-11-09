@@ -26,16 +26,26 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     if (dataset.task !== "regression") throw new Error("TensorFlow.js training currently supports regression datasets only.");
 
     const featureSchema = JSON.parse(dataset.featureSchemaJson) as DatasetFeature[];
-    if (!featureSchema.length || featureSchema.some((feature) => feature.type !== "numeric")) {
-      throw new Error("TensorFlow.js training requires a non-empty numeric-only feature schema.");
+    if (!Array.isArray(featureSchema) || featureSchema.length === 0 || featureSchema.length > 128 ||
+        featureSchema.some((feature) =>
+          !feature || typeof feature.name !== "string" || !feature.name.trim() ||
+          feature.type !== "numeric"
+        ) || new Set(featureSchema.map((feature) => feature.name)).size !== featureSchema.length) {
+      throw new Error("TensorFlow.js training requires 1 to 128 uniquely named numeric features.");
     }
     const samples = JSON.parse(dataset.samplesJson) as DatasetSample[];
+    if (!Array.isArray(samples) || samples.length !== dataset.rowCount ||
+        samples.length < 30 || samples.length > 5000) {
+      throw new Error("Training dataset rowCount must match its 30 to 5000 stored samples.");
+    }
     if (samples.some((sample) =>
-      !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+      !sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features) ||
+      typeof sample.target !== "number" || !Number.isFinite(sample.target) ||
+      typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
       featureSchema.some((feature) => typeof sample.features[feature.name] !== "number" ||
         !Number.isFinite(sample.features[feature.name]))
     )) {
-      throw new Error("Every TensorFlow sample must contain finite numeric features and a keyed HMAC-SHA-256 pseudonymous groupId.");
+      throw new Error("Every TensorFlow sample must contain finite numeric features, a finite target, and a keyed HMAC-SHA-256 pseudonymous groupId.");
     }
     if (job.modelId === "student-score-population") {
       const expected = ["completed_attempts", "previous_accuracy", "recent_average_accuracy", "overall_average_accuracy", "previous_question_count"];
