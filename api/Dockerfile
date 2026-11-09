@@ -21,7 +21,7 @@ COPY --from=build /app/api/dist ./api/dist
 COPY --from=build /app/api/prisma ./api/prisma
 COPY --from=build /app/api/docker-entrypoint.sh ./api/docker-entrypoint.sh
 
-RUN mkdir -p /app/api/prisma/data && chown -R node:node /app/api
+RUN chown -R node:node /app/api
 USER node
 
 EXPOSE 4000
