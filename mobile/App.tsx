@@ -352,7 +352,7 @@ export default function App() {
                 <Text style={styles.statValue}>{bank?.subjects.length ?? "—"}</Text>
                 <Text style={styles.muted}>Subjects</Text>
               </View>
-            </View>
+            </Animated.View>
             <View style={styles.announcementHeader}>
               <Text style={styles.sectionTitle}>Announcements</Text>
               <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
@@ -373,7 +373,7 @@ export default function App() {
                   <Text style={styles.announcementDate}>
                     {new Date(announcement.publishedAt).toLocaleString()}
                   </Text>
-                </View>
+                </Animated.View>
               ))
             )}
             <TouchableOpacity
