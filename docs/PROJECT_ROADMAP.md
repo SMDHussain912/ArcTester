@@ -1,6 +1,6 @@
 # ArcTester — Development Roadmap & Progress Tracker
 
-Last updated: 2026-11-09
+Last updated: 2026-11-09 (stabilization branch)
 Tracking rule: **Update this file in every development commit.** A task is only marked complete after implementation, relevant tests, and CI verification. Do not mark a feature complete based only on a previous status message.
 
 ## Project delivery order
@@ -16,11 +16,11 @@ Tracking rule: **Update this file in every development commit.** A task is only 
 - [ ] Existing feature set fully re-audited end-to-end.
 - [ ] All existing features confirmed working.
 - [ ] All known backend and frontend bugs fixed.
-- [ ] PostgreSQL migration completed and tested.
-- [x] Latest main-branch ArcTester CI run succeeded for commit `9ed21dc` (PR #13); this is a baseline check, not full end-to-end confirmation.
-- [ ] Full regression suite for the stabilization branch and all feature workflows green.
+- [x] PostgreSQL migration completed and tested in CI, including the partial unique index and a real SQLite-to-PostgreSQL data-copy integration test.
+- [x] Stabilization branch CI passed on commit `33316c8` (run `42539952910`): API 36 test files / 289 tests; web 22 test files / 82 tests; lint and production builds; mobile typecheck; TensorFlow dataset checks; SQLite-to-PostgreSQL migration utility tests.
+- [ ] Full feature-by-feature end-to-end QA and deployment verification.
 
-**Important:** Previous development messages reported that many existing features were implemented and that earlier test runs passed. Those reports are not a substitute for a fresh verification against the current repository. The latest `main` commit (`8c752c7`) has a successful ArcTester CI run, but that run does not verify every feature end-to-end. The stabilization branch now contains initial fixes for PostgreSQL SQL syntax, assigned-exam deadline handling, atomic invigilation auditing, and bulk-delete error handling; fresh branch CI is pending.
+**Important:** The PostgreSQL migration is now implemented and CI-tested. Existing SQLite schema and migrations are preserved in `api/prisma-sqlite/`; a read-only-source data migration utility is available at `scripts/migrate_sqlite_to_postgres.py`. The application has not yet been deployed to Render or Vercel, and the existing feature set still needs a systematic end-to-end QA pass before it can be called complete.
 
 ## Existing feature areas to re-verify
 
@@ -44,17 +44,17 @@ The following areas were previously reported as implemented. Treat them as **imp
 
 ### Critical / deployment blockers
 
-- [ ] Replace or repair SQLite-specific raw analytics SQL for PostgreSQL (quoted identifiers, boolean expressions, numeric result types). Implementation updated in `analytics.ts` and `examRoutes.ts`; PostgreSQL runtime verification is still pending.
-- [ ] Create a PostgreSQL-compatible Prisma migration baseline and a safe SQLite-to-PostgreSQL data migration plan; preserve IDs and relations.
-- [ ] Resolve cross-site authentication cookie behavior between Vercel and Render; prefer a same-origin API proxy or implement secure cross-site cookies with CSRF/origin protections.
+- [x] Replace SQLite-specific raw analytics SQL for PostgreSQL (quoted identifiers, Boolean expressions, numeric result handling, and deterministic history pagination). Verified by the PostgreSQL-backed analytics/API test suite.
+- [x] Create a PostgreSQL-compatible Prisma migration baseline and safe SQLite-to-PostgreSQL data migration utility; preserve IDs, relations, and serial sequences. Legacy SQLite schema/migrations are retained in `api/prisma-sqlite/`.
+- [ ] Complete production browser verification of cross-site authentication. Code now supports `COOKIE_SAME_SITE=None; Secure` and validates Origin for cookie-authenticated mutations; exact `CORS_ORIGINS` values still need to be configured for the chosen deployment.
 - [ ] Resolve the dual frontend structure: package scripts currently run Vite (`web/src/main.tsx`), while a separate Next.js `web/app` tree and `next` dependency also exist. Decide which is canonical from deployment/configuration evidence before removing or migrating anything.
 
 ### High priority correctness and reliability
 
-- [ ] Fix and regression-test the assigned-exam deadline / heartbeat / autosubmit race. Implementation now keeps the timer active on deadline heartbeat errors and has classifier unit tests; CI is pending.
-- [ ] Make invigilation state changes and audit-event writes atomic. Implementation now updates state and writes the event in one transaction with a conditional status update; regression verification is pending.
-- [ ] Handle foreign-key conflicts during bulk question deletion with a clear API response. Implementation now maps Prisma P2003 to HTTP 409; regression verification is pending.
-- [ ] Prevent learner-level train/test leakage in every training pipeline that may contain repeated learner samples.
+- [x] Fix and regression-test the assigned-exam deadline / heartbeat / autosubmit race. Deadline heartbeat errors no longer pause the timer and suppress auto-submit.
+- [x] Make candidate/invigilation session state changes and audit-event writes atomic, with conditional updates and idempotent repeated pause handling.
+- [x] Handle foreign-key conflicts during bulk question deletion with HTTP 409 and a regression test.
+- [x] Prevent learner-level train/test leakage in registered training: real-anonymized samples require keyed pseudonymous group IDs, at least five learner groups, and a meaningful held-out sample; grouped holdout tests pass.
 - [ ] Move long-running TensorFlow training out of normal HTTP request handling or otherwise prove it safely fits host limits.
 - [ ] Audit session revocation, logout behavior, device registry semantics, rate limiting, and bootstrap-admin race conditions.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
@@ -63,9 +63,9 @@ The following areas were previously reported as implemented. Treat them as **imp
 ### Frontend quality
 
 - [ ] Re-test every student and admin navigation path, modal, tab, form, and responsive layout.
-- [ ] Add a top-level React error boundary and safe browser-storage handling where needed.
+- [x] Add a top-level React error boundary and safe browser-storage handling to the active Vite application.
 - [ ] Refactor the large App component incrementally without replacing or regressing the existing UI.
-- [ ] Add regression tests for every confirmed UI bug.
+- [x] Add regression tests for confirmed fixes in this stabilization pass (deadline heartbeat, blocked storage, error boundary, and concept-search loading timing). Continue adding tests as the broader UI audit finds issues.
 
 ## Six approved feature groups
 
@@ -139,7 +139,7 @@ A task can be checked off only when:
 | Date | Commit | Summary | Verification |
 |---|---|---|---|
 | 2026-11-09 | `6da9d670` | Added this roadmap and initial honest status baseline. | Documentation-only; application tests not run. |
-| 2026-11-09 | Baseline verification | Confirmed latest `main` CI run succeeded and found both Vite scripts and a Next.js app tree. | CI run `42534604301` passed on PR #13; feature-level end-to-end verification remains pending. |
+| 2026-11-09 | Stabilization | Fixed PostgreSQL SQL compatibility, session/attempt correctness, import conflict handling, learner-group holdouts, frontend storage/error handling, and switched the primary Prisma provider to PostgreSQL. | PostgreSQL CI run `42539952910` passed; API 289 tests, web 82 tests, migration integration, lint, builds and mobile typecheck green. |
 
 
 ## Stabilization work log
@@ -148,3 +148,24 @@ A task can be checked off only when:
 - 2026-11-09: Fixed the active Vite student app's assigned-exam heartbeat edge case so deadline errors no longer pause the timer and block autosubmission; added unit coverage for deadline, paused-session, and transient-network classifications.
 - 2026-11-09: Made invigilator session status changes and audit-event writes atomic, with a conditional status update to detect concurrent changes.
 - 2026-11-09: Converted referenced-question bulk-delete foreign-key errors into a clear conflict response instead of a generic 500.
+
+
+## PostgreSQL and stabilization verification
+
+- Main Prisma provider is PostgreSQL; the SQLite schema and full legacy migration history are preserved separately under `api/prisma-sqlite/`.
+- PostgreSQL baseline migration and the custom one-active-model partial unique index migration both apply successfully on a clean PostgreSQL 16 database.
+- CI runs the API test suite against PostgreSQL using isolated per-test schemas. The analytics raw SQL paths are therefore exercised on the target database provider.
+- The SQLite-to-PostgreSQL migration utility is tested against a real PostgreSQL service: it preserves explicit IDs and foreign-key relationships, converts timestamp values, and resets serial sequences.
+- Local Docker Compose now starts PostgreSQL 16, waits for database health, and runs Prisma migrations before starting the API.
+- Cross-site cookie configuration and CSRF Origin validation are implemented; production domain configuration and browser-level deployment testing remain pending.
+- Active web build is Vite (`web/src/main.tsx`, `vite build`, and the Dockerfile). A separate Next.js `web/app` tree is still present and tested but is not part of the current production build; do not remove it until its intended role is decided.
+
+## Latest verified CI
+
+- Commit: `33316c8cebbc560419178ea4d236eceadcf5c7c1`
+- Workflow run: `42539952910` — success.
+- API: 36 test files, 289 tests passed on PostgreSQL.
+- Web: 22 test files, 82 tests passed.
+- Lint and web/API production builds passed.
+- Mobile typecheck and TensorFlow dataset preparation checks passed.
+- SQLite-to-PostgreSQL migration utility unit and integration tests passed.
