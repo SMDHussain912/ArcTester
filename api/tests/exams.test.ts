@@ -884,6 +884,27 @@ describe("versioned exam management", () => {
     await server.db.examAssignment.update({
       where: { id: lateAssignment.id }, data: { dueAt: new Date(Date.now() - 1_000) },
     });
+
+    // Once the assignment deadline has passed, all live-exam access paths must agree.
+    const expiredPackage = await request(
+      `/exams/assignments/${lateAssignment.id}/package`, "GET", undefined, lateCandidateCookie,
+    );
+    expect(expiredPackage.status).toBe(403);
+    const expiredStart = await request(
+      `/exams/assignments/${lateAssignment.id}/session/start`, "POST", {}, lateCandidateCookie,
+    );
+    expect(expiredStart.status).toBe(403);
+    const expiredSave = await request(
+      `/exams/assignments/${lateAssignment.id}/answers`, "PUT",
+      { answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }] }, lateCandidateCookie,
+    );
+    expect(expiredSave.status).toBe(403);
+    const expiredHeartbeat = await request(
+      `/exams/assignments/${lateAssignment.id}/session/heartbeat`, "POST",
+      { event: "HEARTBEAT" }, lateCandidateCookie,
+    );
+    expect(expiredHeartbeat.status).toBe(403);
+
     const submitted = await request(
       `/exams/assignments/${lateAssignment.id}/submission`, "POST",
       {

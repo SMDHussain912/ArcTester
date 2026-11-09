@@ -63,6 +63,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [x] Verify invalid exam submissions are rejected before session reconciliation; invalid offline answer regression passed CI run `42543841320`.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
+- [ ] Align assignment deadline boundaries across package, start, autosave, heartbeat, and submission review classification; regression coverage added, awaiting CI.
 - [x] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression passed CI run `42544630276`.
 - [x] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; paused-session regression passed CI run `42544206972`.
 - [ ] Verify heartbeat updates cannot write activity/counters after a concurrent invigilator pause/termination; paused-session heartbeat regression added, awaiting CI.
@@ -167,6 +168,8 @@ A task can be checked off only when:
 - Local Docker Compose now starts PostgreSQL 16, waits for database health, and runs Prisma migrations before starting the API.
 - Cross-site cookie configuration and CSRF Origin validation are implemented; production domain configuration and browser-level deployment testing remain pending.
 - Active web build is Vite (`web/src/main.tsx`, `vite build`, and the Dockerfile). A separate Next.js `web/app` tree is still present and tested but is not part of the current production build; do not remove it until its intended role is decided.
+
+- 2026-11-09: Aligned deadline comparisons so an assignment is closed consistently at its exact due time across package access, session start, answer saves, heartbeats, and late-submission review classification. Extended the deadline regression to verify package/start/save/heartbeat rejection while preserving a late submission for review. Awaiting CI.
 
 ## Latest verified CI
 
