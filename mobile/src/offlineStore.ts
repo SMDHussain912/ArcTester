@@ -216,7 +216,9 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   }
 
   const attemptUuid = Crypto.randomUUID();
-  const startedAt = new Date().toISOString();
+  // Use the server-adjusted clock captured when the package was downloaded.
+  // This keeps the local deadline consistent when the device clock is inaccurate.
+  const startedAt = new Date(adjustedNow).toISOString();
   await db.runAsync(
     `INSERT INTO offline_attempts
       (assignment_id, attempt_uuid, started_at, answers_json, status, updated_at)
@@ -289,7 +291,12 @@ export async function getRemainingSeconds(assignmentId: string): Promise<number 
   if (!attempt) return null;
   const examPackage = await getCachedExamPackage(assignmentId);
   if (!examPackage) return null;
-  const elapsed = Date.now() - new Date(attempt.startedAt).getTime();
+  const packageRow = await db.getFirstAsync<{ server_offset_ms: number }>(
+    "SELECT server_offset_ms FROM exam_packages WHERE assignment_id = ?",
+    assignmentId,
+  );
+  const adjustedNow = Date.now() + (packageRow?.server_offset_ms ?? 0);
+  const elapsed = adjustedNow - new Date(attempt.startedAt).getTime();
   return Math.max(0, examPackage.durationMinutes * 60 - Math.floor(elapsed / 1000));
 }
 
