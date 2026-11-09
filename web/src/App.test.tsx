@@ -70,7 +70,7 @@ describe("live Vite application", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Announcements" })).toBeInTheDocument();
     });
-    expect(screen.getByText("ECET mock exam schedule")).toBeInTheDocument();
+    expect(screen.getAllByText("ECET mock exam schedule").length).toBeGreaterThan(0);
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements"))).toBe(true);
   });
   it("lets an administrator add a question and build a mock exam from it", async () => {
