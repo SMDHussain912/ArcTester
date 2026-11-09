@@ -297,11 +297,11 @@ export default function App() {
                   : "Have an invitation? Create account"}
               </Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         ) : showExams ? (
           <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => setShowExams(false)} />
         ) : test ? (
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <Text style={styles.heading}>Practice session</Text>
             <Text style={styles.muted}>
               {test.questions.length} questions · Select one answer per question
@@ -335,15 +335,15 @@ export default function App() {
             <TouchableOpacity onPress={() => setTest(null)} style={styles.secondary}>
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         ) : (
           <>
             <Animated.View style={[styles.hero, animatedEntrance(entrance)]}>
               <Text style={styles.muted}>SIGNED IN AS</Text>
               <Text style={styles.heading}>{user.email}</Text>
               <Text style={styles.muted}>Your next focused session starts here.</Text>
-            </View>
-            <View style={styles.stats}>
+            </Animated.View>
+            <Animated.View style={[styles.stats, { opacity: statsEntrance, transform: [{ translateY: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }, { scale: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
               <View style={styles.stat}>
                 <Text style={styles.statValue}>{bank?.total ?? "—"}</Text>
                 <Text style={styles.muted}>Questions</Text>
