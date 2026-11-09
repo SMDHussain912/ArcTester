@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Platform,
@@ -286,6 +287,37 @@ export default function App() {
     return `${minutes}:${seconds}`;
   }
 
+  function confirmSubmit() {
+    if (!test || busy) return;
+    const answered = Object.keys(answers).length;
+    const unanswered = test.questions.length - answered;
+    Alert.alert(
+      "Submit practice?",
+      unanswered > 0
+        ? `You answered ${answered} of ${test.questions.length} questions. ${unanswered} will be submitted unanswered.`
+        : `You answered all ${test.questions.length} questions. Submit your practice now?`,
+      [
+        { text: "Keep practicing", style: "cancel" },
+        { text: "Submit", style: "default", onPress: () => { void submit(); } },
+      ],
+    );
+  }
+
+  function confirmExitPractice() {
+    if (!test || busy) return;
+    const answered = Object.keys(answers).length;
+    Alert.alert(
+      "Exit practice?",
+      answered > 0
+        ? `Your ${answered} answered question(s) will be lost if you exit now.`
+        : "Your current practice session will be discarded.",
+      [
+        { text: "Stay", style: "cancel" },
+        { text: "Exit", style: "destructive", onPress: () => { setTest(null); setCurrentQuestionIndex(0); } },
+      ],
+    );
+  }
+
   async function submit() {
     if (!test) return;
     setBusy(true);
@@ -485,18 +517,18 @@ export default function App() {
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity disabled={busy} onPress={submit} style={styles.examNext}>
+                <TouchableOpacity disabled={busy} onPress={confirmSubmit} style={styles.examNext}>
                   <Text style={styles.primaryText}>{busy ? "Submitting…" : "Submit practice"}</Text>
                   <MaterialCommunityIcons name="check" size={19} color="#ffffff" />
                 </TouchableOpacity>
               )}
             </View>
             {currentQuestionIndex < test.questions.length - 1 && (
-              <TouchableOpacity disabled={busy} onPress={submit} style={styles.submitLink}>
+              <TouchableOpacity disabled={busy} onPress={confirmSubmit} style={styles.submitLink}>
                 <Text style={styles.secondaryText}>Submit practice now</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => { setTest(null); setCurrentQuestionIndex(0); }} style={styles.secondary}>
+            <TouchableOpacity onPress={confirmExitPractice} style={styles.secondary}>
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
