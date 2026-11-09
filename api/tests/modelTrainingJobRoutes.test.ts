@@ -116,5 +116,31 @@ describe("durable TensorFlow training jobs", () => {
     });
     expect(response.status).toBe(400);
     expect(await server.db.modelTrainingJob.count({ where: { datasetId: invalid.id } })).toBe(0);
+
+    const mismatched = await server.db.modelDataset.create({
+      data: {
+        name: "mismatched-tensorflow-job-fixture",
+        task: "regression",
+        targetColumn: "target",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({
+          features: { score: index },
+          target: index,
+          groupId: index.toString(16).padStart(64, "0"),
+        }))),
+        rowCount: 29,
+        sourceDescription: "Row-count mismatch must be rejected before queueing.",
+        sourceAttested: true,
+        datasetKind: "synthetic",
+        fingerprint: "mismatched-training-job-fingerprint",
+      },
+    });
+    const mismatchResponse = await request(
+      `/admin/model-datasets/${mismatched.id}/tensorflow-jobs`,
+      "POST",
+      { modelId: "mismatched-training-fixture" },
+    );
+    expect(mismatchResponse.status).toBe(400);
+    expect(await server.db.modelTrainingJob.count({ where: { datasetId: mismatched.id } })).toBe(0);
   });
 });
