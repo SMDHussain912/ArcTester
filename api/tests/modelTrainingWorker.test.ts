@@ -143,6 +143,60 @@ describe("durable model-training worker lease recovery", () => {
     expect(mocks.datasetFindUnique).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["malformed pseudonymous group IDs", (sample: Record<string, unknown>) => ({ ...sample, groupId: "not-a-valid-hmac" })],
+    ["non-finite or missing targets", (sample: Record<string, unknown>) => ({ ...sample, target: null })],
+  ])("rejects persisted samples with %s", async (_caseName, corruptSample) => {
+    const samples = Array.from({ length: 30 }, (_, index) => ({
+      features: { score: index / 30 },
+      target: index / 30,
+      groupId: "a".repeat(64),
+    }));
+    samples[12] = corruptSample(samples[12]) as typeof samples[number];
+    const mocks = workerDatabase({
+      candidate: {
+        id: "job-invalid-sample",
+        datasetId: "dataset-invalid-sample",
+        modelId: "dataset-integrity-test",
+        status: "QUEUED",
+        progress: 0,
+        createdAt: new Date(),
+      },
+      claimedJob: {
+        id: "job-invalid-sample",
+        datasetId: "dataset-invalid-sample",
+        modelId: "dataset-integrity-test",
+        createdById: null,
+        status: "RUNNING",
+        workerId: "worker-validation",
+        seed: 42,
+        epochs: 10,
+        batchSize: 8,
+      },
+      dataset: {
+        id: "dataset-invalid-sample",
+        task: "regression",
+        name: "Invalid sample dataset",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify(samples),
+        rowCount: 30,
+        datasetKind: "synthetic",
+        fingerprint: "fingerprint",
+      },
+    });
+
+    await expect(runNextModelTrainingJob(mocks.db, "worker-validation")).resolves.toBe(true);
+
+    const failure = mocks.updateMany.mock.calls.at(-1)?.[0] as {
+      data: { status: string; errorMessage: string; leaseExpiresAt: null };
+    };
+    expect(failure.data).toMatchObject({
+      status: "FAILED",
+      errorMessage: "Every TensorFlow sample must contain finite numeric features, a finite target, and a keyed HMAC-SHA-256 pseudonymous groupId.",
+      leaseExpiresAt: null,
+    });
+  });
+
   it("does not process a job when another worker wins the atomic claim", async () => {
     const mocks = workerDatabase({
       candidate: {
