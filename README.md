@@ -5,7 +5,7 @@ Offline-first mock-test platform for AP ECET CSE personal study. Portfolio-quali
 - `/web` — React + TypeScript + Vite (browser application)
 - `/mobile` — Expo + React Native + TypeScript (Android/iOS)
 - `/desktop` — Electron (Windows installer)
-- `/api` — Node.js + TypeScript + Express + Prisma + SQLite + Zod
+- `/api` — Node.js + TypeScript + Express + Prisma + PostgreSQL + Zod
 - Tests: Vitest · Lint/format: ESLint + Prettier
 - Runs on `localhost` with **no internet after install**. Lightweight for 8 GB RAM.
 
@@ -53,8 +53,8 @@ docker compose down
 ```
 
 Open <http://localhost:3000>. The API health endpoint is
-<http://localhost:4000/health>. SQLite data is stored in the named
-`arc-tester-data` volume and survives container restarts. To remove the
+<http://localhost:4000/health>. PostgreSQL data is stored in the named
+`arc-tester-postgres` volume and survives container restarts. To remove the
 database as well, use `docker compose down -v` (this permanently deletes
 saved accounts and progress).
 
@@ -135,7 +135,7 @@ Each phase: builds with no TS errors, tests pass, demoable locally.
 API only, no UI. Routes validate with Zod and pass errors to a friendly
 error middleware (`api/src/errors.ts`): Zod → 400 with per-field reasons,
 app errors → their status, anything else → generic 500 (raw errors are never
-leaked to the UI). Tests run on a temp SQLite DB served over a real port —
+leaked to the UI). Tests run on isolated PostgreSQL schemas served over a real port —
 no new libraries (plain `fetch`, no supertest).
 
 - `POST /tests` — `{mode: "mock"|"practice"|"mistakes", subject?, count?}`.
@@ -199,14 +199,11 @@ deterministic. Phase 3 will wire this to the DB + routes without touching it.
 - Helpers: `shuffleArray` (Fisher-Yates, pure), `createSeededRandom`
   (mulberry32, no deps), `MOCK_QUOTAS` / `MOCK_TOTAL` (= 200).
 
-## Phase 1 — Question bank (Prisma + SQLite + Zod)
+## Phase 1 — Question bank (Prisma + PostgreSQL + Zod)
 
-Why validated strings instead of Prisma enums: SQLite has no enum column type
-(it would silently become plain text anyway), so `difficulty`/`source` are
-`String` columns and Zod enforces the allowed values in code — one source of
-truth, no false safety. Same reason options live in a JSON string column:
-SQLite has no array type, so Zod enforces "exactly 4 non-empty strings" before
-anything is stored.
+Difficulty/source remain validated `String` columns and Zod enforces the
+allowed values at the API boundary. Options remain JSON text to preserve the
+existing import/export contract and guarantee exactly four non-empty strings.
 
 Duplicates are blocked by a `UNIQUE` hash on the normalized question text
 (lowercase, trimmed, collapsed spaces), so " WHAT is 2+2? " and
@@ -215,7 +212,7 @@ Duplicates are blocked by a `UNIQUE` hash on the normalized question text
 ### Database scripts
 
 ```bash
-cp api/.env.example api/.env          # DATABASE_URL="file:./dev.db"
+cp api/.env.example api/.env          # set DATABASE_URL to your PostgreSQL instance
 npm run prisma:generate --workspace=api
 npm run prisma:migrate --workspace=api # creates + applies migration
 npm run prisma:seed --workspace=api    # idempotent: 28 now, 0 on re-run
