@@ -1356,14 +1356,20 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
       const session = await db.$transaction(async (tx) => {
-        const updated = await tx.examSession.update({
-          where: { id: assignment.session!.id },
+        const changed = await tx.examSession.updateMany({
+          where: {
+            id: assignment.session!.id,
+            status: "ACTIVE",
+            startedAt: assignment.session!.startedAt,
+          },
           data: {
             lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
             ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
             ...(stale ? { disconnectCount: { increment: 1 } } : {}),
           },
         });
+        if (changed.count !== 1) throw conflict("The exam session is no longer active.");
+        const updated = await tx.examSession.findUniqueOrThrow({ where: { id: assignment.session!.id } });
         if (input.event !== "HEARTBEAT" || stale) {
           await tx.examSessionEvent.create({
             data: { sessionId: updated.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
