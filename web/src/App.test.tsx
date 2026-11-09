@@ -398,4 +398,59 @@ describe("live Vite application", () => {
     )).toBe(true);
   });
 
+  it("queues a durable TensorFlow.js job from the active Vite Model Lab", async () => {
+    const dataset = {
+      id: "dataset-ml-1",
+      name: "Grouped score dataset",
+      task: "regression",
+      rowCount: 100,
+      datasetKind: "synthetic",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      fingerprint: "a".repeat(64),
+      createdById: 1,
+      createdAt: "2026-11-09T00:00:00.000Z",
+    };
+    const job = {
+      id: "training-job-1",
+      datasetId: dataset.id,
+      modelId: "ecet-readiness-tensorflow",
+      status: "QUEUED",
+      progress: 0,
+      errorMessage: "",
+      createdAt: "2026-11-09T00:00:00.000Z",
+      startedAt: null,
+      completedAt: null,
+      result: null,
+    };
+    let queuedPayload: Record<string, unknown> | null = null;
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 1, email: "admin@example.com", role: "ADMIN" },
+      }));
+      if (path.endsWith("/admin/model-datasets")) return Promise.resolve(response(200, { datasets: [dataset] }));
+      if (path.endsWith("/admin/models")) return Promise.resolve(response(200, { models: [] }));
+      if (path.endsWith("/admin/model-training-jobs")) return Promise.resolve(response(200, { jobs: [job] }));
+      if (path.endsWith("/admin/model-datasets/dataset-ml-1/tensorflow-jobs") && init?.method === "POST") {
+        queuedPayload = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Promise.resolve(response(202, { ok: true, job, statusUrl: "/admin/model-training-jobs/training-job-1" }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Model lab" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Queue TensorFlow.js" }));
+
+    await waitFor(() => expect(queuedPayload).not.toBeNull());
+    expect(queuedPayload).toMatchObject({
+      modelId: "ecet-readiness-tensorflow",
+      seed: 42,
+      epochs: 80,
+      batchSize: 32,
+    });
+    expect(await screen.findByRole("heading", { name: "TensorFlow.js training jobs" })).toBeInTheDocument();
+    expect(screen.getByText("QUEUED")).toBeInTheDocument();
+  });
+
 });
