@@ -70,6 +70,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [error, setError] = useState("");
   const autoSubmitStarted = useRef(false);
   const syncLock = useRef(false);
+  const answerSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let mounted = true;
@@ -230,6 +231,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     setBusyId(activePackage.assignmentId);
     setError("");
     try {
+      // Finish every queued SQLite answer write before freezing the submission snapshot.
+      await answerSaveQueue.current;
       await queueOfflineSubmission(activePackage.assignmentId);
       setActivePackage(null);
       setCurrentQuestionIndex(0);
@@ -294,14 +297,17 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     }).start();
   }, [activePackage, currentQuestionIndex, progress, questionTransition, reduceMotion]);
 
-  const chooseAnswer = async (questionId: string, selectedIndex: number) => {
-    if (!activePackage) return;
-    try {
-      await saveOfflineAnswer(activePackage.assignmentId, questionId, selectedIndex);
-      setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
-    } catch (cause) {
+  const chooseAnswer = (questionId: string, selectedIndex: number) => {
+    if (!activePackage || busyId !== null) return;
+    const assignmentId = activePackage.assignmentId;
+    // Update the UI immediately, but serialize SQLite read-modify-write operations.
+    setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
+    answerSaveQueue.current = answerSaveQueue.current
+      .catch(() => undefined)
+      .then(() => saveOfflineAnswer(assignmentId, questionId, selectedIndex));
+    void answerSaveQueue.current.catch((cause) => {
       setError(cause instanceof Error ? cause.message : "Could not save your answer.");
-    }
+    });
   };
 
   if (activePackage) {
