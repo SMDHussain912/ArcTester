@@ -504,7 +504,7 @@ describe("live Vite application", () => {
     let performanceTime = 1000;
     vi.spyOn(performance, "now").mockImplementation(() => performanceTime);
     const serverNow = new Date(Date.now()).toISOString();
-    const deadline = new Date(Date.now() + 60_000).toISOString();
+    const deadline = new Date(new Date(serverNow).getTime() + 60_000).toISOString();
     const assignment = {
       id: "assignment-heartbeat-1",
       availableFrom: null,
