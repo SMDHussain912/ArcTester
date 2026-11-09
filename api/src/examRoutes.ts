@@ -1367,7 +1367,12 @@ export function examRouter(db: PrismaClient): Router {
           throw conflict("This exam session is already closed.");
         }
         if (input.action === "PAUSE" && current.status === "PAUSED") {
-          throw conflict("This exam session is already paused.");
+          // Repeated pause is idempotent and must not reset pausedAt or add
+          // duplicate audit events.
+          return { id: current.id, status: current.status, endedAt: current.endedAt };
+        }
+        if (input.action === "PAUSE" && current.status !== "ACTIVE") {
+          throw conflict("Only an active exam session can be paused.");
         }
         if (input.action === "RESUME" && current.status !== "PAUSED") {
           throw conflict("This exam session is not paused.");
