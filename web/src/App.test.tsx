@@ -52,6 +52,7 @@ describe("live Vite application", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
     expect(await screen.findByRole("heading", { name: "Assigned exams" })).toBeInTheDocument();
     expect(screen.getByText("No assigned exams")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/exams/assigned"))).toBe(true);
   });
 
   it("loads published announcements into the student dashboard and announcements view", async () => {
