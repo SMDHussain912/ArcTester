@@ -42,7 +42,9 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       !sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features) ||
       typeof sample.target !== "number" || !Number.isFinite(sample.target) ||
       typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
-      featureSchema.some((feature) => typeof sample.features[feature.name] !== "number" ||
+      Object.keys(sample.features).length !== featureSchema.length ||
+      featureSchema.some((feature) => !Object.prototype.hasOwnProperty.call(sample.features, feature.name) ||
+        typeof sample.features[feature.name] !== "number" ||
         !Number.isFinite(sample.features[feature.name]))
     )) {
       throw new Error("Every TensorFlow sample must contain finite numeric features, a finite target, and a keyed HMAC-SHA-256 pseudonymous groupId.");
