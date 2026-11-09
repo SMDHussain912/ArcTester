@@ -302,6 +302,7 @@ describe("versioned exam management", () => {
     expect(packageBody.questions[0].correctIndex).toBeUndefined();
     expect(packageBody.questions[0].explanation).toBeUndefined();
     expect(packageBody.questions[0].optionOrder).toHaveLength(4);
+    displayedCorrectIndex = packageBody.questions[0].optionOrder.indexOf(1);
     expect(packageBody.questions[0].options).toEqual(
       packageBody.questions[0].optionOrder.map((index) => ["Stack", "Queue", "Tree", "Graph"][index])
     );
