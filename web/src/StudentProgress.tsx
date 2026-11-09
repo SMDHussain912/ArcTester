@@ -130,3 +130,36 @@ export default function StudentProgress() {
     </section>
   );
 }
+
+
+export function DashboardProgressSummary({ onOpenProgress }: { onOpenProgress: () => void }) {
+  const [overview, setOverview] = useState<PerformanceOverview | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    loadOverview()
+      .then((data) => { if (!cancelled) setOverview(data); })
+      .catch((cause) => { if (!cancelled) setError((cause as Error).message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <section className="panel dashboard-progress" aria-labelledby="dashboard-progress-title">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">YOUR PERFORMANCE</p>
+          <h2 id="dashboard-progress-title">Progress at a glance</h2>
+        </div>
+        <button type="button" className="ghost" onClick={onOpenProgress}>View detailed progress →</button>
+      </div>
+      {error ? <p className="error" role="alert">{error}</p> : overview ? (
+        <div className="dashboard-progress-grid">
+          <article><span className="muted">Practice tests</span><strong>{overview.practice.completedAttempts}</strong><small className="muted">completed</small></article>
+          <article><span className="muted">Practice accuracy</span><strong>{percentage(overview.practice.accuracy)}</strong><small className="muted">{overview.practice.correct} correct answers</small></article>
+          <article><span className="muted">Official exams</span><strong>{overview.formalExams.submissions}</strong><small className="muted">{overview.formalExams.graded} graded</small></article>
+        </div>
+      ) : <p className="muted" role="status">Loading your latest performance…</p>}
+    </section>
+  );
+}
