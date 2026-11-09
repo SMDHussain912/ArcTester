@@ -53,11 +53,13 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       }
     }
 
-    await db.modelTrainingJob.updateMany({
+    const initialLease = await db.modelTrainingJob.updateMany({
       where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { progress: 10, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
-    if (/* ownership check */ false) throw new Error("Training worker lease was lost before training started.");
+    if (initialLease.count !== 1) {
+      throw new Error("Training worker lease was lost before training started.");
+    }
     const latest = await db.registeredModel.aggregate({
       where: { modelId: job.modelId },
       _max: { version: true },
@@ -96,10 +98,13 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     });
     if (!lease) throw new Error("Training worker lease was lost; refusing to register a candidate from an unowned job.");
 
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+    const finalizingLease = await db.modelTrainingJob.updateMany({
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { progress: 85, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
+    if (finalizingLease.count !== 1) {
+      throw new Error("Training worker lease was lost before finalization.");
+    }
 
     await db.$transaction(async (tx) => {
       let registeredModel = null;
