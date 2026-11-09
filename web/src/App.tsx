@@ -1032,9 +1032,7 @@ export default function App() {
                 </div>
               </div>
             </section>
-            <section hidden={activePage !== "progress"}>
-              <StudentProgress />
-            </section>
+            {activePage === "progress" ? <StudentProgress /> : null}
             <section hidden={activePage !== "question-bank"}>
               <div className="section-head">
                 <div>
