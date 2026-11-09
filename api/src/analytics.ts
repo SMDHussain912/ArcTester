@@ -316,7 +316,7 @@ export async function getPerformanceOverview(
       INNER JOIN "ExamSubmission" es ON es.id = ea."submissionId"
       INNER JOIN "ExamVersionQuestion" eq ON eq.id = ea."examQuestionId"
       WHERE es.status = 'GRADED' AND es."assignmentId" IN (
-        SELECT id FROM "ExamAssignment" WHERE studentId = ${userId}
+        SELECT id FROM "ExamAssignment" WHERE "studentId" = ${userId}
       )
       GROUP BY eq.subject
     `,
