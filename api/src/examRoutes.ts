@@ -7,7 +7,7 @@ import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
-import { importFromCsv, importFromJson, previewImport } from "./importService.js";
+import { importFromCsv, importFromJson } from "./importService.js";
 import {
   QUESTION_ANALYTICS_MINIMUM_ANSWERS,
   QUESTION_ANALYTICS_WEAK_ACCURACY,
@@ -110,11 +110,20 @@ export function examRouter(db: PrismaClient): Router {
   router.post("/admin/questions/import/preview", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const format = z.enum(["csv", "json"]).parse(req.body?.format);
-      const payload = format === "csv"
-        ? z.string().min(1).max(8_000_000).parse(req.body?.content)
-        : req.body?.questions;
-      const preview = await previewImport(db, format, payload);
-      res.json({ ok: true, preview });
+      const content = z.string().min(1).max(8_000_000).parse(req.body?.content);
+      let report;
+      if (format === "csv") {
+        report = await importFromCsv(db, content, { dryRun: true });
+      } else {
+        let payload: unknown;
+        try {
+          payload = JSON.parse(content);
+        } catch {
+          return next(badRequest("The JSON file is not valid JSON."));
+        }
+        report = await importFromJson(db, payload, { dryRun: true });
+      }
+      res.json({ ok: true, report });
     } catch (error) { next(error); }
   });
 
