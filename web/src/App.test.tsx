@@ -25,6 +25,7 @@ describe("live Vite application", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
