@@ -3,7 +3,6 @@ import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
-import AssignedExams from "./AssignedExams";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
@@ -917,10 +916,6 @@ export default function App() {
                 ))}
               </div>
             </section>
-            <AssignedExams />
-            <p className="footnote">
-              Assigned papers published by your examiner will appear above when they are ready.
-            </p>
           </>
         )}
         {error && <p className="error">{error}</p>}
