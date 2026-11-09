@@ -257,18 +257,26 @@ function getCookie(req: Request, name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function sessionCookieSameSite(secure: boolean): "Lax" | "None" {
+  return secure && process.env.COOKIE_SAME_SITE?.toLowerCase() === "none" ? "None" : "Lax";
+}
+
 function setSessionCookie(res: Response, token: string): void {
   const secure = process.env.NODE_ENV === "production";
+  const sameSite = sessionCookieSameSite(secure);
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${
-      secure ? "; Secure" : ""
-    }`
+    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=${sameSite}${secure ? "; Secure" : ""}`
   );
 }
 
 function clearSessionCookie(res: Response): void {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  const secure = process.env.NODE_ENV === "production";
+  const sameSite = sessionCookieSameSite(secure);
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=${sameSite}${secure ? "; Secure" : ""}`
+  );
 }
 
 export function authRouter(db: PrismaClient): Router {
