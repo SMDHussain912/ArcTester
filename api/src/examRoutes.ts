@@ -156,12 +156,20 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/question-bank", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const page = Math.max(1, Number(req.query.page) || 1);
-      const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 500));
-      const search = String(req.query.search ?? "").trim();
-      const subjectName = String(req.query.subject ?? "").trim();
-      const topicName = String(req.query.topic ?? "").trim();
-      const difficulty = String(req.query.difficulty ?? "").trim();
+      const query = z.object({
+        page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+        pageSize: z.coerce.number().int().min(1).max(200).default(200),
+        search: z.string().trim().max(200).default(""),
+        subject: z.string().trim().max(80).default(""),
+        topic: z.string().trim().max(80).default(""),
+        difficulty: z.enum(["", "easy", "medium", "hard"]).default(""),
+      }).parse(req.query);
+      const page = query.page;
+      const pageSize = query.pageSize;
+      const search = query.search;
+      const subjectName = query.subject;
+      const topicName = query.topic;
+      const difficulty = query.difficulty;
       const where = {
         ...(subjectName ? { subject: { name: subjectName } } : {}),
         ...(topicName ? { topic: { name: topicName } } : {}),
@@ -273,7 +281,12 @@ export function examRouter(db: PrismaClient): Router {
       if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
       const result = await db.question.deleteMany({ where: { id: { in: input.ids } } });
       res.json({ ok: true, deleted: result.count });
-    } catch (error) { next(error); }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2003") {
+        return next(conflict("Some selected questions are already used by attempts or reports and cannot be deleted. Archive or keep those questions instead."));
+      }
+      next(error);
+    }
   });
 
   router.patch("/admin/questions/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
@@ -364,53 +377,53 @@ export function examRouter(db: PrismaClient): Router {
           questionId: number; subject: string; topic: string | null; difficulty: string;
           correct: number; incorrect: number; unanswered: number; uniqueStudents: number;
         }>>`
-          SELECT aa.questionId AS questionId,
-            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.subjectSnapshot ELSE s.name END) AS subject,
-            MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END) AS topic,
-            MAX(CASE WHEN aa.difficultySnapshot <> '' THEN aa.difficultySnapshot ELSE q.difficulty END) AS difficulty,
-            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+          SELECT aa."questionId" AS "questionId",
+            MAX(CASE WHEN aa."subjectSnapshot" <> '' THEN aa."subjectSnapshot" ELSE s.name END) AS subject,
+            MAX(CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END) AS topic,
+            MAX(CASE WHEN aa."difficultySnapshot" <> '' THEN aa."difficultySnapshot" ELSE q.difficulty END) AS difficulty,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
             SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered,
-            COUNT(DISTINCT CASE WHEN aa.chosen IS NOT NULL THEN a.userId END) AS uniqueStudents
-          FROM AttemptAnswer aa
-          INNER JOIN Attempt a ON a.id = aa.attemptId
-          INNER JOIN User u ON u.id = a.userId
-          INNER JOIN Question q ON q.id = aa.questionId
-          INNER JOIN Subject s ON s.id = q.subjectId
-          LEFT JOIN Topic t ON t.id = q.topicId
-          WHERE a.finishedAt IS NOT NULL AND u.role = 'STUDENT'
-          GROUP BY aa.questionId
+            COUNT(DISTINCT CASE WHEN aa.chosen IS NOT NULL THEN a."userId" END) AS "uniqueStudents"
+          FROM "AttemptAnswer" aa
+          INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+          INNER JOIN "User" u ON u.id = a."userId"
+          INNER JOIN "Question" q ON q.id = aa."questionId"
+          INNER JOIN "Subject" s ON s.id = q."subjectId"
+          LEFT JOIN "Topic" t ON t.id = q."topicId"
+          WHERE a."finishedAt" IS NOT NULL AND u.role = 'STUDENT'
+          GROUP BY aa."questionId"
         `,
         db.$queryRaw<Array<{
           subject: string; topic: string | null; correct: number; incorrect: number;
           unanswered: number; awardedMarks: number; maximumMarks: number;
         }>>`
           SELECT eq.subject AS subject, eq.topic AS topic,
-            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-            SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
-            SUM(CASE WHEN ea.selectedIndex IS NULL THEN 1 ELSE 0 END) AS unanswered,
-            SUM(ea.awardedMarks) AS awardedMarks, SUM(eq.marks) AS maximumMarks
-          FROM ExamSubmissionAnswer ea
-          INNER JOIN ExamSubmission es ON es.id = ea.submissionId
-          INNER JOIN ExamAssignment ass ON ass.id = es.assignmentId
-          INNER JOIN User u ON u.id = ass.studentId
-          INNER JOIN ExamVersionQuestion eq ON eq.id = ea.examQuestionId
+            SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+            SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
+            SUM(CASE WHEN ea."selectedIndex" IS NULL THEN 1 ELSE 0 END) AS unanswered,
+            SUM(ea."awardedMarks") AS "awardedMarks", SUM(eq.marks) AS "maximumMarks"
+          FROM "ExamSubmissionAnswer" ea
+          INNER JOIN "ExamSubmission" es ON es.id = ea."submissionId"
+          INNER JOIN "ExamAssignment" ass ON ass.id = es."assignmentId"
+          INNER JOIN "User" u ON u.id = ass."studentId"
+          INNER JOIN "ExamVersionQuestion" eq ON eq.id = ea."examQuestionId"
           WHERE es.status = 'GRADED' AND u.role = 'STUDENT'
           GROUP BY eq.subject, eq.topic
         `,
         db.$queryRaw<Array<{
           examId: string; title: string; assigned: number; submitted: number; averagePercentage: number | null;
         }>>`
-          SELECT ev.examId AS examId, e.title AS title,
+          SELECT ev."examId" AS "examId", e.title AS title,
             COUNT(ass.id) AS assigned,
             SUM(CASE WHEN sub.id IS NOT NULL THEN 1 ELSE 0 END) AS submitted,
-            AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub.maximumScore > 0
-              THEN (sub.score * 100.0) / sub.maximumScore ELSE NULL END) AS averagePercentage
-          FROM ExamAssignment ass
-          INNER JOIN ExamVersion ev ON ev.id = ass.examVersionId
-          INNER JOIN Exam e ON e.id = ev.examId
-          LEFT JOIN ExamSubmission sub ON sub.assignmentId = ass.id
-          GROUP BY ev.examId, e.title
+            AVG(CASE WHEN sub.status = 'GRADED' AND sub.score IS NOT NULL AND sub."maximumScore" > 0
+              THEN (sub.score * 100.0) / sub."maximumScore" ELSE NULL END) AS "averagePercentage"
+          FROM "ExamAssignment" ass
+          INNER JOIN "ExamVersion" ev ON ev.id = ass."examVersionId"
+          INNER JOIN "Exam" e ON e.id = ev."examId"
+          LEFT JOIN "ExamSubmission" sub ON sub."assignmentId" = ass.id
+          GROUP BY ev."examId", e.title
           ORDER BY assigned DESC
         `,
         db.examSubmission.findMany({
@@ -427,12 +440,12 @@ export function examRouter(db: PrismaClient): Router {
           },
         }),
         db.$queryRaw<Array<{ averagePercentage: number | null }>>`
-          SELECT AVG((sub.score * 100.0) / sub.maximumScore) AS averagePercentage
-          FROM ExamSubmission sub
-          INNER JOIN ExamAssignment ass ON ass.id = sub.assignmentId
-          INNER JOIN User u ON u.id = ass.studentId
+          SELECT AVG((sub.score * 100.0) / sub."maximumScore") AS "averagePercentage"
+          FROM "ExamSubmission" sub
+          INNER JOIN "ExamAssignment" ass ON ass.id = sub."assignmentId"
+          INNER JOIN "User" u ON u.id = ass."studentId"
           WHERE u.role = 'STUDENT' AND sub.status = 'GRADED'
-            AND sub.score IS NOT NULL AND sub.maximumScore > 0
+            AND sub.score IS NOT NULL AND sub."maximumScore" > 0
         `,
       ]);
 
@@ -1166,13 +1179,29 @@ export function examRouter(db: PrismaClient): Router {
         return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
       }
       if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
-        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
+        await db.$transaction(async (tx) => {
+          const changed = await tx.examSession.updateMany({
+            where: { id: assignment.session!.id, status: assignment.session!.status },
+            data: { status: "EXPIRED", endedAt: now },
+          });
+          if (changed.count === 1) {
+            await tx.examSessionEvent.create({
+              data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination duration elapsed before the candidate reconnected." },
+            });
+          }
+        });
         return next(conflict("The exam duration has expired. Contact the invigilator."));
       }
       const session = assignment.session
-        ? await db.examSession.update({
-            where: { id: assignment.session.id },
-            data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+        ? await db.$transaction(async (tx) => {
+            const updated = await tx.examSession.update({
+              where: { id: assignment.session!.id },
+              data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+            });
+            await tx.examSessionEvent.create({
+              data: { sessionId: updated.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate restored an existing active session." },
+            });
+            return updated;
           })
         : await db.examSession.create({
             data: {
@@ -1181,7 +1210,6 @@ export function examRouter(db: PrismaClient): Router {
               events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
           });
-      if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
     } catch (error) { next(error); }
@@ -1292,25 +1320,37 @@ export function examRouter(db: PrismaClient): Router {
         ? new Date(assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs)
         : null;
       if (deadline && now.getTime() > deadline.getTime() + 60000) {
-        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
-        await db.examSessionEvent.create({ data: { sessionId: assignment.session.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." } });
+        await db.$transaction(async (tx) => {
+          const changed = await tx.examSession.updateMany({
+            where: { id: assignment.session!.id, status: "ACTIVE" },
+            data: { status: "EXPIRED", endedAt: now },
+          });
+          if (changed.count === 1) {
+            await tx.examSessionEvent.create({
+              data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." },
+            });
+          }
+        });
         return next(conflict("The examination time has expired."));
       }
       if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
-      const session = await db.examSession.update({
-        where: { id: assignment.session.id },
-        data: {
-          lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
-          ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
-          ...(stale ? { disconnectCount: { increment: 1 } } : {}),
-        },
-      });
-      if (input.event !== "HEARTBEAT" || stale) {
-        await db.examSessionEvent.create({
-          data: { sessionId: session.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+      const session = await db.$transaction(async (tx) => {
+        const updated = await tx.examSession.update({
+          where: { id: assignment.session!.id },
+          data: {
+            lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
+            ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
+            ...(stale ? { disconnectCount: { increment: 1 } } : {}),
+          },
         });
-      }
+        if (input.event !== "HEARTBEAT" || stale) {
+          await tx.examSessionEvent.create({
+            data: { sessionId: updated.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+          });
+        }
+        return updated;
+      });
       const effectiveDeadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, serverTime: now, deadline: effectiveDeadline, sessionStatus: session.status });
     } catch (error) { next(error); }
@@ -1355,17 +1395,40 @@ export function examRouter(db: PrismaClient): Router {
       if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(session.status)) return next(conflict("This exam session is already closed."));
       const now = new Date();
       const status = input.action === "PAUSE" ? "PAUSED" : input.action === "RESUME" ? "ACTIVE" : "TERMINATED";
-      const updated = await db.examSession.update({
-        where: { id: session.id },
-        data: {
-          status, lastActivityAt: now,
-          ...(input.action === "PAUSE" && session.status !== "PAUSED" ? { pausedAt: now } : {}),
-          ...(input.action === "RESUME" && session.pausedAt ? { pausedDurationMs: { increment: now.getTime() - session.pausedAt.getTime() }, pausedAt: null } : {}),
-          ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
-        },
-      });
-      await db.examSessionEvent.create({
-        data: { sessionId: session.id, actorId: req.user!.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+      const updated = await db.$transaction(async (tx) => {
+        const current = await tx.examSession.findUnique({ where: { id: session.id } });
+        if (!current) throw notFound("Exam session not found.");
+        if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(current.status)) {
+          throw conflict("This exam session is already closed.");
+        }
+        if (input.action === "PAUSE" && current.status === "PAUSED") {
+          // Repeated pause is idempotent and must not reset pausedAt or add
+          // duplicate audit events.
+          return { id: current.id, status: current.status, endedAt: current.endedAt };
+        }
+        if (input.action === "PAUSE" && current.status !== "ACTIVE") {
+          throw conflict("Only an active exam session can be paused.");
+        }
+        if (input.action === "RESUME" && current.status !== "PAUSED") {
+          throw conflict("This exam session is not paused.");
+        }
+        const changed = await tx.examSession.updateMany({
+          where: { id: current.id, status: current.status },
+          data: {
+            status, lastActivityAt: now,
+            ...(input.action === "PAUSE" ? { pausedAt: now } : {}),
+            ...(input.action === "RESUME" && current.pausedAt ? { pausedDurationMs: { increment: now.getTime() - current.pausedAt.getTime() }, pausedAt: null } : {}),
+            ...(input.action === "TERMINATE" ? { endedAt: now, pausedAt: null } : {}),
+          },
+        });
+        if (changed.count !== 1) throw conflict("The exam session changed concurrently. Refresh and try again.");
+        await tx.examSessionEvent.create({
+          data: { sessionId: current.id, actorId: req.user!.id, type: "INVIGILATOR_" + input.action, detail: input.reason || "Action taken by invigilator." },
+        });
+        return tx.examSession.findUniqueOrThrow({
+          where: { id: current.id },
+          select: { id: true, status: true, endedAt: true },
+        });
       });
       res.json({ ok: true, session: { id: updated.id, status: updated.status, endedAt: updated.endedAt } });
     } catch (error) { next(error); }

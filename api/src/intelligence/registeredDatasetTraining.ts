@@ -1,10 +1,12 @@
-import { runTunedClassifierExperiments, runRegressionExperiment, splitDatasetRows } from "./datasetPipeline.js";
+import { runTunedClassifierExperiments, runRegressionExperiment, splitDatasetRows, splitDatasetRowsByGroup } from "./datasetPipeline.js";
 import type { DatasetFeatureEncoder } from "./datasetPipeline.js";
 import { predictLinearRegression } from "./linearRegression.js";
 
 export interface RegisteredTrainingSample {
   features: Record<string, number | string>;
   target: number;
+  /** Stable keyed HMAC pseudonym used to keep each learner in one split. */
+  groupId?: string;
 }
 
 export interface RegisteredTrainingResult {
@@ -16,6 +18,7 @@ export interface RegisteredTrainingResult {
   uncertainty?: { residualStdDev: number; method: "holdout-rmse" };
   trainRows: number;
   testRows: number;
+  groupSplit?: { trainGroups: number; testGroups: number };
 }
 
 function validateSchema(schema: DatasetFeatureEncoder[]): void {
@@ -41,6 +44,10 @@ export function trainRegisteredDataset(
   validateSchema(schema);
   if (samples.length < 30 || samples.length > 5000) throw new Error("Automatic training requires between 30 and 5000 dataset rows");
   if (samples.some((sample) => !Number.isFinite(sample.target))) throw new Error("Training targets must be finite numbers");
+  const hasGroupIds = samples.some((sample) => sample.groupId !== undefined);
+  if (hasGroupIds && samples.some((sample) => typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
+    throw new Error("Grouped training requires a keyed HMAC-SHA-256 pseudonymous groupId on every sample.");
+  }
   if (task === "binary-classification") {
     if (samples.some((sample) => sample.target !== 0 && sample.target !== 1)) throw new Error("Classification targets must be binary");
     if (samples.filter((sample) => sample.target === 0).length < 10 || samples.filter((sample) => sample.target === 1).length < 10) {
@@ -61,21 +68,35 @@ export function trainRegisteredDataset(
       const categories = feature.categories ?? [];
       return [...categories.map((category) => Number(value === category)), Number(!categories.includes(value))];
     });
-    return { id: index, features, target: sample.target };
+    return { id: index, ...(sample.groupId ? { groupId: sample.groupId } : {}), features, target: sample.target };
   });
   if (task === "binary-classification" && new Set(rows.map((row) => row.target)).size !== 2) {
     throw new Error("Classification training data must contain both classes");
   }
-  const split = task === "binary-classification"
-    ? (() => {
-      const negative = splitDatasetRows(rows.filter((row) => row.target === 0), { testFraction: 0.2, seed });
-      const positive = splitDatasetRows(rows.filter((row) => row.target === 1), { testFraction: 0.2, seed: (seed + 1) >>> 0 });
-      return {
-        train: [...negative.train, ...positive.train],
-        test: [...negative.test, ...positive.test],
-      };
-    })()
-    : splitDatasetRows(rows, { testFraction: 0.2, seed });
+  const split = hasGroupIds
+    ? splitDatasetRowsByGroup(rows, "groupId", { testFraction: 0.2, seed })
+    : task === "binary-classification"
+      ? (() => {
+        const negative = splitDatasetRows(rows.filter((row) => row.target === 0), { testFraction: 0.2, seed });
+        const positive = splitDatasetRows(rows.filter((row) => row.target === 1), { testFraction: 0.2, seed: (seed + 1) >>> 0 });
+        return {
+          train: [...negative.train, ...positive.train],
+          test: [...negative.test, ...positive.test],
+        };
+      })()
+      : splitDatasetRows(rows, { testFraction: 0.2, seed });
+  if (hasGroupIds && split.test.length < 20) {
+    throw new Error("Grouped training requires at least 20 held-out rows. Add more samples across learner groups.");
+  }
+  if (hasGroupIds && task === "binary-classification") {
+    const trainClasses = new Set(split.train.map((row) => row.target));
+    const testClasses = new Set(split.test.map((row) => row.target));
+    if (trainClasses.size !== 2 || testClasses.size !== 2 ||
+        split.train.filter((row) => row.target === 0).length < 10 ||
+        split.train.filter((row) => row.target === 1).length < 10) {
+      throw new Error("Grouped classification split must retain both classes in train and test, with at least 10 training examples per class. Add more balanced learner groups or choose another seed.");
+    }
+  }
   if (task === "binary-classification") {
     const results = runTunedClassifierExperiments(
       split.train.map(({ features, target }) => ({ features, target })),
@@ -90,6 +111,12 @@ export function trainRegisteredDataset(
       parameters: result.parameters,
       trainRows: split.train.length,
       testRows: split.test.length,
+      ...(hasGroupIds ? {
+        groupSplit: {
+          trainGroups: new Set(split.train.map((row) => row.groupId)).size,
+          testGroups: new Set(split.test.map((row) => row.groupId)).size,
+        },
+      } : {}),
     }));
   }
   const result = runRegressionExperiment(
@@ -105,6 +132,12 @@ export function trainRegisteredDataset(
     uncertainty: { residualStdDev, method: "holdout-rmse" },
     trainRows: split.train.length,
     testRows: split.test.length,
+    ...(hasGroupIds ? {
+      groupSplit: {
+        trainGroups: new Set(split.train.map((row) => row.groupId)).size,
+        testGroups: new Set(split.test.map((row) => row.groupId)).size,
+      },
+    } : {}),
   }];
 }
 

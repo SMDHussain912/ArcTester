@@ -1,0 +1,430 @@
+// SQLite has NO enum type and NO array type, so:
+// - difficulty/source are plain validated Strings (Zod enforces the values in code)
+// - options are stored as a JSON string; Zod enforces "exactly 4 non-empty strings"
+// questionHash is a UNIQUE normalized hash (lowercase, trimmed, collapsed spaces)
+// so duplicates are blocked at the database level, not just in code.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Subject {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  topics    Topic[]
+  questions Question[]
+}
+
+model Topic {
+  id        Int        @id @default(autoincrement())
+  name      String
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId Int
+  questions Question[]
+
+  @@unique([subjectId, name])
+}
+
+model Question {
+  id           Int       @id @default(autoincrement())
+  subject      Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId    Int
+  topic        Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId      Int?
+  text         String
+  // JSON string of exactly 4 non-empty option strings (validated by Zod).
+  options      String
+  correctIndex Int
+  explanation  String    @default("")
+  source       String    @default("")
+  difficulty   String    @default("medium")
+  questionHash String    @unique
+  createdAt    DateTime  @default(now())
+  answers      AttemptAnswer[]
+  stats        Stat[]
+  examSnapshots ExamVersionQuestion[]
+
+  @@index([subjectId])
+}
+
+model Attempt {
+  id         Int             @id @default(autoincrement())
+  mode       String          @default("mock")
+  startedAt  DateTime        @default(now())
+  deadline   DateTime?
+  finishedAt DateTime?
+  expired    Boolean         @default(false)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  answers    AttemptAnswer[]
+
+  @@index([userId])
+}
+
+model User {
+  id                 Int          @id @default(autoincrement())
+  email              String       @unique
+  passwordHash       String
+  role               String       @default("STUDENT")
+  createdAt          DateTime     @default(now())
+  attempts           Attempt[]
+  stats              Stat[]
+  devices            Device[]
+  invitationsCreated Invitation[] @relation("InvitationCreator")
+  examsCreated       Exam[]       @relation("ExamCreator")
+  assignments        ExamAssignment[] @relation("StudentAssignments")
+  assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
+  announcementsCreated Announcement[] @relation("AnnouncementCreator")
+  announcementReads   AnnouncementRead[]
+  examSessions        ExamSession[]
+  examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
+  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
+  modelEvaluations    ModelEvaluation[]    @relation("ModelEvaluationActor")
+  modelDatasets       ModelDataset[]       @relation("ModelDatasetCreator")
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  createdBy   User      @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdById Int
+
+  @@index([email, expiresAt])
+  @@index([createdById])
+}
+
+model Device {
+  id            String    @id @default(cuid())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        Int
+  deviceName    String
+  platform      String
+  fingerprint   String
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  revokedAt     DateTime?
+
+  @@unique([userId, fingerprint])
+  @@index([userId, revokedAt])
+}
+
+// Exam content is versioned. Each version stores immutable question snapshots so
+// later edits to the shared question bank cannot change an assigned exam.
+model Exam {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @default("")
+  status      String   @default("DRAFT")
+  createdBy   User     @relation("ExamCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  versions    ExamVersion[]
+
+  @@index([createdById, status])
+}
+
+model ExamVersion {
+  id               String                 @id @default(cuid())
+  exam             Exam                   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examId           String
+  version          Int
+  instructions     String                 @default("")
+  durationMinutes  Int
+  shuffleQuestions Boolean                @default(false)
+  shuffleOptions   Boolean                @default(false)
+  publishedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  questions        ExamVersionQuestion[]
+  assignments      ExamAssignment[]
+
+  @@unique([examId, version])
+  @@index([examId, publishedAt])
+}
+
+model ExamVersionQuestion {
+  id              String       @id @default(cuid())
+  examVersion     ExamVersion  @relation(fields: [examVersionId], references: [id], onDelete: Cascade)
+  examVersionId   String
+  sourceQuestion  Question?    @relation(fields: [sourceQuestionId], references: [id], onDelete: SetNull)
+  sourceQuestionId Int?
+  position        Int
+  subject         String
+  topic           String?
+  text            String
+  options         String
+  correctIndex    Int
+  explanation     String       @default("")
+  marks           Float        @default(1)
+  negativeMarks   Float        @default(0)
+  createdAt       DateTime     @default(now())
+
+  @@unique([examVersionId, position])
+  @@index([sourceQuestionId])
+  submissionAnswers ExamSubmissionAnswer[]
+  sessionAnswers   ExamSessionAnswer[]
+}
+
+model ExamAssignment {
+  id             String       @id @default(cuid())
+  examVersion    ExamVersion  @relation(fields: [examVersionId], references: [id], onDelete: Restrict)
+  examVersionId  String
+  student        User         @relation("StudentAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+  studentId      Int
+  assignedBy     User         @relation("AssignmentCreator", fields: [assignedById], references: [id], onDelete: Restrict)
+  assignedById   Int
+  assignedAt     DateTime     @default(now())
+  availableFrom  DateTime?
+  dueAt          DateTime?
+  status         String       @default("ASSIGNED")
+  submission     ExamSubmission?
+  session        ExamSession?
+
+  @@unique([examVersionId, studentId])
+  @@index([studentId, status])
+  @@index([assignedById])
+}
+
+model ExamSubmission {
+  id              String                 @id @default(cuid())
+  assignment      ExamAssignment         @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId    String                 @unique
+  attemptUuid     String                 @unique
+  startedAt       DateTime
+  submittedAt     DateTime
+  receivedAt      DateTime               @default(now())
+  status          String                 @default("RECEIVED")
+  score           Float?
+  maximumScore    Float?
+  answers         ExamSubmissionAnswer[]
+
+  @@index([receivedAt, status])
+}
+
+model ExamSubmissionAnswer {
+  id                 String               @id @default(cuid())
+  submission         ExamSubmission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId       String
+  examQuestion       ExamVersionQuestion @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  examQuestionId     String
+  selectedIndex      Int?
+  isCorrect          Boolean
+  awardedMarks       Float
+
+  @@unique([submissionId, examQuestionId])
+  @@index([examQuestionId])
+}
+
+model AttemptAnswer {
+  id         Int      @id @default(autoincrement())
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId  Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionId Int
+  chosen            Int?
+  isCorrect         Boolean
+  subjectSnapshot   String   @default("")
+  topicSnapshot     String?
+  difficultySnapshot String  @default("medium")
+  textSnapshot      String   @default("")
+  optionsSnapshot   String   @default("[]")
+  correctIndexSnapshot Int   @default(0)
+  explanationSnapshot String @default("")
+
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model Stat {
+  id         Int      @id @default(autoincrement())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionId Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  seen       Int      @default(0)
+  wrong      Int      @default(0)
+  lastSeen   DateTime?
+
+  // One stat row per (user, question) pair.
+  @@unique([userId, questionId])
+  @@index([questionId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  createdAt   DateTime @default(now())
+  publishedAt DateTime @default(now())
+  expiresAt   DateTime?
+  createdBy   User     @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById Int
+  reads       AnnouncementRead[]
+
+  @@index([publishedAt, expiresAt])
+  @@index([createdById])
+}
+
+
+model AnnouncementRead {
+  announcementId String
+  studentId      Int
+  seenAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, studentId])
+  @@index([studentId, seenAt])
+}
+
+ 
+model ExamSession {
+  id               String             @id @default(cuid())
+  assignment       ExamAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId     String             @unique
+  student          User               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId        Int
+  status           String             @default("NOT_STARTED")
+  startedAt        DateTime?
+  lastHeartbeatAt  DateTime?
+  lastActivityAt   DateTime?
+  pausedAt         DateTime?
+  pausedDurationMs Int                @default(0)
+  answersRevision  Int                @default(0)
+  endedAt          DateTime?
+  heartbeatCount   Int                @default(0)
+  focusLossCount   Int                @default(0)
+  disconnectCount  Int                @default(0)
+  createdAt        DateTime           @default(now())
+  events           ExamSessionEvent[]
+  answers          ExamSessionAnswer[]
+
+  @@index([status, lastHeartbeatAt])
+  @@index([studentId, status])
+}
+
+model ExamSessionEvent {
+  id        String      @id @default(cuid())
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  actor     User?       @relation("SessionEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
+  type      String
+  detail    String      @default("")
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([actorId])
+}
+
+model ExamSessionAnswer {
+  id             String               @id @default(cuid())
+  session        ExamSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId      String
+  examQuestion   ExamVersionQuestion  @relation(fields: [examQuestionId], references: [id], onDelete: Restrict)
+  examQuestionId String
+  selectedIndex  Int?
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([sessionId, examQuestionId])
+  @@index([examQuestionId])
+}
+
+
+model RegisteredModel {
+  id          String   @id @default(cuid())
+  modelId     String
+  version     Int
+  algorithm   String
+  task        String
+  dataset     String
+  trainingDatasetId String?
+  artifactJson String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  activatedAt DateTime?
+
+  @@unique([modelId, version])
+  @@index([modelId, isActive])
+  @@index([createdAt])
+}
+
+
+model ModelRegistryAudit {
+  id        String   @id @default(cuid())
+  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
+  modelId   String
+  version   Int
+  action    String
+  details   String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([modelId, version, createdAt])
+  @@index([actorId, createdAt])
+}
+
+
+model ModelEvaluation {
+  id                 String   @id @default(cuid())
+  actor              User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId            Int?
+  modelId            String
+  candidateVersion   Int
+  baselineVersion    Int
+  datasetId          String   @default("")
+  evaluationDataset  String
+  datasetFingerprint String
+  sampleCount        Int
+  metricsJson        String
+  status             String
+  evaluatedAt        DateTime @default(now())
+
+  @@index([modelId, candidateVersion, evaluatedAt])
+  @@index([actorId, evaluatedAt])
+}
+
+
+model ModelDataset {
+  id                 String   @id @default(cuid())
+  createdBy          User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById        Int?
+  name               String
+  task               String
+  targetColumn       String   @default("target")
+  featureSchemaJson  String
+  samplesJson        String
+  rowCount           Int
+  sourceDescription  String
+  sourceAttested     Boolean  @default(false)
+  datasetKind        String   @default("synthetic")
+  fingerprint        String   @unique
+  createdAt          DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([createdById, createdAt])
+}
+
+
+model ModelDriftBucket {
+  id          String   @id @default(cuid())
+  modelId     String
+  version     Int
+  featureName String
+  bucket      String
+  periodStart DateTime
+  count       Int      @default(0)
+
+  @@unique([modelId, version, featureName, bucket, periodStart])
+  @@index([modelId, version, periodStart])
+}

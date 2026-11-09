@@ -79,17 +79,17 @@ export async function getWeakTopics(db: PrismaClient, userId: number): Promise<W
     subject: string; topic: string | null; correct: number; wrong: number; unanswered: number;
   }>>`
     SELECT
-      COALESCE(NULLIF(aa.subjectSnapshot, ''), s.name) AS subject,
-      CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END AS topic,
-      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS wrong,
+      COALESCE(NULLIF(aa."subjectSnapshot", ''), s.name) AS subject,
+      CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END AS topic,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS wrong,
       SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
-    FROM AttemptAnswer aa
-    INNER JOIN Attempt a ON a.id = aa.attemptId
-    INNER JOIN Question q ON q.id = aa.questionId
-    INNER JOIN Subject s ON s.id = q.subjectId
-    LEFT JOIN Topic t ON t.id = q.topicId
-    WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+    FROM "AttemptAnswer" aa
+    INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+    INNER JOIN "Question" q ON q.id = aa."questionId"
+    INNER JOIN "Subject" s ON s.id = q."subjectId"
+    LEFT JOIN "Topic" t ON t.id = q."topicId"
+    WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
     GROUP BY subject, topic
   `;
 
@@ -162,20 +162,20 @@ export async function getQuestionPerformance(
     correct: number; incorrect: number; unanswered: number;
   }>>`
     SELECT
-      aa.questionId AS questionId,
-      MAX(COALESCE(NULLIF(aa.subjectSnapshot, ''), s.name)) AS subject,
-      MAX(CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END) AS topic,
-      MAX(COALESCE(NULLIF(aa.difficultySnapshot, ''), q.difficulty)) AS difficulty,
-      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+      aa."questionId" AS "questionId",
+      MAX(COALESCE(NULLIF(aa."subjectSnapshot", ''), s.name)) AS subject,
+      MAX(CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END) AS topic,
+      MAX(COALESCE(NULLIF(aa."difficultySnapshot", ''), q.difficulty)) AS difficulty,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+      SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
       SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
-    FROM AttemptAnswer aa
-    INNER JOIN Attempt a ON a.id = aa.attemptId
-    INNER JOIN Question q ON q.id = aa.questionId
-    INNER JOIN Subject s ON s.id = q.subjectId
-    LEFT JOIN Topic t ON t.id = q.topicId
-    WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
-    GROUP BY aa.questionId
+    FROM "AttemptAnswer" aa
+    INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+    INNER JOIN "Question" q ON q.id = aa."questionId"
+    INNER JOIN "Subject" s ON s.id = q."subjectId"
+    LEFT JOIN "Topic" t ON t.id = q."topicId"
+    WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
+    GROUP BY aa."questionId"
   `;
   const questions: QuestionPerformanceRow[] = aggregates.map((row) => {
     const correct = Number(row.correct ?? 0);
@@ -267,12 +267,12 @@ export async function getPerformanceOverview(
     db.attempt.count({ where: { userId, finishedAt: { not: null } } }),
     db.$queryRaw<Array<{ correct: number; incorrect: number; unanswered: number }>>`
       SELECT
-        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
         SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
-      FROM AttemptAnswer aa
-      INNER JOIN Attempt a ON a.id = aa.attemptId
-      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+      FROM "AttemptAnswer" aa
+      INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+      WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
     `,
     db.attempt.findMany({
       where: { userId, finishedAt: { not: null } },
@@ -286,14 +286,14 @@ export async function getPerformanceOverview(
     getWeakTopics(db, userId),
     db.$queryRaw<Array<{ difficulty: string; correct: number; incorrect: number; unanswered: number }>>`
       SELECT
-        aa.difficultySnapshot AS difficulty,
-        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
+        aa."difficultySnapshot" AS difficulty,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
         SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
-      FROM AttemptAnswer aa
-      INNER JOIN Attempt a ON a.id = aa.attemptId
-      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
-      GROUP BY aa.difficultySnapshot
+      FROM "AttemptAnswer" aa
+      INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+      WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
+      GROUP BY aa."difficultySnapshot"
     `,
     db.examSubmission.count({ where: { assignment: { studentId: userId } } }),
     db.examSubmission.count({ where: { status: "GRADED", assignment: { studentId: userId } } }),
@@ -307,16 +307,16 @@ export async function getPerformanceOverview(
       awardedMarks: number; maximumMarks: number;
     }>>`
       SELECT eq.subject AS subject,
-        SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 1 THEN 1 ELSE 0 END) AS correct,
-        SUM(CASE WHEN ea.selectedIndex IS NOT NULL AND ea.isCorrect = 0 THEN 1 ELSE 0 END) AS incorrect,
-        SUM(CASE WHEN ea.selectedIndex IS NULL THEN 1 ELSE 0 END) AS unanswered,
-        SUM(ea.awardedMarks) AS awardedMarks,
-        SUM(eq.marks) AS maximumMarks
-      FROM ExamSubmissionAnswer ea
-      INNER JOIN ExamSubmission es ON es.id = ea.submissionId
-      INNER JOIN ExamVersionQuestion eq ON eq.id = ea.examQuestionId
-      WHERE es.status = 'GRADED' AND es.assignmentId IN (
-        SELECT id FROM ExamAssignment WHERE studentId = ${userId}
+        SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN ea."selectedIndex" IS NOT NULL AND ea."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN ea."selectedIndex" IS NULL THEN 1 ELSE 0 END) AS unanswered,
+        SUM(ea."awardedMarks") AS "awardedMarks",
+        SUM(eq.marks) AS "maximumMarks"
+      FROM "ExamSubmissionAnswer" ea
+      INNER JOIN "ExamSubmission" es ON es.id = ea."submissionId"
+      INNER JOIN "ExamVersionQuestion" eq ON eq.id = ea."examQuestionId"
+      WHERE es.status = 'GRADED' AND es."assignmentId" IN (
+        SELECT id FROM "ExamAssignment" WHERE "studentId" = ${userId}
       )
       GROUP BY eq.subject
     `,
@@ -408,15 +408,15 @@ export async function getHistory(
       attemptId: number; mode: string; startedAt: Date; finishedAt: Date | null;
       expired: boolean; score: number; total: number;
     }>>`
-      SELECT a.id AS attemptId, a.mode AS mode, a.startedAt AS startedAt,
-        a.finishedAt AS finishedAt, a.expired AS expired,
-        SUM(CASE WHEN aa.isCorrect = 1 THEN 1 ELSE 0 END) AS score,
+      SELECT a.id AS "attemptId", a.mode AS mode, a."startedAt" AS "startedAt",
+        a."finishedAt" AS "finishedAt", a.expired AS expired,
+        SUM(CASE WHEN aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS score,
         COUNT(aa.id) AS total
-      FROM Attempt a
-      LEFT JOIN AttemptAnswer aa ON aa.attemptId = a.id
-      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+      FROM "Attempt" a
+      LEFT JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+      WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY a.id
-      ORDER BY a.finishedAt DESC
+      ORDER BY a."finishedAt" DESC, a.id DESC
       LIMIT ${safeLimit} OFFSET ${(safePage - 1) * safeLimit}
     `,
     db.attempt.count({ where: { userId, finishedAt: { not: null } } }),
@@ -477,15 +477,15 @@ export async function getStudyRecommendations(
     getHistory(db, userId, 1, 1),
     db.$queryRaw<Array<{ subject: string; topic: string | null; lastPracticedAt: Date }>>`
       SELECT
-        CASE WHEN aa.subjectSnapshot <> '' THEN aa.subjectSnapshot ELSE s.name END AS subject,
-        CASE WHEN aa.subjectSnapshot <> '' THEN aa.topicSnapshot ELSE t.name END AS topic,
-        MAX(a.finishedAt) AS lastPracticedAt
-      FROM AttemptAnswer aa
-      INNER JOIN Attempt a ON a.id = aa.attemptId
-      INNER JOIN Question q ON q.id = aa.questionId
-      INNER JOIN Subject s ON s.id = q.subjectId
-      LEFT JOIN Topic t ON t.id = q.topicId
-      WHERE a.userId = ${userId} AND a.finishedAt IS NOT NULL
+        CASE WHEN aa."subjectSnapshot" <> '' THEN aa."subjectSnapshot" ELSE s.name END AS subject,
+        CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END AS topic,
+        MAX(a."finishedAt") AS "lastPracticedAt"
+      FROM "AttemptAnswer" aa
+      INNER JOIN "Attempt" a ON a.id = aa."attemptId"
+      INNER JOIN "Question" q ON q.id = aa."questionId"
+      INNER JOIN "Subject" s ON s.id = q."subjectId"
+      LEFT JOIN "Topic" t ON t.id = q."topicId"
+      WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY subject, topic
     `,
   ]);

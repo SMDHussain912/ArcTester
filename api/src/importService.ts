@@ -1,7 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { parseCsv } from "./csv.js";
-import { insertQuestion } from "./questionRepository.js";
-import { BaseRowSchema, QuestionInputSchema, hashQuestion, type QuestionInput } from "./questions.js";
+import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";
 
 export type InvalidRow = { row: number; reason: string };
 export type ImportReport = {
@@ -29,6 +28,79 @@ const CSV_COLUMNS = [
 
 function invalidRow(row: number, reason: string): InvalidRow {
   return { row, reason };
+}
+
+/**
+ * Bulk imports use INSERT .. ON CONFLICT DO NOTHING through Prisma createMany.
+ * Catching a unique-violation inside a PostgreSQL transaction aborts that
+ * transaction, even if JavaScript catches the exception. Pre-filter known
+ * duplicates and let the database safely skip any concurrent duplicate race.
+ */
+async function insertValidatedQuestions(
+  db: PrismaClient,
+  inputs: QuestionInput[],
+): Promise<{ added: number; duplicates: number }> {
+  return db.$transaction(async (tx) => {
+    const uniqueInputs: QuestionInput[] = [];
+    const seen = new Set<string>();
+    for (const input of inputs) {
+      const hash = hashQuestion(input.text);
+      if (seen.has(hash)) continue;
+      seen.add(hash);
+      uniqueInputs.push(input);
+    }
+
+    const hashes = uniqueInputs.map((input) => hashQuestion(input.text));
+    const existing = hashes.length
+      ? await tx.question.findMany({
+          where: { questionHash: { in: hashes } },
+          select: { questionHash: true },
+        })
+      : [];
+    const existingHashes = new Set(existing.map((row) => row.questionHash));
+    const pending = uniqueInputs.filter((input) => !existingHashes.has(hashQuestion(input.text)));
+    const rows: Array<{
+      subjectId: number;
+      topicId: number;
+      text: string;
+      options: string;
+      correctIndex: number;
+      explanation: string;
+      source: string;
+      difficulty: string;
+      questionHash: string;
+    }> = [];
+
+    for (const input of pending) {
+      const subject = await tx.subject.upsert({
+        where: { name: input.subject.trim() },
+        update: {},
+        create: { name: input.subject.trim() },
+      });
+      const topicName = (input.topic ?? "General").trim() || "General";
+      const topic = await tx.topic.upsert({
+        where: { subjectId_name: { subjectId: subject.id, name: topicName } },
+        update: {},
+        create: { subjectId: subject.id, name: topicName },
+      });
+      rows.push({
+        subjectId: subject.id,
+        topicId: topic.id,
+        text: input.text.trim(),
+        options: encodeOptions(input.options),
+        correctIndex: input.correctIndex,
+        explanation: input.explanation ?? "",
+        source: input.source ?? "",
+        difficulty: input.difficulty ?? "medium",
+        questionHash: hashQuestion(input.text),
+      });
+    }
+
+    const result = rows.length
+      ? await tx.question.createMany({ data: rows, skipDuplicates: true })
+      : { count: 0 };
+    return { added: result.count, duplicates: inputs.length - result.count };
+  });
 }
 
 function describeIssue(error: unknown): string {
@@ -80,14 +152,9 @@ export async function importFromJson(db: PrismaClient, payload: unknown): Promis
     valid.push({ index: rowNumber, input: checked.data });
   });
 
-  // One transaction: either all valid rows land, or none do.
-  await db.$transaction(async (tx) => {
-    for (const item of valid) {
-      const outcome = await insertQuestion(tx as PrismaClient, item.input);
-      if (outcome === "inserted") report.added += 1;
-      else report.duplicates += 1;
-    }
-  });
+  const imported = await insertValidatedQuestions(db, valid.map((item) => item.input));
+  report.added = imported.added;
+  report.duplicates = imported.duplicates;
   return report;
 }
 
@@ -140,13 +207,9 @@ export async function importFromCsv(db: PrismaClient, content: string): Promise<
     valid.push(checked.data);
   });
 
-  await db.$transaction(async (tx) => {
-    for (const input of valid) {
-      const outcome = await insertQuestion(tx as PrismaClient, input);
-      if (outcome === "inserted") report.added += 1;
-      else report.duplicates += 1;
-    }
-  });
+  const imported = await insertValidatedQuestions(db, valid);
+  report.added = imported.added;
+  report.duplicates = imported.duplicates;
   return report;
 }
 

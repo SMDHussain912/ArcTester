@@ -55,8 +55,9 @@ describe("concept library page", () => {
   it("submits a search query to the concept API", async () => {
     render(<SessionProvider><LearningPage /></SessionProvider>);
     const search = await screen.findByRole("textbox", { name: "Search concepts" });
+    const searchButton = await screen.findByRole("button", { name: "Search" });
     fireEvent.change(search, { target: { value: "queue" } });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    fireEvent.click(searchButton);
     await waitFor(() => {
       expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/learning/concepts?q=queue"))).toBe(true);
     });

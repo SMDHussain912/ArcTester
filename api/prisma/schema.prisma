@@ -1,15 +1,13 @@
-// SQLite has NO enum type and NO array type, so:
-// - difficulty/source are plain validated Strings (Zod enforces the values in code)
-// - options are stored as a JSON string; Zod enforces "exactly 4 non-empty strings"
-// questionHash is a UNIQUE normalized hash (lowercase, trimmed, collapsed spaces)
-// so duplicates are blocked at the database level, not just in code.
+// PostgreSQL is the primary application database. Difficulty/source remain validated strings,
+// and options remain JSON text so the API can preserve a stable import/export format.
+// questionHash is a UNIQUE normalized hash, blocking duplicates at the database level.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -1,6 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { createHash, randomBytes } from "node:crypto";
-import { tmpdir } from "node:os";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -8,10 +6,9 @@ import type { AddressInfo } from "node:net";
 import type { Express } from "express";
 
 /**
- * Isolated API + SQLite per test FILE: spins a temp DB, applies the real
- * migration history (including raw SQL indexes), builds the app against it,
- * and serves on a random port. Tests use plain
- * global fetch — no new libraries (no supertest).
+ * Isolated API + PostgreSQL schema per test FILE: applies the real migration
+ * history in a dedicated schema, builds the app against it, and serves on a
+ * random port. Tests use plain global fetch — no supertest.
  */
 
 const testDatabases = new Map<string, PrismaClient>();
@@ -22,6 +19,30 @@ export interface TestServer {
   close: () => Promise<void>;
 }
 
+function schemaUrl(baseUrl: string, schema: string): string {
+  const parsed = new URL(baseUrl);
+  parsed.searchParams.set("schema", schema);
+  return parsed.toString();
+}
+
+async function createSchema(baseUrl: string, schema: string): Promise<void> {
+  const admin = new PrismaClient({ datasources: { db: { url: baseUrl } } });
+  try {
+    await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
+  } finally {
+    await admin.$disconnect();
+  }
+}
+
+async function dropSchema(baseUrl: string, schema: string): Promise<void> {
+  const admin = new PrismaClient({ datasources: { db: { url: baseUrl } } });
+  try {
+    await admin.$executeRawUnsafe(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+  } finally {
+    await admin.$disconnect();
+  }
+}
+
 export async function startTestServer(
   buildApp: (db: PrismaClient) => Express
 ): Promise<TestServer> {
@@ -29,14 +50,22 @@ export async function startTestServer(
   const { dirname } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const apiDir = dirname(dirname(fileURLToPath(import.meta.url)));
+  const baseUrl = process.env.DATABASE_URL;
+  if (!baseUrl) throw new Error("DATABASE_URL must point to the PostgreSQL test server.");
+  const schema = `test_${randomUUID().replace(/-/g, "")}`;
+  const url = schemaUrl(baseUrl, schema);
+  await createSchema(baseUrl, schema);
 
-  const dir = mkdtempSync(join(tmpdir(), "ecet-api-test-"));
-  const url = `file:${join(dir, "test.db")}`;
-  execFileSync(
-    "npx",
-    ["prisma", "migrate", "deploy", "--schema", join(apiDir, "prisma/schema.prisma")],
-    { cwd: apiDir, stdio: "pipe", env: { ...process.env, DATABASE_URL: url } }
-  );
+  try {
+    execFileSync(
+      "npx",
+      ["prisma", "migrate", "deploy", "--schema", join(apiDir, "prisma/schema.prisma")],
+      { cwd: apiDir, stdio: "pipe", env: { ...process.env, DATABASE_URL: url } }
+    );
+  } catch (error) {
+    await dropSchema(baseUrl, schema);
+    throw error;
+  }
   const db = new PrismaClient({ datasources: { db: { url } } });
 
   const app = buildApp(db);
@@ -45,17 +74,17 @@ export async function startTestServer(
   });
   const port = (server.address() as AddressInfo).port;
 
-  const baseUrl = `http://127.0.0.1:${port}`;
-  testDatabases.set(baseUrl, db);
+  const base = `http://127.0.0.1:${port}`;
+  testDatabases.set(base, db);
 
   const close = async () => {
-    testDatabases.delete(baseUrl);
+    testDatabases.delete(base);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.$disconnect();
-    rmSync(dir, { recursive: true, force: true });
+    await dropSchema(baseUrl, schema);
   };
 
-  return { baseUrl, db, close };
+  return { baseUrl: base, db, close };
 }
 
 export async function postJson(

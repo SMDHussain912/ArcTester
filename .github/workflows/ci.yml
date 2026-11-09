@@ -18,7 +18,23 @@ jobs:
   verify:
     name: Test, lint and build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,8 +51,8 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
 
-      - name: Verify migrations on a clean SQLite database
-        run: DATABASE_URL="file:./migration-check.db" npx prisma migrate deploy --schema=api/prisma/schema.prisma
+      - name: Verify migrations on a clean PostgreSQL database
+        run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
 
       - name: Run tests
         run: npm test
@@ -81,3 +97,38 @@ jobs:
 
       - name: Test privacy-safe CSV conversion
         run: python -m unittest scripts/test_prepare_tensorflow_dataset.py -v
+
+  sqlite-to-postgres-migration:
+    name: SQLite to PostgreSQL migration utility tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install migration helper dependency
+        run: pip install -r requirements-migrate.txt
+
+      - name: Test SQLite data migration helpers
+        run: python -m unittest scripts/test_migrate_sqlite_to_postgres.py -v

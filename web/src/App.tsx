@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { xlsxToCsv } from "./xlsx";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
+import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
+import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -125,13 +127,13 @@ type Result = {
 
 function browserDeviceFingerprint(): string {
   const key = "arctester-device-fingerprint";
-  const existing = localStorage.getItem(key);
+  const existing = safeStorage.getItem(key);
   if (existing) return existing;
   const fingerprint =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  localStorage.setItem(key, fingerprint);
+  safeStorage.setItem(key, fingerprint);
   return fingerprint;
 }
 
@@ -281,12 +283,12 @@ export default function App() {
   const [modelLabLoading, setModelLabLoading] = useState(false);
   const [modelLabNotice, setModelLabNotice] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(
-    () => (localStorage.getItem("arctester-theme") as "light" | "dark") || "light"
+    () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("arctester-theme", theme);
+    safeStorage.setItem("arctester-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -313,7 +315,7 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== "STUDENT") return;
     let active = true;
-    const savedAttemptId = localStorage.getItem("arctester-active-practice-attempt");
+    const savedAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
     if (savedAttemptId && /^\d+$/.test(savedAttemptId)) {
       request<RestoredTest>(`/tests/${savedAttemptId}`).then((restored) => {
         if (!active) return;
@@ -323,19 +325,19 @@ export default function App() {
         const serverAnswers = Object.fromEntries(restored.saved.filter((answer) => answer.selectedIndex !== null).map((answer) => [answer.questionId, answer.selectedIndex as number] as const));
         let localAnswers: Record<number, number> = {};
         try {
-          const cached = JSON.parse(localStorage.getItem(practiceAnswersKey(restored.attemptId)) ?? "{}") as Record<string, unknown>;
+          const cached = JSON.parse(safeStorage.getItem(practiceAnswersKey(restored.attemptId)) ?? "{}") as Record<string, unknown>;
           const validQuestionIds = new Set(restored.questions.map((question) => question.id));
           localAnswers = Object.fromEntries(Object.entries(cached).flatMap(([id, value]) => {
             const questionId = Number(id);
             return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
           }));
-        } catch { localStorage.removeItem(practiceAnswersKey(restored.attemptId)); }
+        } catch { safeStorage.removeItem(practiceAnswersKey(restored.attemptId)); }
         setAnswers({ ...serverAnswers, ...localAnswers });
         setActivePage("practice");
       }).catch(() => {
         if (active) {
-          localStorage.removeItem(practiceAnswersKey(savedAttemptId));
-          localStorage.removeItem("arctester-active-practice-attempt");
+          safeStorage.removeItem(practiceAnswersKey(savedAttemptId));
+          safeStorage.removeItem("arctester-active-practice-attempt");
         }
       });
     }
@@ -397,12 +399,15 @@ export default function App() {
       } catch (cause) {
         if (disposed) return;
         const message = (cause as Error).message;
-        if (message.toLowerCase().includes("no active exam session")) {
+        const failure = classifyAssignmentHeartbeatFailure(message);
+        if (failure === "paused") {
           setAssignmentSessionPaused(true);
           setError("Your exam session is paused or locked by the invigilator. Your timer is on hold until the session is resumed.");
-        } else if (message.toLowerCase().includes("time has expired") || message.toLowerCase().includes("deadline has passed")) {
+        } else if (failure === "deadline") {
+          // Do not pause the timer here. The deadline effect must submit the
+          // locally saved answers; the API retains late submissions for review.
           setError(message);
-          setAssignmentSessionPaused(true);
+          setAssignmentSessionPaused(false);
         }
       }
     };
@@ -649,13 +654,13 @@ export default function App() {
       );
       let restoredAnswers: Record<string, number> = {};
       try {
-        const cached = JSON.parse(localStorage.getItem(assignedAnswersKey(assignmentId)) ?? "{}") as Record<string, unknown>;
+        const cached = JSON.parse(safeStorage.getItem(assignedAnswersKey(assignmentId)) ?? "{}") as Record<string, unknown>;
         const validQuestionIds = new Set(response.package.questions.map((question) => question.id));
         restoredAnswers = Object.fromEntries(Object.entries(cached).flatMap(([id, value]) => {
           const questionId = id;
           return validQuestionIds.has(questionId) && Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 3 ? [[questionId, Number(value)] as const] : [];
         }));
-      } catch { localStorage.removeItem(assignedAnswersKey(assignmentId)); }
+      } catch { safeStorage.removeItem(assignedAnswersKey(assignmentId)); }
       assignmentAnswersRevisionRef.current = serverSaved.revision ?? 0;
       const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
@@ -712,8 +717,9 @@ export default function App() {
     if (!activeAssignmentPackage) return;
     const next = { ...assignmentAnswers, [questionId]: selectedIndex };
     setAssignmentAnswers(next);
-    try { localStorage.setItem(assignedAnswersKey(activeAssignmentPackage.assignmentId), JSON.stringify(next)); }
-    catch { setError("Your browser could not save the local answer backup. Submit before closing this tab."); }
+    if (!safeStorage.setItem(assignedAnswersKey(activeAssignmentPackage.assignmentId), JSON.stringify(next))) {
+      setError("Browser storage is unavailable. Keep this exam tab open until you submit; server autosave will continue.");
+    }
   }
 
   async function submitAssignedExam(force = false) {
@@ -725,7 +731,7 @@ export default function App() {
       // Drain the autosave queue so the final submit carries the latest server revision.
       await assignmentSaveQueueRef.current.catch(() => undefined);
       const attemptKey = assignedAttemptKey(activeAssignmentPackage.assignmentId);
-      let attemptUuid = localStorage.getItem(attemptKey);
+      let attemptUuid = safeStorage.getItem(attemptKey);
       if (!attemptUuid) {
         attemptUuid = typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -733,7 +739,7 @@ export default function App() {
               const random = Math.floor(Math.random() * 16);
               return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
             });
-        localStorage.setItem(attemptKey, attemptUuid);
+        safeStorage.setItem(attemptKey, attemptUuid);
       }
       await request(`/exams/assignments/${activeAssignmentPackage.assignmentId}/submission`, {
         method: "POST",
@@ -748,8 +754,8 @@ export default function App() {
           })),
         }),
       });
-      localStorage.removeItem(attemptKey);
-      localStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
+      safeStorage.removeItem(attemptKey);
+      safeStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
       setActiveAssignmentPackage(null);
       setAssignmentStartedAt(null);
       setAssignmentDeadline(null);
@@ -1396,14 +1402,14 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ mode, ...(subject ? { subject } : {}), ...(practiceConfig ? { subjects: practiceConfig.subjects, topicFilters: practiceConfig.topicFilters, count: practiceConfig.count, difficulty: practiceConfig.difficulty } : mode === "practice" ? { count: 10 } : {}) }),
       });
-      const previousAttemptId = localStorage.getItem("arctester-active-practice-attempt");
-      if (previousAttemptId) localStorage.removeItem(practiceAnswersKey(previousAttemptId));
+      const previousAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
+      if (previousAttemptId) safeStorage.removeItem(practiceAnswersKey(previousAttemptId));
       setTest(created);
       setActivePage("practice");
       practiceAutoSubmitRef.current = null;
       setPracticeClock(Date.now());
-      localStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
-      localStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
+      safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
+      safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
       setAnswers({});
     } catch (cause) {
       setError((cause as Error).message);
@@ -1424,10 +1430,8 @@ export default function App() {
     if (!test) return;
     const next = { ...answers, [questionId]: selectedIndex };
     setAnswers(next);
-    try {
-      localStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next));
-    } catch {
-      setError("Your browser could not save the local answer backup. Submit before closing this tab.");
+    if (!safeStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next))) {
+      setError("Browser storage is unavailable. Submit your practice test before closing this tab.");
     }
   }
 
@@ -1447,15 +1451,15 @@ export default function App() {
       });
       const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
-      localStorage.removeItem("arctester-active-practice-attempt");
-      localStorage.removeItem(practiceAnswersKey(test.attemptId));
+      safeStorage.removeItem("arctester-active-practice-attempt");
+      safeStorage.removeItem(practiceAnswersKey(test.attemptId));
       setTest(null);
     } catch (cause) {
       try {
         const recovered = await request<Result>(`/tests/${test.attemptId}/result`);
         setResult(recovered);
-        localStorage.removeItem("arctester-active-practice-attempt");
-        localStorage.removeItem(practiceAnswersKey(test.attemptId));
+        safeStorage.removeItem("arctester-active-practice-attempt");
+        safeStorage.removeItem(practiceAnswersKey(test.attemptId));
         setTest(null);
       } catch {
         setError((cause as Error).message);
@@ -1469,16 +1473,16 @@ export default function App() {
     void request("/auth/logout", { method: "POST" }).catch(() => undefined);
     setUser(null);
     setBank(null);
-    const activePracticeId = localStorage.getItem("arctester-active-practice-attempt");
-    if (activePracticeId) localStorage.removeItem(practiceAnswersKey(activePracticeId));
-    localStorage.removeItem("arctester-active-practice-attempt");
+    const activePracticeId = safeStorage.getItem("arctester-active-practice-attempt");
+    if (activePracticeId) safeStorage.removeItem(practiceAnswersKey(activePracticeId));
+    safeStorage.removeItem("arctester-active-practice-attempt");
     setTest(null);
     setResult(null);
     setAnswers({});
     setAssignmentAnswers({});
     if (activeAssignmentPackage) {
-      localStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
-      localStorage.removeItem(assignedAttemptKey(activeAssignmentPackage.assignmentId));
+      safeStorage.removeItem(assignedAnswersKey(activeAssignmentPackage.assignmentId));
+      safeStorage.removeItem(assignedAttemptKey(activeAssignmentPackage.assignmentId));
     }
     setActiveAssignmentPackage(null);
     setAssignmentStartedAt(null);
