@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTrustedCookieMutation } from "./csrf";
+import { isTrustedCookieMutation } from "../src/csrf.js";
 
 const allowedOrigins = new Set(["https://study.example.com"]);
 
