@@ -31,6 +31,7 @@ export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<CatalogSubject[]>([]),[questions,setQuestions]=useState<Question[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<ImportReport|null>(null),[previewReady,setPreviewReady]=useState(false),[dragging,setDragging]=useState(false);
  const fileRef=useRef<HTMLInputElement>(null);
+ const questionRequestSequence=useRef(0);
  const [form,setForm]=useState({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:""});
  const [exam,setExam]=useState({title:"",description:"",instructions:"Read each question carefully. Select one correct option.",duration:"180",shuffleQuestions:true,shuffleOptions:false,marks:"1",negative:"0.25",selectionMode:"manual",perSubject:""});
  const [examIds,setExamIds]=useState<number[]>([]),[exams,setExams]=useState<Exam[]>([]),[subjectQuotas,setSubjectQuotas]=useState<Record<string,number>>({}),[difficultyMix,setDifficultyMix]=useState({easy:30,medium:50,hard:20}),[subjectScoring,setSubjectScoring]=useState<Record<string,{marks:number;negativeMarks:number}>>({}),[students,setStudents]=useState<Student[]>([]),[assignmentExam,setAssignmentExam]=useState<string|null>(null),[assignedStudents,setAssignedStudents]=useState<number[]>([]),[availableFrom,setAvailableFrom]=useState(""),[dueAt,setDueAt]=useState(""),[preview,setPreview]=useState<ExamPreview|null>(null),[results,setResults]=useState<ExamResult[]>([]),[announcements,setAnnouncements]=useState<Announcement[]>([]),[announcementTitle,setAnnouncementTitle]=useState(""),[announcementMessage,setAnnouncementMessage]=useState(""),[announcementExpiry,setAnnouncementExpiry]=useState("");
@@ -43,7 +44,23 @@ export default function AdminWorkspace(p:Props){
  const selectedSubject=catalog.find(s=>s.name===subject);
  const filteredTopics=selectedSubject?.topics??[];
  async function loadCatalog(){const r=await api<{subjects:CatalogSubject[]}>("/admin/question-catalog");setCatalog(Array.isArray(r.subjects) ? r.subjects : []);}
- async function loadQuestions(nextPage=page){const params=new URLSearchParams({page:String(nextPage),limit:"25"});if(query)params.set("q",query);if(subject)params.set("subject",subject);if(topic)params.set("topic",topic);if(difficulty)params.set("difficulty",difficulty);const r=await api<{questions:Question[];total:number}>("/admin/questions?"+params);setQuestions(Array.isArray(r.questions) ? r.questions : []);setTotal(Number.isFinite(r.total) ? r.total : 0);setPage(nextPage);}
+ async function loadQuestions(nextPage=page){
+  const requestId=++questionRequestSequence.current;
+  const params=new URLSearchParams({page:String(nextPage),limit:"25"});
+  if(query)params.set("q",query);
+  if(subject)params.set("subject",subject);
+  if(topic)params.set("topic",topic);
+  if(difficulty)params.set("difficulty",difficulty);
+  try {
+   const r=await api<{questions:Question[];total:number}>("/admin/questions?"+params);
+   if(requestId!==questionRequestSequence.current)return;
+   setQuestions(Array.isArray(r.questions) ? r.questions : []);
+   setTotal(Number.isFinite(r.total) ? r.total : 0);
+   setPage(nextPage);
+  } catch(error) {
+   if(requestId===questionRequestSequence.current)throw error;
+  }
+ }
  async function loadExams(){const r=await api<{exams:Exam[]}>("/admin/exams");setExams(Array.isArray(r.exams) ? r.exams : []);}
  async function loadStudents(){const r=await api<{students:Student[]}>("/admin/students");setStudents(Array.isArray(r.students) ? r.students : []);}
  async function loadResults(){const r=await api<{results:ExamResult[]}>("/admin/exam-results");setResults(Array.isArray(r.results) ? r.results : []);}
