@@ -495,7 +495,7 @@ export function examRouter(db: PrismaClient): Router {
       });
       const averagePercentage = averageRows[0]?.averagePercentage == null ? null : Number(averageRows[0].averagePercentage);
       const recent = recentSubmissions.map((item) => ({
-        submissionId: item.id, studentId: item.assignment."studentId",
+        submissionId: item.id, studentId: item.assignment.studentId,
         studentEmail: item.assignment.student.email,
         examTitle: item.assignment.examVersion.exam.title,
         submittedAt: item.submittedAt, score: item.score,
@@ -568,7 +568,7 @@ export function examRouter(db: PrismaClient): Router {
       res.json({
         ok: true,
         submissions: items.map((item) => ({
-          submissionId: item.id, assignmentId: item.assignment.id, studentId: item.assignment."studentId",
+          submissionId: item.id, assignmentId: item.assignment.id, studentId: item.assignment.studentId,
           studentEmail: item.assignment.student.email, examTitle: item.assignment.examVersion.exam.title,
           submittedAt: item.submittedAt, receivedAt: item.receivedAt,
           score: item.score, maximumScore: item.maximumScore,
@@ -668,7 +668,7 @@ export function examRouter(db: PrismaClient): Router {
         ok: true, serverTime: new Date(now),
         sessions: sessions.map((session) => ({
           id: session.id, status: session.status, student: session.student,
-          exam: session.assignment.examVersion.exam, assignmentId: session."assignmentId",
+          exam: session.assignment.examVersion.exam, assignmentId: session.assignmentId,
           startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt,
           connectivity: session.status === "ACTIVE" && session.lastHeartbeatAt && now - session.lastHeartbeatAt.getTime() <= 90000 ? "CONNECTED" : "STALE",
           heartbeatCount: session.heartbeatCount, focusLossCount: session.focusLossCount,
