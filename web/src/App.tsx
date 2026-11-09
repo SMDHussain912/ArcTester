@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { xlsxToCsv } from "./xlsx";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
@@ -102,18 +101,14 @@ export default function App() {
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
   const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
-  const [topicSelectionMode, setTopicSelectionMode] = useState<"all" | "include" | "exclude">("all");
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [practiceClock, setPracticeClock] = useState(Date.now());
   const practiceAutoSubmitRef = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -198,7 +193,6 @@ export default function App() {
         setAnswers({ ...answersFromServer, ...answersFromStorage });
         setTest({ ...restored, warnings: restored.warnings ?? [] });
         setActivePage("practice");
-        setPracticeClock(Date.now());
       })
       .catch((cause) => {
         if (cancelled) return;
@@ -460,7 +454,6 @@ export default function App() {
       setTest(created);
       setActivePage("practice");
       practiceAutoSubmitRef.current = null;
-      setPracticeClock(Date.now());
       safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
       safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
       setAnswers({});
