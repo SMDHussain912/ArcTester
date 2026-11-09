@@ -1186,7 +1186,7 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.session?.status === "PAUSED") {
         return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
       }
-      if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
+      if (assignment.session?.startedAt && now.getTime() >= assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
         await db.$transaction(async (tx) => {
           const changed = await tx.examSession.updateMany({
             where: { id: assignment.session!.id, status: assignment.session!.status },
@@ -1274,7 +1274,7 @@ export function examRouter(db: PrismaClient): Router {
         assignment.examVersion.durationMinutes * 60_000 +
         assignment.session.pausedDurationMs
       );
-      if (now > deadline || (assignment.dueAt && now > assignment.dueAt)) {
+      if (now >= deadline || (assignment.dueAt && now >= assignment.dueAt)) {
         return next(forbidden("The examination time has expired."));
       }
       const questionById = new Map(assignment.examVersion.questions.map((question) => [question.id, question]));
@@ -1339,7 +1339,7 @@ export function examRouter(db: PrismaClient): Router {
       const deadline = assignment.session.startedAt
         ? new Date(assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs)
         : null;
-      if (deadline && now.getTime() > deadline.getTime() + 60000) {
+      if (deadline && now.getTime() >= deadline.getTime() + 60000) {
         await db.$transaction(async (tx) => {
           const changed = await tx.examSession.updateMany({
             where: { id: assignment.session!.id, status: "ACTIVE" },
@@ -1353,7 +1353,7 @@ export function examRouter(db: PrismaClient): Router {
         });
         return next(conflict("The examination time has expired."));
       }
-      if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
+      if (assignment.dueAt && assignment.dueAt <= now) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
       const session = await db.$transaction(async (tx) => {
         const changed = await tx.examSession.updateMany({
@@ -1483,7 +1483,7 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.availableFrom && assignment.availableFrom.getTime() > now) {
         return next(forbidden("This exam is not available yet."));
       }
-      if (assignment.dueAt && assignment.dueAt.getTime() < now) {
+      if (assignment.dueAt && assignment.dueAt.getTime() <= now) {
         return next(forbidden("The exam deadline has passed."));
       }
       const paperQuestions = [...assignment.examVersion.questions];
@@ -1657,10 +1657,10 @@ export function examRouter(db: PrismaClient): Router {
         serverSubmittedAt.getTime() - examSession.lastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
         offlineSessionReconciled ||
-        serverSubmittedAt.getTime() > startedAt.getTime() + durationMs + 60000 ||
+        serverSubmittedAt.getTime() >= startedAt.getTime() + durationMs + 60000 ||
         staleHeartbeat ||
         (assignment.availableFrom !== null && startedAt < assignment.availableFrom) ||
-        (assignment.dueAt !== null && submittedAt > assignment.dueAt) ||
+        (assignment.dueAt !== null && submittedAt >= assignment.dueAt) ||
         new Date(input.startedAt).getTime() < startedAt.getTime() - 60000 ||
         new Date(input.startedAt).getTime() > startedAt.getTime() + 60000;
 
