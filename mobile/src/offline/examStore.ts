@@ -1,4 +1,4 @@
-import { canReplaceCachedExamPackage } from "./examCachePolicy";
+import { canReplaceCachedExamPackage } from "../../../shared/offlineExamCachePolicy";
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
 
