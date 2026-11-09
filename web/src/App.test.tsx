@@ -674,4 +674,43 @@ describe("live Vite application", () => {
     });
     expect(await screen.findByRole("heading", { name: "Your result" })).toBeInTheDocument();
   });
+
+  it("shows student practice accuracy and official exam progress", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 10, subjects: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/analytics/overview")) return Promise.resolve(response(200, {
+        generatedAt: new Date().toISOString(),
+        practice: {
+          completedAttempts: 3, questions: 20, correct: 16, incorrect: 4, unanswered: 0,
+          accuracy: 0.8,
+          subjects: [{ subject: "Maths", topic: null, seen: 10, correct: 8, wrong: 2, incorrect: 2, unanswered: 0, accuracy: 0.8 }],
+          difficulty: [],
+          trend: [{ attemptId: 12, finishedAt: new Date().toISOString(), accuracy: 0.8, correct: 8, total: 10 }],
+        },
+        formalExams: {
+          submissions: 2, graded: 1, reviewRequired: 1, score: 42, maximumScore: 50,
+          scorePercentage: 0.84, correct: 8, incorrect: 2, unanswered: 0,
+          subjects: [{ subject: "Physics", correct: 4, incorrect: 1, unanswered: 0, accuracy: 0.8, awardedMarks: 20, maximumMarks: 25 }],
+        },
+      }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Progress" }));
+    expect(await screen.findByRole("heading", { name: "Your progress" })).toBeInTheDocument();
+    expect(screen.getByText("Completed practice tests")).toBeInTheDocument();
+    expect(screen.getByText("Practice accuracy")).toBeInTheDocument();
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(screen.getByText("Maths")).toBeInTheDocument();
+    expect(screen.getByText("Physics")).toBeInTheDocument();
+    expect(screen.getByText("42 / 50 marks")).toBeInTheDocument();
+  });
 });
