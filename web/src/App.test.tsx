@@ -436,6 +436,8 @@ describe("live Vite application", () => {
       }));
       if (path.endsWith("/admin/exams")) return Promise.resolve(response(200, { exams: [] }));
       if (path.endsWith("/admin/subjects")) return Promise.resolve(response(200, { subjects: [] }));
+      if (path.endsWith("/admin/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/auth/invitations")) return Promise.resolve(response(200, { invitations: [] }));
       if (path.endsWith("/admin/model-training-jobs")) return Promise.resolve(response(200, { jobs: [job] }));
       if (path.endsWith("/admin/model-datasets/dataset-ml-1/tensorflow-jobs") && init?.method === "POST") {
         queuedPayload = JSON.parse(String(init.body)) as Record<string, unknown>;
