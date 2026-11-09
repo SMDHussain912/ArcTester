@@ -1202,9 +1202,19 @@ export function examRouter(db: PrismaClient): Router {
       }
       const session = assignment.session
         ? await db.$transaction(async (tx) => {
-            const updated = await tx.examSession.update({
-              where: { id: assignment.session!.id },
+            const changed = await tx.examSession.updateMany({
+              where: {
+                id: assignment.session!.id,
+                status: assignment.session!.status,
+                startedAt: { not: null },
+              },
               data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+            });
+            if (changed.count !== 1) {
+              throw conflict("The exam session changed while reconnecting. Refresh and try again.");
+            }
+            const updated = await tx.examSession.findUniqueOrThrow({
+              where: { id: assignment.session!.id },
             });
             await tx.examSessionEvent.create({
               data: { sessionId: updated.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate restored an existing active session." },

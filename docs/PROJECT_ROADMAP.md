@@ -63,7 +63,8 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [ ] Verify invalid exam submissions are rejected before session reconciliation; the new regression currently awaits CI.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
-- [ ] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; regression added, awaiting CI.
+- [ ] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression added, awaiting CI.
+- [x] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; paused-session regression passed CI run `42544206972`.
 
 ### Frontend quality
 
@@ -213,3 +214,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Hardened answer autosave against a state race: the save transaction now requires the exam session to remain ACTIVE and started, not merely to exist. Added coverage that a paused session rejects an answer save without advancing its revision, then resumes normally. Awaiting CI verification.
+
+
+- 2026-11-09: Hardened exam-session reconnect against a concurrent invigilator state change. Reconnecting an existing session now conditionally transitions only the exact state originally read and requires a valid start timestamp; a concurrent pause/termination produces HTTP 409 instead of being overwritten. Added interrupted-session recovery coverage; awaiting CI verification.

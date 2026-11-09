@@ -364,6 +364,12 @@ describe("versioned exam management", () => {
     expect(staleSave.status).toBe(409);
 
     const sessionId = (started.json.session as { id: string }).id;
+    const originalStartedAt = (started.json.session as { startedAt: string }).startedAt;
+    await server.db.examSession.update({ where: { id: sessionId }, data: { status: "INTERRUPTED" } });
+    const reconnected = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(reconnected.status).toBe(200);
+    expect(reconnected.json.session).toMatchObject({ status: "ACTIVE", startedAt: originalStartedAt });
+
     const paused = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "PAUSE", reason: "Verify paused sessions reject saves" }, adminCookie);
     expect(paused.status).toBe(200);
     const pausedSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
