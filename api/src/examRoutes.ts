@@ -156,12 +156,20 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/question-bank", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const page = Math.max(1, Number(req.query.page) || 1);
-      const pageSize = Math.min(200, Math.max(1, Number(req.query.pageSize) || 500));
-      const search = String(req.query.search ?? "").trim();
-      const subjectName = String(req.query.subject ?? "").trim();
-      const topicName = String(req.query.topic ?? "").trim();
-      const difficulty = String(req.query.difficulty ?? "").trim();
+      const query = z.object({
+        page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+        pageSize: z.coerce.number().int().min(1).max(200).default(200),
+        search: z.string().trim().max(200).default(""),
+        subject: z.string().trim().max(80).default(""),
+        topic: z.string().trim().max(80).default(""),
+        difficulty: z.enum(["", "easy", "medium", "hard"]).default(""),
+      }).parse(req.query);
+      const page = query.page;
+      const pageSize = query.pageSize;
+      const search = query.search;
+      const subjectName = query.subject;
+      const topicName = query.topic;
+      const difficulty = query.difficulty;
       const where = {
         ...(subjectName ? { subject: { name: subjectName } } : {}),
         ...(topicName ? { topic: { name: topicName } } : {}),
