@@ -225,21 +225,6 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
-
-
-
-
-  const hasActiveTrainingJobs = modelTrainingJobs.some((job) => job.status === "QUEUED" || job.status === "RUNNING");
-
-
-
-
-
-
-
-
-
-
   async function refreshAssignedExams() {
     const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
     setAssignedExams(response.assignments);
@@ -404,37 +389,6 @@ export default function App() {
       setBusy(false);
     }
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   async function acknowledgeAnnouncement(id: string) {
     setBusy(true);
