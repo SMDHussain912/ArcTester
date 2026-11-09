@@ -279,6 +279,34 @@ describe("live Vite application", () => {
     });
   });
 
+  it("keeps the user signed in when server-side logout fails", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, {
+          user: { id: 9, email: "learner@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/bank")) {
+        return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/auth/logout") && init?.method === "POST") {
+        return Promise.resolve(response(503, { error: "Database temporarily unavailable." }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText("learner@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(await screen.findByText(/Secure sign-out failed/)).toBeInTheDocument();
+    expect(screen.getByText("learner@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Practice" })).toBeInTheDocument();
+  });
+
   it("lets students switch tabs during a mock test and resume with answers intact", async () => {
     const createdTest = {
       attemptId: 880,

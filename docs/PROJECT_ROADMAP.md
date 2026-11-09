@@ -56,7 +56,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [x] Handle foreign-key conflicts during bulk question deletion with HTTP 409 and a regression test.
 - [x] Prevent learner-level train/test leakage in registered training: real-anonymized samples require keyed pseudonymous group IDs, at least five learner groups, and a meaningful held-out sample; grouped holdout tests pass.
 - [ ] Move long-running TensorFlow training out of normal HTTP request handling or otherwise prove it safely fits host limits.
-- [x] Make logout invalidate all previously issued cookie and bearer JWTs by incrementing the user's `sessionVersion`; replay-after-logout is covered by API regression tests.
+- [x] Make logout invalidate all previously issued cookie and bearer JWTs by incrementing the user's `sessionVersion`; replay-after-logout is covered by API regression tests. The Vite UI now waits for server confirmation and preserves the signed-in state if revocation fails.
 - [ ] Implement per-device session revocation and audit device registry semantics, rate limiting, and bootstrap-admin race conditions.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
@@ -179,3 +179,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Corrected the mock-test navigation regression test to enter the Practice page before clicking the mock-test launcher; the test now asserts answer retention after switching to Announcements and back.
+
+
+- 2026-11-09: Updated the production Vite sign-out flow to await server-side token revocation. If the API/database cannot revoke the session, the app keeps the user signed in and shows an actionable error instead of silently pretending logout succeeded. Added a regression test.
