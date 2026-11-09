@@ -59,12 +59,14 @@ describe("POST /tests", () => {
     const body = json as {
       attemptId: number;
       deadline: string;
+      serverNow: string;
       warnings: string[];
       questions: { id: number; subject: string; text: string; options: string[] }[];
     };
     expect(body.questions).toHaveLength(2);
     expect(body.questions.every((q) => q.subject === "Maths")).toBe(true);
     expect(body.deadline).toBeTruthy();
+    expect(Number.isFinite(Date.parse(body.serverNow))).toBe(true);
     for (const q of body.questions) {
       expect(q).not.toHaveProperty("correctIndex");
       expect(q).not.toHaveProperty("explanation");
