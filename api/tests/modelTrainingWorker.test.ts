@@ -97,6 +97,52 @@ describe("durable model-training worker lease recovery", () => {
     expect(terminalUpdate.data.completedAt).toBeInstanceOf(Date);
   });
 
+  it("rejects stored datasets whose declared row count does not match their samples", async () => {
+    const mocks = workerDatabase({
+      candidate: {
+        id: "job-invalid-dataset",
+        datasetId: "dataset-mismatch",
+        modelId: "dataset-integrity-test",
+        status: "QUEUED",
+        progress: 0,
+        createdAt: new Date(),
+      },
+      claimedJob: {
+        id: "job-invalid-dataset",
+        datasetId: "dataset-mismatch",
+        modelId: "dataset-integrity-test",
+        createdById: null,
+        status: "RUNNING",
+        workerId: "worker-validation",
+        seed: 42,
+        epochs: 10,
+        batchSize: 8,
+      },
+      dataset: {
+        id: "dataset-mismatch",
+        task: "regression",
+        name: "Mismatched dataset",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify([]),
+        rowCount: 30,
+        datasetKind: "synthetic",
+        fingerprint: "fingerprint",
+      },
+    });
+
+    await expect(runNextModelTrainingJob(mocks.db, "worker-validation")).resolves.toBe(true);
+
+    const failure = mocks.updateMany.mock.calls.at(-1)?.[0] as {
+      data: { status: string; errorMessage: string; leaseExpiresAt: null };
+    };
+    expect(failure.data).toMatchObject({
+      status: "FAILED",
+      errorMessage: "Training dataset rowCount must match its 30 to 5000 stored samples.",
+      leaseExpiresAt: null,
+    });
+    expect(mocks.datasetFindUnique).toHaveBeenCalledOnce();
+  });
+
   it("does not process a job when another worker wins the atomic claim", async () => {
     const mocks = workerDatabase({
       candidate: {
