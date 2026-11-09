@@ -78,6 +78,8 @@ function cookieCsrfGuard(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
+  // requireAuth resolves the same injected client used by every router and test schema.
+  app.locals.db = database;
   app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
   app.use(cookieCsrfGuard);
