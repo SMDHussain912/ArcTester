@@ -56,8 +56,53 @@ export default function App() {
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const [error, setError] = useState("");
+  const [startupVisible, setStartupVisible] = useState(true);
+  const startupFade = useRef(new Animated.Value(1)).current;
+  const startupLogo = useRef(new Animated.Value(0)).current;
+  const startupProgress = useRef(new Animated.Value(0)).current;
+  const startupOrbit = useRef(new Animated.Value(0)).current;
+  const startupPulse = useRef(new Animated.Value(0.85)).current;
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const orbit = Animated.loop(
+      Animated.timing(startupOrbit, {
+        toValue: 1,
+        duration: 2600,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(startupPulse, { toValue: 1.08, duration: 850, useNativeDriver: true }),
+        Animated.timing(startupPulse, { toValue: 0.85, duration: 850, useNativeDriver: true }),
+      ]),
+    );
+    orbit.start();
+    pulse.start();
+    Animated.sequence([
+      Animated.delay(180),
+      Animated.parallel([
+        Animated.spring(startupLogo, { toValue: 1, speed: 12, bounciness: 7, useNativeDriver: true }),
+        Animated.timing(startupProgress, { toValue: 1, duration: 2350, easing: Easing.inOut(Easing.cubic), useNativeDriver: false }),
+      ]),
+      Animated.delay(450),
+      Animated.timing(startupFade, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) setStartupVisible(false);
+      orbit.stop();
+      pulse.stop();
+    });
+    return () => {
+      orbit.stop();
+      pulse.stop();
+      startupFade.stopAnimation();
+      startupLogo.stopAnimation();
+      startupProgress.stopAnimation();
+    };
+  }, [startupFade, startupLogo, startupOrbit, startupProgress, startupPulse]);
 
   useEffect(() => {
     entrance.setValue(0);
@@ -280,7 +325,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="auto" />
+      <StatusBar style={startupVisible ? "light" : "auto"} />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.brandRow}>
           <View style={styles.logo}>
@@ -534,6 +579,37 @@ export default function App() {
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
         <Text style={styles.footer}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
+      {startupVisible && (
+        <Animated.View style={[styles.startupOverlay, { opacity: startupFade }]}>
+          <View style={styles.startupContent}>
+            <Animated.View style={[styles.startupOrbit, {
+              transform: [{ rotate: startupOrbit.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }, { scale: startupPulse }],
+            }]}>
+              <View style={styles.startupOrbitDot} />
+            </Animated.View>
+            <Animated.View style={[styles.startupLogoFrame, {
+              opacity: startupLogo,
+              transform: [
+                { scale: startupLogo.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) },
+                { translateY: startupLogo.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+              ],
+            }]}>
+              <Text style={styles.startupLogoText}>A</Text>
+            </Animated.View>
+            <Animated.Text style={[styles.startupEyebrow, { opacity: startupLogo }]}>NEURAL EXAMINATION SYSTEM</Animated.Text>
+            <Animated.Text style={[styles.startupTitle, { opacity: startupLogo }]}>ArcTester</Animated.Text>
+            <Animated.Text style={[styles.startupSubtitle, { opacity: startupLogo }]}>ESTABLISHING SECURE CONNECTION</Animated.Text>
+            <View style={styles.startupProgressTrack}>
+              <Animated.View style={[styles.startupProgressFill, {
+                width: startupProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+              }]} />
+            </View>
+            <Animated.Text style={[styles.startupLinkText, { opacity: startupLogo }]}>LINK START</Animated.Text>
+            <Animated.Text style={[styles.startupStatus, { opacity: startupLogo }]}>SYSTEM LINK ESTABLISHED  ·  READY</Animated.Text>
+          </View>
+          <Text style={styles.startupFooter}>ARCTESTER OS  /  MOBILE INTERFACE</Text>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -549,6 +625,54 @@ function animatedEntrance(value: Animated.Value) {
 }
 
 const styles = StyleSheet.create({
+  startupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: "#050b18",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 28,
+  },
+  startupContent: { width: "100%", maxWidth: 360, alignItems: "center" },
+  startupOrbit: {
+    position: "absolute",
+    top: 12,
+    width: 184,
+    height: 184,
+    borderRadius: 92,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.32)",
+    borderStyle: "dashed",
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  startupOrbitDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#67e8f9", marginRight: -5, shadowColor: "#22d3ee", shadowOpacity: 1, shadowRadius: 12, elevation: 8 },
+  startupLogoFrame: {
+    width: 112,
+    height: 112,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "#38bdf8",
+    backgroundColor: "rgba(14,165,233,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0ea5e9",
+    shadowOpacity: 0.65,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 14,
+    marginBottom: 36,
+  },
+  startupLogoText: { color: "#e0f2fe", fontSize: 58, fontWeight: "200", letterSpacing: -4 },
+  startupEyebrow: { color: "#67e8f9", fontSize: 9, fontWeight: "800", letterSpacing: 3, marginBottom: 9 },
+  startupTitle: { color: "#f8fafc", fontSize: 34, fontWeight: "800", letterSpacing: 1 },
+  startupSubtitle: { color: "#94a3b8", fontSize: 9, fontWeight: "700", letterSpacing: 2, marginTop: 10 },
+  startupProgressTrack: { width: "78%", height: 3, borderRadius: 4, overflow: "hidden", backgroundColor: "#1e293b", marginTop: 30 },
+  startupProgressFill: { height: 3, backgroundColor: "#22d3ee", shadowColor: "#22d3ee", shadowOpacity: 1, shadowRadius: 8 },
+  startupLinkText: { color: "#a5f3fc", fontSize: 13, fontWeight: "900", letterSpacing: 6, marginTop: 22 },
+  startupStatus: { color: "#64748b", fontSize: 8, fontWeight: "700", letterSpacing: 1.5, marginTop: 10 },
+  startupFooter: { position: "absolute", bottom: 28, color: "#475569", fontSize: 8, letterSpacing: 2 },
   safe: { flex: 1, backgroundColor: "#f4f6fa" },
   container: {
     padding: 20,
