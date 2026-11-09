@@ -38,8 +38,16 @@ jobs:
           npx prisma migrate diff --from-empty --to-schema-datamodel api/prisma/schema.prisma --script > api/prisma/migrations/20261109000000_postgresql_baseline/migration.sql
 
       - name: Commit generated baseline
+        env:
+          TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          git add api/prisma/migrations/20261109000000_postgresql_baseline/migration.sql
+          migration_file="api/prisma/migrations/20261109000000_postgresql_baseline/migration.sql"
+          cp "$migration_file" "$RUNNER_TEMP/postgresql-baseline.sql"
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+          mkdir -p "$(dirname "$migration_file")"
+          cp "$RUNNER_TEMP/postgresql-baseline.sql" "$migration_file"
+          git add "$migration_file"
           if git diff --cached --quiet; then
             echo "PostgreSQL baseline is already current."
             exit 0
@@ -47,4 +55,4 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(db): generate PostgreSQL baseline migration"
-          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
+          git push origin "HEAD:$TARGET_BRANCH"
