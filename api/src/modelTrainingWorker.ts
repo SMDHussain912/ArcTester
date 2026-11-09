@@ -79,6 +79,12 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       },
     );
 
+    const lease = await db.modelTrainingJob.findFirst({
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    if (!lease) throw new Error("Training worker lease was lost; refusing to register a candidate from an unowned job.");
+
     await db.modelTrainingJob.updateMany({
       where: { id: jobId, status: "RUNNING", workerId },
       data: { progress: 85, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
