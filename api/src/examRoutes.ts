@@ -1544,6 +1544,24 @@ export function examRouter(db: PrismaClient): Router {
         return next(conflict("An attempt has already been submitted for this assignment."));
       }
 
+      // Validate the complete answer set before creating or changing any session state.
+      // Invalid offline submissions must not leave behind a reconciled session.
+      const questions = assignment.examVersion.questions;
+      const questionById = new Map(questions.map((question) => [question.id, question]));
+      if (
+        input.answers.length !== questions.length ||
+        input.answers.some((answer) => !questionById.has(answer.examQuestionId))
+      ) {
+        return next(badRequest("Submit one answer entry for every question in this exam."));
+      }
+      for (const answer of input.answers) {
+        const question = questionById.get(answer.examQuestionId)!;
+        const optionCount = parseOptions(question.options).length;
+        if (answer.selectedIndex !== null && answer.selectedIndex >= optionCount) {
+          return next(badRequest("The selected option does not exist for this question."));
+        }
+      }
+
       const serverSubmittedAt = new Date();
       let examSession = assignment.session;
       const offlineSessionReconciled = !examSession;
@@ -1582,15 +1600,6 @@ export function examRouter(db: PrismaClient): Router {
       // A request may arrive just after the due time even when the candidate
       // autosaved answers before the deadline. Keep the submission for review
       // instead of discarding those answers; late timing is marked REVIEW_REQUIRED.
-      const questions = assignment.examVersion.questions;
-      const questionIds = new Set(questions.map((question) => question.id));
-      if (
-        input.answers.length !== questions.length ||
-        input.answers.some((answer) => !questionIds.has(answer.examQuestionId))
-      ) {
-        return next(badRequest("Submit one answer entry for every question in this exam."));
-      }
-
       const answersByQuestion = new Map(
         input.answers.map((answer) => [answer.examQuestionId, answer.selectedIndex])
       );

@@ -271,24 +271,6 @@ describe("versioned exam management", () => {
     assignmentId = assignment.id;
   });
 
-  it("handles concurrent duplicate assignment requests without creating duplicate rows or returning server errors", async () => {
-    const secondStudent = await server.db.user.findUniqueOrThrow({
-      where: { email: "other-student@arctester.test" },
-      select: { id: true },
-    });
-    const body = { studentIds: [secondStudent.id] };
-    const responses = await Promise.all([
-      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
-      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
-    ]);
-
-    expect(responses.every((response) => response.status === 201 || response.status === 409)).toBe(true);
-    expect(responses.some((response) => response.status === 201)).toBe(true);
-    expect(await server.db.examAssignment.count({
-      where: { examVersion: { examId }, studentId: secondStudent.id },
-    })).toBe(1);
-  });
-
   it("lists published papers in the student catalogue without exposing answer data", async () => {
     const catalog = await request("/exams/catalog", "GET", undefined, studentCookie);
     expect(catalog.status).toBe(200);
@@ -641,6 +623,24 @@ describe("versioned exam management", () => {
     expect(forbiddenDetail.status).toBe(403);
   });
 
+  it("handles concurrent duplicate assignment requests without creating duplicate rows or returning server errors", async () => {
+    const thirdStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "third-student@arctester.test" },
+      select: { id: true },
+    });
+    const body = { studentIds: [thirdStudent.id] };
+    const responses = await Promise.all([
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+    ]);
+
+    expect(responses.every((response) => response.status === 201 || response.status === 409)).toBe(true);
+    expect(responses.some((response) => response.status === 201)).toBe(true);
+    expect(await server.db.examAssignment.count({
+      where: { examVersion: { examId }, studentId: thirdStudent.id },
+    })).toBe(1);
+  });
+
   it("accepts a queued offline submission when no live server session was created", async () => {
     const version = await server.db.examVersion.findFirstOrThrow({
       where: { examId },
@@ -691,6 +691,42 @@ describe("versioned exam management", () => {
       include: { events: true },
     });
     expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
+  });
+
+  it("rejects invalid offline answers without creating a session", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const invalidStudentCookie = await createSession("invalid-offline-answer@arctester.test", "STUDENT");
+    const invalidStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "invalid-offline-answer@arctester.test" },
+      select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const invalidAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: version.id, studentId: invalidStudent.id, assignedById: admin.id },
+    });
+
+    const rejected = await request(
+      `/exams/assignments/${invalidAssignment.id}/submission`,
+      "POST",
+      {
+        attemptUuid: "9d4bd8a4-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: "not-in-this-exam", selectedIndex: 0 }],
+      },
+      invalidStudentCookie
+    );
+
+    expect(rejected.status).toBe(400);
+    expect(await server.db.examSession.findUnique({
+      where: { assignmentId: invalidAssignment.id },
+    })).toBeNull();
   });
 
   it("prevents another student from reading a submission result", async () => {
