@@ -93,6 +93,22 @@ describe("durable TensorFlow training jobs", () => {
     const status = await request(`/admin/model-training-jobs/${jobId}`);
     expect(status.body.job).toMatchObject({ status: "SUCCEEDED", progress: 100, errorMessage: "" });
     expect(status.body.job.result).toMatchObject({ promoted: false, split: { trainRows: 80, testRows: 20 } });
+    const result = status.body.job.result as {
+      model: { modelId: string; version: number } | null;
+    };
+    const audits = await server.db.modelRegistryAudit.findMany({
+      where: { modelId: "worker-training-fixture" },
+      orderBy: { version: "asc" },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0].version).toBe(1);
+    if (result.model) {
+      const saved = await server.db.registeredModel.findUnique({
+        where: { modelId_version: { modelId: result.model.modelId, version: result.model.version } },
+      });
+      expect(saved).not.toBeNull();
+      expect(JSON.parse(saved!.artifactJson).version).toBe(saved!.version);
+    }
     expect(await runNextModelTrainingJob(server.db, "test-worker-two")).toBe(false);
   });
 
