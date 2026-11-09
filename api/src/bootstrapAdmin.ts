@@ -13,9 +13,12 @@ export async function bootstrapAdmin(
 ): Promise<void> {
   const passwordHash = hashPassword(password);
   await db.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(
-      "DO LANGUAGE plpgsql 'BEGIN PERFORM pg_advisory_xact_lock(1380011073, 1); END'"
-    );
+    const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT pg_try_advisory_xact_lock(1380011073, 1) AS locked
+    `;
+    if (!lockRows[0]?.locked) {
+      throw new Error("Another administrator bootstrap is already running. Retry after it finishes.");
+    }
     const existingAdmins = await tx.user.count({ where: { role: "ADMIN" } });
     if (existingAdmins > 0) {
       throw new Error("An administrator already exists. Bootstrap is one-time only.");
