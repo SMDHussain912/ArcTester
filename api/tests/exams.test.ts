@@ -807,6 +807,50 @@ describe("versioned exam management", () => {
     })).toBeNull();
   });
 
+  it("does not leave an offline session when its attempt UUID was already used", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const duplicateStudentCookie = await createSession("duplicate-offline-attempt@arctester.test", "STUDENT");
+    const duplicateStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "duplicate-offline-attempt@arctester.test" },
+      select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const duplicateAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: version.id, studentId: duplicateStudent.id, assignedById: admin.id },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: version.id },
+    });
+
+    const rejected = await request(
+      `/exams/assignments/${duplicateAssignment.id}/submission`,
+      "POST",
+      {
+        // This UUID was committed by the earlier online submission retry test.
+        attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+      },
+      duplicateStudentCookie
+    );
+
+    expect(rejected.status).toBe(409);
+    expect(await server.db.examSubmission.findUnique({
+      where: { assignmentId: duplicateAssignment.id },
+    })).toBeNull();
+    expect(await server.db.examSession.findUnique({
+      where: { assignmentId: duplicateAssignment.id },
+    })).toBeNull();
+    await server.db.user.delete({ where: { id: duplicateStudent.id } });
+  });
+
   it("prevents another student from reading a submission result", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/result`,

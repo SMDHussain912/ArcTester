@@ -62,6 +62,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [x] Serialize one-time administrator bootstrap with `pg_try_advisory_xact_lock`; concurrent bootstrap regression passed in CI run `42542180790`.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [x] Verify invalid exam submissions are rejected before session reconciliation; invalid offline answer regression passed CI run `42543841320`.
+- [ ] Keep offline session reconciliation atomic with submission creation; a reused attempt UUID regression verifies rejected offline submissions leave no session, pending CI.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
 - [ ] Align assignment deadline boundaries across package, start, autosave, heartbeat, and submission review classification; regression coverage added, awaiting CI.
 - [x] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression passed CI run `42544630276`.
@@ -170,6 +171,8 @@ A task can be checked off only when:
 - Active web build is Vite (`web/src/main.tsx`, `vite build`, and the Dockerfile). A separate Next.js `web/app` tree is still present and tested but is not part of the current production build; do not remove it until its intended role is decided.
 
 - 2026-11-09: Aligned deadline comparisons so an assignment is closed consistently at its exact due time across package access, session start, answer saves, heartbeats, and late-submission review classification. Extended the deadline regression to verify package/start/save/heartbeat rejection while preserving a late submission for review. Awaiting CI.
+
+- 2026-11-09: Moved offline session creation and its reconciliation audit event into the same transaction as submission finalization. Idempotency/duplicate-attempt checks now happen before session creation; a reused attempt UUID regression verifies no orphan ACTIVE session remains. Awaiting CI.
 
 ## Latest verified CI
 
