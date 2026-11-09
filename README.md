@@ -27,6 +27,9 @@ npm install
 
 # 1. API (http://localhost:4000)
 cp api/.env.example api/.env
+# Start PostgreSQL and ensure DATABASE_URL points to it.
+npm run prisma:migrate --workspace=api
+npm run prisma:seed --workspace=api
 npm run dev:api
 # health check:
 curl http://localhost:4000/health
@@ -61,6 +64,35 @@ saved accounts and progress).
 For phone access, set `VITE_API_URL` and `CORS_ORIGINS` in the root
 `.env` file to your computer's LAN IP, then rebuild the web image with
 `docker compose up --build -d`. See the LAN steps below.
+
+## Move existing SQLite data to PostgreSQL
+
+The previous SQLite schema and migration history are preserved in
+`api/prisma-sqlite/`. The main application now uses PostgreSQL. The one-time
+migration helper copies existing rows and IDs into an **empty, already-migrated**
+PostgreSQL schema; it never modifies the SQLite source.
+
+1. Back up your SQLite database file first.
+2. Configure `.env` with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+   `POSTGRES_DB`, then start only PostgreSQL:
+   `docker compose up -d postgres`.
+3. Apply the PostgreSQL schema from the host, using the local port:
+   `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" npx prisma migrate deploy --schema=api/prisma/schema.prisma`.
+4. Install the one-time migration dependency:
+   `python -m pip install -r requirements-migrate.txt`.
+5. Copy the data (change the source path if your SQLite file is elsewhere):
+   `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" python scripts/migrate_sqlite_to_postgres.py --sqlite api/prisma/dev.db`.
+6. Check the printed row counts, then start the app:
+   `docker compose up --build -d`.
+
+For a previous Docker volume, copy its database file out before step 1:
+`docker run --rm -v arc-tester-data:/old -v "$PWD":/backup alpine cp /old/arc-tester.db /backup/arc-tester-old.db`.
+Pass that copied file with `--sqlite arc-tester-old.db`.
+
+The target tables must be empty before importing. Do not start the API container
+before importing an old database: its entrypoint seeds starter questions.
+For a fresh installation with no SQLite data to preserve, skip this section
+and use `docker compose up --build -d` directly.
 
 ### Running on a phone (same Wi-Fi)
 
