@@ -271,6 +271,24 @@ describe("versioned exam management", () => {
     assignmentId = assignment.id;
   });
 
+  it("handles concurrent duplicate assignment requests without creating duplicate rows or returning server errors", async () => {
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const body = { studentIds: [secondStudent.id] };
+    const responses = await Promise.all([
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+    ]);
+
+    expect(responses.every((response) => response.status === 201 || response.status === 409)).toBe(true);
+    expect(responses.some((response) => response.status === 201)).toBe(true);
+    expect(await server.db.examAssignment.count({
+      where: { examVersion: { examId }, studentId: secondStudent.id },
+    })).toBe(1);
+  });
+
   it("lists published papers in the student catalogue without exposing answer data", async () => {
     const catalog = await request("/exams/catalog", "GET", undefined, studentCookie);
     expect(catalog.status).toBe(200);

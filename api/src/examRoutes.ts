@@ -1098,6 +1098,14 @@ export function examRouter(db: PrismaClient): Router {
       });
       res.status(201).json({ ok: true, created: assignments.length, assignments });
     } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "P2002"
+      ) {
+        return next(conflict("One or more students already have an assignment for this exam version. Refresh the assignment list before retrying."));
+      }
       next(error);
     }
   });
