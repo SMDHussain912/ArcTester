@@ -97,3 +97,22 @@ jobs:
 
       - name: Test privacy-safe CSV conversion
         run: python -m unittest scripts/test_prepare_tensorflow_dataset.py -v
+
+  sqlite-to-postgres-migration:
+    name: SQLite to PostgreSQL migration utility tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install migration helper dependency
+        run: pip install -r requirements-migrate.txt
+
+      - name: Test SQLite data migration helpers
+        run: python -m unittest scripts/test_migrate_sqlite_to_postgres.py -v
