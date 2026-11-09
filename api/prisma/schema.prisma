@@ -430,6 +430,8 @@ model ModelTrainingJob {
   status         String      @default("QUEUED")
   progress       Int         @default(0)
   errorMessage   String      @default("")
+  workerId       String      @default("")
+  leaseExpiresAt DateTime?
   resultJson     String      @default("{}")
   createdAt      DateTime    @default(now())
   startedAt      DateTime?
