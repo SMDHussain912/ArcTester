@@ -1505,8 +1505,9 @@ export function examRouter(db: PrismaClient): Router {
         serverTime: new Date(now).toISOString(),
         questions: orderedQuestions.map((question) => {
           const originalOptions = parseOptions(question.options);
-          const optionOrder = [0, 1, 2, 3];
-          if (assignment.examVersion.shuffleOptions) optionOrder.sort(() => Math.random() - 0.5);
+          const optionOrder = assignment.examVersion.shuffleOptions
+            ? stableOptionOrder(assignment.id, question.id, originalOptions.length)
+            : originalOptions.map((_, index) => index);
           return {
             id: question.id,
             position: question.position,
