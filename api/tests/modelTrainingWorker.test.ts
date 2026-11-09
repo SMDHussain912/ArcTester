@@ -146,6 +146,10 @@ describe("durable model-training worker lease recovery", () => {
   it.each([
     ["malformed pseudonymous group IDs", (sample: Record<string, unknown>) => ({ ...sample, groupId: "not-a-valid-hmac" })],
     ["non-finite or missing targets", (sample: Record<string, unknown>) => ({ ...sample, target: null })],
+    ["undeclared feature keys", (sample: Record<string, unknown>) => ({
+      ...sample,
+      features: { ...(sample.features as Record<string, unknown>), undeclared_feature: 1 },
+    })],
   ])("rejects persisted samples with %s", async (_caseName, corruptSample) => {
     const samples = Array.from({ length: 30 }, (_, index) => ({
       features: { score: index / 30 },
