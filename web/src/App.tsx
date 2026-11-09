@@ -1620,7 +1620,7 @@ export default function App() {
                 <p className="eyebrow">PRACTICE SESSION</p>
                 <h1>Stay focused.</h1>
                 <p className="muted">
-                  {test.questions.length} questions · {Object.keys(answers).length} answered{practiceRemainingSeconds !== null ? ` · ${Math.floor(practiceRemainingSeconds / 60).toString().padStart(2, "0")}:${(practiceRemainingSeconds % 60).toString().padStart(2, "0")} remaining` : ""}
+                  {test.questions.length} questions · {Object.keys(answers).length} answered
                 </p>
               </div>
               <button className="ghost" onClick={() => setActivePage("dashboard")}>
