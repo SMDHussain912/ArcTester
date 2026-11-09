@@ -19,6 +19,7 @@ Tracking rule: **Update this file in every development commit.** A task is only 
 - [x] PostgreSQL migration completed and tested in CI, including the partial unique index and a real SQLite-to-PostgreSQL data-copy integration test.
 - [x] Stabilization branch CI passed on commit `33316c8` (run `42539952910`): API 36 test files / 289 tests; web 22 test files / 82 tests; lint and production builds; mobile typecheck; TensorFlow dataset checks; SQLite-to-PostgreSQL migration utility tests.
 - [ ] Full feature-by-feature end-to-end QA and deployment verification.
+- [x] Server-side logout revocation and frontend failure handling verified in CI.
 
 **Important:** The PostgreSQL migration is now implemented and CI-tested. Existing SQLite schema and migrations are preserved in `api/prisma-sqlite/`; a read-only-source data migration utility is available at `scripts/migrate_sqlite_to_postgres.py`. The application has not yet been deployed to Render or Vercel, and the existing feature set still needs a systematic end-to-end QA pass before it can be called complete.
 
@@ -66,7 +67,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Re-test every student and admin navigation path, modal, tab, form, and responsive layout.
 - [x] Add a top-level React error boundary and safe browser-storage handling to the active Vite application.
 - [ ] Refactor the large App component incrementally without replacing or regressing the existing UI.
-- [x] Add regression tests for confirmed fixes in this stabilization pass (deadline heartbeat, blocked storage, error boundary, concept-search loading timing, and student tab switching during a live mock test). Continue adding tests as the broader UI audit finds issues.
+- [x] Add regression tests for confirmed fixes in this stabilization pass (deadline heartbeat, blocked storage, error boundary, concept-search loading timing, and student tab switching during a live mock test). Continue adding tests as the broader UI audit finds issues. The active Vite app now has 8 direct component tests; the remaining Next.js page tests are retained separately because that tree is not part of the current Vite production build.
 
 ## Six approved feature groups
 
@@ -181,4 +182,5 @@ A task can be checked off only when:
 - 2026-11-09: Corrected the mock-test navigation regression test to enter the Practice page before clicking the mock-test launcher; the test now asserts answer retention after switching to Announcements and back.
 
 
-- 2026-11-09: Updated the production Vite sign-out flow to await server-side token revocation. If the API/database cannot revoke the session, the app keeps the user signed in and shows an actionable error instead of silently pretending logout succeeded. Added a regression test. The new API-confirmed sign-out behavior must pass the next full CI run before merge.
+- 2026-11-09: Updated the production Vite sign-out flow to await server-side token revocation. If the API/database cannot revoke the session, the app keeps the user signed in and shows an actionable error instead of silently pretending logout succeeded. Added a regression test.
+- 2026-11-09: Verified the final auth + UI stabilization changes in CI run `42541320090`: API 36 files / 290 tests, web 22 files / 84 tests, PostgreSQL migrations, migration utility tests, TensorFlow dataset checks, mobile typecheck, lint and production builds all passed. The API-confirmed sign-out behavior passed full CI run `42541320090`.
