@@ -295,7 +295,13 @@ export function examRouter(db: PrismaClient): Router {
       const result = await db.question.deleteMany({ where: { id: { in: input.ids } } });
       res.json({ ok: true, deleted: result.count });
     } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2003") {
+      const databaseError = error instanceof Error ? error.message : "";
+      const errorCode = typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: string }).code
+        : undefined;
+      // Prisma reports P2003 on some providers; PostgreSQL may surface its
+      // RESTRICT foreign-key violation as SQLSTATE 23001 inside the message.
+      if (errorCode === "P2003" || /violates RESTRICT setting of foreign key constraint|SQLSTATE 23001|code: "23001"/i.test(databaseError)) {
         return next(conflict("Some selected questions are already used by attempts or reports and cannot be deleted. Archive or keep those questions instead."));
       }
       next(error);
