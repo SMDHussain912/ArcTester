@@ -416,7 +416,7 @@ export async function getHistory(
       LEFT JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
       WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY a.id
-      ORDER BY a."finishedAt" DESC
+      ORDER BY a."finishedAt" DESC, a.id DESC
       LIMIT ${safeLimit} OFFSET ${(safePage - 1) * safeLimit}
     `,
     db.attempt.count({ where: { userId, finishedAt: { not: null } } }),
