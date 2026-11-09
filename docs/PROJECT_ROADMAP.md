@@ -201,4 +201,4 @@ A task can be checked off only when:
 - Remaining: feature-by-feature end-to-end QA, deployment-specific cookie/browser verification, Vercel/Render configuration confirmation, and long-running TensorFlow training request lifecycle.
 
 
-- 2026-11-09: Added a Vercel + Render deployment guide with Vite build/output settings, Docker context, PostgreSQL/JWT/CORS/cookie environment variables, and the third-party-cookie limitation. Actual provider configuration and browser testing remain pending.
+- 2026-11-09: Added a Vercel + Render deployment guide with Vite build/output settings, Docker context, PostgreSQL/JWT/CORS/cookie environment variables, and the third-party-cookie limitation. Actual provider configuration and browser testing remain pending; the deployment-guide documentation should be included in the next CI run.
