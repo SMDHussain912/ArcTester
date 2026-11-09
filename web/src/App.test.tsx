@@ -451,7 +451,8 @@ describe("live Vite application", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Model lab" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Queue TensorFlow.js" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Queue TensorFlow.js" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Queue TensorFlow.js" }));
 
     await waitFor(() => expect(queuedPayload).not.toBeNull());
     expect(queuedPayload).toMatchObject({
