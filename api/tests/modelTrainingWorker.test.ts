@@ -80,13 +80,14 @@ describe("durable model-training worker lease recovery", () => {
     expect(claim.data.leaseExpiresAt.getTime()).toBeGreaterThan(Date.now());
 
     const terminalUpdate = mocks.updateMany.mock.calls.at(-1)?.[0] as {
-      where: { id: string; status: string; workerId: string };
+      where: { id: string; status: string; workerId: string; leaseExpiresAt: { gt: Date } };
       data: { status: string; errorMessage: string; completedAt: Date; leaseExpiresAt: null };
     };
-    expect(terminalUpdate.where).toEqual({
+    expect(terminalUpdate.where).toMatchObject({
       id: "job-expired",
       status: "RUNNING",
       workerId: "worker-recovery",
+      leaseExpiresAt: { gt: expect.any(Date) },
     });
     expect(terminalUpdate.data).toMatchObject({
       status: "FAILED",
