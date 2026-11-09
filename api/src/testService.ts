@@ -67,6 +67,7 @@ export interface CreatedTest {
   attemptId: number;
   mode: TestMode;
   deadline: string | null;
+  serverNow: string;
   questions: PublicQuestion[];
   warnings: string[];
 }
@@ -300,6 +301,7 @@ export async function createTest(
     attemptId: attempt.id,
     mode: input.mode,
     deadline: attempt.deadline ? attempt.deadline.toISOString() : null,
+    serverNow: now.toISOString(),
     questions: selected
       .map((s) => byId.get(s.id))
       .filter((d) => d !== undefined)
