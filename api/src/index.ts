@@ -6,6 +6,8 @@ import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { modelRegistryRouter } from "./modelRoutes.js";
+import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
+import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -95,6 +97,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use("/auth", authRouter(database));
   app.use(examRouter(database));
   app.use(announcementRouter(database));
+  app.use(modelTrainingJobsRouter(database));
   app.use(modelRegistryRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
@@ -107,6 +110,7 @@ const app = buildApp();
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
+    startModelTrainingWorker(db);
     console.log(`ecet-api listening on http://localhost:\${PORT}`);
   });
 }
