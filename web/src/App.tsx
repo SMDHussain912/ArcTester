@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
+import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
@@ -91,11 +92,12 @@ export default function App() {
   const [activeAssignmentPackage, setActiveAssignmentPackage] = useState<AssignedExamPackage | null>(null);
   const [assignmentAnswers, setAssignmentAnswers] = useState<Record<string, number>>({});
   const [assignmentStartedAt, setAssignmentStartedAt] = useState<string | null>(null);
-  const [, setAssignmentDeadline] = useState<string | null>(null);
-  const [, setAssignmentServerOffset] = useState(0);
+  const [assignmentDeadline, setAssignmentDeadline] = useState<string | null>(null);
+  const [assignmentServerOffset, setAssignmentServerOffset] = useState(0);
   const [assignmentSessionPaused, setAssignmentSessionPaused] = useState(false);
-  const [, setAssignmentClock] = useState(Date.now());
-  const [, setAssignmentAutoSubmitTriggered] = useState(false);
+  const [assignmentClock, setAssignmentClock] = useState(0);
+  const [assignmentAutoSubmitTriggered, setAssignmentAutoSubmitTriggered] = useState(false);
+  const assignmentConnectionLostRef = useRef(false);
   const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
@@ -112,6 +114,13 @@ export default function App() {
   const assignmentSaveSequenceRef = useRef(0);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const assignmentAnswersRevisionRef = useRef(0);
+  const effectiveAssignmentDeadline = Math.min(
+    assignmentDeadline ? new Date(assignmentDeadline).getTime() : Number.POSITIVE_INFINITY,
+    activeAssignmentPackage?.dueAt ? new Date(activeAssignmentPackage.dueAt).getTime() : Number.POSITIVE_INFINITY,
+  );
+  const assignmentRemainingSeconds = Number.isFinite(effectiveAssignmentDeadline)
+    ? Math.max(0, Math.ceil((effectiveAssignmentDeadline - (assignmentClock + assignmentServerOffset)) / 1000))
+    : 0;
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "announcements" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
@@ -275,9 +284,71 @@ export default function App() {
       setAssignmentSessionPaused(false);
       setAssignmentClock(performance.now());
       setAssignmentAutoSubmitTriggered(false);
+      assignmentConnectionLostRef.current = false;
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+
+  // Drive the candidate countdown from the server deadline and a server/client clock offset.
+  useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused) return;
+    setAssignmentClock(performance.now());
+    const timer = window.setInterval(() => setAssignmentClock(performance.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused]);
+
+  // Keep the server-owned session alive and report focus/reconnection events.
+  // Transient network failures do not pause the candidate timer; only an explicit
+  // server response that the session is unavailable/paused does.
+  useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt) return;
+    const assignmentId = activeAssignmentPackage.assignmentId;
+    let disposed = false;
+    const sendHeartbeat = async (event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED") => {
+      try {
+        const heartbeat = await request<{ serverTime: string; deadline: string | null; sessionStatus: string }>(
+          `/exams/assignments/${encodeURIComponent(assignmentId)}/session/heartbeat`,
+          { method: "POST", body: JSON.stringify({ event }) },
+        );
+        if (disposed) return;
+        setAssignmentServerOffset(new Date(heartbeat.serverTime).getTime() - performance.now());
+        if (heartbeat.deadline) setAssignmentDeadline(heartbeat.deadline);
+        setAssignmentSessionPaused(heartbeat.sessionStatus !== "ACTIVE");
+        assignmentConnectionLostRef.current = false;
+      } catch (cause) {
+        if (disposed) return;
+        const message = (cause as Error).message;
+        const failure = classifyAssignmentHeartbeatFailure(message);
+        if (failure === "paused") setAssignmentSessionPaused(true);
+        if (failure === "transient") assignmentConnectionLostRef.current = true;
+        // Deadline failures intentionally leave the timer running so the client
+        // can submit its locally saved answers for server-side review.
+      }
+    };
+    const interval = window.setInterval(() => {
+      void sendHeartbeat(assignmentConnectionLostRef.current ? "CONNECTION_RESTORED" : "HEARTBEAT");
+    }, 15000);
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        void sendHeartbeat("FOCUS_LOST");
+      } else {
+        void sendHeartbeat(assignmentConnectionLostRef.current ? "CONNECTION_RESTORED" : "FOCUS_RESTORED");
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [activeAssignmentPackage, assignmentStartedAt]);
+
+  useEffect(() => {
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused ||
+        assignmentRemainingSeconds > 0 || assignmentAutoSubmitTriggered || busy) return;
+    setAssignmentAutoSubmitTriggered(true);
+    void submitAssignedExam(true);
+  }, [activeAssignmentPackage, assignmentStartedAt, assignmentSessionPaused, assignmentRemainingSeconds, assignmentAutoSubmitTriggered, busy]);
 
   useEffect(() => {
     if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
