@@ -64,6 +64,8 @@ describe("durable TensorFlow training jobs", () => {
     expect((await request(`/admin/model-training-jobs/${jobId}`, "GET", undefined, studentCookie)).status).toBe(403);
     expect((await request(`/admin/model-training-jobs/${jobId}`, "GET", undefined, "")).status).toBe(403);
     expect((await request(`/admin/model-training-jobs/${jobId}`)).body.job.status).toBe("QUEUED");
+    // Keep this queue-only test from leaving an older job ahead of the worker test.
+    await server.db.modelTrainingJob.delete({ where: { id: jobId } });
   });
 
   it("claims a queued job, runs TensorFlow training and persists its terminal result", async () => {
