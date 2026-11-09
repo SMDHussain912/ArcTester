@@ -474,8 +474,13 @@ export function authRouter(db: PrismaClient): Router {
     try {
       const token = readSessionToken(req);
       if (token) {
+        let payload: Record<string, unknown> | null = null;
         try {
-          const payload = verifyJwt(token);
+          payload = verifyJwt(token);
+        } catch {
+          // Invalid or expired tokens still have their browser cookie cleared.
+        }
+        if (payload) {
           const userId = Number(payload.sub);
           const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
           if (Number.isSafeInteger(userId) && userId > 0 &&
@@ -487,9 +492,6 @@ export function authRouter(db: PrismaClient): Router {
               data: { sessionVersion: { increment: 1 } },
             });
           }
-        } catch (error) {
-          if (error instanceof Error && "code" in error) throw error;
-          // Invalid or expired tokens still have their cookie cleared.
         }
       }
       clearSessionCookie(res);
