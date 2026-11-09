@@ -553,6 +553,9 @@ describe("versioned exam management", () => {
     expect(finalState.pausedAt).toBeNull();
     expect(finalState.endedAt).not.toBeNull();
     expect(finalState.pausedDurationMs).toBeGreaterThanOrEqual(301000);
+
+    // Keep this regression fixture isolated from later tests that assert global counts.
+    await server.db.user.delete({ where: { id: student.id } });
   });
 
   it("paginates admin student lists and supports email search", async () => {

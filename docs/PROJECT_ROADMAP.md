@@ -66,7 +66,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [x] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression passed CI run `42544630276`.
 - [x] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; paused-session regression passed CI run `42544206972`.
 - [ ] Verify heartbeat updates cannot write activity/counters after a concurrent invigilator pause/termination; paused-session heartbeat regression added, awaiting CI.
-- [ ] Preserve elapsed paused duration when an invigilator terminates a paused session; regression test added, awaiting CI.
+- [ ] Preserve elapsed paused duration when an invigilator terminates a paused session; regression test added. CI run `42546652750` exposed fixture leakage into global student/assignment totals; the test now deletes its dedicated student fixture, and CI rerun is pending.
 
 ### Frontend quality
 
@@ -218,6 +218,7 @@ A task can be checked off only when:
 - 2026-11-09: Hardened answer autosave against a state race: the save transaction now requires the exam session to remain ACTIVE and started, not merely to exist. Added coverage that a paused session rejects an answer save without advancing its revision, then resumes normally. Awaiting CI verification.
 
 
+- 2026-11-09: Corrected the paused-session termination regression fixture after CI exposed contamination of later global-count assertions; the dedicated student is now deleted at the end of the test. Awaiting a fresh CI run.
 - 2026-11-09: Hardened exam-session reconnect against a concurrent invigilator state change. Reconnecting an existing session now conditionally transitions only the exact state originally read and requires a valid start timestamp; a concurrent pause/termination produces HTTP 409 instead of being overwritten. Added interrupted-session recovery coverage; awaiting CI verification.
 
 
