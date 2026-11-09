@@ -708,7 +708,7 @@ describe("live Vite application", () => {
     expect(await screen.findByRole("heading", { name: "Your progress" })).toBeInTheDocument();
     expect(screen.getByText("Completed practice tests")).toBeInTheDocument();
     expect(screen.getByText("Practice accuracy")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(3);
     expect(screen.getByText("Maths")).toBeInTheDocument();
     expect(screen.getByText("Physics")).toBeInTheDocument();
     expect(screen.getByText("42 / 50 marks")).toBeInTheDocument();
