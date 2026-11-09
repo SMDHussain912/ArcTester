@@ -328,7 +328,7 @@ export default function App() {
       return;
     }
     request<{ announcements: Announcement[] }>("/announcements/active")
-      .then(({ announcements }) => setActiveAnnouncements(announcements))
+      .then(({ announcements }) => setActiveAnnouncements(Array.isArray(announcements) ? announcements : []))
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
@@ -344,17 +344,17 @@ export default function App() {
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
     request<{ invitations: Invitation[] }>("/auth/invitations")
-      .then(({ invitations: items }) => setInvitations(items))
+      .then(({ invitations: items }) => setInvitations(Array.isArray(items) ? items : []))
       .catch((cause) => setError((cause as Error).message));
     request<{ announcements: Announcement[] }>("/admin/announcements")
-      .then(({ announcements: items }) => setAnnouncements(items))
+      .then(({ announcements: items }) => setAnnouncements(Array.isArray(items) ? items : []))
       .catch((cause) => setError((cause as Error).message));
     void fetchAllAdminQuestions().catch((cause) => setError((cause as Error).message));
     request<{ subjects: AdminSubject[] }>("/admin/subjects")
       .then(({ subjects }) => { const items = subjects ?? []; setAdminSubjects(items); if (items[0]) setNewTopicSubjectId(items[0].id); })
       .catch((cause) => setError((cause as Error).message));
     request<{ exams: AdminExam[] }>("/admin/exams")
-      .then(({ exams }) => setAdminExams(exams))
+      .then(({ exams }) => setAdminExams(Array.isArray(exams) ? exams : []))
       .catch((cause) => setError((cause as Error).message));
     request<AdminAnalytics>("/admin/analytics/overview")
       .then(setAdminAnalytics)
