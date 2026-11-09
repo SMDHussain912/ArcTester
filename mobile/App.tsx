@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Animated,
@@ -54,6 +55,7 @@ export default function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
   const [busy, setBusy] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const [error, setError] = useState("");
@@ -67,6 +69,25 @@ export default function App() {
   const statsEntrance = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      startupLogo.setValue(1);
+      startupProgress.setValue(1);
+      startupFade.setValue(0);
+      setStartupVisible(false);
+      return;
+    }
     const orbit = Animated.loop(
       Animated.timing(startupOrbit, {
         toValue: 1,
@@ -103,9 +124,14 @@ export default function App() {
       startupLogo.stopAnimation();
       startupProgress.stopAnimation();
     };
-  }, [startupFade, startupLogo, startupOrbit, startupProgress, startupPulse]);
+  }, [reduceMotion, startupFade, startupLogo, startupOrbit, startupProgress, startupPulse]);
 
   useEffect(() => {
+    if (reduceMotion) {
+      entrance.setValue(1);
+      statsEntrance.setValue(1);
+      return;
+    }
     entrance.setValue(0);
     statsEntrance.setValue(0);
     Animated.parallel([
@@ -125,7 +151,7 @@ export default function App() {
         }),
       ]),
     ]).start();
-  }, [entrance, statsEntrance, user, test, showExams]);
+  }, [entrance, reduceMotion, statsEntrance, user, test, showExams]);
 
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
@@ -266,6 +292,11 @@ export default function App() {
 
   useEffect(() => {
     if (!test) return;
+    if (reduceMotion) {
+      questionTransition.setValue(1);
+      progress.setValue((currentQuestionIndex + 1) / test.questions.length);
+      return;
+    }
     questionTransition.setValue(0);
     Animated.timing(questionTransition, {
       toValue: 1,
@@ -279,7 +310,7 @@ export default function App() {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [test, currentQuestionIndex, progress, questionTransition]);
+  }, [test, currentQuestionIndex, progress, questionTransition, reduceMotion]);
 
   function formatTime(totalSeconds: number) {
     const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
