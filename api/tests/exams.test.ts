@@ -435,6 +435,15 @@ describe("versioned exam management", () => {
     expect(repeatedPausedState.pausedAt?.getTime()).toBe(firstPausedAt);
     const blockedResume = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
     expect(blockedResume.status).toBe(409);
+    const blockedSubmission = await request(`/exams/assignments/${assignmentId}/submission`, "POST", {
+      attemptUuid: "7a2b8d1c-3e4f-4a5b-9c6d-7e8f90123456",
+      startedAt: sessionInfo.startedAt,
+      submittedAt: new Date().toISOString(),
+      answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+    }, studentCookie);
+    expect(blockedSubmission.status).toBe(409);
+    expect(await server.db.examSubmission.findUnique({ where: { assignmentId } })).toBeNull();
+    expect((await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } })).status).toBe("PAUSED");
     const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME" }, adminCookie);
     expect(resumed.status).toBe(200);
     const resumedHeartbeat = await request(`/exams/assignments/${assignmentId}/session/heartbeat`, "POST", { event: "HEARTBEAT" }, studentCookie);
