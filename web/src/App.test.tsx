@@ -738,7 +738,19 @@ describe("live Vite application", () => {
     expect(screen.getByText("Completed practice tests")).toBeInTheDocument();
   });
 
-  it("shows a recoverable message when dashboard analytics response is incomplete", async () => {
+  it("retries dashboard analytics after an incomplete response", async () => {
+    const overview = {
+      generatedAt: new Date().toISOString(),
+      practice: {
+        completedAttempts: 2, questions: 10, correct: 8, incorrect: 2, unanswered: 0,
+        accuracy: 0.8, subjects: [], difficulty: [], trend: [],
+      },
+      formalExams: {
+        submissions: 1, graded: 1, reviewRequired: 0, score: 8, maximumScore: 10,
+        scorePercentage: 0.8, correct: 8, incorrect: 2, unanswered: 0, subjects: [],
+      },
+    };
+    let analyticsRequests = 0;
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
@@ -749,14 +761,18 @@ describe("live Vite application", () => {
       if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
         return Promise.resolve(response(200, { announcements: [] }));
       }
-      if (path.endsWith("/analytics/overview")) return Promise.resolve(response(200, { ok: true }));
+      if (path.endsWith("/analytics/overview")) {
+        analyticsRequests += 1;
+        return Promise.resolve(response(200, analyticsRequests === 1 ? { ok: true } : overview));
+      }
       return Promise.resolve(response(200, { ok: true }));
     });
 
     render(<App />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Progress data is temporarily unavailable.");
-    expect(screen.getByRole("heading", { name: "Progress at a glance" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /View detailed progress/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
+    expect(await screen.findByText("2", { selector: "strong" })).toBeInTheDocument();
+    expect(analyticsRequests).toBe(2);
   });
 
   it("shows student practice accuracy and official exam progress", async () => {
