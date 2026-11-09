@@ -43,6 +43,31 @@ type Assignment = {
 
 type Props = { token: string; onExit: () => void };
 
+type SubmissionResponse = {
+  submission?: { id?: string; attemptUuid?: string };
+};
+
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+function requireMatchingSubmission(
+  response: SubmissionResponse,
+  expectedAttemptUuid: string
+): string {
+  const submission = response.submission;
+  if (!submission?.id) {
+    throw new Error("The server response did not include a submission ID.");
+  }
+  if (submission.attemptUuid !== expectedAttemptUuid) {
+    throw new Error("The server returned a different attempt identifier. The saved attempt remains pending for manual review.");
+  }
+  return submission.id;
+}
+
 export default function OfflineExamWorkspace({ token, onExit }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [cached, setCached] = useState<CachedExam[]>([]);
@@ -71,7 +96,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       },
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "The server request failed.");
+    if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
     return body as T;
   }, [token]);
 
@@ -100,9 +125,7 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       let failed = 0;
       for (const attempt of pending) {
         try {
-          const result = await request<{
-            submission?: { id?: string };
-          }>(`/exams/assignments/${attempt.assignmentId}/submission`, {
+          const result = await request<SubmissionResponse>(`/exams/assignments/${encodeURIComponent(attempt.assignmentId)}/submission`, {
             method: "POST",
             body: JSON.stringify({
               attemptUuid: attempt.attemptUuid,
@@ -111,10 +134,8 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
               answers: attempt.answers,
             }),
           });
-          if (!result.submission?.id) {
-            throw new Error("The server response did not include a submission ID.");
-          }
-          await markSubmissionSynced(attempt.assignmentId, result.submission.id);
+          const submissionId = requireMatchingSubmission(result, attempt.attemptUuid);
+          await markSubmissionSynced(attempt.assignmentId, submissionId);
           uploaded += 1;
         } catch (cause) {
           failed += 1;
@@ -122,6 +143,12 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
             attempt.assignmentId,
             cause instanceof Error ? cause.message : "Submission sync failed."
           );
+          if (
+            cause instanceof ApiRequestError &&
+            (cause.status === 401 || cause.status === 403 || cause.status >= 500)
+          ) {
+            break;
+          }
         }
       }
 
@@ -226,14 +253,15 @@ export default function OfflineExamWorkspace({ token, onExit }: Props) {
       setMessage("Attempt saved on this device");
       if (online) {
         setMessage("Uploading saved attempt");
-        const result = await request<{ submission: { id: string } }>(
-          `/exams/assignments/${submission.assignmentId}/submission`,
+        const result = await request<SubmissionResponse>(
+          `/exams/assignments/${encodeURIComponent(submission.assignmentId)}/submission`,
           {
             method: "POST",
             body: JSON.stringify(submission),
           }
         );
-        await markSubmissionSynced(submission.assignmentId, result.submission.id);
+        const submissionId = requireMatchingSubmission(result, submission.attemptUuid);
+        await markSubmissionSynced(submission.assignmentId, submissionId);
         setMessage("Submission synchronized");
       } else {
         setMessage("Offline submission queued — reconnect to upload");
