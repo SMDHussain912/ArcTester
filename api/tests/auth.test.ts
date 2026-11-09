@@ -167,13 +167,21 @@ describe("auth", () => {
     );
   });
 
-  it("logs out and clears the cookie", async () => {
+  it("logs out, clears the cookie, and revokes the previously issued JWT", async () => {
+    const oldToken = cookieJar.get("ecet_session");
+    expect(oldToken).toBeTruthy();
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/logout`, {});
     expect(res.status).toBe(200);
     const cleared = res.headers.get("set-cookie") ?? "";
     expect(cleared).toContain("Max-Age=0");
     cookieJar.delete("ecet_session");
 
+    const replay = await fetch(`${server.baseUrl}/tests`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `ecet_session=${oldToken}` },
+      body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
+    });
+    expect(replay.status).toBe(403);
     const me = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
     expect(me.status).toBe(403);
   });
@@ -240,6 +248,21 @@ describe("auth — bearer token (native/mobile clients)", () => {
       body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
     });
     expect(res.status).toBe(201);
+  });
+
+  it("revokes a bearer token when its owner signs out", async () => {
+    const token = await signInForToken("mobile@example.com", "secret1234");
+    const logout = await fetch(`${server.baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(logout.status).toBe(200);
+    const replay = await fetch(`${server.baseUrl}/tests`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
+    });
+    expect(replay.status).toBe(403);
   });
 
   it("rejects a missing bearer token on protected routes", async () => {

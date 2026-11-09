@@ -69,6 +69,8 @@ model User {
   email              String       @unique
   passwordHash       String
   role               String       @default("STUDENT")
+  // Incremented on logout to invalidate previously issued cookie and bearer JWTs.
+  sessionVersion     Int          @default(0)
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]

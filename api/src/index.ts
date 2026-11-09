@@ -80,6 +80,9 @@ function cookieCsrfGuard(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
+  // Authentication middleware reads the database attached to this app instance,
+  // so test servers and production use the same session-version check.
+  app.locals.db = database;
   app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
   app.use(cookieCsrfGuard);

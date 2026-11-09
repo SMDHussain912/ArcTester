@@ -1470,7 +1470,15 @@ export default function App() {
   }
 
   async function signOut() {
-    void request("/auth/logout", { method: "POST" }).catch(() => undefined);
+    setBusy(true);
+    setError("");
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch (cause) {
+      setError(`Secure sign-out failed. Your server session may still be active. ${(cause as Error).message}`);
+      setBusy(false);
+      return;
+    }
     setUser(null);
     setBank(null);
     const activePracticeId = safeStorage.getItem("arctester-active-practice-attempt");
@@ -1531,6 +1539,7 @@ export default function App() {
     setImportPreviewError("");
     setError("");
     setActivePage("dashboard");
+    setBusy(false);
   }
 
   if (!user) {
@@ -1622,7 +1631,7 @@ export default function App() {
               {theme === "light" ? "☾" : "☀"}
             </button>
             <span className="user-email">{user.email}</span>
-            <button className="ghost" onClick={signOut}>Sign out</button>
+            <button className="ghost" disabled={busy} onClick={signOut}>Sign out</button>
           </div>
         </header>
         <main className="main-content">
@@ -2027,7 +2036,7 @@ export default function App() {
             {theme === "light" ? "☾" : "☀"}
           </button>
           <span className="user-email">{user.email}</span>
-          <button className="ghost" onClick={signOut}>
+          <button className="ghost" disabled={busy} onClick={signOut}>
             Sign out
           </button>
         </div>

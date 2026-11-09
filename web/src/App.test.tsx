@@ -279,6 +279,89 @@ describe("live Vite application", () => {
     });
   });
 
+  it("keeps the user signed in when server-side logout fails", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, {
+          user: { id: 9, email: "learner@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/bank")) {
+        return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/auth/logout") && init?.method === "POST") {
+        return Promise.resolve(response(503, { error: "Database temporarily unavailable." }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText("learner@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(await screen.findByText(/Secure sign-out failed/)).toBeInTheDocument();
+    expect(screen.getByText("learner@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Practice" })).toBeInTheDocument();
+  });
+
+  it("lets students switch tabs during a mock test and resume with answers intact", async () => {
+    const createdTest = {
+      attemptId: 880,
+      mode: "mock",
+      deadline: null,
+      questions: [{
+        id: 88,
+        subject: "Computer Science",
+        topic: "Data Structures",
+        text: "Which structure follows FIFO?",
+        options: ["Stack", "Queue", "Tree", "Graph"],
+      }],
+      warnings: [],
+    };
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, {
+          user: { id: 7, email: "learner@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/bank")) {
+        return Promise.resolve(response(200, {
+          total: 1,
+          subjects: [{ subject: "Computer Science", count: 1, topics: [{ topic: "Data Structures", count: 1 }] }],
+        }));
+      }
+      if (path.endsWith("/tests") && init?.method === "POST") {
+        return Promise.resolve(response(201, createdTest));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start mock test" }));
+    const question = await screen.findByText("Which structure follows FIFO?");
+    const questionCard = question.closest("article");
+    expect(questionCard).not.toBeNull();
+    fireEvent.click(within(questionCard!).getByRole("button", { name: /Queue/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Announcements" }));
+    expect(await screen.findByRole("heading", { name: "Announcements" })).toBeInTheDocument();
+    expect(screen.queryByText("Which structure follows FIFO?")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Practice" }));
+    const resumedQuestion = await screen.findByText("Which structure follows FIFO?");
+    const resumedCard = resumedQuestion.closest("article");
+    expect(resumedCard).not.toBeNull();
+    expect(within(resumedCard!).getByRole("button", { name: /Queue/ })).toHaveClass("selected");
+    expect(screen.getAllByText(/1 answered/).length).toBeGreaterThan(0);
+  });
+
   it("opens a practice paper when a student launches a subject from Question bank", async () => {
     const createdTest = {
       attemptId: 712,
