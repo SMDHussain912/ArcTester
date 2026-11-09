@@ -176,9 +176,16 @@ export default function App() {
           try {
             const parsed: unknown = JSON.parse(savedAnswers);
             if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              const validQuestions = new Map(restored.questions.map((question) => [String(question.id), question]));
               answersFromStorage = Object.fromEntries(
-                Object.entries(parsed).filter(([, value]) => Number.isInteger(value) && Number(value) >= 0),
-              ) as Record<number, number>;
+                Object.entries(parsed).flatMap(([questionId, value]) => {
+                  const question = validQuestions.get(questionId);
+                  if (!question || !Number.isInteger(value) || Number(value) < 0 || Number(value) >= question.options.length) {
+                    return [];
+                  }
+                  return [[Number(questionId), Number(value)] as const];
+                }),
+              );
             }
           } catch {
             safeStorage.removeItem(practiceAnswersKey(attemptId));
