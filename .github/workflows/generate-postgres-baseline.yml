@@ -1,0 +1,50 @@
+name: Generate PostgreSQL baseline
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "api/prisma/schema.prisma"
+      - ".github/workflows/generate-postgres-baseline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pull request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate PostgreSQL baseline migration
+        run: |
+          mkdir -p api/prisma/migrations/20261109000000_postgresql_baseline
+          npx prisma migrate diff --from-empty --to-schema-datamodel api/prisma/schema.prisma --script > api/prisma/migrations/20261109000000_postgresql_baseline/migration.sql
+
+      - name: Commit generated baseline
+        run: |
+          git add api/prisma/migrations/20261109000000_postgresql_baseline/migration.sql
+          if git diff --cached --quiet; then
+            echo "PostgreSQL baseline is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(db): generate PostgreSQL baseline migration"
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
