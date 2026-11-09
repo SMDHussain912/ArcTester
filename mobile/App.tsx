@@ -403,6 +403,39 @@ export default function App() {
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
             <Text style={styles.examHint}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
+            <View style={styles.navigator}>
+              <Text style={styles.navigatorTitle}>JUMP TO QUESTION</Text>
+              <View style={styles.navigatorGrid}>
+                {test.questions.map((question, index) => {
+                  const answered = answers[question.id] !== undefined;
+                  const current = index === currentQuestionIndex;
+                  return (
+                    <TouchableOpacity
+                      key={question.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Question ${index + 1}${answered ? ", answered" : ", unanswered"}`}
+                      accessibilityState={{ selected: current }}
+                      onPress={() => setCurrentQuestionIndex(index)}
+                      style={[
+                        styles.navigatorItem,
+                        answered && styles.navigatorAnswered,
+                        current && styles.navigatorCurrent,
+                      ]}
+                    >
+                      <Text style={[
+                        styles.navigatorNumber,
+                        answered && styles.navigatorNumberAnswered,
+                        current && styles.navigatorNumberCurrent,
+                      ]}>{index + 1}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.navigatorLegend}>
+                <Text style={styles.navigatorLegendText}>● Answered</Text>
+                <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
+              </View>
+            </View>
             {secondsLeft === 0 && <Text style={styles.timerNotice}>Time is up. Submit your answers to finish.</Text>}
             {test.questions[currentQuestionIndex] && (
               <Animated.View
@@ -788,6 +821,17 @@ const styles = StyleSheet.create({
   progressTrack: { height: 7, backgroundColor: "#e9edf5", borderRadius: 8, overflow: "hidden", marginTop: 18 },
   progressFill: { height: "100%", backgroundColor: "#2563eb", borderRadius: 8 },
   examHint: { color: "#8993a5", fontSize: 11, marginTop: 8 },
+  navigator: { marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: "#f7f9fc", borderWidth: 1, borderColor: "#e8edf5" },
+  navigatorTitle: { color: "#748096", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  navigatorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  navigatorItem: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: "#dce2eb", backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  navigatorAnswered: { backgroundColor: "#eaf7f0", borderColor: "#9bd4b5" },
+  navigatorCurrent: { borderColor: "#2563eb", borderWidth: 2, backgroundColor: "#eff6ff" },
+  navigatorNumber: { color: "#526078", fontSize: 12, fontWeight: "700" },
+  navigatorNumberAnswered: { color: "#167647" },
+  navigatorNumberCurrent: { color: "#2563eb" },
+  navigatorLegend: { flexDirection: "row", gap: 14, marginTop: 10 },
+  navigatorLegendText: { color: "#748096", fontSize: 10 },
   timerNotice: { color: "#b42318", fontWeight: "700", marginTop: 12 },
   question: { borderTopWidth: 1, borderTopColor: "#edf0f5", paddingTop: 18, marginTop: 18 },
   optionRow: { flexDirection: "row", alignItems: "center", gap: 11 },
