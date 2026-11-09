@@ -693,6 +693,42 @@ describe("versioned exam management", () => {
     expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
   });
 
+  it("rejects invalid offline answers without creating a session", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const invalidStudentCookie = await createSession("invalid-offline-answer@arctester.test", "STUDENT");
+    const invalidStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "invalid-offline-answer@arctester.test" },
+      select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const invalidAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: version.id, studentId: invalidStudent.id, assignedById: admin.id },
+    });
+
+    const rejected = await request(
+      `/exams/assignments/${invalidAssignment.id}/submission`,
+      "POST",
+      {
+        attemptUuid: "9d4bd8a4-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: "not-in-this-exam", selectedIndex: 0 }],
+      },
+      invalidStudentCookie
+    );
+
+    expect(rejected.status).toBe(400);
+    expect(await server.db.examSession.findUnique({
+      where: { assignmentId: invalidAssignment.id },
+    })).toBeNull();
+  });
+
   it("prevents another student from reading a submission result", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/result`,

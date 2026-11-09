@@ -61,6 +61,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Implement per-device session revocation and audit device registry semantics and rate limiting.
 - [x] Serialize one-time administrator bootstrap with `pg_try_advisory_xact_lock`; concurrent bootstrap regression passed in CI run `42542180790`.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
+- [ ] Verify invalid exam submissions are rejected before session reconciliation; the new regression currently awaits CI.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
 
 ### Frontend quality
@@ -204,4 +205,7 @@ A task can be checked off only when:
 - 2026-11-09: Added a Vercel + Render deployment guide with Vite build/output settings, Docker context, PostgreSQL/JWT/CORS/cookie environment variables, and the third-party-cookie limitation. Actual provider configuration and browser testing remain pending; the deployment-guide documentation should be included in the next CI run.
 
 
-- 2026-11-09: Hardened exam assignment against concurrent duplicate requests: a uniqueness race now returns HTTP 409 instead of an unhandled 500. The first CI run exposed test-fixture contamination because the new test assigned a student reused by later analytics/offline-submission tests. Moved the concurrency test after analytics and gave it a dedicated student fixture; the corrected regression is awaiting CI verification.
+- 2026-11-09: Hardened exam assignment against concurrent duplicate requests: a uniqueness race now returns HTTP 409 instead of an unhandled 500. The first CI run exposed test-fixture contamination because the new test assigned a student reused by later analytics/offline-submission tests. Moved the concurrency test after analytics and gave it a dedicated student fixture; corrected CI run `42543383789` passed all four jobs.
+
+
+- 2026-11-09: Exam submission audit found that offline session reconciliation happened before validating submitted question IDs and option indexes. Invalid payloads could therefore leave a session row despite returning HTTP 400. Moved full answer-set validation ahead of session creation, added per-question option bounds checks, and added a regression proving invalid offline submissions do not create a session. Awaiting CI verification for this follow-up.
