@@ -40,7 +40,7 @@ const RegisterSchema = z.object({
 }).strict();
 
 const PredictionSchema = z.object({
-  features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+  features: z.record(z.string(), z.union([z.number().finite(), z.string().max(500)])),
 }).strict();
 
 const TrainingSchema = z.object({
@@ -54,7 +54,7 @@ const EvaluationSchema = z.object({
 }).strict();
 
 const DatasetSampleSchema = z.object({
-  features: z.record(z.union([z.number().finite(), z.string().max(500)])),
+  features: z.record(z.string(), z.union([z.number().finite(), z.string().max(500)])),
   target: z.number().finite(),
   // Keyed HMAC-SHA-256 pseudonym only; never store a learner name, email or database ID here.
   groupId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
