@@ -1,0 +1,92 @@
+name: Dependency Security Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "web/package.json"
+      - "api/package.json"
+      - "mobile/package.json"
+      - ".github/workflows/dependency-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit npm dependency tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Generate npm audit report
+        run: npm audit --json > npm-audit.json || true
+
+      - name: Summarize advisories
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const report = JSON.parse(fs.readFileSync("npm-audit.json", "utf8"));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const total = counts.total ?? 0;
+          const summary = [
+            "## npm dependency security audit",
+            "",
+            `Total advisories: **${total}**`,
+            "",
+            "| Severity | Count |",
+            "|---|---:|",
+            ...["critical", "high", "moderate", "low", "info"].map((level) =>
+              `| ${level} | ${counts[level] ?? 0} |`
+            ),
+            "",
+            "### Affected packages",
+            "",
+          ];
+          for (const [name, item] of Object.entries(report.vulnerabilities ?? {})) {
+            const via = (item.via ?? []).map((entry) =>
+              typeof entry === "string" ? entry : entry.title
+            ).filter(Boolean).join("; ");
+            summary.push(`- **${name}** (${item.severity}) — ${via || "See attached npm audit JSON"}; fix available: ${JSON.stringify(item.fixAvailable ?? false)}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary.join("\n") + "\n");
+          console.log(summary.join("\n"));
+          NODE
+
+      - name: Upload full audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-dependency-audit
+          path: npm-audit.json
+          retention-days: 14
+
+      - name: Fail when critical or high advisories remain
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const report = JSON.parse(fs.readFileSync("npm-audit.json", "utf8"));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const critical = counts.critical ?? 0;
+          const high = counts.high ?? 0;
+          console.log(`Critical: ${critical}; high: ${high}`);
+          if (critical > 0 || high > 0) {
+            console.error("Dependency security gate failed. Remediate critical/high advisories before release.");
+            process.exit(1);
+          }
+          NODE

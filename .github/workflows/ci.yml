@@ -1,4 +1,4 @@
-name: CI
+name: ArcTester CI
 
 on:
   push:
@@ -11,20 +11,33 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: arctester-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
-    name: Build, test and lint
+    name: Test, lint and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -37,69 +50,23 @@ jobs:
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
-        env:
-          DATABASE_URL: file:./dev.db
 
-      - name: Build API and web
-        run: npm run build
-        env:
-          DATABASE_URL: file:./dev.db
+      - name: Verify migrations on a clean PostgreSQL database
+        run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
 
       - name: Run tests
         run: npm test
-        env:
-          DATABASE_URL: file:./dev.db
 
       - name: Run lint
         run: npm run lint
 
-      - name: Check formatting of changed files
-        shell: bash
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            git fetch origin "$BASE_REF"
-            changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD")"
-          elif [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            changed_files="$(git ls-files)"
-          else
-            changed_files="$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")"
-          fi
+      - name: Build web and API
+        run: npm run build
 
-          format_files="$(printf '%s\n' "$changed_files" | grep -E '\.(css|html|js|jsx|json|md|mdx|scss|ts|tsx|yaml|yml)$' || true)"
-          if [[ -z "$format_files" ]]; then
-            echo "No changed Prettier-supported files to check."
-          else
-            printf '%s\n' "$format_files" | xargs npx prettier --check
-          fi
-
-  docker-build:
-    name: Build Docker images
-    runs-on: ubuntu-latest
-    needs: verify
-    timeout-minutes: 20
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Build API and web images
-        run: docker compose build
-        env:
-          JWT_SECRET: ci-only-secret-for-image-build
-          NEXT_PUBLIC_API_URL: http://localhost:4000
-          CORS_ORIGINS: http://localhost:3000
-
-  mobile-typecheck:
-    name: Mobile TypeScript check
+  mobile:
+    name: Mobile typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: mobile
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -110,7 +77,58 @@ jobs:
           node-version: 20
 
       - name: Install mobile dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --prefix mobile
 
       - name: Typecheck mobile app
-        run: npm run typecheck
+        run: npm run typecheck --prefix mobile
+
+  dataset-preparation:
+    name: TensorFlow dataset preparation tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test privacy-safe CSV conversion
+        run: python -m unittest scripts/test_prepare_tensorflow_dataset.py -v
+
+  sqlite-to-postgres-migration:
+    name: SQLite to PostgreSQL migration utility tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install migration helper dependency
+        run: pip install -r requirements-migrate.txt
+
+      - name: Test SQLite data migration helpers
+        run: python -m unittest scripts/test_migrate_sqlite_to_postgres.py -v

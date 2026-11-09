@@ -1,0 +1,2 @@
+ALTER TABLE "ExamSession" ADD COLUMN "pausedAt" DATETIME;
+ALTER TABLE "ExamSession" ADD COLUMN "pausedDurationMs" INTEGER NOT NULL DEFAULT 0;

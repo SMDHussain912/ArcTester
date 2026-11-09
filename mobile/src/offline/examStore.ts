@@ -40,12 +40,31 @@ export type OfflineAnswer = {
   selectedIndex: number | null;
 };
 
+export type CachedAnnouncement = {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  publishedAt: string;
+  expiresAt: string | null;
+};
+
 export type PendingSubmission = {
   assignmentId: string;
   attemptUuid: string;
   startedAt: string;
   submittedAt: string;
   answers: OfflineAnswer[];
+};
+
+export type StoredOfflineAttempt = {
+  assignmentId: string;
+  attemptUuid: string;
+  startedAt: string;
+  submittedAt: string | null;
+  answers: OfflineAnswer[];
+  syncStatus: "IN_PROGRESS" | "PENDING" | "SYNC_ERROR" | "SYNCED";
+  lastError: string | null;
 };
 
 type AttemptRow = {
@@ -69,6 +88,11 @@ async function database(): Promise<SQLite.SQLiteDatabase> {
           sha256 TEXT NOT NULL,
           downloaded_at TEXT NOT NULL,
           server_offset_ms REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cached_announcements (
+          announcement_id TEXT PRIMARY KEY NOT NULL,
+          announcement_json TEXT NOT NULL,
+          cached_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS offline_attempts (
           assignment_id TEXT PRIMARY KEY NOT NULL,
@@ -183,6 +207,18 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
   const cached = await getCachedExam(assignmentId);
   if (!cached) throw new Error("Download this exam before starting it.");
 
+  const db = await database();
+  const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
+    "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
+    assignmentId
+  );
+  // A started attempt must remain resumable after the assignment deadline so
+  // the app can restore its answers and submit the expired attempt.
+  if (existing) {
+    if (existing.sync_status === "IN_PROGRESS") return existing.attempt_uuid;
+    throw new Error("An attempt already exists for this assignment.");
+  }
+
   const trustedNow = Date.now() + cached.serverOffsetMs;
   const availableFrom = cached.package.availableFrom
     ? new Date(cached.package.availableFrom).getTime()
@@ -194,16 +230,6 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
   }
   if (dueAt !== null && trustedNow > dueAt) {
     throw new Error("The deadline for this exam has passed.");
-  }
-
-  const db = await database();
-  const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
-    "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId
-  );
-  if (existing) {
-    if (existing.sync_status === "IN_PROGRESS") return existing.attempt_uuid;
-    throw new Error("An attempt already exists for this assignment.");
   }
 
   const attemptUuid = Crypto.randomUUID();
@@ -219,6 +245,37 @@ export async function startOfflineAttempt(assignmentId: string): Promise<string>
     now
   );
   return attemptUuid;
+}
+
+
+export async function getOfflineAttempt(
+  assignmentId: string
+): Promise<StoredOfflineAttempt | null> {
+  const db = await database();
+  const row = await db.getFirstAsync<{
+    assignment_id: string;
+    attempt_uuid: string;
+    started_at: string;
+    submitted_at: string | null;
+    answers_json: string;
+    sync_status: StoredOfflineAttempt["syncStatus"];
+    last_error: string | null;
+  }>(
+    `SELECT assignment_id, attempt_uuid, started_at, submitted_at, answers_json,
+            sync_status, last_error
+     FROM offline_attempts WHERE assignment_id = ?`,
+    assignmentId
+  );
+  if (!row) return null;
+  return {
+    assignmentId: row.assignment_id,
+    attemptUuid: row.attempt_uuid,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at,
+    answers: JSON.parse(row.answers_json) as OfflineAnswer[],
+    syncStatus: row.sync_status,
+    lastError: row.last_error,
+  };
 }
 
 export async function saveOfflineAnswer(
@@ -340,4 +397,32 @@ export async function markSubmissionSyncError(
     new Date().toISOString(),
     assignmentId
   );
+}
+
+export async function cacheAnnouncements(
+  announcements: CachedAnnouncement[]
+): Promise<void> {
+  const db = await database();
+  await db.withTransactionAsync(async () => {
+    for (const announcement of announcements) {
+      await db.runAsync(
+        `INSERT INTO cached_announcements (announcement_id, announcement_json, cached_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(announcement_id) DO UPDATE SET
+           announcement_json = excluded.announcement_json,
+           cached_at = excluded.cached_at`,
+        announcement.id,
+        JSON.stringify(announcement),
+        new Date().toISOString()
+      );
+    }
+  });
+}
+
+export async function listCachedAnnouncements(): Promise<CachedAnnouncement[]> {
+  const db = await database();
+  const rows = await db.getAllAsync<{ announcement_json: string }>(
+    "SELECT announcement_json FROM cached_announcements ORDER BY cached_at DESC"
+  );
+  return rows.map((row) => JSON.parse(row.announcement_json) as CachedAnnouncement);
 }

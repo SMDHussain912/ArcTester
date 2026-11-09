@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
+import { validateJwtSecret } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
 import {
   issueTestInvitation,
@@ -52,6 +53,22 @@ async function getJsonWithCookie(
   setCookieFromResponse(res);
   return { status: res.status, json: await res.json(), headers: res.headers };
 }
+
+describe("JWT secret configuration", () => {
+  it("rejects missing, weak and placeholder production secrets", () => {
+    expect(() => validateJwtSecret("", true)).toThrow(/at least 32 bytes/);
+    expect(() => validateJwtSecret("dev-secret-change-me-in-production", true)).toThrow(/at least 32 bytes/);
+    expect(() => validateJwtSecret("short-secret", true)).toThrow(/at least 32 bytes/);
+  });
+
+  it("accepts a sufficiently strong production secret", () => {
+    expect(() => validateJwtSecret("a".repeat(64), true)).not.toThrow();
+  });
+
+  it("does not require production-strength secrets in development or tests", () => {
+    expect(() => validateJwtSecret("", false)).not.toThrow();
+  });
+});
 
 describe("auth", () => {
   beforeAll(async () => {
@@ -150,13 +167,21 @@ describe("auth", () => {
     );
   });
 
-  it("logs out and clears the cookie", async () => {
+  it("logs out, clears the cookie, and revokes the previously issued JWT", async () => {
+    const oldToken = cookieJar.get("ecet_session");
+    expect(oldToken).toBeTruthy();
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/logout`, {});
     expect(res.status).toBe(200);
     const cleared = res.headers.get("set-cookie") ?? "";
     expect(cleared).toContain("Max-Age=0");
     cookieJar.delete("ecet_session");
 
+    const replay = await fetch(`${server.baseUrl}/tests`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `ecet_session=${oldToken}` },
+      body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
+    });
+    expect(replay.status).toBe(403);
     const me = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
     expect(me.status).toBe(403);
   });
@@ -225,6 +250,21 @@ describe("auth — bearer token (native/mobile clients)", () => {
     expect(res.status).toBe(201);
   });
 
+  it("revokes a bearer token when its owner signs out", async () => {
+    const token = await signInForToken("mobile@example.com", "secret1234");
+    const logout = await fetch(`${server.baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(logout.status).toBe(200);
+    const replay = await fetch(`${server.baseUrl}/tests`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
+    });
+    expect(replay.status).toBe(403);
+  });
+
   it("rejects a missing bearer token on protected routes", async () => {
     const res = await fetch(`${server.baseUrl}/tests`, {
       method: "POST",
@@ -270,5 +310,25 @@ describe("auth — bearer token (native/mobile clients)", () => {
     const cookieBody = (await withCookie.json()) as { user: { id: number } };
 
     expect(tokenBody.user.id).toBe(cookieBody.user.id);
+  });
+
+  it("throttles repeated failed sign-in attempts across cookie and bearer endpoints", async () => {
+    const email = "rate-limit-probe@example.com";
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const endpoint = attempt < 4 ? "/auth/login" : "/auth/token";
+      const response = await fetch(`${server.baseUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password: "wrong-password" }),
+      });
+      expect(response.status).toBe(attempt === 7 ? 429 : 400);
+    }
+    const blocked = await fetch(`${server.baseUrl}/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password: "correct-horse-battery" }),
+    });
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
   });
 });

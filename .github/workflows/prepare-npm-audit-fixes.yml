@@ -1,0 +1,61 @@
+name: Prepare semver-safe npm audit fixes
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/prepare-npm-audit-fixes.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npm-audit-safe-fixes
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Create a branch with non-breaking audit fixes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install the current lockfile
+        run: npm ci
+
+      - name: Apply semver-compatible npm audit fixes only
+        run: |
+          set +e
+          npm audit fix
+          status=$?
+          set -e
+          echo "npm audit fix exit code: $status (remaining advisories are reported in the audit workflow)."
+          exit 0
+
+      - name: Push a review branch
+        id: branch
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No semver-compatible fixes are available."
+            exit 0
+          fi
+          branch="security/npm-audit-semver-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add package.json package-lock.json
+          git commit -m "chore(deps): apply semver-safe npm audit fixes"
+          git push origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Review branch: $branch" >> "$GITHUB_STEP_SUMMARY"

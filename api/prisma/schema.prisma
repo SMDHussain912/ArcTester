@@ -1,15 +1,13 @@
-// SQLite has NO enum type and NO array type, so:
-// - difficulty/source are plain validated Strings (Zod enforces the values in code)
-// - options are stored as a JSON string; Zod enforces "exactly 4 non-empty strings"
-// questionHash is a UNIQUE normalized hash (lowercase, trimmed, collapsed spaces)
-// so duplicates are blocked at the database level, not just in code.
+// PostgreSQL is the primary application database. Difficulty/source remain validated strings,
+// and options remain JSON text so the API can preserve a stable import/export format.
+// questionHash is a UNIQUE normalized hash, blocking duplicates at the database level.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -71,6 +69,8 @@ model User {
   email              String       @unique
   passwordHash       String
   role               String       @default("STUDENT")
+  // Incremented on logout to invalidate previously issued cookie and bearer JWTs.
+  sessionVersion     Int          @default(0)
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
@@ -167,6 +167,7 @@ model ExamVersionQuestion {
   @@unique([examVersionId, position])
   @@index([sourceQuestionId])
   submissionAnswers ExamSubmissionAnswer[]
+  sessionAnswers   ExamSessionAnswer[]
 }
 
 model ExamAssignment {
@@ -182,6 +183,7 @@ model ExamAssignment {
   dueAt          DateTime?
   status         String       @default("ASSIGNED")
   submission     ExamSubmission?
+  session        ExamSession?
 
   @@unique([examVersionId, studentId])
   @@index([studentId, status])
@@ -222,10 +224,17 @@ model AttemptAnswer {
   id         Int      @id @default(autoincrement())
   attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   attemptId  Int
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
   questionId Int
-  chosen     Int?
-  isCorrect  Boolean
+  chosen            Int?
+  isCorrect         Boolean
+  subjectSnapshot   String   @default("")
+  topicSnapshot     String?
+  difficultySnapshot String  @default("medium")
+  textSnapshot      String   @default("")
+  optionsSnapshot   String   @default("[]")
+  correctIndexSnapshot Int   @default(0)
+  explanationSnapshot String @default("")
 
   @@index([attemptId])
   @@index([questionId])
@@ -233,7 +242,7 @@ model AttemptAnswer {
 
 model Stat {
   id         Int      @id @default(autoincrement())
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
   questionId Int
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     Int

@@ -63,4 +63,18 @@ describe("CORS origin allowlist", () => {
     expect(response.headers.get("access-control-allow-methods")).toContain("POST");
     expect(response.headers.get("access-control-allow-headers")).toContain("authorization");
   });
+
+  it.each(["PATCH", "DELETE"])("allows %s preflight requests used by admin tools", async (method) => {
+    const response = await fetch(`${server.baseUrl}/admin/questions/1`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://study.example.com",
+        "access-control-request-method": method,
+        "access-control-request-headers": "content-type,authorization",
+      },
+    });
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://study.example.com");
+    expect(response.headers.get("access-control-allow-methods")).toContain(method);
+  });
 });

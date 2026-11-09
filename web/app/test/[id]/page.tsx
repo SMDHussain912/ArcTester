@@ -63,6 +63,7 @@ function TestRunner() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const loadedAtRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittedRef = useRef(false);
 
@@ -117,6 +118,7 @@ function TestRunner() {
     if (!view || submittedRef.current) return;
     submittedRef.current = true;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await api.submit(
         attemptId,
@@ -135,7 +137,7 @@ function TestRunner() {
       if (isAuthError(e)) {
         void refresh();
       }
-      setError(e instanceof ApiError ? e.message : "Could not submit the test.");
+      setSubmitError(e instanceof ApiError ? e.message : "Could not submit the test. Your answers are still on this page; try again.");
     }
   }, [view, attemptId, answers, questions, router, refresh]);
 
@@ -208,6 +210,7 @@ function TestRunner() {
 
   return (
     <div className="exam-layout">
+      {submitError ? <p className="error" role="alert">{submitError}</p> : null}
       <div className="exam-heading">
         <div>
           <p className="eyebrow">Exam session</p>

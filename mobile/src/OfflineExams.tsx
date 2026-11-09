@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
+  configureOfflineStore,
   getPendingSubmissions,
   getRemainingSeconds,
   listCachedExamPackages,
@@ -42,9 +43,11 @@ type Props = {
   api: ApiRequest;
   apiUrl: string;
   token: string;
+  userId: string;
+  onExit?: () => void;
 };
 
-export function OfflineExams({ api, apiUrl, token }: Props) {
+export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
 
@@ -65,6 +68,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
   const syncLock = useRef(false);
 
   const refreshLocalState = useCallback(async () => {
+    configureOfflineStore(userId);
     const [packages, pending] = await Promise.all([
       listCachedExamPackages(),
       getPendingSubmissions(),
@@ -72,7 +76,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setCachedIds(packages.map((item) => item.assignmentId));
     setCachedPackages(packages);
     setPendingCount(pending.length);
-  }, []);
+  }, [userId]);
 
   const refreshAssignments = useCallback(async () => {
     const result = await apiRef.current<{ assignments: AssignedExam[] }>("/exams/assigned");
@@ -85,6 +89,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setSyncing(true);
     setError("");
     try {
+      configureOfflineStore(userId);
       const pending = await getPendingSubmissions();
       if (pending.length > 0) {
         setSyncMessage("Uploading saved exam submissions…");
@@ -100,7 +105,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
       syncLock.current = false;
       setSyncing(false);
     }
-  }, [apiUrl, refreshAssignments, refreshLocalState, token]);
+  }, [apiUrl, refreshAssignments, refreshLocalState, token, userId]);
 
   useEffect(() => {
     let mounted = true;
@@ -170,6 +175,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setBusyId(assignmentId);
     setError("");
     try {
+      configureOfflineStore(userId);
       const response = await apiRef.current<{
         package: OfflineExamPackage;
         sha256: string;
@@ -188,6 +194,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     setError("");
     autoSubmitStarted.current = false;
     try {
+      configureOfflineStore(userId);
       const started = await startOfflineAttempt(assignmentId);
       const restored = await restoreActiveAttempt(assignmentId);
       setActivePackage(started.examPackage);
@@ -246,6 +253,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
     const seconds = (remainingSeconds ?? 0) % 60;
     return (
       <View style={styles.card}>
+        {onExit && <TouchableOpacity onPress={onExit} style={styles.backButton}><Text style={styles.link}>‹ Back to dashboard</Text></TouchableOpacity>}
         <Text style={styles.heading}>{activePackage.title}</Text>
         <Text style={styles.timer}>
           Time left: {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
@@ -279,9 +287,14 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
           onPress={() => void submitExam()}
           style={styles.primary}
         >
-          <Text style={styles.primaryText}>
-            {busyId ? "Saving…" : "Submit exam"}
-          </Text>
+          <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          disabled={busyId !== null}
+          onPress={() => setActivePackage(null)}
+          style={styles.secondaryButton}
+        >
+          <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
         </TouchableOpacity>
       </View>
     );
@@ -290,11 +303,12 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
   return (
     <View style={styles.section}>
       <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>Assigned exams</Text>
+        {onExit ? <TouchableOpacity onPress={onExit}><Text style={styles.link}>‹ Dashboard</Text></TouchableOpacity> : <Text style={styles.sectionTitle}>Assigned exams</Text>}
         <TouchableOpacity disabled={syncing} onPress={() => void syncOutbox()}>
           <Text style={styles.link}>{syncing ? "Syncing…" : "Sync now"}</Text>
         </TouchableOpacity>
       </View>
+      {onExit && <Text style={styles.sectionTitle}>Assigned exams</Text>}
       <Text style={styles.muted}>
         {online ? "Internet connected" : "Offline mode"} · {pendingCount} pending submission
         {pendingCount === 1 ? "" : "s"}
@@ -324,7 +338,11 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
                     style={styles.secondaryButton}
                   >
                     <Text style={styles.secondaryText}>
-                      {busyId === assignment.id ? "Working…" : downloaded ? "Downloaded" : "Download"}
+                      {busyId === assignment.id
+                        ? "Working…"
+                        : downloaded
+                          ? "Downloaded"
+                          : "Download"}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -341,12 +359,16 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
         })
       )}
       {cachedPackages
-        .filter((examPackage) => !assignments.some((assignment) => assignment.id === examPackage.assignmentId))
+        .filter(
+          (examPackage) =>
+            !assignments.some((assignment) => assignment.id === examPackage.assignmentId)
+        )
         .map((examPackage) => (
           <View key={examPackage.assignmentId} style={styles.assignment}>
             <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
             <Text style={styles.muted}>
-              {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes · Saved offline
+              {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes ·
+              Saved offline
             </Text>
             <TouchableOpacity
               disabled={busyId !== null}
@@ -365,6 +387,7 @@ export function OfflineExams({ api, apiUrl, token }: Props) {
 const styles = StyleSheet.create({
   section: { marginTop: 24 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  backButton: { alignSelf: "flex-start", marginBottom: 14 },
   sectionTitle: { color: "#172033", fontSize: 17, fontWeight: "800", marginBottom: 8 },
   link: { color: "#2563eb", fontWeight: "700" },
   muted: { color: "#748096", fontSize: 12, marginTop: 4 },

@@ -10,6 +10,7 @@ let secondStudentCookie = "";
 let studentId = 0;
 let examId = "";
 let assignmentId = "";
+let displayedCorrectIndex = 1;
 
 async function request(
   path: string,
@@ -35,6 +36,15 @@ async function createSession(email: string, role: "ADMIN" | "STUDENT"): Promise<
   await server.db.user.create({
     data: { email, passwordHash: hashPassword("exam-test-password-123"), role },
   });
+  const response = await fetch(`${server.baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: "exam-test-password-123" }),
+  });
+  return sessionCookie(response);
+}
+
+async function loginExistingSession(email: string): Promise<string> {
   const response = await fetch(`${server.baseUrl}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -83,6 +93,116 @@ describe("versioned exam management", () => {
     const student = await request("/admin/exams", "POST", {}, studentCookie);
     expect(anonymous.status).toBe(403);
     expect(student.status).toBe(403);
+  });
+
+  it("allows admins to add questions directly to the question bank", async () => {
+    const payload = {
+      subject: "Computer Networks",
+      topic: "OSI Model",
+      text: "Which OSI layer is responsible for routing packets? (admin-created)",
+      options: ["Physical", "Network", "Session", "Presentation"],
+      correctIndex: 1,
+      explanation: "The network layer handles logical addressing and routing.",
+      difficulty: "medium",
+      source: "Admin question editor",
+    };
+    const created = await request("/admin/questions", "POST", payload, adminCookie);
+    expect(created.status).toBe(201);
+    expect((created.json.question as { subject: string }).subject).toBe("Computer Networks");
+
+    const duplicate = await request("/admin/questions", "POST", payload, adminCookie);
+    expect(duplicate.status).toBe(409);
+
+    const student = await request("/admin/questions", "POST", payload, studentCookie);
+    expect(student.status).toBe(403);
+
+    const bank = await request("/admin/question-bank", "GET", undefined, adminCookie);
+    expect(bank.status).toBe(200);
+    expect((bank.json.questions as Array<{ text: string }>).some((item) => item.text === payload.text)).toBe(true);
+  });
+
+  it("returns a conflict when bulk deletion targets a question used by an attempt", async () => {
+    const question = await server.db.question.findFirstOrThrow({
+      where: { text: "Which structure follows FIFO?" },
+    });
+    const attempt = await server.db.attempt.create({
+      data: { userId: studentId, mode: "practice" },
+    });
+    await server.db.attemptAnswer.create({
+      data: {
+        attemptId: attempt.id,
+        questionId: question.id,
+        chosen: null,
+        isCorrect: false,
+        subjectSnapshot: "Computer Science",
+        topicSnapshot: "Data Structures",
+        difficultySnapshot: "easy",
+        textSnapshot: question.text,
+        optionsSnapshot: question.options,
+        correctIndexSnapshot: question.correctIndex,
+        explanationSnapshot: question.explanation,
+      },
+    });
+
+    const deleted = await request("/admin/questions/bulk", "DELETE", { ids: [question.id] }, adminCookie);
+    expect(deleted.status).toBe(409);
+    expect((deleted.json.error as string)).toContain("already used");
+    expect(await server.db.question.findUnique({ where: { id: question.id } })).not.toBeNull();
+    await server.db.attemptAnswer.deleteMany({ where: { attemptId: attempt.id } });
+    await server.db.attempt.delete({ where: { id: attempt.id } });
+  });
+
+  it("rejects non-integer question bank pagination", async () => {
+    const response = await request("/admin/question-bank?page=1.5", "GET", undefined, adminCookie);
+    expect(response.status).toBe(400);
+  });
+
+  it("validates paper duplicates, subject blueprint and difficulty balance", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const duplicate = await request("/admin/exams/validate-paper", "POST", {
+      durationMinutes: 60,
+      questions: [
+        { questionId: question.id, marks: 1, negativeMarks: 0 },
+        { questionId: question.id, marks: 1, negativeMarks: 0 },
+      ],
+    }, adminCookie);
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.json.valid).toBe(false);
+    expect((duplicate.json.errors as string[]).join(" ")).toContain("Duplicate");
+    const student = await request("/admin/exams/validate-paper", "POST", {
+      durationMinutes: 60,
+      questions: [{ questionId: question.id, marks: 1, negativeMarks: 0 }],
+    }, studentCookie);
+    expect(student.status).toBe(403);
+  });
+
+  it("rejects a paper where every question has zero marks", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const response = await request("/admin/exams", "POST", {
+      title: "Zero Mark Paper",
+      description: "",
+      instructions: "",
+      durationMinutes: 30,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: [{ questionId: question.id, marks: 0, negativeMarks: 0 }],
+    }, adminCookie);
+    expect(response.status).toBe(400);
+    expect((response.json.reasons as string[]).join(" ")).toContain("An exam must award more than zero total marks.");
+  });
+
+  it("rejects a paper where negative marks exceed correct-answer marks", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const response = await request("/admin/exams", "POST", {
+      title: "Invalid Marking Paper",
+      description: "",
+      instructions: "",
+      durationMinutes: 30,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: [{ questionId: question.id, marks: 0.25, negativeMarks: 1 }],
+    }, adminCookie);
+    expect(response.status).toBe(400);
   });
 
   it("creates a draft with immutable question snapshots and marking values", async () => {
@@ -151,6 +271,18 @@ describe("versioned exam management", () => {
     assignmentId = assignment.id;
   });
 
+  it("lists published papers in the student catalogue without exposing answer data", async () => {
+    const catalog = await request("/exams/catalog", "GET", undefined, studentCookie);
+    expect(catalog.status).toBe(200);
+    const papers = catalog.json.catalog as Array<{ examId: string; assignment: { id: string } | null; questionCount: number }>;
+    const paper = papers.find((item) => item.examId === examId);
+    expect(paper).toBeTruthy();
+    expect(paper?.assignment?.id).toBe(assignmentId);
+    expect(paper?.questionCount).toBe(1);
+    const anonymous = await request("/exams/catalog");
+    expect(anonymous.status).toBe(403);
+  });
+
   it("delivers a student package without answer keys or explanations", async () => {
     const list = await request("/exams/assigned", "GET", undefined, studentCookie);
     expect(list.status).toBe(200);
@@ -206,15 +338,134 @@ describe("versioned exam management", () => {
     expect(response.status).toBe(404);
   });
 
+  it("saves assigned-exam answers on the server and restores them after a reload", async () => {
+    const assignment = await server.db.examAssignment.findUniqueOrThrow({
+      where: { id: assignmentId },
+      select: { examVersionId: true },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: assignment.examVersionId },
+    });
+    const started = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(started.status).toBe(200);
+    const empty = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
+    expect(empty.status).toBe(200);
+    expect(empty.json.answers).toEqual([]);
+    expect(empty.json.revision).toBe(0);
+    const saved = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 0,
+      answers: [{ examQuestionId: question.id, selectedIndex: 2 }],
+    }, studentCookie);
+    expect(saved.status).toBe(200);
+    expect(saved.json).toMatchObject({ savedCount: 1, revision: 1 });
+    const secondDeviceCookie = await loginExistingSession("exam-student@arctester.test");
+    const staleSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 0,
+      answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
+    }, secondDeviceCookie);
+    expect(staleSave.status).toBe(409);
+
+    const sessionId = (started.json.session as { id: string }).id;
+    const originalStartedAt = (started.json.session as { startedAt: string }).startedAt;
+    await server.db.examSession.update({ where: { id: sessionId }, data: { status: "INTERRUPTED" } });
+    const reconnected = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(reconnected.status).toBe(200);
+    expect(reconnected.json.session).toMatchObject({ status: "ACTIVE", startedAt: originalStartedAt });
+
+    const paused = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "PAUSE", reason: "Verify paused sessions reject saves" }, adminCookie);
+    expect(paused.status).toBe(200);
+    const pausedSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 1,
+      answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
+    }, studentCookie);
+    expect(pausedSave.status).toBe(409);
+    const beforePausedHeartbeat = await server.db.examSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const blockedHeartbeat = await request(
+      `/exams/assignments/${assignmentId}/session/heartbeat`, "POST", { event: "HEARTBEAT" }, studentCookie,
+    );
+    expect(blockedHeartbeat.status).toBe(409);
+    const afterPausedHeartbeat = await server.db.examSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(afterPausedHeartbeat.status).toBe("PAUSED");
+    expect(afterPausedHeartbeat.heartbeatCount).toBe(beforePausedHeartbeat.heartbeatCount);
+    expect(afterPausedHeartbeat.lastHeartbeatAt?.getTime()).toBe(beforePausedHeartbeat.lastHeartbeatAt?.getTime());
+    const pausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(pausedState.answersRevision).toBe(1);
+    const resumed = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "RESUME" }, adminCookie);
+    expect(resumed.status).toBe(200);
+
+    const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
+    expect(restored.status).toBe(200);
+    expect(restored.json.revision).toBe(1);
+    expect(restored.json.answers).toEqual([expect.objectContaining({ examQuestionId: question.id, selectedIndex: 2 })]);
+    const staleSubmission = await request(`/exams/assignments/${assignmentId}/submission`, "POST", {
+      revision: 0,
+      attemptUuid: "b8b5e7f0-4d22-4d71-92f0-9b6b5b8b1202",
+      startedAt: started.json.session.startedAt,
+      submittedAt: new Date().toISOString(),
+      answers: [{ examQuestionId: question.id, selectedIndex: 2 }],
+    }, secondDeviceCookie);
+    expect(staleSubmission.status).toBe(409);
+    const foreign = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, secondStudentCookie);
+    expect(foreign.status).toBe(404);
+    const invalid = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      answers: [{ examQuestionId: "not-in-this-exam", selectedIndex: 0 }],
+    }, studentCookie);
+    expect(invalid.status).toBe(400);
+  });
+
   it("scores offline submissions on the server and safely handles retries", async () => {
     const question = await server.db.examVersionQuestion.findFirstOrThrow();
-    const startedAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const started = await request(
+      `/exams/assignments/${assignmentId}/session/start`,
+      "POST",
+      {},
+      studentCookie
+    );
+    expect(started.status).toBe(200);
+    const sessionInfo = started.json.session as { startedAt: string };
+    const heartbeat = await request(
+      `/exams/assignments/${assignmentId}/session/heartbeat`,
+      "POST",
+      { event: "HEARTBEAT" },
+      studentCookie
+    );
+    expect(heartbeat.status).toBe(200);
+    const live = await request("/admin/exams/live-sessions", "GET", undefined, adminCookie);
+    expect(live.status).toBe(200);
+    expect((live.json.sessions as Array<{ assignmentId: string }>).some((item) => item.assignmentId === assignmentId)).toBe(true);
+    const liveSessions = live.json.sessions as Array<{ id: string; assignmentId: string }>;
+    const activeSession = liveSessions.find((item) => item.assignmentId === assignmentId)!;
+    const paused = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "PAUSE", reason: "Test pause" }, adminCookie);
+    expect(paused.status).toBe(200);
+    const firstPausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } });
+    const firstPausedAt = firstPausedState.pausedAt?.getTime();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const repeatedPause = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "PAUSE", reason: "Repeated pause should not reset the timer." }, adminCookie);
+    expect(repeatedPause.status).toBe(200);
+    const repeatedPausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } });
+    expect(repeatedPausedState.pausedAt?.getTime()).toBe(firstPausedAt);
+    const blockedResume = await request(`/exams/assignments/${assignmentId}/session/start`, "POST", {}, studentCookie);
+    expect(blockedResume.status).toBe(409);
+    const blockedSubmission = await request(`/exams/assignments/${assignmentId}/submission`, "POST", {
+      attemptUuid: "7a2b8d1c-3e4f-4a5b-9c6d-7e8f90123456",
+      startedAt: sessionInfo.startedAt,
+      submittedAt: new Date().toISOString(),
+      answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+    }, studentCookie);
+    expect(blockedSubmission.status).toBe(409);
+    expect(await server.db.examSubmission.findUnique({ where: { assignmentId } })).toBeNull();
+    expect((await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } })).status).toBe("PAUSED");
+    const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME" }, adminCookie);
+    expect(resumed.status).toBe(200);
+    const resumedHeartbeat = await request(`/exams/assignments/${assignmentId}/session/heartbeat`, "POST", { event: "HEARTBEAT" }, studentCookie);
+    expect(resumedHeartbeat.status).toBe(200);
+    const startedAt = sessionInfo.startedAt;
     const submittedAt = new Date().toISOString();
     const body = {
       attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
       startedAt,
       submittedAt,
-      answers: [{ examQuestionId: question.id, selectedIndex: 1 }],
+      answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
     };
 
     const first = await request(
@@ -269,6 +520,339 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
+  it("preserves elapsed pause duration when an invigilator terminates a paused session", async () => {
+    const assignment = await server.db.examAssignment.findUniqueOrThrow({
+      where: { id: assignmentId },
+      select: { examVersionId: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const cookie = await createSession("terminate-paused@arctester.test", "STUDENT");
+    const student = await server.db.user.findUniqueOrThrow({
+      where: { email: "terminate-paused@arctester.test" },
+      select: { id: true },
+    });
+    const extraAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: assignment.examVersionId, studentId: student.id, assignedById: admin.id },
+    });
+    const started = await request(`/exams/assignments/${extraAssignment.id}/session/start`, "POST", {}, cookie);
+    expect(started.status).toBe(200);
+    const session = started.json.session as { id: string };
+    const paused = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "PAUSE" }, adminCookie);
+    expect(paused.status).toBe(200);
+
+    const pausedAt = new Date(Date.now() - 5 * 60 * 1000);
+    await server.db.examSession.update({
+      where: { id: session.id },
+      data: { pausedAt, pausedDurationMs: 1000 },
+    });
+    const terminated = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "TERMINATE", reason: "Candidate session ended" }, adminCookie);
+    expect(terminated.status).toBe(200);
+    const finalState = await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } });
+    expect(finalState.status).toBe("TERMINATED");
+    expect(finalState.pausedAt).toBeNull();
+    expect(finalState.endedAt).not.toBeNull();
+    expect(finalState.pausedDurationMs).toBeGreaterThanOrEqual(301000);
+
+    // Keep this regression fixture isolated from later tests that assert global counts.
+    await server.db.user.delete({ where: { id: student.id } });
+  });
+
+  it("paginates admin student lists and supports email search", async () => {
+    await server.db.user.createMany({
+      data: Array.from({ length: 55 }, (_, index) => ({
+        email: `page-student-${String(index).padStart(2, "0")}@arctester.test`,
+        passwordHash: "test-hash", role: "STUDENT",
+      })),
+    });
+    const first = await request("/admin/students?page=1&limit=25", "GET", undefined, adminCookie);
+    expect(first.status).toBe(200);
+    expect(first.json.students).toHaveLength(25);
+    expect(first.json).toMatchObject({ page: 1, limit: 25, total: 57, totalPages: 3 });
+    const filtered = await request("/admin/students?page=1&limit=25&search=page-student-54", "GET", undefined, adminCookie);
+    expect((filtered.json.students as Array<{ email: string }>).map((student) => student.email)).toEqual(["page-student-54@arctester.test"]);
+  });
+
+  it("returns paginated review-required submissions", async () => {
+    const response = await request("/admin/submissions/review-required?page=1&limit=10", "GET", undefined, adminCookie);
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({ page: 1, limit: 10 });
+    expect((response.json.submissions as unknown[]).length).toBeLessThanOrEqual(10);
+    expect(response.json.total).toBe(await server.db.examSubmission.count({ where: { status: "REVIEW_REQUIRED" } }));
+  });
+
+  it("returns exam attendance and question-level report data", async () => {
+    const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
+    expect(attendance.status).toBe(200);
+    const row = (attendance.json.attendance as Array<{ assignmentId: string; attendanceStatus: string }>).find((item) => item.assignmentId === assignmentId);
+    expect(row?.attendanceStatus).toBe("SUBMITTED");
+
+    const report = await request(`/admin/exams/${examId}/report`, "GET", undefined, adminCookie);
+    expect(report.status).toBe(200);
+    const data = report.json.report as { assigned: number; submitted: number; questions: Array<{ correct: number; responses: number }> };
+    expect(data.assigned).toBe(1);
+    expect(data.submitted).toBe(1);
+    expect(data.questions[0]).toMatchObject({ correct: 1, responses: 1 });
+    const audit = await request(`/admin/exams/assignments/${assignmentId}/audit`, "GET", undefined, adminCookie);
+    expect(audit.status).toBe(200);
+    const auditBody = audit.json.audit as { events: Array<{ type: string; actor: { email: string } | null }> };
+    expect(auditBody.events.some((event) => event.type === "INVIGILATOR_PAUSE" && event.actor?.email === "exam-admin@arctester.test")).toBe(true);
+    expect(auditBody.events.some((event) => event.type === "SUBMITTED" && event.actor?.email === "exam-student@arctester.test")).toBe(true);
+    const student = await request(`/admin/exams/${examId}/report`, "GET", undefined, studentCookie);
+    expect(student.status).toBe(403);
+  });
+
+  it("shows administrator analytics and blocks student access", async () => {
+    const question = await server.db.question.findUniqueOrThrow({
+      where: { questionHash: "exam-route-question-fifo-unique" },
+    });
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const thirdStudent = await server.db.user.create({
+      data: { email: "third-student@arctester.test", passwordHash: "test-only", role: "STUDENT" },
+    });
+    const cohortIds = [studentId, studentId, secondStudent.id, secondStudent.id, thirdStudent.id];
+    for (const userId of cohortIds) {
+      await server.db.attempt.create({
+        data: {
+          userId,
+          mode: "practice",
+          startedAt: new Date(Date.now() - 60_000),
+          finishedAt: new Date(),
+          answers: {
+            create: {
+              questionId: question.id,
+              chosen: 0,
+              isCorrect: false,
+              subjectSnapshot: "Computer Science",
+              topicSnapshot: "Data Structures",
+              difficultySnapshot: "easy",
+            },
+          },
+        },
+      });
+    }
+    const admin = await request("/admin/analytics/overview", "GET", undefined, adminCookie);
+    expect(admin.status).toBe(200);
+    const body = admin.json as {
+      totals: { students: number; exams: number; assignments: number; submissions: number; averagePercentage: number | null };
+      practice: {
+        questionPerformance: {
+          minimumAnswers: number;
+          minimumStudents: number;
+          weakAccuracyThreshold: number;
+          insufficientSampleCount: number;
+          questions: { questionId: number; sampleSize: number; uniqueStudents: number; sufficientData: boolean; weak: boolean }[];
+        };
+      };
+      exams: { title: string; assigned: number; submitted: number; averagePercentage: number | null }[];
+      recentSubmissions: {
+        submissionId: string;
+        studentId: number;
+        studentEmail: string;
+        examTitle: string;
+        score: number | null;
+      }[];
+    };
+    expect(body.totals.students).toBe(58);
+    expect(body.totals.exams).toBe(1);
+    expect(body.totals.assignments).toBe(1);
+    expect(body.totals.submissions).toBe(1);
+    expect(body.totals.averagePercentage).toBe(100);
+    expect(body.practice.questionPerformance).toMatchObject({
+      minimumAnswers: 5,
+      minimumStudents: 3,
+      weakAccuracyThreshold: 0.6,
+      questions: [{
+        questionId: question.id,
+        sampleSize: 5,
+        uniqueStudents: 3,
+        sufficientData: true,
+        weak: true,
+      }],
+    });
+    expect(body.exams[0].title).toBe("Offline Systems Test");
+    expect(body.exams[0].submitted).toBe(1);
+    expect(body.recentSubmissions[0].studentEmail).toBe("exam-student@arctester.test");
+
+    const submissionId = body.recentSubmissions[0].submissionId;
+    const detail = await request(
+      `/admin/submissions/${submissionId}`,
+      "GET",
+      undefined,
+      adminCookie
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.json.submission.student.email).toBe("exam-student@arctester.test");
+    expect(detail.json.submission.questions[0].correctIndex).toBe(1);
+    expect(detail.json.submission.questions[0].selectedIndex).toBe(1);
+    expect(detail.json.submission.questions[0].isCorrect).toBe(true);
+
+    const student = await request("/admin/analytics/overview", "GET", undefined, studentCookie);
+    expect(student.status).toBe(403);
+    const forbiddenDetail = await request(
+      `/admin/submissions/${submissionId}`,
+      "GET",
+      undefined,
+      studentCookie
+    );
+    expect(forbiddenDetail.status).toBe(403);
+  });
+
+  it("handles concurrent duplicate assignment requests without creating duplicate rows or returning server errors", async () => {
+    const thirdStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "third-student@arctester.test" },
+      select: { id: true },
+    });
+    const body = { studentIds: [thirdStudent.id] };
+    const responses = await Promise.all([
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+    ]);
+
+    expect(responses.every((response) => response.status === 201 || response.status === 409)).toBe(true);
+    expect(responses.some((response) => response.status === 201)).toBe(true);
+    expect(await server.db.examAssignment.count({
+      where: { examVersion: { examId }, studentId: thirdStudent.id },
+    })).toBe(1);
+  });
+
+  it("accepts a queued offline submission when no live server session was created", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const offlineAssignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: version.id,
+        studentId: secondStudent.id,
+        assignedById: (await server.db.user.findUniqueOrThrow({
+          where: { email: "exam-admin@arctester.test" },
+          select: { id: true },
+        })).id,
+      },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: version.id },
+    });
+    const startedAt = new Date().toISOString();
+    const submitted = await request(
+      `/exams/assignments/${offlineAssignment.id}/submission`,
+      "POST",
+      {
+        attemptUuid: "8d4bd8a4-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt,
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: null }],
+      },
+      secondStudentCookie
+    );
+    expect(submitted.status).toBe(201);
+    const submission = submitted.json.submission as { id: string; status: string };
+    expect(submission.status).toBe("REVIEW_REQUIRED");
+    const heldResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
+    expect(heldResult.status).toBe(200);
+    expect(heldResult.json.result).toMatchObject({ score: null, maximumScore: null, questions: [] });
+    const released = await request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie);
+    expect(released.status).toBe(200);
+    const availableResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
+    expect(availableResult.status).toBe(200);
+    expect((availableResult.json.result as { questions: unknown[] }).questions).toHaveLength(1);
+    const session = await server.db.examSession.findUniqueOrThrow({
+      where: { assignmentId: offlineAssignment.id },
+      include: { events: true },
+    });
+    expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
+  });
+
+  it("rejects invalid offline answers without creating a session", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const invalidStudentCookie = await createSession("invalid-offline-answer@arctester.test", "STUDENT");
+    const invalidStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "invalid-offline-answer@arctester.test" },
+      select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const invalidAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: version.id, studentId: invalidStudent.id, assignedById: admin.id },
+    });
+
+    const rejected = await request(
+      `/exams/assignments/${invalidAssignment.id}/submission`,
+      "POST",
+      {
+        attemptUuid: "9d4bd8a4-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: "not-in-this-exam", selectedIndex: 0 }],
+      },
+      invalidStudentCookie
+    );
+
+    expect(rejected.status).toBe(400);
+    expect(await server.db.examSession.findUnique({
+      where: { assignmentId: invalidAssignment.id },
+    })).toBeNull();
+  });
+
+  it("does not leave an offline session when its attempt UUID was already used", async () => {
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId },
+      orderBy: { version: "desc" },
+    });
+    const duplicateStudentCookie = await createSession("duplicate-offline-attempt@arctester.test", "STUDENT");
+    const duplicateStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "duplicate-offline-attempt@arctester.test" },
+      select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const duplicateAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: version.id, studentId: duplicateStudent.id, assignedById: admin.id },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: version.id },
+    });
+
+    const rejected = await request(
+      `/exams/assignments/${duplicateAssignment.id}/submission`,
+      "POST",
+      {
+        // This UUID was committed by the earlier online submission retry test.
+        attemptUuid: "4fbd8a4b-ff25-4ec6-8b93-8f46a3b8c2f1",
+        startedAt: new Date().toISOString(),
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+      },
+      duplicateStudentCookie
+    );
+
+    expect(rejected.status).toBe(409);
+    expect(await server.db.examSubmission.findUnique({
+      where: { assignmentId: duplicateAssignment.id },
+    })).toBeNull();
+    expect(await server.db.examSession.findUnique({
+      where: { assignmentId: duplicateAssignment.id },
+    })).toBeNull();
+    await server.db.user.delete({ where: { id: duplicateStudent.id } });
+  });
+
   it("prevents another student from reading a submission result", async () => {
     const response = await request(
       `/exams/assignments/${assignmentId}/result`,
@@ -277,6 +861,31 @@ describe("versioned exam management", () => {
       secondStudentCookie
     );
     expect(response.status).toBe(404);
+  });
+
+  it("supports immutable exam version editing and cloning", async () => {
+    const latest = await request(`/admin/exams/${examId}/latest-version`, "GET", undefined, adminCookie);
+    expect(latest.status).toBe(200);
+    const data = latest.json.exam as { version: { questions: Array<{ sourceQuestionId: number; marks: number; negativeMarks: number }> } };
+    expect(data.version.questions).toHaveLength(1);
+    const edited = await request(`/admin/exams/${examId}`, "PATCH", {
+      title: "Offline Systems Test Revised",
+      description: "Revised paper version",
+      instructions: "Read carefully.",
+      durationMinutes: 50,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: data.version.questions.map((question) => ({
+        questionId: question.sourceQuestionId, marks: question.marks, negativeMarks: question.negativeMarks,
+      })),
+    }, adminCookie);
+    expect(edited.status).toBe(200);
+    expect((edited.json.exam as { versions: Array<{ version: number }> }).versions[0].version).toBe(2);
+
+    const cloned = await request(`/admin/exams/${examId}/clone`, "POST", {}, adminCookie);
+    expect(cloned.status).toBe(201);
+    expect((cloned.json.exam as { title: string; status: string }).title).toContain("Copy of");
+    expect((cloned.json.exam as { status: string }).status).toBe("DRAFT");
   });
 
   it("keeps the published version snapshot unchanged when the source bank question changes", async () => {
@@ -288,4 +897,71 @@ describe("versioned exam management", () => {
     const snapshot = await server.db.examVersionQuestion.findFirstOrThrow();
     expect(snapshot.text).toBe("Which structure follows FIFO?");
   });
+  it("retains deadline-crossing submissions for invigilator review", async () => {
+    const sourceAssignment = await server.db.examAssignment.findUniqueOrThrow({ where: { id: assignmentId } });
+    const lateCandidateCookie = await createSession("late-candidate@arctester.test", "STUDENT");
+    const lateCandidate = await server.db.user.findUniqueOrThrow({
+      where: { email: "late-candidate@arctester.test" }, select: { id: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" }, select: { id: true },
+    });
+    const lateAssignment = await server.db.examAssignment.create({
+      data: {
+        examVersionId: sourceAssignment.examVersionId,
+        studentId: lateCandidate.id,
+        assignedById: admin.id,
+        dueAt: new Date(Date.now() + 60_000),
+      },
+    });
+    const question = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: sourceAssignment.examVersionId },
+    });
+    const started = await request(
+      `/exams/assignments/${lateAssignment.id}/session/start`, "POST", {}, lateCandidateCookie,
+    );
+    expect(started.status).toBe(200);
+    const session = started.json.session as { startedAt: string };
+    const saved = await request(
+      `/exams/assignments/${lateAssignment.id}/answers`, "PUT",
+      { answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }] }, lateCandidateCookie,
+    );
+    expect(saved.status).toBe(200);
+    await server.db.examAssignment.update({
+      where: { id: lateAssignment.id }, data: { dueAt: new Date(Date.now() - 1_000) },
+    });
+
+    // Once the assignment deadline has passed, all live-exam access paths must agree.
+    const expiredPackage = await request(
+      `/exams/assignments/${lateAssignment.id}/package`, "GET", undefined, lateCandidateCookie,
+    );
+    expect(expiredPackage.status).toBe(403);
+    const expiredStart = await request(
+      `/exams/assignments/${lateAssignment.id}/session/start`, "POST", {}, lateCandidateCookie,
+    );
+    expect(expiredStart.status).toBe(403);
+    const expiredSave = await request(
+      `/exams/assignments/${lateAssignment.id}/answers`, "PUT",
+      { answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }] }, lateCandidateCookie,
+    );
+    expect(expiredSave.status).toBe(403);
+    const expiredHeartbeat = await request(
+      `/exams/assignments/${lateAssignment.id}/session/heartbeat`, "POST",
+      { event: "HEARTBEAT" }, lateCandidateCookie,
+    );
+    expect(expiredHeartbeat.status).toBe(403);
+
+    const submitted = await request(
+      `/exams/assignments/${lateAssignment.id}/submission`, "POST",
+      {
+        attemptUuid: "a8b5e7f0-4d22-4d71-92f0-9b6b5b8b1201",
+        startedAt: session.startedAt,
+        submittedAt: new Date().toISOString(),
+        answers: [{ examQuestionId: question.id, selectedIndex: displayedCorrectIndex }],
+      }, lateCandidateCookie,
+    );
+    expect(submitted.status).toBe(201);
+    expect(submitted.json.submission).toMatchObject({ status: "REVIEW_REQUIRED" });
+  });
+
 });

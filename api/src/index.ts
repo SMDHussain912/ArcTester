@@ -45,10 +45,42 @@ function localCors(
   next();
 }
 
+
+/**
+ * SameSite=None is needed when the Vite frontend and API are hosted on
+ * different sites (for example Vercel + Render). In that mode, require a
+ * trusted Origin for every state-changing request authenticated by the
+ * browser cookie. Native clients use bearer tokens and do not depend on CORS.
+ */
+function cookieCsrfGuard(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void {
+  if (process.env.NODE_ENV !== "production") return next();
+  const allowedOrigins = new Set(
+    (process.env.CORS_ORIGINS ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+  if (!isTrustedCookieMutation({
+    method: req.method,
+    origin: req.headers.origin,
+    authorization: req.headers.authorization,
+    cookie: req.headers.cookie,
+  }, allowedOrigins)) {
+    res.status(403).json({ error: "This browser request origin is not allowed." });
+    return;
+  }
+  next();
+}
+
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
   app.use(express.json({ limit: "10mb" }));
   app.use(localCors);
+  app.use(cookieCsrfGuard);
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
@@ -69,6 +101,7 @@ const app = buildApp();
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
+    startModelTrainingWorker(db);
     console.log(`ecet-api listening on http://localhost:\${PORT}`);
   });
 }

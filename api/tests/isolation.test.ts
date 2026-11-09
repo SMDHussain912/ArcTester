@@ -142,7 +142,7 @@ describe("per-user isolation", () => {
 
     const aliceHistory = await alice.get(`/analytics/history`);
     expect(aliceHistory.status).toBe(200);
-    expect((aliceHistory.json as unknown[]).length).toBeGreaterThan(0);
+    expect((aliceHistory.json as { items: unknown[] }).items.length).toBeGreaterThan(0);
 
     // Bob has no history and no stats yet, so both reports are empty for him.
     const bobWeak = await bob.get(`/analytics/weak-topics`);
@@ -151,7 +151,7 @@ describe("per-user isolation", () => {
 
     const bobHistory = await bob.get(`/analytics/history`);
     expect(bobHistory.status).toBe(200);
-    expect(bobHistory.json).toEqual([]);
+    expect(bobHistory.json).toMatchObject({ items: [], page: 1, limit: 10, total: 0, totalPages: 0 });
   });
 
   it("scopes the progress export to the owner", async () => {
@@ -192,7 +192,7 @@ describe("per-user isolation", () => {
     // Bob now sees the imported attempts, but under his own account.
     const bobHistory = await bob.get(`/analytics/history`);
     expect(bobHistory.status).toBe(200);
-    expect((bobHistory.json as unknown[]).length).toBeGreaterThan(0);
+    expect((bobHistory.json as { items: unknown[] }).items.length).toBeGreaterThan(0);
 
     const bobAttempts = await server.db.attempt.findMany({ where: { userId: bobId } });
     expect(bobAttempts.length).toBeGreaterThan(0);

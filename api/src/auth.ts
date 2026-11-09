@@ -5,19 +5,29 @@
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
-import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-change-me-in-production";
+const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
+const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
 const COOKIE_NAME = "ecet_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET must be set in production.");
+export function validateJwtSecret(secret: string, production = process.env.NODE_ENV === "production"): void {
+  if (!production) return;
+  if (
+    Buffer.byteLength(secret, "utf8") < 32 ||
+    secret === DEVELOPMENT_JWT_SECRET ||
+    /change[_ -]?me|replace[_ -]?me|example|placeholder/i.test(secret)
+  ) {
+    throw new Error("JWT_SECRET must be a strong, unique secret of at least 32 bytes in production. Generate one with: openssl rand -hex 32");
+  }
 }
+
+validateJwtSecret(JWT_SECRET);
 
 function base64Url(data: Buffer): string {
   return data.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -101,6 +111,30 @@ export function verifyPassword(password: string, stored: string): boolean {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
+function scryptAsync(password: string | Buffer, salt: string | Buffer, keylen: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, (error, derived) => {
+      if (error) reject(error);
+      else resolve(derived as Buffer);
+    });
+  });
+}
+
+export async function hashPasswordAsync(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(password, salt, 64);
+  return `${salt.toString("hex")}:${derived.toString("hex")}`;
+}
+
+export async function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex || !/^[a-f0-9]{32}$/i.test(saltHex) || !/^[a-f0-9]{128}$/i.test(hashHex)) return false;
+  const salt = Buffer.from(saltHex, "hex");
+  const expected = Buffer.from(hashHex, "hex");
+  const derived = await scryptAsync(password, salt, 64);
+  return derived.length === expected.length && timingSafeEqual(derived, expected);
+}
+
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
@@ -122,6 +156,53 @@ const DeviceSchema = z.object({
   fingerprint: z.string().trim().min(16).max(128),
 });
 
+// Best-effort per-process throttle shared by browser and bearer sign-in endpoints.
+// It limits guesses against one account without trusting forwarded client IP headers.
+const LOGIN_FAILURE_LIMIT = 8;
+const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const loginFailures = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
+
+function loginRetryAfter(email: string, now = Date.now()): number {
+  const bucket = loginFailures.get(email);
+  if (!bucket) return 0;
+  if (now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && bucket.blockedUntil <= now) {
+    loginFailures.delete(email);
+    return 0;
+  }
+  return bucket.blockedUntil > now ? Math.ceil((bucket.blockedUntil - now) / 1000) : 0;
+}
+
+function recordLoginFailure(email: string, now = Date.now()): number {
+  let bucket = loginFailures.get(email);
+  if (!bucket || now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS) {
+    bucket = { count: 0, windowStartedAt: now, blockedUntil: 0 };
+  }
+  bucket.count += 1;
+  if (bucket.count >= LOGIN_FAILURE_LIMIT) bucket.blockedUntil = now + LOGIN_FAILURE_WINDOW_MS;
+  loginFailures.set(email, bucket);
+
+  if (loginFailures.size > 5000) {
+    for (const [key, value] of loginFailures) {
+      if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(key);
+    }
+    while (loginFailures.size > 5000) {
+      const oldestKey = loginFailures.keys().next().value;
+      if (oldestKey === undefined) break;
+      loginFailures.delete(oldestKey);
+    }
+  }
+  return loginRetryAfter(email, now);
+}
+
+function clearLoginFailures(email: string): void {
+  loginFailures.delete(email);
+}
+
+function rejectThrottledLogin(res: Response, retryAfter: number): void {
+  res.setHeader("Retry-After", String(retryAfter));
+  res.status(429).json({ error: "Too many failed sign-in attempts. Try again later." });
+}
+
 export interface AuthedRequest extends Request {
   user?: { id: number; email: string };
 }
@@ -135,20 +216,39 @@ export function readSessionToken(req: Request): string | null {
   return match ? match[1].trim() : null;
 }
 
-export function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction): void {
+export async function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction): Promise<void> {
   const token = readSessionToken(req);
   if (!token) return next(forbidden("Sign in before using ArcTester."));
+
+  let payload: Record<string, unknown>;
   try {
-    const payload = verifyJwt(token);
-    const id = Number(payload.sub);
-    const email = String(payload.email ?? "");
-    if (!Number.isSafeInteger(id) || id <= 0 || !email) {
-      return next(forbidden("Invalid or expired session. Sign in again."));
+    payload = verifyJwt(token);
+  } catch {
+    return next(forbidden("Invalid or expired session. Sign in again."));
+  }
+
+  const id = Number(payload.sub);
+  const email = String(payload.email ?? "");
+  const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+  if (!Number.isSafeInteger(id) || id <= 0 || !email ||
+      !Number.isSafeInteger(sessionVersion) || sessionVersion < 0) {
+    return next(forbidden("Invalid or expired session. Sign in again."));
+  }
+
+  const db = req.app.locals.db as PrismaClient | undefined;
+  if (!db) return next(new Error("Authentication database is not configured."));
+  try {
+    const user = await db.user.findUnique({
+      where: { id },
+      select: { email: true, sessionVersion: true },
+    });
+    if (!user || user.email !== email || user.sessionVersion !== sessionVersion) {
+      return next(forbidden("This session has been revoked. Sign in again."));
     }
     req.user = { id, email };
     next();
-  } catch {
-    next(forbidden("Invalid or expired session. Sign in again."));
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -176,18 +276,26 @@ function getCookie(req: Request, name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function sessionCookieSameSite(secure: boolean): "Lax" | "None" {
+  return secure && process.env.COOKIE_SAME_SITE?.toLowerCase() === "none" ? "None" : "Lax";
+}
+
 function setSessionCookie(res: Response, token: string): void {
   const secure = process.env.NODE_ENV === "production";
+  const sameSite = sessionCookieSameSite(secure);
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${
-      secure ? "; Secure" : ""
-    }`
+    `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=${sameSite}${secure ? "; Secure" : ""}`
   );
 }
 
 function clearSessionCookie(res: Response): void {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  const secure = process.env.NODE_ENV === "production";
+  const sameSite = sessionCookieSameSite(secure);
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=${sameSite}${secure ? "; Secure" : ""}`
+  );
 }
 
 export function authRouter(db: PrismaClient): Router {
@@ -266,6 +374,7 @@ export function authRouter(db: PrismaClient): Router {
     try {
       const input = RegisterSchema.parse(req.body);
       const tokenHash = sha256(input.invitationToken);
+      const passwordHash = await hashPasswordAsync(input.password);
       const now = new Date();
 
       const user = await db.$transaction(async (tx) => {
@@ -299,7 +408,7 @@ export function authRouter(db: PrismaClient): Router {
         return tx.user.create({
           data: {
             email: input.email,
-            passwordHash: hashPassword(input.password),
+            passwordHash,
             role: "STUDENT",
           },
           select: { id: true, email: true, role: true },
@@ -319,11 +428,16 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/login", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
+      const retryAfter = loginRetryAfter(input.email);
+      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
-      if (!user || !verifyPassword(input.password, user.passwordHash)) {
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
+        const blockedFor = recordLoginFailure(input.email);
+        if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      const token = signJwt({ sub: String(user.id), email: user.email });
+      clearLoginFailures(input.email);
+      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
     } catch (error) {
@@ -334,11 +448,16 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/token", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
+      const retryAfter = loginRetryAfter(input.email);
+      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
-      if (!user || !verifyPassword(input.password, user.passwordHash)) {
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
+        const blockedFor = recordLoginFailure(input.email);
+        if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      const token = signJwt({ sub: String(user.id), email: user.email });
+      clearLoginFailures(input.email);
+      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       res.json({
         ok: true,
         token,
@@ -351,9 +470,35 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/logout", (_req, res) => {
-    clearSessionCookie(res);
-    res.json({ ok: true, message: "Signed out." });
+  router.post("/logout", async (req, res, next) => {
+    try {
+      const token = readSessionToken(req);
+      if (token) {
+        let payload: Record<string, unknown> | null = null;
+        try {
+          payload = verifyJwt(token);
+        } catch {
+          // Invalid or expired tokens still have their browser cookie cleared.
+        }
+        if (payload) {
+          const userId = Number(payload.sub);
+          const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+          if (Number.isSafeInteger(userId) && userId > 0 &&
+              Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
+            // Only revoke tokens from the version presented by this request.
+            // Replaying logout cannot invalidate a later sign-in.
+            await db.user.updateMany({
+              where: { id: userId, sessionVersion },
+              data: { sessionVersion: { increment: 1 } },
+            });
+          }
+        }
+      }
+      clearSessionCookie(res);
+      res.json({ ok: true, message: "Signed out. Existing sessions were revoked." });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get("/me", async (req, res, next) => {
@@ -363,9 +508,12 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true },
+        select: { id: true, email: true, role: true, sessionVersion: true },
       });
-      if (!user) return next(forbidden("Account not found."));
+      const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+      if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
+        return next(forbidden("This session has been revoked. Sign in again."));
+      }
       res.json({ ok: true, user });
     } catch {
       next(forbidden("Invalid session."));

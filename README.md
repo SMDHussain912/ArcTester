@@ -5,7 +5,7 @@ Offline-first mock-test platform for AP ECET CSE personal study. Portfolio-quali
 - `/web` — React + TypeScript + Vite (browser application)
 - `/mobile` — Expo + React Native + TypeScript (Android/iOS)
 - `/desktop` — Electron (Windows installer)
-- `/api` — Node.js + TypeScript + Express + Prisma + SQLite + Zod
+- `/api` — Node.js + TypeScript + Express + Prisma + PostgreSQL + Zod
 - Tests: Vitest · Lint/format: ESLint + Prettier
 - Runs on `localhost` with **no internet after install**. Lightweight for 8 GB RAM.
 
@@ -27,6 +27,9 @@ npm install
 
 # 1. API (http://localhost:4000)
 cp api/.env.example api/.env
+# Start PostgreSQL and ensure DATABASE_URL points to it.
+npm run prisma:migrate --workspace=api
+npm run prisma:seed --workspace=api
 npm run dev:api
 # health check:
 curl http://localhost:4000/health
@@ -53,14 +56,101 @@ docker compose down
 ```
 
 Open <http://localhost:3000>. The API health endpoint is
-<http://localhost:4000/health>. SQLite data is stored in the named
-`arc-tester-data` volume and survives container restarts. To remove the
+<http://localhost:4000/health>. PostgreSQL data is stored in the named
+`arc-tester-postgres` volume and survives container restarts. To remove the
 database as well, use `docker compose down -v` (this permanently deletes
 saved accounts and progress).
 
-For phone access, set `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` in the root
+For phone access, set `VITE_API_URL` and `CORS_ORIGINS` in the root
 `.env` file to your computer's LAN IP, then rebuild the web image with
 `docker compose up --build -d`. See the LAN steps below.
+
+## Hosted deployment: Vercel frontend + Render API
+
+The current production frontend build is **Vite** (`npm run build:web`, output
+`web/dist`). The separate `web/app` Next.js tree is not used by this build.
+Keep the Vercel project rooted at the repository root so the npm workspaces and
+root lockfile are available.
+
+### Vercel (static web app)
+
+- Root Directory: repository root (`.`).
+- Install Command: `npm ci`.
+- Build Command: `npm run build:web`.
+- Output Directory: `web/dist`.
+- Environment Variable: `VITE_API_URL=https://YOUR-API.onrender.com`.
+
+`VITE_API_URL` is compiled into the static bundle at build time. Redeploy the
+web app after changing it.
+
+### Render (API service)
+
+Create a Docker web service from the repository with the repository root as
+the Docker build context and `api/Dockerfile` as the Dockerfile path. Do not set
+the service root directory to `api`: the Dockerfile copies the root workspace
+lockfile and both workspace manifests.
+
+Configure these environment variables on Render:
+
+- `DATABASE_URL`: the Render PostgreSQL **internal** connection URL, including
+  `?schema=public`.
+- `JWT_SECRET`: a random secret generated with `openssl rand -hex 32`.
+- `CORS_ORIGINS`: the exact browser origin of the Vercel app, e.g.
+  `https://your-app.vercel.app` (no trailing slash). Multiple exact origins
+  can be comma-separated.
+- `COOKIE_SAME_SITE=None`: required when the frontend and API are cross-site.
+  The API sets `Secure` automatically when `NODE_ENV=production`.
+- `NODE_ENV=production` (Render's Node/Docker runtime normally sets this).
+
+The API entrypoint applies Prisma migrations before starting the server. Do not
+manually run SQLite migrations against the PostgreSQL service.
+
+### Browser cookie warning
+
+Vercel's default `*.vercel.app` domain and Render's default `*.onrender.com`
+domain are different sites. `SameSite=None; Secure` permits the cross-site
+cookie, but browser privacy settings can still block third-party cookies.
+For reliable browser sessions, use custom domains under the same registrable
+domain (for example `app.example.com` and `api.example.com`) and keep the
+API's CORS origin set to the exact app origin. A same-origin API proxy is
+another option, but is not configured by this repository yet.
+
+After deploying, verify login, page refresh, logout, and a protected API request
+in at least one desktop browser and one mobile browser. CI does not prove the
+provider-side environment variables or real-browser cookie behavior.
+
+## Move existing SQLite data to PostgreSQL
+
+The previous SQLite schema and migration history are preserved in
+`api/prisma-sqlite/`. The main application now uses PostgreSQL. The one-time
+migration helper copies existing rows and IDs into an **empty, already-migrated**
+PostgreSQL schema; it never modifies the SQLite source.
+
+1. Back up your SQLite database file first.
+2. If the SQLite database is not at the latest legacy schema, apply the
+   preserved SQLite migrations first:
+   `DATABASE_URL="file:/absolute/path/to/arc-tester.db" npx prisma migrate deploy --schema=api/prisma-sqlite/schema.prisma`.
+3. Configure `.env` with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+   `POSTGRES_DB`, then start only PostgreSQL:
+   `docker compose up -d postgres`.
+4. Apply the PostgreSQL schema from the host, using the local port:
+   `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" npx prisma migrate deploy --schema=api/prisma/schema.prisma`.
+5. Install the one-time migration dependency:
+   `python -m pip install -r requirements-migrate.txt`.
+6. Copy the data (change the source path if your SQLite file is elsewhere):
+   `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" python scripts/migrate_sqlite_to_postgres.py --sqlite api/prisma/dev.db`.
+7. Check the printed row counts, then start the app:
+   `docker compose up --build -d`.
+
+For a previous Docker volume, find its exact name with
+`docker volume ls --format '{{.Name}}' | grep arc-tester-data`, then copy it:
+`docker run --rm -v ACTUAL_VOLUME_NAME:/old -v "$PWD":/backup alpine cp /old/arc-tester.db /backup/arc-tester-old.db`.
+Pass that copied file with `--sqlite arc-tester-old.db`.
+
+The target tables must be empty before importing. Do not start the API container
+before importing an old database: its entrypoint seeds starter questions.
+For a fresh installation with no SQLite data to preserve, skip this section
+and use `docker compose up --build -d` directly.
 
 ### Running on a phone (same Wi-Fi)
 
@@ -74,7 +164,7 @@ To make it work from a real device:
 
 1. Find your machine's LAN IP: `hostname -I` (e.g. `192.168.1.5`).
 2. In `web/.env.local`, point the app at the LAN IP:
-   `NEXT_PUBLIC_API_URL=http://192.168.1.5:4000`.
+   `VITE_API_URL=http://192.168.1.5:4000`.
 3. Add the web origin to `CORS_ORIGINS` in `api/.env`:
    `CORS_ORIGINS=http://192.168.1.5:3000`. Multiple origins can be
    comma-separated. Localhost origins remain allowed by default.
@@ -89,12 +179,12 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | ---------------------- | ---------------------------- |
 | `npm run dev`          | Run API + Web together       |
 | `npm run dev:api`      | API dev server (`tsx watch`) |
-| `npm run dev:web`      | Web dev server (`next dev`)  |
+| `npm run dev:web`      | Web dev server (Vite)  |
 | `npm run build`        | Build both workspaces        |
 | `npm run test`         | Vitest in both workspaces    |
 | `npm run lint`         | ESLint in both workspaces    |
 | `npm run format`       | Prettier write               |
-| `npm run format:check` | Prettier check (CI-friendly) |
+| `npm run format:check` | Check Prettier formatting |
 | `npm run dev:mobile`   | Expo development server |
 | `npm run dev:desktop`  | Electron desktop shell |
 | `npm run build:mobile` | Export Expo app bundles |
@@ -108,6 +198,10 @@ Question bank (run from the repo root):
 | `npm run import:questions --workspace=api`           | Seed the starter bank (idempotent) |
 | `npm run prisma:migrate --workspace=api`             | Create/apply migrations            |
 
+## Product requirements
+
+The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md). It defines role boundaries, subject-first practice, the formal examination lifecycle, invigilation, attendance, announcements, UX standards, verification requirements, and the prioritized roadmap. Treat roadmap items as planned until their end-to-end workflow is implemented and verified.
+
 ## Phases
 
 - [x] **0. Scaffold** — monorepo, tooling, scripts, README skeleton
@@ -117,8 +211,12 @@ Question bank (run from the repo root):
 - [x] **4. UI** (home, test screen with palette, result review with explanations)
 - [x] **5. Analytics** (weak-topics report, score history, progress export/import)
 - [x] **6. Auth** (JWT sessions, per-user progress, login UI, bearer tokens)
-- [ ] **7 (in progress).** Docker Compose deployment, GitHub Actions CI,
-  LAN CORS support; native mobile client remains.
+- [x] **7.** Docker Compose deployment and LAN CORS support.
+- [x] **8.** Administrative examination authoring, immutable versions, assignment, submissions, and reports.
+- [x] **9.** Candidate session records, server-side start/deadline enforcement, heartbeats, audit events, and invigilator actions.
+- [ ] **10 (in progress).** UI modularization, stronger workflow coverage, session recovery, and continued accessibility/responsive polish.
+
+GitHub Actions runs the ArcTester CI workflow for API/web tests, lint, production builds, Prisma migration verification, mobile typechecking, and privacy-safe TensorFlow dataset converter tests. Check the Actions tab for the exact status of each commit; a pushed commit alone is not proof of verification.
 
 Each phase: builds with no TS errors, tests pass, demoable locally.
 
@@ -127,7 +225,7 @@ Each phase: builds with no TS errors, tests pass, demoable locally.
 API only, no UI. Routes validate with Zod and pass errors to a friendly
 error middleware (`api/src/errors.ts`): Zod → 400 with per-field reasons,
 app errors → their status, anything else → generic 500 (raw errors are never
-leaked to the UI). Tests run on a temp SQLite DB served over a real port —
+leaked to the UI). Tests run on isolated PostgreSQL schemas served over a real port —
 no new libraries (plain `fetch`, no supertest).
 
 - `POST /tests` — `{mode: "mock"|"practice"|"mistakes", subject?, count?}`.
@@ -150,9 +248,9 @@ no new libraries (plain `fetch`, no supertest).
 CORS: the API allows `http://localhost:*` / `127.0.0.1` origins only (hand-rolled
 8-line middleware — no `cors` package, so no new dependency).
 
-## Phase 4 — UI (`/web`, Next.js App Router)
+## Phase 4 — UI (`/web`, React + TypeScript + Vite)
 
-Plain CSS in one global stylesheet (`web/app/globals.css`) — no UI libraries.
+Plain CSS in one global stylesheet (`web/src/styles.css`) — no UI libraries.
 Light/dark follows `prefers-color-scheme`; every control is keyboard reachable
 with a visible focus ring; labels wrap every input; mobile-friendly at 360px.
 
@@ -167,7 +265,7 @@ with a visible focus ring; labels wrap every input; mobile-friendly at 360px.
 - **Result** (`/result/[id]`) — score, per-subject table, wrong-answer review
   with the correct option and explanation; expired attempts get a warning.
 - **API client** (`web/lib/api.ts`) — typed, base URL from
-  `NEXT_PUBLIC_API_URL` (see `web/.env.local.example`), every failure becomes a
+  `VITE_API_URL` (see `web/.env.local.example`), every failure becomes a
   friendly sentence (never raw error text).
 - **Tests** — pure helpers only, node env, no jsdom:
   `lib/timer.test.ts` (9), `lib/palette.test.ts` (5), `lib/answers.test.ts` (6).
@@ -191,14 +289,11 @@ deterministic. Phase 3 will wire this to the DB + routes without touching it.
 - Helpers: `shuffleArray` (Fisher-Yates, pure), `createSeededRandom`
   (mulberry32, no deps), `MOCK_QUOTAS` / `MOCK_TOTAL` (= 200).
 
-## Phase 1 — Question bank (Prisma + SQLite + Zod)
+## Phase 1 — Question bank (Prisma + PostgreSQL + Zod)
 
-Why validated strings instead of Prisma enums: SQLite has no enum column type
-(it would silently become plain text anyway), so `difficulty`/`source` are
-`String` columns and Zod enforces the allowed values in code — one source of
-truth, no false safety. Same reason options live in a JSON string column:
-SQLite has no array type, so Zod enforces "exactly 4 non-empty strings" before
-anything is stored.
+Difficulty/source remain validated `String` columns and Zod enforces the
+allowed values at the API boundary. Options remain JSON text to preserve the
+existing import/export contract and guarantee exactly four non-empty strings.
 
 Duplicates are blocked by a `UNIQUE` hash on the normalized question text
 (lowercase, trimmed, collapsed spaces), so " WHAT is 2+2? " and
@@ -207,7 +302,7 @@ Duplicates are blocked by a `UNIQUE` hash on the normalized question text
 ### Database scripts
 
 ```bash
-cp api/.env.example api/.env          # DATABASE_URL="file:./dev.db"
+cp api/.env.example api/.env          # set DATABASE_URL to your PostgreSQL instance
 npm run prisma:generate --workspace=api
 npm run prisma:migrate --workspace=api # creates + applies migration
 npm run prisma:seed --workspace=api    # idempotent: 28 now, 0 on re-run
@@ -278,9 +373,9 @@ Invalid rows never stop the run — the valid rows are still imported, and each
 bad row is reported with a reason (missing column, wrong `correctIndex`,
 empty option, and so on).
 
-## Phase 5 — Analytics (`api/src/analytics.ts` + `analyticsRoutes.ts`)
+## Phase 5 — Analytics (`api/src/analytics.ts`, `analyticsRoutes.ts`, and admin exam analytics)
 
-No UI yet — API endpoints only, same Zod validation + friendly-error middleware.
+Practice analytics and formal-exam analytics are exposed through authenticated APIs and administrative views. The admin workspace summarizes students, exams, assignments, submissions, submission rates, average percentages, and recent submissions. Candidate attendance, live session connectivity, and audit history are separate operational views.
 
 - `GET /analytics/weak-topics` — per-subject (and per-topic) rows
   `{ subject, topic, seen, wrong, accuracy }` sorted weakest-first

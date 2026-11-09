@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { importFromCsv, importFromJson } from "../src/importService.js";
+import { importFromCsv, importFromJson, previewImport } from "../src/importService.js";
 import { BASE_QUESTIONS } from "../prisma/baseQuestions.js";
 import { closeTestDb, testDb } from "./setup.js";
 
@@ -11,6 +11,17 @@ const VALID_JSON = [
 ];
 
 describe("importFromJson", () => {
+  it("rejects oversized JSON imports before writing any rows", async () => {
+    const db = await testDb();
+    const oversized = Array.from({ length: 2001 }, (_, index) => [
+      "Maths", `Question ${index}?`, ["a", "b", "c", "d"], 0, "",
+    ]);
+    const report = await importFromJson(db, oversized);
+    expect(report.added).toBe(0);
+    expect(report.invalid[0].reason).toContain("2000-question limit");
+    expect(await db.question.count()).toBe(0);
+  });
+
   it("imports valid rows", async () => {
     const db = await testDb();
     const report = await importFromJson(db, VALID_JSON);
@@ -134,5 +145,39 @@ describe("importFromCsv", () => {
     const report = await importFromCsv(db, "subject,text\nMaths,hi");
     expect(report.added).toBe(0);
     expect(report.invalid[0].reason).toContain("missing columns");
+  });
+});
+
+
+describe("previewImport", () => {
+  it("validates JSON, detects existing and in-file duplicates, and does not write", async () => {
+    const db = await testDb();
+    await importFromJson(db, [VALID_JSON[0]]);
+    const preview = await previewImport(db, "json", [
+      VALID_JSON[0],
+      ["Maths", "What is 5 + 5?", ["9", "10", "11", "12"], 1, "Addition."],
+      ["Maths", "Invalid options?", ["a", "b"], 0, ""],
+      [
+        "Maths",
+        "What is 5 + 5?",
+        ["9", "10", "11", "12"],
+        1,
+        "Duplicate in this file.",
+      ],
+    ]);
+
+    expect(preview).toMatchObject({ valid: 1, duplicates: 2, total: 4 });
+    expect(preview.invalid).toHaveLength(1);
+    expect(preview.invalid[0].row).toBe(3);
+    expect(await db.question.count()).toBe(1);
+  });
+
+  it("validates CSV before import and reports missing columns", async () => {
+    const db = await testDb();
+    const preview = await previewImport(db, "csv", "subject,text\nMaths,hello");
+
+    expect(preview.valid).toBe(0);
+    expect(preview.invalid[0].reason).toContain("Missing columns");
+    expect(await db.question.count()).toBe(0);
   });
 });
