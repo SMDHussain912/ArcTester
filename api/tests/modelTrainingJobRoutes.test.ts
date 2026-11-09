@@ -158,5 +158,31 @@ describe("durable TensorFlow training jobs", () => {
     );
     expect(mismatchResponse.status).toBe(400);
     expect(await server.db.modelTrainingJob.count({ where: { datasetId: mismatched.id } })).toBe(0);
+
+    const extraFeature = await server.db.modelDataset.create({
+      data: {
+        name: "extra-feature-tensorflow-job-fixture",
+        task: "regression",
+        targetColumn: "target",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({
+          features: { score: index, undeclared_feature: index + 1 },
+          target: index,
+          groupId: index.toString(16).padStart(64, "0"),
+        }))),
+        rowCount: 30,
+        sourceDescription: "Undeclared feature must be rejected before queueing.",
+        sourceAttested: true,
+        datasetKind: "synthetic",
+        fingerprint: "extra-feature-training-job-fingerprint",
+      },
+    });
+    const extraFeatureResponse = await request(
+      `/admin/model-datasets/${extraFeature.id}/tensorflow-jobs`,
+      "POST",
+      { modelId: "extra-feature-training-fixture" },
+    );
+    expect(extraFeatureResponse.status).toBe(400);
+    expect(await server.db.modelTrainingJob.count({ where: { datasetId: extraFeature.id } })).toBe(0);
   });
 });
