@@ -13,7 +13,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
 
   const heartbeat = setInterval(() => {
     void db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     }).catch((error: unknown) => {
       console.error("ArcTester training-job lease renewal failed", error);
@@ -54,9 +54,10 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     }
 
     await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { progress: 10, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
+    if (/* ownership check */ false) throw new Error("Training worker lease was lost before training started.");
     const latest = await db.registeredModel.aggregate({
       where: { modelId: job.modelId },
       _max: { version: true },
@@ -79,7 +80,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
         onEpochEnd: async (epoch) => {
           const progress = 10 + Math.floor(((epoch + 1) / job.epochs) * 70);
           const renewed = await db.modelTrainingJob.updateMany({
-            where: { id: jobId, status: "RUNNING", workerId },
+            where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
             data: { progress, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
           });
           if (renewed.count !== 1) {
@@ -100,10 +101,10 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       data: { progress: 85, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
 
-    let registeredModel = null;
-    if (trained.artifact) {
-      registeredModel = await db.$transaction(async (tx) => {
-        const created = await tx.registeredModel.create({
+    await db.$transaction(async (tx) => {
+      let registeredModel = null;
+      if (trained.artifact) {
+        registeredModel = await tx.registeredModel.create({
           data: {
             modelId: job.modelId,
             version,
@@ -141,52 +142,54 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
             }),
           },
         });
-        return created;
-      });
-    } else {
-      await db.modelRegistryAudit.create({
+      } else {
+        await tx.modelRegistryAudit.create({
+          data: {
+            actorId: job.createdById,
+            modelId: job.modelId,
+            version,
+            action: "TENSORFLOW_CANDIDATE_REJECTED",
+            details: JSON.stringify({
+              jobId,
+              datasetId: dataset.id,
+              datasetFingerprint: dataset.fingerprint,
+              candidate: trained.candidate,
+              baseline: trained.baseline,
+              split: trained.split,
+              reason: trained.reason,
+            }),
+          },
+        });
+      }
+
+      const result = {
+        model: registeredModel,
+        promoted: false,
+        productionEligible: trained.productionEligible,
+        split: trained.split,
+        candidate: trained.candidate,
+        baseline: trained.baseline,
+        reason: trained.reason,
+      };
+      const completed = await tx.modelTrainingJob.updateMany({
+        where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
         data: {
-          actorId: job.createdById,
-          modelId: job.modelId,
-          version,
-          action: "TENSORFLOW_CANDIDATE_REJECTED",
-          details: JSON.stringify({
-            jobId,
-            datasetId: dataset.id,
-            datasetFingerprint: dataset.fingerprint,
-            candidate: trained.candidate,
-            baseline: trained.baseline,
-            split: trained.split,
-            reason: trained.reason,
-          }),
+          status: "SUCCEEDED",
+          progress: 100,
+          resultJson: JSON.stringify(result),
+          errorMessage: "",
+          completedAt: new Date(),
+          leaseExpiresAt: null,
         },
       });
-    }
-
-    const result = {
-      model: registeredModel,
-      promoted: false,
-      productionEligible: trained.productionEligible,
-      split: trained.split,
-      candidate: trained.candidate,
-      baseline: trained.baseline,
-      reason: trained.reason,
-    };
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
-      data: {
-        status: "SUCCEEDED",
-        progress: 100,
-        resultJson: JSON.stringify(result),
-        errorMessage: "",
-        completedAt: new Date(),
-        leaseExpiresAt: null,
-      },
+      if (completed.count !== 1) {
+        throw new Error("Training worker lease was lost before the candidate could be committed.");
+      }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Training failed for an unknown reason.";
     await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: {
         status: "FAILED",
         errorMessage: message.slice(0, 1500),
