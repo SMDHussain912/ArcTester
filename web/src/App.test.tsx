@@ -239,7 +239,7 @@ describe("live Vite application", () => {
 
   it("restores an in-progress practice attempt and saved answers after reload", async () => {
     vi.stubGlobal("localStorage", {
-      getItem: vi.fn((key: string) => key === "arctester-active-practice-attempt" ? "42" : key === "arctester-practice-answers-42" ? JSON.stringify({ "7": 1 }) : null),
+      getItem: vi.fn((key: string) => key === "arctester-active-practice-attempt" ? "42" : key === "arctester-practice-answers-42" ? JSON.stringify({ "7": 1, "8": 9, "999": 0 }) : null),
       setItem: vi.fn(),
       removeItem: vi.fn(),
       clear: vi.fn(),
@@ -252,7 +252,7 @@ describe("live Vite application", () => {
         mode: "practice",
         deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         serverNow: "2026-11-08T11:00:00.000Z",
-        questions: [{ id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] }],
+        questions: [\n          { id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] },\n          { id: 8, subject: "Maths", topic: "Algebra", text: "Second restored question?", options: ["A", "B", "C", "D"] },\n        ],
         saved: [{ questionId: 7, selectedIndex: null }],
       }));
       if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1, topics: [{ topic: "Algebra", count: 1 }] }] }));
@@ -265,6 +265,10 @@ describe("live Vite application", () => {
     expect(await screen.findByText("Restored question?")).toBeInTheDocument();
     const restoredQuestion = screen.getByText("Restored question?").closest("article");
     expect(within(restoredQuestion!).getAllByRole("button")[1]).toHaveClass("selected");
+    expect(await screen.findByText("Second restored question?")).toBeInTheDocument();
+    const secondQuestion = screen.getByText("Second restored question?").closest("article");
+    expect(within(secondQuestion!).getAllByRole("button").every((button) => !button.classList.contains("selected"))).toBe(true);
+    expect(screen.getByText("1 / 2 answered")).toBeInTheDocument();
   });
 
   it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
