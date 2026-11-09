@@ -1171,13 +1171,29 @@ export function examRouter(db: PrismaClient): Router {
         return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
       }
       if (assignment.session?.startedAt && now.getTime() > assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
-        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
+        await db.$transaction(async (tx) => {
+          const changed = await tx.examSession.updateMany({
+            where: { id: assignment.session!.id, status: assignment.session!.status },
+            data: { status: "EXPIRED", endedAt: now },
+          });
+          if (changed.count === 1) {
+            await tx.examSessionEvent.create({
+              data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination duration elapsed before the candidate reconnected." },
+            });
+          }
+        });
         return next(conflict("The exam duration has expired. Contact the invigilator."));
       }
       const session = assignment.session
-        ? await db.examSession.update({
-            where: { id: assignment.session.id },
-            data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+        ? await db.$transaction(async (tx) => {
+            const updated = await tx.examSession.update({
+              where: { id: assignment.session!.id },
+              data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+            });
+            await tx.examSessionEvent.create({
+              data: { sessionId: updated.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate restored an existing active session." },
+            });
+            return updated;
           })
         : await db.examSession.create({
             data: {
@@ -1186,7 +1202,6 @@ export function examRouter(db: PrismaClient): Router {
               events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
           });
-      if (assignment.session) await db.examSessionEvent.create({ data: { sessionId: session.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate resumed an existing session." } });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
     } catch (error) { next(error); }
@@ -1297,25 +1312,37 @@ export function examRouter(db: PrismaClient): Router {
         ? new Date(assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs)
         : null;
       if (deadline && now.getTime() > deadline.getTime() + 60000) {
-        await db.examSession.update({ where: { id: assignment.session.id }, data: { status: "EXPIRED", endedAt: now } });
-        await db.examSessionEvent.create({ data: { sessionId: assignment.session.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." } });
+        await db.$transaction(async (tx) => {
+          const changed = await tx.examSession.updateMany({
+            where: { id: assignment.session!.id, status: "ACTIVE" },
+            data: { status: "EXPIRED", endedAt: now },
+          });
+          if (changed.count === 1) {
+            await tx.examSessionEvent.create({
+              data: { sessionId: assignment.session!.id, actorId: req.user!.id, type: "SESSION_EXPIRED", detail: "Server-side examination deadline elapsed." },
+            });
+          }
+        });
         return next(conflict("The examination time has expired."));
       }
       if (assignment.dueAt && now > assignment.dueAt) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
-      const session = await db.examSession.update({
-        where: { id: assignment.session.id },
-        data: {
-          lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
-          ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
-          ...(stale ? { disconnectCount: { increment: 1 } } : {}),
-        },
-      });
-      if (input.event !== "HEARTBEAT" || stale) {
-        await db.examSessionEvent.create({
-          data: { sessionId: session.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+      const session = await db.$transaction(async (tx) => {
+        const updated = await tx.examSession.update({
+          where: { id: assignment.session!.id },
+          data: {
+            lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
+            ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
+            ...(stale ? { disconnectCount: { increment: 1 } } : {}),
+          },
         });
-      }
+        if (input.event !== "HEARTBEAT" || stale) {
+          await tx.examSessionEvent.create({
+            data: { sessionId: updated.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
+          });
+        }
+        return updated;
+      });
       const effectiveDeadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, serverTime: now, deadline: effectiveDeadline, sessionStatus: session.status });
     } catch (error) { next(error); }
