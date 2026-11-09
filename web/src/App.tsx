@@ -924,7 +924,6 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-        {notice && <p className="success-message notice" role="status">{notice}</p>}
       </main>
       {activeAnnouncements[0] && (
         <div className="student-announcement-backdrop">
