@@ -47,7 +47,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 
 - [x] Replace SQLite-specific raw analytics SQL for PostgreSQL (quoted identifiers, Boolean expressions, numeric result handling, and deterministic history pagination). Verified by the PostgreSQL-backed analytics/API test suite.
 - [x] Create a PostgreSQL-compatible Prisma migration baseline and safe SQLite-to-PostgreSQL data migration utility; preserve IDs, relations, and serial sequences. Legacy SQLite schema/migrations are retained in `api/prisma-sqlite/`.
-- [ ] Complete production browser verification of cross-site authentication. Code now supports `COOKIE_SAME_SITE=None; Secure` and validates Origin for cookie-authenticated mutations; exact `CORS_ORIGINS` values still need to be configured for the chosen deployment.
+- [ ] Complete production browser verification of cross-site authentication. Code supports `COOKIE_SAME_SITE=None; Secure` and validates Origin for cookie-authenticated mutations. A Vercel + Render deployment guide is now in README; exact service domains and environment variables still need to be confirmed in the user's provider dashboards.
 - [ ] Resolve the dual frontend structure: package scripts currently run Vite (`web/src/main.tsx`), while a separate Next.js `web/app` tree and `next` dependency also exist. Decide which is canonical from deployment/configuration evidence before removing or migrating anything.
 
 ### High priority correctness and reliability
@@ -199,3 +199,6 @@ A task can be checked off only when:
 - Web: 22 test files, 84 tests passed; production Vite app direct tests: 8.
 - PostgreSQL migrations, SQLite data-migration utility tests, TensorFlow dataset checks, mobile typecheck, lint, and production builds all passed.
 - Remaining: feature-by-feature end-to-end QA, deployment-specific cookie/browser verification, Vercel/Render configuration confirmation, and long-running TensorFlow training request lifecycle.
+
+
+- 2026-11-09: Added a Vercel + Render deployment guide with Vite build/output settings, Docker context, PostgreSQL/JWT/CORS/cookie environment variables, and the third-party-cookie limitation. Actual provider configuration and browser testing remain pending.

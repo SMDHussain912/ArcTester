@@ -65,6 +65,60 @@ For phone access, set `VITE_API_URL` and `CORS_ORIGINS` in the root
 `.env` file to your computer's LAN IP, then rebuild the web image with
 `docker compose up --build -d`. See the LAN steps below.
 
+## Hosted deployment: Vercel frontend + Render API
+
+The current production frontend build is **Vite** (`npm run build:web`, output
+`web/dist`). The separate `web/app` Next.js tree is not used by this build.
+Keep the Vercel project rooted at the repository root so the npm workspaces and
+root lockfile are available.
+
+### Vercel (static web app)
+
+- Root Directory: repository root (`.`).
+- Install Command: `npm ci`.
+- Build Command: `npm run build:web`.
+- Output Directory: `web/dist`.
+- Environment Variable: `VITE_API_URL=https://YOUR-API.onrender.com`.
+
+`VITE_API_URL` is compiled into the static bundle at build time. Redeploy the
+web app after changing it.
+
+### Render (API service)
+
+Create a Docker web service from the repository with the repository root as
+the Docker build context and `api/Dockerfile` as the Dockerfile path. Do not set
+the service root directory to `api`: the Dockerfile copies the root workspace
+lockfile and both workspace manifests.
+
+Configure these environment variables on Render:
+
+- `DATABASE_URL`: the Render PostgreSQL **internal** connection URL, including
+  `?schema=public`.
+- `JWT_SECRET`: a random secret generated with `openssl rand -hex 32`.
+- `CORS_ORIGINS`: the exact browser origin of the Vercel app, e.g.
+  `https://your-app.vercel.app` (no trailing slash). Multiple exact origins
+  can be comma-separated.
+- `COOKIE_SAME_SITE=None`: required when the frontend and API are cross-site.
+  The API sets `Secure` automatically when `NODE_ENV=production`.
+- `NODE_ENV=production` (Render's Node/Docker runtime normally sets this).
+
+The API entrypoint applies Prisma migrations before starting the server. Do not
+manually run SQLite migrations against the PostgreSQL service.
+
+### Browser cookie warning
+
+Vercel's default `*.vercel.app` domain and Render's default `*.onrender.com`
+domain are different sites. `SameSite=None; Secure` permits the cross-site
+cookie, but browser privacy settings can still block third-party cookies.
+For reliable browser sessions, use custom domains under the same registrable
+domain (for example `app.example.com` and `api.example.com`) and keep the
+API's CORS origin set to the exact app origin. A same-origin API proxy is
+another option, but is not configured by this repository yet.
+
+After deploying, verify login, page refresh, logout, and a protected API request
+in at least one desktop browser and one mobile browser. CI does not prove the
+provider-side environment variables or real-browser cookie behavior.
+
 ## Move existing SQLite data to PostgreSQL
 
 The previous SQLite schema and migration history are preserved in
