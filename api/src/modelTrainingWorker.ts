@@ -117,7 +117,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     await db.$transaction(async (tx) => {
       // Serialize version allocation per model across API instances. The
       // transaction-scoped lock is released automatically on commit/rollback.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${job.modelId}, 0))`;
+      await tx.$queryRaw`SELECT true AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${job.modelId}, 0))) AS model_lock`;
       const latest = await tx.registeredModel.aggregate({
         where: { modelId: job.modelId },
         _max: { version: true },
