@@ -362,6 +362,20 @@ describe("versioned exam management", () => {
       answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
     }, secondDeviceCookie);
     expect(staleSave.status).toBe(409);
+
+    const sessionId = (started.json.session as { id: string }).id;
+    const paused = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "PAUSE", reason: "Verify paused sessions reject saves" }, adminCookie);
+    expect(paused.status).toBe(200);
+    const pausedSave = await request(`/exams/assignments/${assignmentId}/answers`, "PUT", {
+      revision: 1,
+      answers: [{ examQuestionId: question.id, selectedIndex: 0 }],
+    }, studentCookie);
+    expect(pausedSave.status).toBe(409);
+    const pausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(pausedState.answersRevision).toBe(1);
+    const resumed = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "RESUME" }, adminCookie);
+    expect(resumed.status).toBe(200);
+
     const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
     expect(restored.status).toBe(200);
     expect(restored.json.revision).toBe(1);
