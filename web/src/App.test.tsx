@@ -59,7 +59,7 @@ describe("live Vite application", () => {
 
     render(<App />);
 
-    const popup = within(document.body).getByRole("dialog", { name: "ECET mock exam schedule", hidden: true });
+    const popup = (await screen.findAllByRole("dialog", { name: "ECET mock exam schedule" }))[0];
     expect(within(popup).getByText("The mock exam starts tomorrow at 10 AM.")).toBeInTheDocument();
 
     fireEvent.click(within(popup).getByRole("button", { name: /Got it/ }));
