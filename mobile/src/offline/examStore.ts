@@ -1,3 +1,4 @@
+import { canReplaceCachedExamPackage } from "./examCachePolicy";
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
 
@@ -139,6 +140,18 @@ export async function cacheExamPackage(
   }
 
   const db = await database();
+  const existingAttempt = await db.getFirstAsync<{ sync_status: string }>(
+    "SELECT sync_status FROM offline_attempts WHERE assignment_id = ?",
+    examPackage.assignmentId
+  );
+  if (existingAttempt) {
+    const existingCached = await getCachedExam(examPackage.assignmentId);
+    if (canReplaceCachedExamPackage(true, existingCached?.sha256, expectedSha256) && existingCached) {
+      return existingCached;
+    }
+    throw new Error("This assignment already has an offline attempt; its cached exam version cannot be replaced.");
+  }
+
   await db.runAsync(
     `INSERT INTO exam_packages
       (assignment_id, package_json, sha256, downloaded_at, server_offset_ms)
