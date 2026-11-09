@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
   configureOfflineStore,
@@ -236,6 +236,22 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     }
   }, [activeAttemptUuid, activePackage, refreshLocalState, syncOutbox]);
 
+  const confirmSubmitExam = () => {
+    if (!activePackage || busyId !== null) return;
+    const answered = Object.values(answers).filter((value) => value !== null && value !== undefined).length;
+    const unanswered = activePackage.questions.length - answered;
+    Alert.alert(
+      "Submit assigned exam?",
+      unanswered > 0
+        ? `You answered ${answered} of ${activePackage.questions.length} questions. ${unanswered} will remain unanswered. Your submission will be saved on this device and synced when possible.`
+        : `All ${activePackage.questions.length} questions are answered. Save and submit this exam now?`,
+      [
+        { text: "Keep working", style: "cancel" },
+        { text: "Submit exam", style: "default", onPress: () => { void submitExam(); } },
+      ],
+    );
+  };
+
   useEffect(() => {
     if (activePackage && remainingSeconds === 0 && !autoSubmitStarted.current) {
       autoSubmitStarted.current = true;
@@ -370,7 +386,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
           ) : (
             <TouchableOpacity
               disabled={busyId !== null}
-              onPress={() => void submitExam()}
+              onPress={confirmSubmitExam}
               style={styles.primarySmall}
             >
               <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
