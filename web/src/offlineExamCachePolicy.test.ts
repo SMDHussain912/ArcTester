@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canReplaceCachedExamPackage } from "../../mobile/src/offline/examCachePolicy";
+import { canReplaceCachedExamPackage } from "../../shared/offlineExamCachePolicy";
 
 describe("offline exam package version policy", () => {
   it("allows refreshing a cached package before an attempt starts", () => {
