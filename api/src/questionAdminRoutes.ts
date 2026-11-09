@@ -12,7 +12,7 @@ const ListSchema = z.object({
   subject: z.string().trim().max(120).optional(),
   topic: z.string().trim().max(120).optional(),
   difficulty: z.enum(["easy", "medium", "hard"]).optional(),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
 const UpdateSchema = QuestionInputSchema.partial().refine((value) => Object.keys(value).length > 0);
