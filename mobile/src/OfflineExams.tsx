@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, Alert, Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
   configureOfflineStore,
@@ -66,9 +66,22 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [error, setError] = useState("");
   const autoSubmitStarted = useRef(false);
   const syncLock = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const refreshLocalState = useCallback(async () => {
     configureOfflineStore(userId);
@@ -261,6 +274,11 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
 
   useEffect(() => {
     if (!activePackage) return;
+    if (reduceMotion) {
+      questionTransition.setValue(1);
+      progress.setValue((currentQuestionIndex + 1) / activePackage.questions.length);
+      return;
+    }
     questionTransition.setValue(0);
     Animated.timing(questionTransition, {
       toValue: 1,
@@ -274,7 +292,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [activePackage, currentQuestionIndex, progress, questionTransition]);
+  }, [activePackage, currentQuestionIndex, progress, questionTransition, reduceMotion]);
 
   const chooseAnswer = async (questionId: string, selectedIndex: number) => {
     if (!activePackage) return;
