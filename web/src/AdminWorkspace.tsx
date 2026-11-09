@@ -73,6 +73,7 @@ export default function AdminWorkspace(p:Props){
  async function publish(id:string){await run(async()=>{await api(`/admin/exams/${id}/publish`,{method:"POST"});setNotice("Exam version published. It is now ready for assignment.");await loadExams();});}
  async function openPreview(id:string){await run(async()=>{const r=await api<{exam:ExamPreview}>("/admin/exams/"+id+"/preview");setPreview(r.exam);});}
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
+ function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
  const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["model-lab","Model lab","⌁"]];
  return <div className="admin-shell">
