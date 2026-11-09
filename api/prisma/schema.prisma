@@ -83,6 +83,10 @@ model User {
   announcementViews AnnouncementView[]
   examSessions      ExamSession[]
   examSessionEvents ExamSessionEvent[] @relation("ExamSessionEventActor")
+  modelDatasetsCreated ModelDataset[] @relation("ModelDatasetCreator")
+  modelEvaluations ModelEvaluation[] @relation("ModelEvaluationActor")
+  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
+  modelTrainingJobsCreated ModelTrainingJob[] @relation("ModelTrainingJobCreator")
 }
 
 model Invitation {
@@ -359,6 +363,7 @@ model RegisteredModel {
 
 model ModelRegistryAudit {
   id        String   @id @default(cuid())
+  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorId   Int?
   modelId   String
   version   Int
@@ -372,6 +377,7 @@ model ModelRegistryAudit {
 
 model ModelEvaluation {
   id                String   @id @default(cuid())
+  actor             User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorId           Int?
   modelId           String
   candidateVersion  Int
@@ -390,7 +396,9 @@ model ModelEvaluation {
 
 model ModelDataset {
   id                String   @id @default(cuid())
+  createdBy         User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdById       Int?
+  trainingJobs      ModelTrainingJob[]
   name              String
   task              String
   targetColumn      String   @default("target")
@@ -421,8 +429,10 @@ model ModelDriftBucket {
 }
 
 model ModelTrainingJob {
-  id             String    @id @default(cuid())
+  id             String      @id @default(cuid())
+  dataset        ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
   datasetId      String
+  createdBy      User?        @relation("ModelTrainingJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdById    Int?
   modelId        String
   seed           Int       @default(42)
