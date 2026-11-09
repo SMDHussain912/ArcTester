@@ -1585,40 +1585,26 @@ export function examRouter(db: PrismaClient): Router {
       }
 
       const serverSubmittedAt = new Date();
-      let examSession = assignment.session;
+      const examSession = assignment.session;
       const offlineSessionReconciled = !examSession;
-      if (!examSession) {
-        // Offline attempts cannot create a live server session while disconnected.
-        // Reconcile the locally recorded start time when the queued submission arrives.
-        const claimedStartedAt = new Date(input.startedAt);
+      // Validate offline client time now, but defer all reconciliation writes to
+      // the submission transaction so a rejected attempt cannot leave an ACTIVE session.
+      const claimedStartedAt = offlineSessionReconciled ? new Date(input.startedAt) : null;
+      if (claimedStartedAt) {
         if (!Number.isFinite(claimedStartedAt.getTime()) || claimedStartedAt.getTime() > serverSubmittedAt.getTime() + 60_000) {
           return next(badRequest("The offline exam start time is invalid."));
         }
         if (assignment.availableFrom && claimedStartedAt < assignment.availableFrom) {
           return next(forbidden("The exam was started before its availability window."));
         }
-        examSession = await db.examSession.create({
-          data: {
-            assignmentId: assignment.id,
-            studentId: req.user!.id,
-            status: "ACTIVE",
-            startedAt: claimedStartedAt,
-            lastHeartbeatAt: serverSubmittedAt,
-            lastActivityAt: serverSubmittedAt,
-            events: {
-              create: {
-                actorId: req.user!.id,
-                type: "OFFLINE_SESSION_RECONCILED",
-                detail: "An offline exam attempt was reconciled when the device reconnected.",
-              },
-            },
-          },
-        });
       }
-      if (examSession.status !== "ACTIVE" || !examSession.startedAt) {
+      if (examSession && (examSession.status !== "ACTIVE" || !examSession.startedAt)) {
         return next(conflict("The exam session is not active. Resume it before submitting."));
       }
-      const serverStartedAt = examSession.startedAt;
+      const serverStartedAt = examSession?.startedAt ?? claimedStartedAt;
+      if (!serverStartedAt) return next(conflict("The exam session has no valid start time."));
+      const sessionPausedDurationMs = examSession?.pausedDurationMs ?? 0;
+      const sessionLastHeartbeatAt = examSession?.lastHeartbeatAt ?? serverSubmittedAt;
       // A request may arrive just after the due time even when the candidate
       // autosaved answers before the deadline. Keep the submission for review
       // instead of discarding those answers; late timing is marked REVIEW_REQUIRED.
@@ -1652,9 +1638,9 @@ export function examRouter(db: PrismaClient): Router {
       // Server-owned session timestamps prevent candidates from extending time by editing browser clocks.
       const startedAt = serverStartedAt;
       const submittedAt = serverSubmittedAt;
-      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + examSession.pausedDurationMs;
-      const staleHeartbeat = !examSession.lastHeartbeatAt ||
-        serverSubmittedAt.getTime() - examSession.lastHeartbeatAt.getTime() > 90000;
+      const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + sessionPausedDurationMs;
+      const staleHeartbeat = !sessionLastHeartbeatAt ||
+        serverSubmittedAt.getTime() - sessionLastHeartbeatAt.getTime() > 90000;
       const suspiciousTiming =
         offlineSessionReconciled ||
         serverSubmittedAt.getTime() >= startedAt.getTime() + durationMs + 60000 ||
@@ -1680,10 +1666,31 @@ export function examRouter(db: PrismaClient): Router {
           throw conflict("This attempt identifier has already been used.");
         }
 
+        // Check idempotency before reconciling an offline session. The session
+        // and its audit event are created inside this transaction so any later
+        // failure (including a reused attempt UUID) rolls them back together.
+        const submissionSession = examSession ?? await tx.examSession.create({
+          data: {
+            assignmentId: assignment.id,
+            studentId: req.user!.id,
+            status: "ACTIVE",
+            startedAt: serverStartedAt,
+            lastHeartbeatAt: serverSubmittedAt,
+            lastActivityAt: serverSubmittedAt,
+            events: {
+              create: {
+                actorId: req.user!.id,
+                type: "OFFLINE_SESSION_RECONCILED",
+                detail: "An offline exam attempt was reconciled when the device reconnected.",
+              },
+            },
+          },
+        });
+
         if (!offlineSessionReconciled && input.revision !== undefined) {
           const currentRevision = await tx.examSession.updateMany({
             where: {
-              id: examSession.id,
+              id: submissionSession.id,
               status: "ACTIVE",
               startedAt: serverStartedAt,
               answersRevision: input.revision,
@@ -1700,7 +1707,7 @@ export function examRouter(db: PrismaClient): Router {
         // pause or termination from being overwritten by a late submission.
         const completedSession = await tx.examSession.updateMany({
           where: {
-            id: examSession.id,
+            id: submissionSession.id,
             status: "ACTIVE",
             startedAt: serverStartedAt,
           },
@@ -1736,7 +1743,7 @@ export function examRouter(db: PrismaClient): Router {
           data: { status: "SUBMITTED" },
         });
         await tx.examSessionEvent.create({
-          data: { sessionId: examSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
+          data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
         });
         return created;
       });
