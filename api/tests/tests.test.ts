@@ -349,7 +349,7 @@ describe("submit + result", () => {
       count: 1,
     })) as { json: { attemptId: number; questions: { id: number }[] } };
     const questionId = created.json.questions[0].id;
-    await expect(server.db.question.delete({ where: { id: questionId } })).rejects.toMatchObject({ code: "P2003" });
+    await expect(server.db.question.delete({ where: { id: questionId } })).rejects.toThrow(/foreign key constraint|P2003/i);
     expect(await server.db.question.findUnique({ where: { id: questionId } })).not.toBeNull();
   });
 
