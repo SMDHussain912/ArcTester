@@ -85,6 +85,9 @@ export function trainRegisteredDataset(
         };
       })()
       : splitDatasetRows(rows, { testFraction: 0.2, seed });
+  if (hasGroupIds && split.test.length < 20) {
+    throw new Error("Grouped training requires at least 20 held-out rows. Add more samples across learner groups.");
+  }
   if (hasGroupIds && task === "binary-classification") {
     const trainClasses = new Set(split.train.map((row) => row.target));
     const testClasses = new Set(split.test.map((row) => row.target));
