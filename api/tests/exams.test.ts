@@ -193,6 +193,11 @@ describe("versioned exam management", () => {
     await server.db.attempt.delete({ where: { id: attempt.id } });
   });
 
+  it("rejects out-of-range pagination on the active admin question list", async () => {
+    const response = await request("/admin/questions?page=1000001", "GET", undefined, adminCookie);
+    expect(response.status).toBe(400);
+  });
+
   it("rejects non-integer question bank pagination", async () => {
     const response = await request("/admin/question-bank?page=1.5", "GET", undefined, adminCookie);
     expect(response.status).toBe(400);
