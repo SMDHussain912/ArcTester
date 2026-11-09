@@ -66,7 +66,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Re-test every student and admin navigation path, modal, tab, form, and responsive layout.
 - [x] Add a top-level React error boundary and safe browser-storage handling to the active Vite application.
 - [ ] Refactor the large App component incrementally without replacing or regressing the existing UI.
-- [x] Add regression tests for confirmed fixes in this stabilization pass (deadline heartbeat, blocked storage, error boundary, and concept-search loading timing). Continue adding tests as the broader UI audit finds issues.
+- [x] Add regression tests for confirmed fixes in this stabilization pass (deadline heartbeat, blocked storage, error boundary, concept-search loading timing, and student tab switching during a live mock test). Continue adding tests as the broader UI audit finds issues.
 
 ## Six approved feature groups
 
@@ -173,3 +173,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Fixed logout token replay. JWTs now carry a user session-version claim, and every protected API route checks it against PostgreSQL. Logout increments the version, invalidating previously issued browser-cookie and bearer tokens. Legacy tokens without the claim are treated as version 0 until logout. Per-device revocation remains separate work. A follow-up commit also ensures database failures during logout revocation are returned to the client; run CI against the final branch head before merge.
+
+
+- 2026-11-09: Expanded the production Vite application's own UI regression suite to verify that a student can leave a mock-test tab, open Announcements, return to Practice, and retain the selected answer and progress.
