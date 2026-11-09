@@ -961,3 +961,21 @@ The user's local run reported 112/114 API tests passing, with two fixture expect
 2. Register an authorized, genuinely anonymized dataset with the exact five-feature schema and next-attempt accuracy target.
 3. Verify grouped holdout metrics and manually activate only a candidate that passes real-data provenance and baseline checks.
 4. Run staging verification with a real student account and active artifact; confirm persistence, delivery size, fallback and model refresh behavior.
+
+
+### Phase 7 implementation log — durable TensorFlow training jobs (2026-11-09)
+
+**Implemented on main; not yet CI-verified**
+- Added a durable PostgreSQL job record with worker lease metadata and terminal result/error fields.
+- Added an admin queue API and status/list endpoints.
+- Added a multi-instance-safe conditional claim operation for queued or expired-lease jobs, with periodic lease renewal during TensorFlow training.
+- Added worker-side dataset validation, grouped learner holdout training, inactive artifact registration, governance audit records, and persisted failure state.
+- Started the worker with the API process outside test mode.
+- Added the durable-job controls and progress/result table to the active Vite Model Lab.
+- Added integration tests for queueing, admin-only access, successful worker completion, and invalid dataset rejection.
+
+**Not yet accepted as complete**
+- Latest GitHub Actions result must be green on the final documentation-updated main commit.
+- Add explicit lease-expiry/reclaim and competing-worker regression tests.
+- Add per-epoch progress reporting if the TensorFlow.js training API is extended with callbacks.
+- Deployment validation on Render and browser verification remain open.
