@@ -253,7 +253,10 @@ describe("live Vite application", () => {
         mode: "practice",
         deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         serverNow: "2026-11-08T11:00:00.000Z",
-        questions: [\n          { id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] },\n          { id: 8, subject: "Maths", topic: "Algebra", text: "Second restored question?", options: ["A", "B", "C", "D"] },\n        ],
+        questions: [
+          { id: 7, subject: "Maths", topic: "Algebra", text: "Restored question?", options: ["A", "B", "C", "D"] },
+          { id: 8, subject: "Maths", topic: "Algebra", text: "Second restored question?", options: ["A", "B", "C", "D"] },
+        ],
         saved: [{ questionId: 7, selectedIndex: null }],
       }));
       if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1, topics: [{ topic: "Algebra", count: 1 }] }] }));
