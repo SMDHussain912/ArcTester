@@ -332,6 +332,49 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
+  // Recover a saved practice attempt after reload. The server remains the source
+  // of truth for the attempt; local storage only identifies it and restores answers.
+  useEffect(() => {
+    if (user?.role !== "STUDENT" || test || result) return;
+    const attemptId = safeStorage.getItem("arctester-active-practice-attempt");
+    if (!attemptId) return;
+    let cancelled = false;
+    request<RestoredTest>(`/tests/${encodeURIComponent(attemptId)}`)
+      .then((restored) => {
+        if (cancelled || !restored || !Array.isArray(restored.questions)) return;
+        const savedAnswers = safeStorage.getItem(practiceAnswersKey(attemptId));
+        let answersFromStorage: Record<number, number> = {};
+        if (savedAnswers) {
+          try {
+            const parsed: unknown = JSON.parse(savedAnswers);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              answersFromStorage = Object.fromEntries(
+                Object.entries(parsed).filter(([, value]) => Number.isInteger(value) && Number(value) >= 0),
+              ) as Record<number, number>;
+            }
+          } catch {
+            safeStorage.removeItem(practiceAnswersKey(attemptId));
+          }
+        }
+        const answersFromServer = Object.fromEntries(
+          (Array.isArray(restored.saved) ? restored.saved : [])
+            .filter((answer) => answer.selectedIndex !== null)
+            .map((answer) => [answer.questionId, answer.selectedIndex as number]),
+        );
+        setAnswers({ ...answersFromServer, ...answersFromStorage });
+        setTest({ ...restored, warnings: restored.warnings ?? [] });
+        setActivePage("practice");
+        setPracticeClock(Date.now());
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        // A stale local attempt must not prevent the student from using the app.
+        safeStorage.removeItem("arctester-active-practice-attempt");
+        setError(`Your previous practice attempt could not be restored: ${(cause as Error).message}`);
+      });
+    return () => { cancelled = true; };
+  }, [user, test, result]);
+
   async function dismissAnnouncement(id: string) {
     try {
       await request("/announcements/" + id + "/seen", { method: "POST" });
