@@ -581,6 +581,19 @@ describe("live Vite application", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
     expect(await screen.findByText("What is 2 + 2?")).toBeInTheDocument();
+    const assignedQuestion = screen.getByText("What is 2 + 2?").closest("article");
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: `arctester-assignment-answers-${assignment.id}`,
+        newValue: JSON.stringify({ "exam-question-1": 2 }),
+      }));
+    });
+    expect(within(assignedQuestion!).getAllByRole("button")[2]).toHaveClass("selected");
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) =>
+        String(input).endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT"
+      )).toBe(true);
+    });
     expect(screen.getByText("01:00 remaining")).toBeInTheDocument();
 
     const countdownInterval = intervalSpy.mock.calls.find(([, delay]) => delay === 1000)?.[0];
