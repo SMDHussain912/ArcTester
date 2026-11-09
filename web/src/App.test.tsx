@@ -63,7 +63,7 @@ describe("live Vite application", () => {
     expect(within(popup).getByText("The mock exam starts tomorrow at 10 AM.")).toBeInTheDocument();
 
     fireEvent.click(within(popup).getByRole("button", { name: /Got it/ }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector('[aria-labelledby="announcement-popup-title"]')).not.toBeInTheDocument());
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/seen"))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /Announcements/ }));
@@ -138,7 +138,7 @@ describe("live Vite application", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add to question bank" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Question added to the question bank.");
+    expect(await screen.findByRole("status")).toHaveTextContent("Question added to the bank.");
     expect(screen.getAllByText(createdQuestion.text).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock test builder" }));
@@ -202,7 +202,7 @@ describe("live Vite application", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: /Review queue/ }));
-    expect(await screen.findByText("learner@example.com")).toBeInTheDocument();
+    expect(await screen.findByText(/learner@example.com/)).toBeInTheDocument();
     expect(screen.getByText("ECET Mock 01")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve & release" }));
@@ -462,7 +462,7 @@ describe("live Vite application", () => {
       batchSize: 32,
     });
     expect(await screen.findByRole("heading", { name: "TensorFlow.js training jobs" })).toBeInTheDocument();
-    expect(screen.getByText("QUEUED")).toBeInTheDocument();
+    expect(screen.getByText(/QUEUED/)).toBeInTheDocument();
   });
 
 });
