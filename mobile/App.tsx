@@ -50,7 +50,11 @@ export default function App() {
   const [showExams, setShowExams] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "profile">("home");
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(20 * 60);
   const [busy, setBusy] = useState(false);
+  const questionTransition = useRef(new Animated.Value(1)).current;
+  const progress = useRef(new Animated.Value(0)).current;
   const [error, setError] = useState("");
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
@@ -197,11 +201,44 @@ export default function App() {
       });
       setTest(result);
       setAnswers({});
+      setCurrentQuestionIndex(0);
+      setSecondsLeft(20 * 60);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  useEffect(() => {
+    if (!test) return;
+    const timer = setInterval(() => {
+      setSecondsLeft((remaining) => Math.max(0, remaining - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [test]);
+
+  useEffect(() => {
+    if (!test) return;
+    questionTransition.setValue(0);
+    Animated.timing(questionTransition, {
+      toValue: 1,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(progress, {
+      toValue: (currentQuestionIndex + 1) / test.questions.length,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [test, currentQuestionIndex, progress, questionTransition]);
+
+  function formatTime(totalSeconds: number) {
+    const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+    const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${seconds}`;
   }
 
   async function submit() {
@@ -218,6 +255,7 @@ export default function App() {
         }),
       });
       setTest(null);
+      setCurrentQuestionIndex(0);
       setError("Practice submitted. Open the web app to review the full result.");
       const fresh = await api<Bank>("/bank");
       setBank(fresh);
@@ -235,6 +273,7 @@ export default function App() {
     setBank(null);
     setAnnouncements([]);
     setTest(null);
+    setCurrentQuestionIndex(0);
     setShowExams(false);
     setActiveTab("home");
   }
@@ -305,37 +344,81 @@ export default function App() {
           <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : test ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <Text style={styles.heading}>Practice session</Text>
-            <Text style={styles.muted}>
-              {test.questions.length} questions · Select one answer per question
-            </Text>
-            {test.questions.map((question, index) => (
-              <View key={question.id} style={styles.question}>
-                <Text style={styles.questionTitle}>
-                  {index + 1}. {question.text}
-                </Text>
-                {question.options.map((option, optionIndex) => (
-                  <TouchableOpacity
-                    key={optionIndex}
-                    onPress={() =>
-                      setAnswers((current) => ({ ...current, [question.id]: optionIndex }))
-                    }
-                    style={[
-                      styles.option,
-                      answers[question.id] === optionIndex && styles.optionSelected,
-                    ]}
-                  >
-                    <Text style={styles.optionText}>
-                      {String.fromCharCode(65 + optionIndex)}. {option}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <View style={styles.examHeader}>
+              <View>
+                <Text style={styles.heading}>Practice session</Text>
+                <Text style={styles.muted}>Question {currentQuestionIndex + 1} of {test.questions.length}</Text>
               </View>
-            ))}
-            <TouchableOpacity disabled={busy} onPress={submit} style={styles.primary}>
-              <Text style={styles.primaryText}>{busy ? "Submitting…" : "Submit practice"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setTest(null)} style={styles.secondary}>
+              <View style={[styles.timerPill, secondsLeft === 0 && styles.timerExpired]}>
+                <MaterialCommunityIcons name="timer-outline" size={17} color={secondsLeft === 0 ? "#b42318" : "#2563eb"} />
+                <Text style={[styles.timerText, secondsLeft === 0 && styles.timerExpiredText]}>{formatTime(secondsLeft)}</Text>
+              </View>
+            </View>
+            <View style={styles.progressTrack}>
+              <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+            </View>
+            <Text style={styles.examHint}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
+            {secondsLeft === 0 && <Text style={styles.timerNotice}>Time is up. Submit your answers to finish.</Text>}
+            {test.questions[currentQuestionIndex] && (
+              <Animated.View
+                key={test.questions[currentQuestionIndex].id}
+                style={[
+                  styles.question,
+                  {
+                    opacity: questionTransition,
+                    transform: [{ translateX: questionTransition.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }],
+                  },
+                ]}
+              >
+                <Text style={styles.questionTitle}>{test.questions[currentQuestionIndex].text}</Text>
+                {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
+                  const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
+                  return (
+                    <TouchableOpacity
+                      key={optionIndex}
+                      onPress={() => setAnswers((current) => ({ ...current, [test.questions[currentQuestionIndex].id]: optionIndex }))}
+                      style={[styles.option, selected && styles.optionSelected]}
+                      activeOpacity={0.78}
+                    >
+                      <View style={styles.optionRow}>
+                        <View style={[styles.optionLetter, selected && styles.optionLetterSelected]}>
+                          <Text style={[styles.optionLetterText, selected && styles.optionLetterTextSelected]}>{String.fromCharCode(65 + optionIndex)}</Text>
+                        </View>
+                        <Text style={[styles.optionText, { flex: 1 }]}>{option}</Text>
+                        {selected && <MaterialCommunityIcons name="check-circle" size={20} color="#2563eb" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </Animated.View>
+            )}
+            <View style={styles.examActions}>
+              <TouchableOpacity
+                disabled={currentQuestionIndex === 0}
+                onPress={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
+                style={[styles.examSecondary, currentQuestionIndex === 0 && styles.examButtonDisabled]}
+              >
+                <MaterialCommunityIcons name="chevron-left" size={20} color={currentQuestionIndex === 0 ? "#aab2c0" : "#526078"} />
+                <Text style={styles.examSecondaryText}>Previous</Text>
+              </TouchableOpacity>
+              {currentQuestionIndex < test.questions.length - 1 ? (
+                <TouchableOpacity onPress={() => setCurrentQuestionIndex((index) => Math.min(test.questions.length - 1, index + 1))} style={styles.examNext}>
+                  <Text style={styles.primaryText}>Next question</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity disabled={busy} onPress={submit} style={styles.examNext}>
+                  <Text style={styles.primaryText}>{busy ? "Submitting…" : "Submit practice"}</Text>
+                  <MaterialCommunityIcons name="check" size={19} color="#ffffff" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {currentQuestionIndex < test.questions.length - 1 && (
+              <TouchableOpacity disabled={busy} onPress={submit} style={styles.submitLink}>
+                <Text style={styles.secondaryText}>Submit practice now</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => { setTest(null); setCurrentQuestionIndex(0); }} style={styles.secondary}>
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -573,7 +656,28 @@ const styles = StyleSheet.create({
   },
   subjectName: { color: "#172033", fontWeight: "700", fontSize: 15 },
   arrow: { color: "#2563eb", fontSize: 25 },
+  examHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  timerPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#eff6ff", borderRadius: 20, paddingHorizontal: 11, paddingVertical: 8 },
+  timerText: { color: "#2563eb", fontWeight: "800", fontVariant: ["tabular-nums"] },
+  timerExpired: { backgroundColor: "#fff1f0" },
+  timerExpiredText: { color: "#b42318" },
+  progressTrack: { height: 7, backgroundColor: "#e9edf5", borderRadius: 8, overflow: "hidden", marginTop: 18 },
+  progressFill: { height: "100%", backgroundColor: "#2563eb", borderRadius: 8 },
+  examHint: { color: "#8993a5", fontSize: 11, marginTop: 8 },
+  timerNotice: { color: "#b42318", fontWeight: "700", marginTop: 12 },
   question: { borderTopWidth: 1, borderTopColor: "#edf0f5", paddingTop: 18, marginTop: 18 },
+  optionRow: { flexDirection: "row", alignItems: "center", gap: 11 },
+  optionLetter: { width: 29, height: 29, borderRadius: 9, backgroundColor: "#f0f2f6", alignItems: "center", justifyContent: "center" },
+  optionLetterSelected: { backgroundColor: "#dbeafe" },
+  optionLetterText: { color: "#526078", fontWeight: "800", fontSize: 12 },
+  optionLetterTextSelected: { color: "#1d4ed8" },
+  examActions: { flexDirection: "row", gap: 10, marginTop: 22 },
+  examSecondary: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#dce2eb", borderRadius: 12, paddingHorizontal: 12, minHeight: 48 },
+  examSecondaryText: { color: "#526078", fontWeight: "700", fontSize: 12 },
+  examButtonDisabled: { opacity: 0.55 },
+  examNext: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, backgroundColor: "#2563eb", borderRadius: 12, minHeight: 48, paddingHorizontal: 10 },
+  submitLink: { alignItems: "center", marginTop: 8, padding: 6 },
+
   questionTitle: {
     color: "#172033",
     fontSize: 16,
