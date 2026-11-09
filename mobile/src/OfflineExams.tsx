@@ -412,7 +412,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
           )}
         </View>
         {currentQuestionIndex < activePackage.questions.length - 1 && (
-          <TouchableOpacity disabled={busyId !== null} onPress={() => void submitExam()} style={styles.submitLink}>
+          <TouchableOpacity disabled={busyId !== null} onPress={confirmSubmitExam} style={styles.submitLink}>
             <Text style={styles.link}>Submit exam now</Text>
           </TouchableOpacity>
         )}
