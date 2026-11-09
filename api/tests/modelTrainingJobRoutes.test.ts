@@ -3,6 +3,18 @@ import { buildApp } from "../src/index.js";
 import { runNextModelTrainingJob } from "../src/modelTrainingWorker.js";
 import { signUp, startTestServer, type TestServer } from "./server.js";
 
+type TrainingJobResponseBody = Record<string, unknown> & {
+  dataset: { id: string };
+  job: {
+    id: string;
+    status: string;
+    progress: number;
+    modelId: string;
+    errorMessage: string;
+    result: unknown;
+  };
+};
+
 describe("durable TensorFlow training jobs", () => {
   let server: TestServer;
   let adminCookie: string;
@@ -18,7 +30,7 @@ describe("durable TensorFlow training jobs", () => {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    return { status: response.status, body: await response.json() as Record<string, any> };
+    return { status: response.status, body: await response.json() as TrainingJobResponseBody };
   }
 
   beforeAll(async () => {
