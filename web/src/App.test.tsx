@@ -28,6 +28,31 @@ describe("live Vite application", () => {
     vi.unstubAllGlobals();
   });
 
+  it("routes students through the single session-controlled assigned exam centre", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(response(200, {
+          user: { id: 4, email: "student@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/bank")) {
+        return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) {
+        return Promise.resolve(response(200, { assignments: [] }));
+      }
+      return Promise.resolve(response(200, { announcements: [], ok: true }));
+    });
+
+    render(<App />);
+
+    expect(screen.queryByRole("heading", { name: "Assigned mock tests" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    expect(await screen.findByRole("heading", { name: "Assigned exams" })).toBeInTheDocument();
+    expect(screen.getByText("No assigned exams")).toBeInTheDocument();
+  });
+
   it("loads published announcements into the student dashboard and announcements view", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const path = String(input);
