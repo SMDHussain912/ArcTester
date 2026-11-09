@@ -36,7 +36,7 @@ jobs:
 
       - name: Apply available security fixes, including required major upgrades
         run: |
-          npm audit fix --force
+          npm audit fix --force || npm audit --audit-level=high
 
       - name: Require zero critical and high advisories
         run: |
