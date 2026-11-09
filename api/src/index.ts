@@ -5,6 +5,9 @@ import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
+import { modelRegistryRouter } from "./modelRoutes.js";
+import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
+import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 
 const db = new PrismaClient();
 
@@ -92,6 +95,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use("/auth", authRouter(database));
   app.use(examRouter(database));
   app.use(questionAdminRouter(database));
+  app.use(modelRegistryRouter(database));
+  app.use(modelTrainingJobsRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
