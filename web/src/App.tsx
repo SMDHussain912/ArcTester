@@ -384,7 +384,7 @@ export default function App() {
 
   async function dismissAnnouncement(id: string) {
     try {
-      await request("/announcements/" + id + "/seen", { method: "POST" });
+      await request("/announcements/" + id + "/read", { method: "POST" });
       setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
     } catch (cause) {
       setError((cause as Error).message);
