@@ -101,6 +101,6 @@ describe("durable TensorFlow training jobs", () => {
       modelId: "invalid-training-fixture",
     });
     expect(response.status).toBe(400);
-    expect((await server.db.modelTrainingJob.count({ where: { datasetId: invalid.id } })).toBe(0);
+    expect(await server.db.modelTrainingJob.count({ where: { datasetId: invalid.id } })).toBe(0);
   });
 });
