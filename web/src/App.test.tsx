@@ -274,6 +274,15 @@ describe("live Vite application", () => {
     const secondQuestion = screen.getByText("Second restored question?").closest("article");
     expect(within(secondQuestion!).getAllByRole("button").every((button) => !button.classList.contains("selected"))).toBe(true);
     expect(screen.getByText("1 / 2 answered")).toBeInTheDocument();
+
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "arctester-practice-answers-42",
+        newValue: JSON.stringify({ "7": 1, "8": 2, "999": 0 }),
+      }));
+    });
+    expect(within(secondQuestion!).getAllByRole("button")[2]).toHaveClass("selected");
+    expect(screen.getByText("2 / 2 answered")).toBeInTheDocument();
   });
 
   it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
