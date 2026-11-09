@@ -632,6 +632,34 @@ export default function App() {
 
   submitPracticeTestRef.current = submitTest;
 
+  // Synchronize saved answers when the same practice attempt is open in another tab.
+  useEffect(() => {
+    if (!test || result) return;
+    const answerKey = practiceAnswersKey(test.attemptId);
+    const validQuestions = new Map(test.questions.map((question) => [String(question.id), question]));
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== answerKey || !event.newValue) return;
+      try {
+        const parsed: unknown = JSON.parse(event.newValue);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+        const incoming = Object.fromEntries(
+          Object.entries(parsed).flatMap(([questionId, value]) => {
+            const question = validQuestions.get(questionId);
+            if (!question || !Number.isInteger(value) || Number(value) < 0 || Number(value) >= question.options.length) {
+              return [];
+            }
+            return [[Number(questionId), Number(value)] as const];
+          }),
+        );
+        setAnswers((current) => ({ ...current, ...incoming }));
+      } catch {
+        // Ignore malformed updates from another tab; local answers remain usable.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [test, result]);
+
   // Keep practice/mock timers monotonic and synchronize them to the API clock.
   useEffect(() => {
     if (!test || result || !test.deadline) return;
