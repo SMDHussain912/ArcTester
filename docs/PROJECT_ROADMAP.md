@@ -59,7 +59,7 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Move long-running TensorFlow training out of normal HTTP request handling or otherwise prove it safely fits host limits.
 - [x] Make logout invalidate all previously issued cookie and bearer JWTs by incrementing the user's `sessionVersion`; replay-after-logout is covered by API regression tests. The Vite UI now waits for server confirmation and preserves the signed-in state if revocation fails.
 - [ ] Implement per-device session revocation and audit device registry semantics and rate limiting.
-- [x] Serialize one-time administrator bootstrap with a PostgreSQL transaction-scoped advisory lock; concurrent bootstrap regression test added.
+- [x] Serialize one-time administrator bootstrap with `pg_try_advisory_xact_lock`; concurrent bootstrap regression passed in CI run `42542180790`.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
 
@@ -188,3 +188,14 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Made one-time admin bootstrap concurrency-safe with a PostgreSQL advisory transaction lock and added a regression test that runs two different bootstrap requests concurrently; exactly one administrator can be created. The new PostgreSQL concurrency regression test must pass on the current PR head.
+
+
+## Latest stabilization CI (2026-11-09)
+
+- PR: [#15 — Stabilize existing app and revoke sessions on logout](https://github.com/smdgamekingindo-TN/ArcTester/pull/15) (draft; not merged or deployed).
+- Verified commit: `1dde76ab47c6b5625d96a8b41c796e71bc298682`.
+- Workflow run: `42542180790` — success.
+- API: 37 test files, 291 tests passed on PostgreSQL.
+- Web: 22 test files, 84 tests passed; production Vite app direct tests: 8.
+- PostgreSQL migrations, SQLite data-migration utility tests, TensorFlow dataset checks, mobile typecheck, lint, and production builds all passed.
+- Remaining: feature-by-feature end-to-end QA, deployment-specific cookie/browser verification, Vercel/Render configuration confirmation, and long-running TensorFlow training request lifecycle.
