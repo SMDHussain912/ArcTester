@@ -86,6 +86,7 @@ model User {
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
   modelEvaluations    ModelEvaluation[]    @relation("ModelEvaluationActor")
   modelDatasets       ModelDataset[]       @relation("ModelDatasetCreator")
+  modelTrainingJobs   ModelTrainingJob[]   @relation("ModelTrainingJobCreator")
 }
 
 model Invitation {
@@ -413,8 +414,32 @@ model ModelDataset {
 
   @@index([name, createdAt])
   @@index([createdById, createdAt])
+  trainingJobs       ModelTrainingJob[]
 }
 
+model ModelTrainingJob {
+  id             String      @id @default(cuid())
+  dataset        ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  datasetId      String
+  createdBy      User?       @relation("ModelTrainingJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById    Int?
+  modelId        String
+  seed           Int         @default(42)
+  epochs         Int         @default(80)
+  batchSize      Int         @default(32)
+  status         String      @default("QUEUED")
+  progress       Int         @default(0)
+  errorMessage   String      @default("")
+  resultJson     String      @default("{}")
+  createdAt      DateTime    @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime    @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([datasetId, createdAt])
+}
 
 model ModelDriftBucket {
   id          String   @id @default(cuid())
