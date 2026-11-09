@@ -179,7 +179,7 @@ export default function App() {
   }, [user, activePage]);
 
   useEffect(() => {
-    if (user?.role !== "STUDENT" || activePage !== "assigned-exams") return;
+    if (user?.role !== "STUDENT" || !["dashboard", "assigned-exams"].includes(activePage)) return;
     let cancelled = false;
     request<{ assignments: AssignedExam[] }>("/exams/assigned")
       .then(({ assignments }) => {
@@ -1037,6 +1037,34 @@ export default function App() {
               <section className="panel student-notice-preview">
                 <div className="section-head"><div><p className="eyebrow">IMPORTANT UPDATES</p><h2>Latest announcement</h2></div><button className="ghost" onClick={() => setActivePage("announcements")}>View all ({announcements.length}) →</button></div>
                 <strong>{announcements[0].title}</strong><p>{announcements[0].message}</p><small className="muted">{new Date(announcements[0].publishedAt).toLocaleString()}</small>
+              </section>
+            ) : null}
+            {activePage === "dashboard" && assignedExams.some((item) => !item.submission) ? (
+              <section className="panel student-notice-preview" aria-labelledby="upcoming-exams-title">
+                <div className="section-head">
+                  <div>
+                    <p className="eyebrow">EXAM CENTRE</p>
+                    <h2 id="upcoming-exams-title">Your assigned exams</h2>
+                    <p className="muted">{assignedExams.filter((item) => !item.submission).length} exam{assignedExams.filter((item) => !item.submission).length === 1 ? "" : "s"} awaiting submission</p>
+                  </div>
+                  <button type="button" className="ghost" onClick={() => setActivePage("assigned-exams")}>View all exams →</button>
+                </div>
+                <div className="grid two">
+                  {assignedExams.filter((item) => !item.submission).slice(0, 3).map((item) => {
+                    const unavailable = item.availableFrom && new Date(item.availableFrom).getTime() > Date.now();
+                    const expired = item.dueAt && new Date(item.dueAt).getTime() < Date.now();
+                    return (
+                      <article className="panel assigned-exam-card" key={item.id}>
+                        <div className="admin-exam-meta">
+                          <div><strong>{item.exam.title}</strong><p className="muted">Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div>
+                          <span className={expired ? "status status-expired" : unavailable ? "status status-pending" : "status status-used"}>{expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span>
+                        </div>
+                        <p className="muted">Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</p>
+                        <p className="muted">Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</p>
+                      </article>
+                    );
+                  })}
+                </div>
               </section>
             ) : null}
             {activePage === "dashboard" && test ? (
