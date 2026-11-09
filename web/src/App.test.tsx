@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -494,4 +494,102 @@ describe("live Vite application", () => {
     expect(screen.getByText(/QUEUED/)).toBeInTheDocument();
   });
 
+
+  it("drives the assigned exam countdown from server time and sends session heartbeats", async () => {
+    let performanceTime = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => performanceTime);
+    const serverNow = new Date(Date.now()).toISOString();
+    const deadline = new Date(Date.now() + 60_000).toISOString();
+    const assignment = {
+      id: "assignment-heartbeat-1",
+      availableFrom: null,
+      dueAt: null,
+      exam: { title: "Heartbeat verification exam", description: "Session test" },
+      version: 1,
+      questionCount: 1,
+      durationMinutes: 1,
+      submission: null,
+    };
+    const examPackage = {
+      assignmentId: assignment.id,
+      title: assignment.exam.title,
+      version: 1,
+      durationMinutes: 1,
+      dueAt: null,
+      instructions: "Answer the question.",
+      questions: [{
+        id: "exam-question-1",
+        position: 0,
+        subject: "Maths",
+        topic: "Algebra",
+        text: "What is 2 + 2?",
+        options: ["2", "3", "4", "5"],
+        marks: 1,
+        negativeMarks: 0,
+      }],
+    };
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [assignment] }));
+      if (path.endsWith(`/exams/assignments/${assignment.id}/package`)) {
+        return Promise.resolve(response(200, { package: examPackage }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/session/start`)) {
+        return Promise.resolve(response(200, { session: {
+          startedAt: serverNow,
+          serverTime: serverNow,
+          deadline,
+          status: "ACTIVE",
+        } }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method !== "PUT") {
+        return Promise.resolve(response(200, { revision: 0, answers: [] }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/session/heartbeat`)) {
+        return Promise.resolve(response(200, {
+          serverTime: new Date(Date.now()).toISOString(),
+          deadline,
+          sessionStatus: "ACTIVE",
+        }));
+      }
+      return Promise.resolve(response(200, { ok: true, revision: 1 }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
+    expect(await screen.findByText("What is 2 + 2?")).toBeInTheDocument();
+    expect(screen.getByText("01:00 remaining")).toBeInTheDocument();
+
+    const countdownInterval = intervalSpy.mock.calls.find(([, delay]) => delay === 1000)?.[0];
+    const heartbeatInterval = intervalSpy.mock.calls.find(([, delay]) => delay === 15000)?.[0];
+    expect(typeof countdownInterval).toBe("function");
+    expect(typeof heartbeatInterval).toBe("function");
+
+    performanceTime += 1000;
+    await act(async () => {
+      (countdownInterval as () => void)();
+    });
+    expect(screen.getByText("00:59 remaining")).toBeInTheDocument();
+
+    await act(async () => {
+      (heartbeatInterval as () => void)();
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) =>
+        String(input).endsWith(`/exams/assignments/${assignment.id}/session/heartbeat`) &&
+        init?.method === "POST" &&
+        JSON.parse(String(init.body)).event === "HEARTBEAT"
+      )).toBe(true);
+    });
+  });
 });
