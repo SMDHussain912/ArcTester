@@ -30,6 +30,7 @@ type Test = {
   attemptId: number;
   mode: string;
   deadline: string | null;
+  serverNow?: string;
   questions: Question[];
   warnings: string[];
 };
@@ -107,7 +108,10 @@ export default function App() {
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const practiceAutoSubmitRef = useRef<number | null>(null);
+  const [practiceClock, setPracticeClock] = useState(0);
+  const [practiceServerOffset, setPracticeServerOffset] = useState(0);
+  const practiceAutoSubmitRef = useRef(false);
+  const submitPracticeTestRef = useRef<() => Promise<void>>(async () => {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -121,6 +125,10 @@ export default function App() {
   const assignmentRemainingSeconds = Number.isFinite(effectiveAssignmentDeadline)
     ? Math.max(0, Math.ceil((effectiveAssignmentDeadline - (assignmentClock + assignmentServerOffset)) / 1000))
     : 0;
+  const practiceDeadline = test?.deadline ? new Date(test.deadline).getTime() : Number.POSITIVE_INFINITY;
+  const practiceRemainingSeconds = Number.isFinite(practiceDeadline)
+    ? Math.max(0, Math.ceil((practiceDeadline - (practiceClock + practiceServerOffset)) / 1000))
+    : null;
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "announcements" | "assigned-exams">("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
@@ -206,6 +214,10 @@ export default function App() {
             .map((answer) => [answer.questionId, answer.selectedIndex as number]),
         );
         setAnswers({ ...answersFromServer, ...answersFromStorage });
+        const clientNow = performance.now();
+        setPracticeServerOffset(new Date(restored.serverNow).getTime() - clientNow);
+        setPracticeClock(clientNow);
+        practiceAutoSubmitRef.current = false;
         setTest({ ...restored, warnings: restored.warnings ?? [] });
         setActivePage("practice");
       })
@@ -533,9 +545,12 @@ export default function App() {
       });
       const previousAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
       if (previousAttemptId) safeStorage.removeItem(practiceAnswersKey(previousAttemptId));
+      const clientNow = performance.now();
+      setPracticeServerOffset(new Date(created.serverNow ?? new Date().toISOString()).getTime() - clientNow);
+      setPracticeClock(clientNow);
       setTest(created);
       setActivePage("practice");
-      practiceAutoSubmitRef.current = null;
+      practiceAutoSubmitRef.current = false;
       safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
       safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
       setAnswers({});
@@ -596,6 +611,28 @@ export default function App() {
       setBusy(false);
     }
   }
+
+  submitPracticeTestRef.current = submitTest;
+
+  // Keep practice/mock timers monotonic and synchronize them to the API clock.
+  useEffect(() => {
+    if (!test || result || !test.deadline) return;
+    setPracticeClock(performance.now());
+    const timer = window.setInterval(() => setPracticeClock(performance.now()), 1000);
+    const onVisibilityChange = () => setPracticeClock(performance.now());
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [test, result]);
+
+  useEffect(() => {
+    if (!test || result || practiceRemainingSeconds === null ||
+        practiceRemainingSeconds > 0 || practiceAutoSubmitRef.current || busy) return;
+    practiceAutoSubmitRef.current = true;
+    void submitPracticeTestRef.current();
+  }, [test, result, practiceRemainingSeconds, busy]);
 
   async function signOut() {
     setBusy(true);
@@ -777,6 +814,7 @@ export default function App() {
                 <h1>Stay focused.</h1>
                 <p className="muted">
                   {test.questions.length} questions · {Object.keys(answers).length} answered
+                  {practiceRemainingSeconds !== null ? <> · <strong className={practiceRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(practiceRemainingSeconds / 60).toString().padStart(2, "0")}:{(practiceRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></> : null}
                 </p>
               </div>
               <button className="ghost" onClick={() => setActivePage("dashboard")}>
