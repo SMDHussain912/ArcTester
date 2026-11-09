@@ -73,20 +73,24 @@ migration helper copies existing rows and IDs into an **empty, already-migrated*
 PostgreSQL schema; it never modifies the SQLite source.
 
 1. Back up your SQLite database file first.
-2. Configure `.env` with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+2. If the SQLite database is not at the latest legacy schema, apply the
+   preserved SQLite migrations first:
+   `DATABASE_URL="file:/absolute/path/to/arc-tester.db" npx prisma migrate deploy --schema=api/prisma-sqlite/schema.prisma`.
+3. Configure `.env` with `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
    `POSTGRES_DB`, then start only PostgreSQL:
    `docker compose up -d postgres`.
-3. Apply the PostgreSQL schema from the host, using the local port:
+4. Apply the PostgreSQL schema from the host, using the local port:
    `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" npx prisma migrate deploy --schema=api/prisma/schema.prisma`.
-4. Install the one-time migration dependency:
+5. Install the one-time migration dependency:
    `python -m pip install -r requirements-migrate.txt`.
-5. Copy the data (change the source path if your SQLite file is elsewhere):
+6. Copy the data (change the source path if your SQLite file is elsewhere):
    `DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DB?schema=public" python scripts/migrate_sqlite_to_postgres.py --sqlite api/prisma/dev.db`.
-6. Check the printed row counts, then start the app:
+7. Check the printed row counts, then start the app:
    `docker compose up --build -d`.
 
-For a previous Docker volume, copy its database file out before step 1:
-`docker run --rm -v arc-tester-data:/old -v "$PWD":/backup alpine cp /old/arc-tester.db /backup/arc-tester-old.db`.
+For a previous Docker volume, find its exact name with
+`docker volume ls --format '{{.Name}}' | grep arc-tester-data`, then copy it:
+`docker run --rm -v ACTUAL_VOLUME_NAME:/old -v "$PWD":/backup alpine cp /old/arc-tester.db /backup/arc-tester-old.db`.
 Pass that copied file with `--sqlite arc-tester-old.db`.
 
 The target tables must be empty before importing. Do not start the API container
