@@ -59,7 +59,7 @@ describe("live Vite application", () => {
 
     render(<App />);
 
-    const popup = await screen.findByRole("dialog", { name: "ECET mock exam schedule" });
+    const popup = within(document.body).getByRole("dialog", { name: "ECET mock exam schedule", hidden: true });
     expect(within(popup).getByText("The mock exam starts tomorrow at 10 AM.")).toBeInTheDocument();
 
     fireEvent.click(within(popup).getByRole("button", { name: /Got it/ }));
@@ -93,6 +93,9 @@ describe("live Vite application", () => {
       if (path.includes("/admin/question-bank")) {
         return Promise.resolve(response(200, { questions: [] }));
       }
+      if (path.includes("/admin/questions?")) {
+        return Promise.resolve(response(200, { questions: [createdQuestion], total: 1 }));
+      }
       if (path.endsWith("/admin/questions")) {
         return Promise.resolve(response(201, { ok: true, question: createdQuestion }));
       }
@@ -123,28 +126,28 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Question bank" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add question" }));
 
     fireEvent.change(screen.getByLabelText("Subject"), { target: { value: "Computer Science" } });
     fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Data Structures" } });
-    fireEvent.change(screen.getByLabelText("Question"), { target: { value: createdQuestion.text } });
+    fireEvent.change(screen.getByLabelText("Question text"), { target: { value: createdQuestion.text } });
     createdQuestion.options.forEach((option, index) => {
       fireEvent.change(screen.getByLabelText(`Option ${String.fromCharCode(65 + index)}`), {
         target: { value: option },
       });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add question to bank" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to question bank" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Question added to the question bank.");
     expect(screen.getAllByText(createdQuestion.text).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Exams" }));
-    fireEvent.change(screen.getByLabelText("Exam title"), { target: { value: "CSE Mock Test 01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mock test builder" }));
+    fireEvent.change(screen.getByLabelText("Test title"), { target: { value: "CSE Mock Test 01" } });
     fireEvent.change(screen.getByLabelText("Duration (minutes)"), { target: { value: "90" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /Which data structure follows FIFO order/ }));
     fireEvent.change(screen.getByLabelText("Marks per question"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Negative marks per wrong answer"), { target: { value: "0.5" } });
-    fireEvent.click(screen.getByRole("button", { name: /Create draft/ }));
+    fireEvent.change(screen.getByLabelText("Negative marks"), { target: { value: "0.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save draft exam/ }));
 
     await waitFor(() => expect(examPayload).not.toBeNull());
     expect(examPayload).toMatchObject({
