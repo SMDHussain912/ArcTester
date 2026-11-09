@@ -700,6 +700,65 @@ describe("live Vite application", () => {
     expect(screen.getAllByText("Not answered").length).toBeGreaterThan(0);
   });
 
+
+  it("renders dashboard progress and opens detailed analytics", async () => {
+    const overview = {
+      generatedAt: new Date().toISOString(),
+      practice: {
+        completedAttempts: 5, questions: 30, correct: 24, incorrect: 6, unanswered: 0,
+        accuracy: 0.8, subjects: [], difficulty: [], trend: [],
+      },
+      formalExams: {
+        submissions: 3, graded: 2, reviewRequired: 1, score: 36, maximumScore: 40,
+        scorePercentage: 0.9, correct: 18, incorrect: 2, unanswered: 0, subjects: [],
+      },
+    };
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/analytics/overview")) return Promise.resolve(response(200, overview));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Progress at a glance" })).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /View detailed progress/ }));
+    expect(await screen.findByRole("heading", { name: "Your progress" })).toBeInTheDocument();
+    expect(screen.getByText("Completed practice tests")).toBeInTheDocument();
+  });
+
+  it("shows a recoverable message when dashboard analytics response is incomplete", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/analytics/overview")) return Promise.resolve(response(200, { ok: true }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Progress data is temporarily unavailable.");
+    expect(screen.getByRole("heading", { name: "Progress at a glance" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /View detailed progress/ })).toBeInTheDocument();
+  });
+
   it("shows student practice accuracy and official exam progress", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const path = String(input);
