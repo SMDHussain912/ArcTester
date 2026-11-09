@@ -20,7 +20,7 @@ const CreateExamSchema = z.object({
   durationMinutes: z.number().int().min(1).max(600),
   shuffleQuestions: z.boolean().default(false),
   shuffleOptions: z.boolean().default(false),
-  subjectRules: z.record(z.object({
+  subjectRules: z.record(z.string(), z.object({
     marks: z.number().finite().min(0).max(100),
     negativeMarks: z.number().finite().min(0).max(100),
   })).default({}),
