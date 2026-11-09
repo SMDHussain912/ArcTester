@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
 import { runNextModelTrainingJob } from "../src/modelTrainingWorker.js";
-import { signUp, type TestServer } from "./server.js";
+import { signUp, startTestServer, type TestServer } from "./server.js";
 
 describe("durable TensorFlow training jobs", () => {
   let server: TestServer;
@@ -48,7 +48,7 @@ describe("durable TensorFlow training jobs", () => {
   });
 
   afterAll(async () => {
-    await server.close();
+    if (server) await server.close();
   });
 
   it("queues jobs without blocking the request and exposes admin-only status", async () => {
