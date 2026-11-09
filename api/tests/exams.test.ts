@@ -518,6 +518,46 @@ describe("versioned exam management", () => {
     expect(resultBody.questions[0].isCorrect).toBe(true);
   });
 
+  it("preserves elapsed pause duration when an invigilator terminates a paused session", async () => {
+    const assignment = await server.db.examAssignment.findUniqueOrThrow({
+      where: { id: assignmentId },
+      select: { examVersionId: true },
+    });
+    const admin = await server.db.user.findUniqueOrThrow({
+      where: { email: "exam-admin@arctester.test" },
+      select: { id: true },
+    });
+    const cookie = await createSession("terminate-paused@arctester.test", "STUDENT");
+    const student = await server.db.user.findUniqueOrThrow({
+      where: { email: "terminate-paused@arctester.test" },
+      select: { id: true },
+    });
+    const extraAssignment = await server.db.examAssignment.create({
+      data: { examVersionId: assignment.examVersionId, studentId: student.id, assignedById: admin.id },
+    });
+    const started = await request(`/exams/assignments/${extraAssignment.id}/session/start`, "POST", {}, cookie);
+    expect(started.status).toBe(200);
+    const session = started.json.session as { id: string };
+    const paused = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "PAUSE" }, adminCookie);
+    expect(paused.status).toBe(200);
+
+    const pausedAt = new Date(Date.now() - 5 * 60 * 1000);
+    await server.db.examSession.update({
+      where: { id: session.id },
+      data: { pausedAt, pausedDurationMs: 1000 },
+    });
+    const terminated = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "TERMINATE", reason: "Candidate session ended" }, adminCookie);
+    expect(terminated.status).toBe(200);
+    const finalState = await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } });
+    expect(finalState.status).toBe("TERMINATED");
+    expect(finalState.pausedAt).toBeNull();
+    expect(finalState.endedAt).not.toBeNull();
+    expect(finalState.pausedDurationMs).toBeGreaterThanOrEqual(301000);
+
+    // Keep this regression fixture isolated from later tests that assert global counts.
+    await server.db.user.delete({ where: { id: student.id } });
+  });
+
   it("paginates admin student lists and supports email search", async () => {
     await server.db.user.createMany({
       data: Array.from({ length: 55 }, (_, index) => ({
