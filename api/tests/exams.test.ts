@@ -95,6 +95,47 @@ describe("versioned exam management", () => {
     expect(student.status).toBe(403);
   });
 
+  it("previews CSV and JSON question imports using the admin UI content contract without writing", async () => {
+    const before = await server.db.question.count();
+    const jsonContent = JSON.stringify([{
+      subject: "Preview Subject",
+      topic: "Preview Topic",
+      text: "Preview-only JSON question for admin UI contract",
+      options: ["A", "B", "C", "D"],
+      correctIndex: 2,
+      explanation: "Preview only",
+      source: "Admin preview regression",
+      difficulty: "easy",
+    }]);
+    const jsonPreview = await request("/admin/questions/import/preview", "POST", {
+      format: "json",
+      content: jsonContent,
+    }, adminCookie);
+    expect(jsonPreview.status).toBe(200);
+    expect(jsonPreview.json.report).toMatchObject({ added: 1, duplicates: 0, total: 1, invalid: [] });
+
+    const csvContent = [
+      "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty",
+      "Preview Subject,Preview Topic,Preview-only CSV question,A,B,C,D,1,Preview only,Admin preview regression,easy",
+    ].join("\n");
+    const csvPreview = await request("/admin/questions/import/preview", "POST", {
+      format: "csv",
+      content: csvContent,
+    }, adminCookie);
+    expect(csvPreview.status).toBe(200);
+    expect(csvPreview.json.report).toMatchObject({ added: 1, duplicates: 0, total: 1, invalid: [] });
+    expect(await server.db.question.count()).toBe(before);
+  });
+
+  it("rejects malformed JSON question import previews with a client error", async () => {
+    const invalid = await request("/admin/questions/import/preview", "POST", {
+      format: "json",
+      content: "{not-json",
+    }, adminCookie);
+    expect(invalid.status).toBe(400);
+    expect(invalid.json.error).toContain("not valid JSON");
+  });
+
   it("allows admins to add questions directly to the question bank", async () => {
     const payload = {
       subject: "Computer Networks",
