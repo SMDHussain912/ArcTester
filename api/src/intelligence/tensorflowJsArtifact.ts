@@ -45,7 +45,7 @@ export const tensorflowJsArtifactSchema = z.object({
     // Check the size before running the regex: huge strings can make regex
     // validation expensive enough to overflow the JavaScript call stack.
     if (value.length > 16_000_000) {
-      context.addIssue({ code: z.ZodIssueCode.too_big, origin: "string", maximum: 16_000_000, inclusive: true, message: "Model weight payload exceeds 16 MB" });
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Model weight payload exceeds 16 MB" });
       return;
     }
     if (value.length < 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
