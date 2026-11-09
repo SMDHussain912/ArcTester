@@ -8,6 +8,8 @@ import { questionAdminRouter } from "./questionAdminRoutes.js";
 import { modelRegistryRouter } from "./modelRoutes.js";
 import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
 import { startModelTrainingWorker } from "./modelTrainingWorker.js";
+import { announcementRouter } from "./announcementRoutes.js";
+import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
 
@@ -97,6 +99,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(questionAdminRouter(database));
   app.use(modelRegistryRouter(database));
   app.use(modelTrainingJobsRouter(database));
+  app.use(announcementRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
