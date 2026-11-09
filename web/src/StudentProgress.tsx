@@ -135,9 +135,13 @@ export default function StudentProgress() {
 export function DashboardProgressSummary({ onOpenProgress }: { onOpenProgress: () => void }) {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError("");
     loadOverview()
       .then((data) => {
         if (cancelled) return;
@@ -147,9 +151,10 @@ export function DashboardProgressSummary({ onOpenProgress }: { onOpenProgress: (
         }
         setOverview(data);
       })
-      .catch((cause) => { if (!cancelled) setError((cause as Error).message); });
+      .catch((cause) => { if (!cancelled) setError((cause as Error).message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [retryCount]);
 
   return (
     <section className="panel dashboard-progress" aria-labelledby="dashboard-progress-title">
@@ -160,13 +165,20 @@ export function DashboardProgressSummary({ onOpenProgress }: { onOpenProgress: (
         </div>
         <button type="button" className="ghost" onClick={onOpenProgress}>View detailed progress →</button>
       </div>
-      {error ? <p className="error" role="alert">{error}</p> : overview ? (
+      {error ? (
+        <>
+          <p className="error" role="alert">{error}</p>
+          <button type="button" className="ghost" disabled={loading} onClick={() => setRetryCount((count) => count + 1)}>
+            {loading ? "Retrying…" : "Retry progress"}
+          </button>
+        </>
+      ) : overview ? (
         <div className="dashboard-progress-grid">
           <article><span className="muted">Practice tests</span><strong>{overview.practice.completedAttempts}</strong><small className="muted">completed</small></article>
           <article><span className="muted">Practice accuracy</span><strong>{percentage(overview.practice.accuracy)}</strong><small className="muted">{overview.practice.correct} correct answers</small></article>
           <article><span className="muted">Official exams</span><strong>{overview.formalExams.submissions}</strong><small className="muted">{overview.formalExams.graded} graded</small></article>
         </div>
-      ) : <p className="muted" role="status">Loading your latest performance…</p>}
+      ) : <p className="muted" role="status">{loading ? "Loading your latest performance…" : "Progress is unavailable."}</p>}
     </section>
   );
 }
