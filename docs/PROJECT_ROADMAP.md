@@ -61,9 +61,9 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [ ] Implement per-device session revocation and audit device registry semantics and rate limiting.
 - [x] Serialize one-time administrator bootstrap with `pg_try_advisory_xact_lock`; concurrent bootstrap regression passed in CI run `42542180790`.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
-- [ ] Verify invalid exam submissions are rejected before session reconciliation; the new regression currently awaits CI.
+- [x] Verify invalid exam submissions are rejected before session reconciliation; invalid offline answer regression passed CI run `42543841320`.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
-- [ ] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression added, awaiting CI.
+- [x] Verify reconnect cannot reactivate a session changed concurrently by an invigilator; conditional reconnect update and interrupted-session regression passed CI run `42544630276`.
 - [x] Verify conditional answer writes cannot commit after a concurrent invigilator pause/termination; paused-session regression passed CI run `42544206972`.
 
 ### Frontend quality
@@ -217,3 +217,6 @@ A task can be checked off only when:
 
 
 - 2026-11-09: Hardened exam-session reconnect against a concurrent invigilator state change. Reconnecting an existing session now conditionally transitions only the exact state originally read and requires a valid start timestamp; a concurrent pause/termination produces HTTP 409 instead of being overwritten. Added interrupted-session recovery coverage; awaiting CI verification.
+
+
+- 2026-11-09: Hardened submission finalization against an invigilator state race. The transaction now conditionally completes only an ACTIVE session with the same server-owned start timestamp observed before submission; if the session was paused or terminated concurrently, the transaction returns HTTP 409 and rolls back the submission. Added a regression proving a paused session cannot be submitted and remains paused; awaiting CI.

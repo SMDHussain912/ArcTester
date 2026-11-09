@@ -1672,12 +1672,32 @@ export function examRouter(db: PrismaClient): Router {
 
         if (!offlineSessionReconciled && input.revision !== undefined) {
           const currentRevision = await tx.examSession.updateMany({
-            where: { id: examSession.id, answersRevision: input.revision },
+            where: {
+              id: examSession.id,
+              status: "ACTIVE",
+              startedAt: serverStartedAt,
+              answersRevision: input.revision,
+            },
             data: { answersRevision: { increment: 1 } },
           });
           if (currentRevision.count !== 1) {
             throw conflict("These answers were changed in another session. Reload the exam before submitting.");
           }
+        }
+
+        // Finalize only if the session is still active with the same start time
+        // observed before the transaction. This prevents a concurrent invigilator
+        // pause or termination from being overwritten by a late submission.
+        const completedSession = await tx.examSession.updateMany({
+          where: {
+            id: examSession.id,
+            status: "ACTIVE",
+            startedAt: serverStartedAt,
+          },
+          data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
+        });
+        if (completedSession.count !== 1) {
+          throw conflict("The exam session changed before submission was finalized. Refresh and contact the invigilator.");
         }
 
         const created = await tx.examSubmission.create({
@@ -1704,10 +1724,6 @@ export function examRouter(db: PrismaClient): Router {
         await tx.examAssignment.update({
           where: { id: assignment.id },
           data: { status: "SUBMITTED" },
-        });
-        await tx.examSession.update({
-          where: { id: examSession.id },
-          data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
         });
         await tx.examSessionEvent.create({
           data: { sessionId: examSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
