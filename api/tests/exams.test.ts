@@ -148,6 +148,8 @@ describe("versioned exam management", () => {
     expect(deleted.status).toBe(409);
     expect((deleted.json.error as string)).toContain("already used");
     expect(await server.db.question.findUnique({ where: { id: question.id } })).not.toBeNull();
+    await server.db.attemptAnswer.deleteMany({ where: { attemptId: attempt.id } });
+    await server.db.attempt.delete({ where: { id: attempt.id } });
   });
 
   it("rejects non-integer question bank pagination", async () => {
