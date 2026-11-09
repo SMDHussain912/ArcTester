@@ -673,6 +673,9 @@ describe("live Vite application", () => {
       )).toBe(true);
     });
     expect(await screen.findByRole("heading", { name: "Your result" })).toBeInTheDocument();
+    expect(screen.getByText("Correct answer:")).toBeInTheDocument();
+    expect(screen.getByText("Review the concept.")).toBeInTheDocument();
+    expect(screen.getByText("Not answered")).toBeInTheDocument();
   });
 
   it("shows student practice accuracy and official exam progress", async () => {
