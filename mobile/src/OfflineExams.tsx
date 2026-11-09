@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
   configureOfflineStore,
@@ -58,6 +58,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const questionTransition = useRef(new Animated.Value(1)).current;
+  const progress = useRef(new Animated.Value(0)).current;
   const [pendingCount, setPendingCount] = useState(0);
   const [online, setOnline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -198,6 +201,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       const started = await startOfflineAttempt(assignmentId);
       const restored = await restoreActiveAttempt(assignmentId);
       setActivePackage(started.examPackage);
+      setCurrentQuestionIndex(0);
       setActiveAttemptUuid(started.attemptUuid);
       setAnswers(restored?.answers ?? {});
       setRemainingSeconds(await getRemainingSeconds(assignmentId));
@@ -215,6 +219,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     try {
       await queueOfflineSubmission(activePackage.assignmentId);
       setActivePackage(null);
+      setCurrentQuestionIndex(0);
       setActiveAttemptUuid("");
       setAnswers({});
       await refreshLocalState();
@@ -237,6 +242,23 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       void submitExam();
     }
   }, [activePackage, remainingSeconds, submitExam]);
+
+  useEffect(() => {
+    if (!activePackage) return;
+    questionTransition.setValue(0);
+    Animated.timing(questionTransition, {
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(progress, {
+      toValue: (currentQuestionIndex + 1) / activePackage.questions.length,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [activePackage, currentQuestionIndex, progress, questionTransition]);
 
   const chooseAnswer = async (questionId: string, selectedIndex: number) => {
     if (!activePackage) return;
@@ -261,18 +283,33 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         <Text style={styles.muted}>
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
         </Text>
-        {activePackage.questions.map((question, index) => (
-          <View key={question.id} style={styles.question}>
+        <Text style={styles.muted}>
+          Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.keys(answers).length} answered
+        </Text>
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+        </View>
+        {activePackage.questions[currentQuestionIndex] && (
+          <Animated.View
+            key={activePackage.questions[currentQuestionIndex].id}
+            style={[
+              styles.question,
+              {
+                opacity: questionTransition,
+                transform: [{ translateX: questionTransition.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+              },
+            ]}
+          >
             <Text style={styles.questionTitle}>
-              {index + 1}. {question.text}
+              {currentQuestionIndex + 1}. {activePackage.questions[currentQuestionIndex].text}
             </Text>
-            {question.options.map((option, optionIndex) => (
+            {activePackage.questions[currentQuestionIndex].options.map((option, optionIndex) => (
               <TouchableOpacity
                 key={optionIndex}
-                onPress={() => void chooseAnswer(question.id, optionIndex)}
+                onPress={() => void chooseAnswer(activePackage.questions[currentQuestionIndex].id, optionIndex)}
                 style={[
                   styles.option,
-                  answers[question.id] === optionIndex && styles.optionSelected,
+                  answers[activePackage.questions[currentQuestionIndex].id] === optionIndex && styles.optionSelected,
                 ]}
               >
                 <Text style={styles.optionText}>
@@ -280,15 +317,38 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
-        ))}
-        <TouchableOpacity
-          disabled={busyId !== null}
-          onPress={() => void submitExam()}
-          style={styles.primary}
-        >
-          <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
-        </TouchableOpacity>
+          </Animated.View>
+        )}
+        <View style={styles.examActions}>
+          <TouchableOpacity
+            disabled={currentQuestionIndex === 0 || busyId !== null}
+            onPress={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
+            style={[styles.secondaryButton, currentQuestionIndex === 0 && styles.disabled]}
+          >
+            <Text style={styles.secondaryText}>Previous</Text>
+          </TouchableOpacity>
+          {currentQuestionIndex < activePackage.questions.length - 1 ? (
+            <TouchableOpacity
+              onPress={() => setCurrentQuestionIndex((index) => Math.min(activePackage.questions.length - 1, index + 1))}
+              style={styles.primarySmall}
+            >
+              <Text style={styles.primaryText}>Next question ›</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              disabled={busyId !== null}
+              onPress={() => void submitExam()}
+              style={styles.primarySmall}
+            >
+              <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {currentQuestionIndex < activePackage.questions.length - 1 && (
+          <TouchableOpacity disabled={busyId !== null} onPress={() => void submitExam()} style={styles.submitLink}>
+            <Text style={styles.link}>Submit exam now</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           disabled={busyId !== null}
           onPress={() => setActivePackage(null)}
@@ -404,6 +464,10 @@ const styles = StyleSheet.create({
   heading: { color: "#172033", fontSize: 21, fontWeight: "800" },
   timer: { color: "#b42318", fontWeight: "800", fontSize: 18, marginTop: 12 },
   question: { borderTopWidth: 1, borderTopColor: "#edf0f5", paddingTop: 16, marginTop: 16 },
+  progressTrack: { height: 6, backgroundColor: "#e8edf5", borderRadius: 99, overflow: "hidden", marginTop: 12 },
+  progressFill: { height: 6, backgroundColor: "#2563eb", borderRadius: 99 },
+  examActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 18 },
+  submitLink: { alignSelf: "center", padding: 10, marginTop: 4 },
   questionTitle: { color: "#172033", fontSize: 15, fontWeight: "700", lineHeight: 22 },
   option: { borderWidth: 1, borderColor: "#e0e5ed", borderRadius: 10, padding: 12, marginTop: 8 },
   optionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
