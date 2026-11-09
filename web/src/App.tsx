@@ -177,6 +177,19 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
   }, [user, activePage]);
 
+  useEffect(() => {
+    if (user?.role !== "STUDENT" || activePage !== "assigned-exams") return;
+    let cancelled = false;
+    request<{ assignments: AssignedExam[] }>("/exams/assigned")
+      .then(({ assignments }) => {
+        if (!cancelled) setAssignedExams(Array.isArray(assignments) ? assignments : []);
+      })
+      .catch((cause) => {
+        if (!cancelled) setError((cause as Error).message);
+      });
+    return () => { cancelled = true; };
+  }, [user, activePage]);
+
   // Recover a saved practice attempt after reload. The server remains the source
   // of truth for the attempt; local storage only identifies it and restores answers.
   useEffect(() => {
@@ -247,8 +260,12 @@ export default function App() {
   }, [user]);
 
   async function refreshAssignedExams() {
-    const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
-    setAssignedExams(response.assignments);
+    try {
+      const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
+      setAssignedExams(Array.isArray(response.assignments) ? response.assignments : []);
+    } catch (cause) {
+      setError((cause as Error).message);
+    }
   }
 
   async function reviewAssignedExam(assignmentId: string) {
