@@ -249,3 +249,17 @@ A task can be checked off only when:
 - Worker progress currently reports lifecycle milestones, not per-epoch training percentage.
 - Expired leases permit recovery after a worker disappears; verify multi-instance lease behavior and long-running training under deployment conditions.
 - Run PostgreSQL migration deployment, API/web tests, lint and production builds in GitHub Actions. Do not mark this slice complete until the latest main commit has a successful CI run.
+
+
+## Product audit — four-milestone release gate (2026-11-09)
+The product audit is being completed before starting the six approved feature groups. The four audit milestones are:
+1. Student experience: authentication, dashboard/navigation, subject-first practice, mock tests, answer persistence/recovery, assigned exams, results and explanations.
+2. Administrator experience: question bank/imports, exam authoring/publishing/assignment, invigilation, review queue, analytics and Model Lab.
+3. Reliability: offline/reconnect, refresh/restart recovery, multiple tabs, concurrent sessions, and responsive mobile/desktop behavior.
+4. Deployment: confirm the canonical Vite frontend, verify Render/PostgreSQL and frontend hosting configuration, cross-site browser authentication, and worker lifecycle.
+
+### Audit findings and fixes
+- Confirmed the production browser build is React + Vite (web/src/main.tsx, vite build, web/dist). The separate web/app Next.js tree is not the deployed frontend; retain it until its intended archival/removal is handled deliberately.
+- Student/mobile offline synchronization audit found that the Expo workspace accepted any response containing a submission ID without confirming it belonged to the locally queued attempt. It also continued sending later submissions after authentication or server failures.
+- Fixed mobile/src/offline/OfflineExamWorkspace.tsx: both immediate and queued uploads now require the server-returned attemptUuid to match the local attempt before marking it synchronized; queued synchronization stops after HTTP 401, 403, or 5xx while preserving pending records. Assignment IDs are URL-encoded.
+- The mobile sync fix is implemented on main; its mobile typecheck and full CI run are the verification gate. This does not yet complete the student experience audit.
