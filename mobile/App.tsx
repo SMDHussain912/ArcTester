@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -47,6 +48,7 @@ export default function App() {
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [showExams, setShowExams] = useState(false);
+  const [activeTab, setActiveTab] = useState<"home" | "profile">("home");
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -234,6 +236,7 @@ export default function App() {
     setAnnouncements([]);
     setTest(null);
     setShowExams(false);
+    setActiveTab("home");
   }
 
   return (
@@ -299,7 +302,7 @@ export default function App() {
             </TouchableOpacity>
           </Animated.View>
         ) : showExams ? (
-          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => setShowExams(false)} />
+          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : test ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <Text style={styles.heading}>Practice session</Text>
@@ -334,6 +337,26 @@ export default function App() {
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setTest(null)} style={styles.secondary}>
               <Text style={styles.secondaryText}>Exit practice</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : activeTab === "profile" ? (
+          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+            <View style={styles.profileAvatar}>
+              <MaterialCommunityIcons name="account" size={34} color="#ffffff" />
+            </View>
+            <Text style={[styles.heading, { textAlign: "center" }]}>Your profile</Text>
+            <Text style={[styles.muted, { textAlign: "center" }]}>{user.email}</Text>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileLabel}>ACCOUNT ID</Text>
+              <Text style={styles.profileValue}>{user.id}</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileLabel}>QUESTION BANK</Text>
+              <Text style={styles.profileValue}>{bank?.total ?? "Loading…"} questions</Text>
+            </View>
+            <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
+              <MaterialCommunityIcons name="logout" size={18} color="#b42318" />
+              <Text style={styles.dangerText}>Sign out</Text>
             </TouchableOpacity>
           </Animated.View>
         ) : (
@@ -407,6 +430,22 @@ export default function App() {
               <Text style={styles.secondaryText}>Sign out</Text>
             </TouchableOpacity>
           </>
+        )}
+        {user && !test && !showExams && (
+          <Animated.View style={[styles.bottomNav, animatedEntrance(entrance)]}>
+            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("home")}>
+              <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
+              <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
+              <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
+              <Text style={styles.navLabel}>Exams</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("profile")}>
+              <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
+              <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Profile</Text>
+            </TouchableOpacity>
+          </Animated.View>
         )}
         {!!error && <Text style={styles.error}>{error}</Text>}
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
@@ -553,4 +592,51 @@ const styles = StyleSheet.create({
   optionText: { color: "#293449", lineHeight: 21 },
   error: { color: "#b42318", marginTop: 16, lineHeight: 21 },
   footer: { textAlign: "center", color: "#9aa3b2", fontSize: 12, marginTop: 30 },
+  bottomNav: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e4e8ef",
+    borderRadius: 18,
+    paddingVertical: 12,
+    marginTop: 24,
+    shadowColor: "#172033",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  navItem: { alignItems: "center", justifyContent: "center", minWidth: 76, gap: 4 },
+  navLabel: { color: "#8993a5", fontSize: 11, fontWeight: "600" },
+  navLabelActive: { color: "#2563eb" },
+  profileAvatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 25,
+    backgroundColor: "#2563eb",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  profileInfo: {
+    borderTopWidth: 1,
+    borderTopColor: "#edf0f5",
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  profileLabel: { color: "#8993a5", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  profileValue: { color: "#172033", fontSize: 15, fontWeight: "700", marginTop: 5 },
+  dangerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#fff1f0",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 20,
+  },
+  dangerText: { color: "#b42318", fontWeight: "700" },
 });
