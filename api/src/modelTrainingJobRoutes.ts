@@ -64,7 +64,9 @@ export function modelTrainingJobsRouter(db: PrismaClient): Router {
       }
       const samples = parsedSamples.data;
       if (samples.some((sample) =>
-        features.some((feature) => typeof sample.features[feature.name] !== "number")
+        Object.keys(sample.features).length !== features.length ||
+        features.some((feature) => !Object.prototype.hasOwnProperty.call(sample.features, feature.name) ||
+          typeof sample.features[feature.name] !== "number")
       )) {
         return next(badRequest("Every sample must contain finite numeric values for all declared features."));
       }
