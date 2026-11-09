@@ -289,6 +289,39 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
         </View>
+        <View style={styles.navigator}>
+          <Text style={styles.navigatorTitle}>QUESTION NAVIGATOR</Text>
+          <View style={styles.navigatorGrid}>
+            {activePackage.questions.map((question, index) => {
+              const answered = answers[question.id] !== undefined && answers[question.id] !== null;
+              const current = index === currentQuestionIndex;
+              return (
+                <TouchableOpacity
+                  key={question.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Question ${index + 1}${answered ? ", answered" : ", unanswered"}`}
+                  accessibilityState={{ selected: current }}
+                  onPress={() => setCurrentQuestionIndex(index)}
+                  style={[
+                    styles.navigatorItem,
+                    answered && styles.navigatorAnswered,
+                    current && styles.navigatorCurrent,
+                  ]}
+                >
+                  <Text style={[
+                    styles.navigatorNumber,
+                    answered && styles.navigatorNumberAnswered,
+                    current && styles.navigatorNumberCurrent,
+                  ]}>{index + 1}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.navigatorLegend}>
+            <Text style={styles.navigatorLegendText}>● Answered</Text>
+            <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
+          </View>
+        </View>
         {activePackage.questions[currentQuestionIndex] && (
           <Animated.View
             key={activePackage.questions[currentQuestionIndex].id}
@@ -466,6 +499,17 @@ const styles = StyleSheet.create({
   question: { borderTopWidth: 1, borderTopColor: "#edf0f5", paddingTop: 16, marginTop: 16 },
   progressTrack: { height: 6, backgroundColor: "#e8edf5", borderRadius: 99, overflow: "hidden", marginTop: 12 },
   progressFill: { height: 6, backgroundColor: "#2563eb", borderRadius: 99 },
+  navigator: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: "#f7f9fc", borderWidth: 1, borderColor: "#e8edf5" },
+  navigatorTitle: { color: "#748096", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  navigatorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  navigatorItem: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: "#dce2eb", backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  navigatorAnswered: { backgroundColor: "#eaf7f0", borderColor: "#9bd4b5" },
+  navigatorCurrent: { borderColor: "#2563eb", borderWidth: 2, backgroundColor: "#eff6ff" },
+  navigatorNumber: { color: "#526078", fontSize: 12, fontWeight: "700" },
+  navigatorNumberAnswered: { color: "#167647" },
+  navigatorNumberCurrent: { color: "#2563eb" },
+  navigatorLegend: { flexDirection: "row", gap: 14, marginTop: 10 },
+  navigatorLegendText: { color: "#748096", fontSize: 10 },
   examActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 18 },
   submitLink: { alignSelf: "center", padding: 10, marginTop: 4 },
   questionTitle: { color: "#172033", fontSize: 15, fontWeight: "700", lineHeight: 22 },
