@@ -39,9 +39,14 @@ type AdminAnalytics = {
   recentSubmissions: { submissionId: string; studentEmail: string; examTitle: string; submittedAt: string; score: number | null; maximumScore: number | null; status: string }[];
 };
 type ModelDataset = {
-  id: string; name: string; task: "regression" | "binary-classification"; rowCount: number;
+  id: string; name: string; task: "regression" | "binary-classification"; rowCount: number; datasetKind: "synthetic" | "real-anonymized";
   sourceDescription: string; sourceAttested: boolean; fingerprint: string; createdById: number | null; createdAt: string;
   featureSchema: { name: string; type: "numeric" | "categorical"; categories?: string[] }[];
+};
+type ModelTrainingJob = {
+  id: string; datasetId: string; modelId: string; status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  progress: number; errorMessage: string; createdAt: string; startedAt: string | null; completedAt: string | null;
+  result: { productionEligible: boolean; reason: string; candidate: { mae: number; rmse: number }; baseline: { mae: number; rmse: number }; model: { version: number } | null } | null;
 };
 type RegisteredModel = {
   modelId: string; version: number; algorithm: string; task: string; dataset: string;
@@ -253,6 +258,7 @@ export default function App() {
   const assignmentAnswersRevisionRef = useRef(0);
   const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "subjects" | "exams" | "live-sessions" | "attendance" | "review-queue" | "announcements" | "invitations" | "assigned-exams" | "model-lab">("dashboard");
   const [modelDatasets, setModelDatasets] = useState<ModelDataset[]>([]);
+  const [modelTrainingJobs, setModelTrainingJobs] = useState<ModelTrainingJob[]>([]);
   const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([]);
   const [modelDatasetName, setModelDatasetName] = useState("ecet-holdout-v1");
   const [modelDatasetTask, setModelDatasetTask] = useState<"regression" | "binary-classification">("binary-classification");
@@ -480,21 +486,54 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [user, activePage, liveSessionsPage, attendancePage]);
 
+  const hasActiveTrainingJobs = modelTrainingJobs.some((job) => job.status === "QUEUED" || job.status === "RUNNING");
+  useEffect(() => {
+    if (user?.role !== "ADMIN" || activePage !== "model-lab") return;
+    if (!hasActiveTrainingJobs) return;
+    const interval = window.setInterval(() => { void refreshTrainingJobs().catch((cause) => setError((cause as Error).message)); }, 2_000);
+    return () => window.clearInterval(interval);
+  }, [user, activePage, hasActiveTrainingJobs]);
+
   async function refreshModelLab() {
     setModelLabLoading(true);
     try {
-      const [datasetResponse, modelResponse] = await Promise.all([
+      const [datasetResponse, modelResponse, jobResponse] = await Promise.all([
         request<{ datasets: ModelDataset[] }>("/admin/model-datasets"),
         request<{ models: RegisteredModel[] }>("/admin/models"),
+        request<{ jobs: ModelTrainingJob[] }>("/admin/model-training-jobs"),
       ]);
       setModelDatasets(datasetResponse.datasets);
       setRegisteredModels(modelResponse.models);
+      setModelTrainingJobs(jobResponse.jobs);
       if (!modelEvaluationDatasetId && datasetResponse.datasets[0]) setModelEvaluationDatasetId(datasetResponse.datasets[0].id);
       if (!modelCandidateId && modelResponse.models[0]) setModelCandidateId(modelResponse.models[0].modelId);
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
       setModelLabLoading(false);
+    }
+  }
+
+  async function refreshTrainingJobs() {
+    const response = await request<{ jobs: ModelTrainingJob[] }>("/admin/model-training-jobs");
+    setModelTrainingJobs(response.jobs);
+  }
+
+  async function queueTensorflowTraining(dataset: ModelDataset) {
+    setBusy(true);
+    setError("");
+    setModelLabNotice("");
+    try {
+      const response = await request<{ job: ModelTrainingJob }>(
+        `/admin/model-datasets/${encodeURIComponent(dataset.id)}/tensorflow-jobs`,
+        { method: "POST", body: JSON.stringify({ modelId: `${trainingModelPrefix}-tensorflow`, seed: 42, epochs: 80, batchSize: 32 }) },
+      );
+      setModelLabNotice(`TensorFlow.js job ${response.job.id} queued. It will run in the API worker.`);
+      await refreshTrainingJobs();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1679,6 +1718,10 @@ export default function App() {
               </div>}
             </div>
             <div className="panel">
+              <div className="section-head"><div><p className="eyebrow">BACKGROUND WORK</p><h2>TensorFlow.js training jobs</h2></div><button className="ghost" disabled={modelLabLoading || busy} onClick={() => void refreshTrainingJobs()}>Refresh jobs</button></div>
+              {modelTrainingJobs.length === 0 ? <p className="muted">No TensorFlow.js jobs submitted.</p> : <div className="table-wrap"><table><thead><tr><th>Job</th><th>Model</th><th>Status</th><th>Progress</th><th>Submitted</th><th>Details</th></tr></thead><tbody>{modelTrainingJobs.map((job) => <tr key={job.id}><td><code>{job.id.slice(0, 10)}</code></td><td>{job.modelId}</td><td>{job.status}</td><td><progress max={100} value={job.progress}>{job.progress}%</progress> {job.progress}%</td><td>{new Date(job.createdAt).toLocaleString()}</td><td>{job.status === "FAILED" ? job.errorMessage : job.result ? <span>{job.result.reason} {job.result.model ? `Registered v${job.result.model.version}` : "No artifact registered"}</span> : "Waiting for worker…"}</td></tr>)}</tbody></table></div>}
+            </div>
+            <div className="panel">
               <div className="section-head"><div><p className="eyebrow">VERSION REGISTRY</p><h2>Registered models</h2></div></div>
               {modelLabLoading ? <p className="muted">Loading model registry…</p> : registeredModels.length === 0 ? <p className="muted">No model versions registered yet.</p> : <div className="table-wrap"><table><thead><tr><th>Model</th><th>Version</th><th>Algorithm</th><th>Dataset</th><th>Status</th><th>Action</th></tr></thead><tbody>{registeredModels.map((model) => <tr key={`${model.modelId}-${model.version}`}><td>{model.modelId}</td><td>{model.version}</td><td>{model.algorithm}</td><td>{model.dataset}</td><td>{model.isActive ? "Active" : "Inactive"}</td><td><div className="inline-actions"><button className="ghost" disabled={busy} onClick={() => void loadModelAudit(model.modelId)}>History</button><button className="ghost" disabled={busy || modelDriftLoading} onClick={() => void loadModelDrift(model.modelId, model.version)}>Drift</button>{!model.isActive && <button className="ghost" disabled={busy} onClick={() => void activateModelCandidate(model.modelId, model.version)}>Promote</button>}</div></td></tr>)}</tbody></table></div>}
             </div>
@@ -1701,7 +1744,8 @@ export default function App() {
               <div className="form-grid">
                 <label>Training model ID prefix<input value={trainingModelPrefix} onChange={(event) => setTrainingModelPrefix(event.target.value)} maxLength={48} pattern="[a-z0-9][a-z0-9-]{0,47}" /></label>
               </div>
-              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button></td></tr>)}</tbody></table></div>}
+              {modelDatasets.length === 0 ? <p className="muted">No evaluation datasets registered.</p> : <div className="table-wrap"><table><thead><tr><th>Name</th><th>Task</th><th>Rows</th><th>Features</th><th>Fingerprint</th><th>Training</th></tr></thead><tbody>{modelDatasets.map((dataset) => { const tensorflowReady = dataset.task === "regression" && dataset.featureSchema.length > 0 && dataset.featureSchema.every((feature) => feature.type === "numeric") && dataset.rowCount >= 30; return <tr key={dataset.id}><td>{dataset.name}</td><td>{dataset.task}</td><td>{dataset.rowCount}</td><td>{dataset.featureSchema.length}</td><td><code>{dataset.fingerprint.slice(0, 16)}…</code></td><td><div className="inline-actions"><button className="ghost" disabled={busy || dataset.rowCount < 30 || !trainingModelPrefix.trim()} onClick={() => void trainRegisteredDataset(dataset.id)}>Train candidates</button>{tensorflowReady && <button className="ghost" disabled={busy || !trainingModelPrefix.trim()} onClick={() => void queueTensorflowTraining(dataset)}>Queue TensorFlow.js</button>}</div></td></tr>; })}</tbody></table></div>}
+              <p className="muted">TensorFlow.js jobs require 30–5000 rows with numeric features and a keyed HMAC-SHA256 groupId on every sample. Jobs are stored in PostgreSQL and processed by the API worker. Synthetic datasets remain ineligible for production activation.</p>
               <p className="muted">Source attestations are administrative declarations, not independent proof of provenance. Synthetic data is not production validation.</p>
             </div>
           </section>
