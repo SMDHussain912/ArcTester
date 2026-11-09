@@ -332,6 +332,13 @@ export default function App() {
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
 
+  useEffect(() => {
+    if (user?.role !== "STUDENT" || !["dashboard", "announcements"].includes(activePage)) return;
+    request<{ announcements: Announcement[] }>("/announcements")
+      .then(({ announcements: items }) => setAnnouncements(Array.isArray(items) ? items : []))
+      .catch((cause) => setError((cause as Error).message));
+  }, [user, activePage]);
+
   // Recover a saved practice attempt after reload. The server remains the source
   // of truth for the attempt; local storage only identifies it and restores answers.
   useEffect(() => {
