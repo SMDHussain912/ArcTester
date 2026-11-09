@@ -7,7 +7,7 @@ import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 const CreateAnnouncementSchema = z.object({
   title: z.string().trim().min(2).max(120),
   message: z.string().trim().min(1).max(4000),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 
 const AfterSchema = z.string().datetime().optional();
@@ -39,11 +39,11 @@ export function announcementRouter(db: PrismaClient): Router {
             title: true,
             message: true,
             createdAt: true,
-            publishedAt: true,
+            startsAt: true,
             expiresAt: true,
           },
         });
-        res.status(201).json({ ok: true, announcement });
+        res.status(201).json({ ok: true, announcement: { ...announcement, _count: { views: 0 } } });
       } catch (error) {
         next(error);
       }
@@ -57,15 +57,16 @@ export function announcementRouter(db: PrismaClient): Router {
     async (_req, res, next) => {
       try {
         const announcements = await db.announcement.findMany({
-          orderBy: { publishedAt: "desc" },
+          orderBy: { startsAt: "desc" },
           take: 100,
           select: {
             id: true,
             title: true,
             message: true,
             createdAt: true,
-            publishedAt: true,
+            startsAt: true,
             expiresAt: true,
+            _count: { select: { views: true } },
           },
         });
         res.json({ ok: true, announcements });
@@ -75,29 +76,77 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   );
 
+  router.delete(
+    "/admin/announcements/:id",
+    requireAuth,
+    requireAdmin(db),
+    async (req, res, next) => {
+      try {
+        const deleted = await db.announcement.deleteMany({ where: { id: req.params.id } });
+        if (deleted.count === 0) return next(badRequest("Announcement not found."));
+        res.json({ ok: true });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.get("/announcements/active", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const now = new Date();
+      const announcements = await db.announcement.findMany({
+        where: {
+          startsAt: { lte: now },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          views: { none: { userId: req.user!.id } },
+        },
+        orderBy: { startsAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          title: true,
+          message: true,
+          createdAt: true,
+          startsAt: true,
+          expiresAt: true,
+        },
+      });
+      res.json({
+        ok: true,
+        announcements: announcements.map((announcement) => ({
+          ...announcement,
+          publishedAt: announcement.startsAt,
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/announcements/:id/read", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
+      const now = new Date();
       const announcement = await db.announcement.findFirst({
         where: {
           id: req.params.id,
-          publishedAt: { lte: new Date() },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          startsAt: { lte: now },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
         select: { id: true },
       });
       if (!announcement) return next(badRequest("This announcement is no longer available."));
-      await db.announcementRead.upsert({
+      const view = await db.announcementView.upsert({
         where: {
-          announcementId_studentId: {
+          announcementId_userId: {
             announcementId: announcement.id,
-            studentId: req.user!.id,
+            userId: req.user!.id,
           },
         },
-        create: { announcementId: announcement.id, studentId: req.user!.id },
-        update: { seenAt: new Date() },
+        create: { announcementId: announcement.id, userId: req.user!.id },
+        update: { seenAt: now },
+        select: { seenAt: true },
       });
-      res.json({ ok: true, seenAt: new Date().toISOString() });
+      res.json({ ok: true, seenAt: view.seenAt.toISOString() });
     } catch (error) {
       next(error);
     }
@@ -111,20 +160,20 @@ export function announcementRouter(db: PrismaClient): Router {
       const now = new Date();
       const announcements = await db.announcement.findMany({
         where: {
-          publishedAt: { lte: now, ...(after ? { gt: after } : {}) },
+          startsAt: { lte: now, ...(after ? { gt: after } : {}) },
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
-        orderBy: { publishedAt: "desc" },
+        orderBy: { startsAt: "desc" },
         take: 200,
         select: {
           id: true,
           title: true,
           message: true,
           createdAt: true,
-          publishedAt: true,
+          startsAt: true,
           expiresAt: true,
-          reads: {
-            where: { studentId: req.user!.id },
+          views: {
+            where: { userId: req.user!.id },
             select: { seenAt: true },
             take: 1,
           },
@@ -132,9 +181,10 @@ export function announcementRouter(db: PrismaClient): Router {
       });
       res.json({
         ok: true,
-        announcements: announcements.map(({ reads, ...announcement }) => ({
+        announcements: announcements.map(({ views, ...announcement }) => ({
           ...announcement,
-          seenAt: reads[0]?.seenAt ?? null,
+          publishedAt: announcement.startsAt,
+          seenAt: views[0]?.seenAt ?? null,
         })),
         serverTime: now.toISOString(),
       });
