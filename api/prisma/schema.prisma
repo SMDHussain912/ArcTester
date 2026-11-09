@@ -336,3 +336,110 @@ model AnnouncementView {
   @@unique([announcementId, userId])
   @@index([userId, seenAt])
 }
+
+// Model registry and evaluation records. These models must remain represented in
+// the Prisma schema as well as the SQL migrations so generated clients expose them.
+model RegisteredModel {
+  id                String   @id @default(cuid())
+  modelId           String
+  version           Int
+  algorithm         String
+  task              String
+  dataset           String
+  trainingDatasetId String?
+  artifactJson      String
+  isActive          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  activatedAt       DateTime?
+
+  @@unique([modelId, version])
+  @@index([modelId, isActive])
+  @@index([createdAt])
+}
+
+model ModelRegistryAudit {
+  id        String   @id @default(cuid())
+  actorId   Int?
+  modelId   String
+  version   Int
+  action    String
+  details   String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([modelId, version, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model ModelEvaluation {
+  id                String   @id @default(cuid())
+  actorId           Int?
+  modelId           String
+  candidateVersion  Int
+  baselineVersion   Int
+  datasetId         String   @default("")
+  evaluationDataset String
+  datasetFingerprint String
+  sampleCount       Int
+  metricsJson       String
+  status            String
+  evaluatedAt       DateTime @default(now())
+
+  @@index([modelId, candidateVersion, evaluatedAt])
+  @@index([actorId, evaluatedAt])
+}
+
+model ModelDataset {
+  id                String   @id @default(cuid())
+  createdById       Int?
+  name              String
+  task              String
+  targetColumn      String   @default("target")
+  featureSchemaJson String
+  samplesJson       String
+  rowCount          Int
+  sourceDescription String
+  sourceAttested    Boolean  @default(false)
+  datasetKind       String   @default("synthetic")
+  fingerprint       String   @unique
+  createdAt         DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model ModelDriftBucket {
+  id          String   @id @default(cuid())
+  modelId     String
+  version     Int
+  featureName String
+  bucket      String
+  periodStart DateTime
+  count       Int      @default(0)
+
+  @@unique([modelId, version, featureName, bucket, periodStart])
+  @@index([modelId, version, periodStart])
+}
+
+model ModelTrainingJob {
+  id             String    @id @default(cuid())
+  datasetId      String
+  createdById    Int?
+  modelId        String
+  seed           Int       @default(42)
+  epochs         Int       @default(80)
+  batchSize      Int       @default(32)
+  status         String    @default("QUEUED")
+  progress       Int       @default(0)
+  errorMessage   String    @default("")
+  workerId       String    @default("")
+  leaseExpiresAt DateTime?
+  resultJson     String    @default("{}")
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([datasetId, createdAt])
+}
