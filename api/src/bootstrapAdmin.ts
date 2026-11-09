@@ -13,7 +13,9 @@ export async function bootstrapAdmin(
 ): Promise<void> {
   const passwordHash = hashPassword(password);
   await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1380011073, 1)`;
+    await tx.$executeRawUnsafe(
+      "DO $ BEGIN PERFORM pg_advisory_xact_lock(1380011073, 1); END $;"
+    );
     const existingAdmins = await tx.user.count({ where: { role: "ADMIN" } });
     if (existingAdmins > 0) {
       throw new Error("An administrator already exists. Bootstrap is one-time only.");
