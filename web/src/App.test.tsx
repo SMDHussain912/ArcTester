@@ -593,4 +593,81 @@ describe("live Vite application", () => {
       )).toBe(true);
     });
   });
+
+  it("counts down practice time from the API clock and automatically submits at expiry", async () => {
+    let performanceTime = 2000;
+    vi.spyOn(performance, "now").mockImplementation(() => performanceTime);
+    const serverNow = new Date(Date.now()).toISOString();
+    const deadline = new Date(Date.now() + 60_000).toISOString();
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, {
+        total: 1,
+        subjects: [{ subject: "Maths", count: 1, topics: [] }],
+      }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/tests") && init?.method === "POST") {
+        return Promise.resolve(response(201, {
+          attemptId: 901,
+          mode: "mock",
+          deadline,
+          serverNow,
+          warnings: [],
+          questions: [{ id: 90, subject: "Maths", topic: null, text: "Timed question?", options: ["A", "B", "C", "D"] }],
+        }));
+      }
+      if (path.endsWith("/tests/901/submit") && init?.method === "POST") {
+        return Promise.resolve(response(200, { attemptId: 901, score: 0, total: 1, expired: true }));
+      }
+      if (path.endsWith("/tests/901/result")) {
+        return Promise.resolve(response(200, {
+          attemptId: 901,
+          score: 0,
+          total: 1,
+          breakdown: [{ subject: "Maths", correct: 0, total: 1 }],
+          questions: [{
+            questionId: 90,
+            text: "Timed question?",
+            options: ["A", "B", "C", "D"],
+            selectedIndex: null,
+            correctIndex: 0,
+            isCorrect: false,
+            explanation: "Review the concept.",
+          }],
+        }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start mock test" }));
+    expect(await screen.findByText("Timed question?")).toBeInTheDocument();
+    expect(screen.getByText("01:00 remaining")).toBeInTheDocument();
+
+    const countdownInterval = intervalSpy.mock.calls.find(([, delay]) => delay === 1000)?.[0];
+    expect(typeof countdownInterval).toBe("function");
+    performanceTime += 1000;
+    await act(async () => {
+      (countdownInterval as () => void)();
+    });
+    expect(screen.getByText("00:59 remaining")).toBeInTheDocument();
+
+    performanceTime += 60_000;
+    await act(async () => {
+      (countdownInterval as () => void)();
+    });
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) =>
+        String(input).endsWith("/tests/901/submit") && init?.method === "POST"
+      )).toBe(true);
+    });
+    expect(await screen.findByRole("heading", { name: "Your result" })).toBeInTheDocument();
+  });
 });
