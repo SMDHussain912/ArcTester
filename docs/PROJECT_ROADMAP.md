@@ -56,7 +56,8 @@ The following areas were previously reported as implemented. Treat them as **imp
 - [x] Handle foreign-key conflicts during bulk question deletion with HTTP 409 and a regression test.
 - [x] Prevent learner-level train/test leakage in registered training: real-anonymized samples require keyed pseudonymous group IDs, at least five learner groups, and a meaningful held-out sample; grouped holdout tests pass.
 - [ ] Move long-running TensorFlow training out of normal HTTP request handling or otherwise prove it safely fits host limits.
-- [ ] Audit session revocation, logout behavior, device registry semantics, rate limiting, and bootstrap-admin race conditions.
+- [x] Make logout invalidate all previously issued cookie and bearer JWTs by incrementing the user's `sessionVersion`; replay-after-logout is covered by API regression tests.
+- [ ] Implement per-device session revocation and audit device registry semantics, rate limiting, and bootstrap-admin race conditions.
 - [ ] Audit route validation, pagination bounds, import limits, and error responses.
 - [ ] Verify answer autosave/recovery behavior, including refresh, reconnect, multiple tabs, and deadline boundaries.
 
@@ -169,3 +170,6 @@ A task can be checked off only when:
 - Lint and web/API production builds passed.
 - Mobile typecheck and TensorFlow dataset preparation checks passed.
 - SQLite-to-PostgreSQL migration utility unit and integration tests passed.
+
+
+- 2026-11-09: Fixed logout token replay. JWTs now carry a user session-version claim, and every protected API route checks it against PostgreSQL. Logout increments the version, invalidating previously issued browser-cookie and bearer tokens. Legacy tokens without the claim are treated as version 0 until logout. Per-device revocation remains separate work.

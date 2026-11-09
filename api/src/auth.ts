@@ -216,20 +216,39 @@ export function readSessionToken(req: Request): string | null {
   return match ? match[1].trim() : null;
 }
 
-export function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction): void {
+export async function requireAuth(req: AuthedRequest, _res: Response, next: NextFunction): Promise<void> {
   const token = readSessionToken(req);
   if (!token) return next(forbidden("Sign in before using ArcTester."));
+
+  let payload: Record<string, unknown>;
   try {
-    const payload = verifyJwt(token);
-    const id = Number(payload.sub);
-    const email = String(payload.email ?? "");
-    if (!Number.isSafeInteger(id) || id <= 0 || !email) {
-      return next(forbidden("Invalid or expired session. Sign in again."));
+    payload = verifyJwt(token);
+  } catch {
+    return next(forbidden("Invalid or expired session. Sign in again."));
+  }
+
+  const id = Number(payload.sub);
+  const email = String(payload.email ?? "");
+  const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+  if (!Number.isSafeInteger(id) || id <= 0 || !email ||
+      !Number.isSafeInteger(sessionVersion) || sessionVersion < 0) {
+    return next(forbidden("Invalid or expired session. Sign in again."));
+  }
+
+  const db = req.app.locals.db as PrismaClient | undefined;
+  if (!db) return next(new Error("Authentication database is not configured."));
+  try {
+    const user = await db.user.findUnique({
+      where: { id },
+      select: { email: true, sessionVersion: true },
+    });
+    if (!user || user.email !== email || user.sessionVersion !== sessionVersion) {
+      return next(forbidden("This session has been revoked. Sign in again."));
     }
     req.user = { id, email };
     next();
-  } catch {
-    next(forbidden("Invalid or expired session. Sign in again."));
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -418,7 +437,7 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(input.email);
-      const token = signJwt({ sub: String(user.id), email: user.email });
+      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
     } catch (error) {
@@ -438,7 +457,7 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(input.email);
-      const token = signJwt({ sub: String(user.id), email: user.email });
+      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       res.json({
         ok: true,
         token,
@@ -451,9 +470,33 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/logout", (_req, res) => {
-    clearSessionCookie(res);
-    res.json({ ok: true, message: "Signed out." });
+  router.post("/logout", async (req, res, next) => {
+    try {
+      const token = readSessionToken(req);
+      if (token) {
+        try {
+          const payload = verifyJwt(token);
+          const userId = Number(payload.sub);
+          const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+          if (Number.isSafeInteger(userId) && userId > 0 &&
+              Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
+            // Only revoke tokens from the version presented by this request.
+            // Replaying logout cannot invalidate a later sign-in.
+            await db.user.updateMany({
+              where: { id: userId, sessionVersion },
+              data: { sessionVersion: { increment: 1 } },
+            });
+          }
+        } catch (error) {
+          if (error instanceof Error && "code" in error) throw error;
+          // Invalid or expired tokens still have their cookie cleared.
+        }
+      }
+      clearSessionCookie(res);
+      res.json({ ok: true, message: "Signed out. Existing sessions were revoked." });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get("/me", async (req, res, next) => {
@@ -463,9 +506,12 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true },
+        select: { id: true, email: true, role: true, sessionVersion: true },
       });
-      if (!user) return next(forbidden("Account not found."));
+      const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+      if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
+        return next(forbidden("This session has been revoked. Sign in again."));
+      }
       res.json({ ok: true, user });
     } catch {
       next(forbidden("Invalid session."));
