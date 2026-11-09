@@ -304,7 +304,10 @@ export default function App() {
     if (!activeAssignmentPackage || !assignmentStartedAt) return;
     const assignmentId = activeAssignmentPackage.assignmentId;
     let disposed = false;
+    let heartbeatInFlight = false;
     const sendHeartbeat = async (event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED") => {
+      if (disposed || heartbeatInFlight) return;
+      heartbeatInFlight = true;
       try {
         const heartbeat = await request<{ serverTime: string; deadline: string | null; sessionStatus: string }>(
           `/exams/assignments/${encodeURIComponent(assignmentId)}/session/heartbeat`,
@@ -323,6 +326,8 @@ export default function App() {
         if (failure === "transient") assignmentConnectionLostRef.current = true;
         // Deadline failures intentionally leave the timer running so the client
         // can submit its locally saved answers for server-side review.
+      } finally {
+        heartbeatInFlight = false;
       }
     };
     const interval = window.setInterval(() => {
