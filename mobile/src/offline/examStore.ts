@@ -140,34 +140,52 @@ export async function cacheExamPackage(
   }
 
   const db = await database();
-  const existingAttempt = await db.getFirstAsync<{ sync_status: string }>(
-    "SELECT sync_status FROM offline_attempts WHERE assignment_id = ?",
-    examPackage.assignmentId
-  );
-  if (existingAttempt) {
-    const existingCached = await getCachedExam(examPackage.assignmentId);
-    if (canReplaceCachedExamPackage(true, existingCached?.sha256, expectedSha256) && existingCached) {
-      return existingCached;
+  let existingCached: CachedExam | null = null;
+  await db.withTransactionAsync(async () => {
+    const existingAttempt = await db.getFirstAsync<{ sync_status: string }>(
+      "SELECT sync_status FROM offline_attempts WHERE assignment_id = ?",
+      examPackage.assignmentId
+    );
+    if (existingAttempt) {
+      const row = await db.getFirstAsync<{
+        package_json: string;
+        sha256: string;
+        downloaded_at: string;
+        server_offset_ms: number;
+      }>(
+        "SELECT package_json, sha256, downloaded_at, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
+        examPackage.assignmentId
+      );
+      if (row && canReplaceCachedExamPackage(true, row.sha256, expectedSha256)) {
+        existingCached = {
+          package: JSON.parse(row.package_json) as ExamPackage,
+          sha256: row.sha256,
+          downloadedAt: row.downloaded_at,
+          serverOffsetMs: row.server_offset_ms,
+        };
+        return;
+      }
+      throw new Error("This assignment already has an offline attempt; its cached exam version cannot be replaced.");
     }
-    throw new Error("This assignment already has an offline attempt; its cached exam version cannot be replaced.");
-  }
 
-  await db.runAsync(
-    `INSERT INTO exam_packages
-      (assignment_id, package_json, sha256, downloaded_at, server_offset_ms)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(assignment_id) DO UPDATE SET
-       package_json = excluded.package_json,
-       sha256 = excluded.sha256,
-       downloaded_at = excluded.downloaded_at,
-       server_offset_ms = excluded.server_offset_ms`,
-    examPackage.assignmentId,
-    JSON.stringify(examPackage),
-    expectedSha256.toLowerCase(),
-    downloadedAt,
-    serverOffsetMs
-  );
+    await db.runAsync(
+      `INSERT INTO exam_packages
+        (assignment_id, package_json, sha256, downloaded_at, server_offset_ms)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(assignment_id) DO UPDATE SET
+         package_json = excluded.package_json,
+         sha256 = excluded.sha256,
+         downloaded_at = excluded.downloaded_at,
+         server_offset_ms = excluded.server_offset_ms`,
+      examPackage.assignmentId,
+      JSON.stringify(examPackage),
+      expectedSha256.toLowerCase(),
+      downloadedAt,
+      serverOffsetMs
+    );
+  });
 
+  if (existingCached) return existingCached;
   return {
     package: examPackage,
     sha256: expectedSha256.toLowerCase(),
@@ -217,46 +235,61 @@ export async function getCachedExam(assignmentId: string): Promise<CachedExam | 
 }
 
 export async function startOfflineAttempt(assignmentId: string): Promise<string> {
-  const cached = await getCachedExam(assignmentId);
-  if (!cached) throw new Error("Download this exam before starting it.");
-
   const db = await database();
-  const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
-    "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId
-  );
-  // A started attempt must remain resumable after the assignment deadline so
-  // the app can restore its answers and submit the expired attempt.
-  if (existing) {
-    if (existing.sync_status === "IN_PROGRESS") return existing.attempt_uuid;
-    throw new Error("An attempt already exists for this assignment.");
-  }
+  let attemptUuid = "";
+  await db.withTransactionAsync(async () => {
+    const cachedRow = await db.getFirstAsync<{
+      package_json: string;
+      sha256: string;
+      downloaded_at: string;
+      server_offset_ms: number;
+    }>(
+      "SELECT package_json, sha256, downloaded_at, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
+      assignmentId
+    );
+    if (!cachedRow) throw new Error("Download this exam before starting it.");
+    const cachedPackage = JSON.parse(cachedRow.package_json) as ExamPackage;
 
-  const trustedNow = Date.now() + cached.serverOffsetMs;
-  const availableFrom = cached.package.availableFrom
-    ? new Date(cached.package.availableFrom).getTime()
-    : null;
-  const dueAt = cached.package.dueAt ? new Date(cached.package.dueAt).getTime() : null;
+    const existing = await db.getFirstAsync<{ attempt_uuid: string; sync_status: string }>(
+      "SELECT attempt_uuid, sync_status FROM offline_attempts WHERE assignment_id = ?",
+      assignmentId
+    );
+    // A started attempt must remain resumable after the assignment deadline so
+    // the app can restore its answers and submit the expired attempt.
+    if (existing) {
+      if (existing.sync_status === "IN_PROGRESS") {
+        attemptUuid = existing.attempt_uuid;
+        return;
+      }
+      throw new Error("An attempt already exists for this assignment.");
+    }
 
-  if (availableFrom !== null && trustedNow < availableFrom) {
-    throw new Error("This exam is not available yet.");
-  }
-  if (dueAt !== null && trustedNow > dueAt) {
-    throw new Error("The deadline for this exam has passed.");
-  }
+    const trustedNow = Date.now() + cachedRow.server_offset_ms;
+    const availableFrom = cachedPackage.availableFrom
+      ? new Date(cachedPackage.availableFrom).getTime()
+      : null;
+    const dueAt = cachedPackage.dueAt ? new Date(cachedPackage.dueAt).getTime() : null;
 
-  const attemptUuid = Crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO offline_attempts
-      (assignment_id, attempt_uuid, started_at, answers_json, sync_status, created_at, updated_at)
-     VALUES (?, ?, ?, '[]', 'IN_PROGRESS', ?, ?)`,
-    assignmentId,
-    attemptUuid,
-    now,
-    now,
-    now
-  );
+    if (availableFrom !== null && trustedNow < availableFrom) {
+      throw new Error("This exam is not available yet.");
+    }
+    if (dueAt !== null && trustedNow > dueAt) {
+      throw new Error("The deadline for this exam has passed.");
+    }
+
+    attemptUuid = Crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO offline_attempts
+        (assignment_id, attempt_uuid, started_at, answers_json, sync_status, created_at, updated_at)
+       VALUES (?, ?, ?, '[]', 'IN_PROGRESS', ?, ?)`,
+      assignmentId,
+      attemptUuid,
+      now,
+      now,
+      now
+    );
+  });
   return attemptUuid;
 }
 
