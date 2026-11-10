@@ -24,22 +24,30 @@ describe("role-aware home dashboard", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a sign-in prompt to visitors without a session", async () => {
+  it("shows a sign-in workspace to visitors without a session", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(jsonResponse(403, { error: "Not signed in." })));
     render(<SessionProvider><HomePage /></SessionProvider>);
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Sign in to continue" })).toBeInTheDocument());
-    expect(screen.queryByRole("link", { name: /Browse practice papers/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Prepare with focus. Track your progress." })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: /Sign in to your workspace/ })).toHaveAttribute("href", "/login");
+    expect(screen.queryByRole("link", { name: /Start a practice paper/ })).not.toBeInTheDocument();
   });
 
-  it("shows practice papers and assigned exams to students", async () => {
+  it("shows the complete student workspace and its destinations", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(jsonResponse(200, {
       ok: true,
       user: { id: 12, email: "student@example.com", role: "STUDENT" },
     })));
     render(<SessionProvider><HomePage /></SessionProvider>);
-    await waitFor(() => expect(screen.getByRole("link", { name: /Browse practice papers/ })).toHaveAttribute("href", "/practice"));
-    expect(screen.getByRole("link", { name: "My assigned exams" })).toHaveAttribute("href", "/assignments");
-    expect(screen.queryByText("Question bank")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Welcome back." })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: /Start a practice paper/ })).toHaveAttribute("href", "/practice");
+    expect(screen.getByRole("link", { name: /Assigned exams/ })).toHaveAttribute("href", "/assignments");
+    expect(screen.getByRole("link", { name: /Performance insights/ })).toHaveAttribute("href", "/analytics");
+    expect(screen.getByRole("link", { name: /Concept library/ })).toHaveAttribute("href", "/learning");
+    expect(screen.getByRole("link", { name: /Study materials/ })).toHaveAttribute("href", "/materials");
+    expect(screen.getByRole("link", { name: /Announcements/ })).toHaveAttribute("href", "/announcements");
+    expect(screen.getByRole("link", { name: /Notifications/ })).toHaveAttribute("href", "/notifications");
+    expect(screen.getByRole("heading", { name: "Before an examination" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Manage question bank/ })).not.toBeInTheDocument();
   });
 
   it("shows administration shortcuts to administrators", async () => {
@@ -50,6 +58,6 @@ describe("role-aware home dashboard", () => {
     render(<SessionProvider><HomePage /></SessionProvider>);
     await waitFor(() => expect(screen.getByRole("heading", { name: "Examination control room" })).toBeInTheDocument());
     expect(screen.getByRole("link", { name: /Manage question bank/ })).toHaveAttribute("href", "/admin/questions");
-    expect(screen.queryByRole("link", { name: /Browse practice papers/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Start a practice paper/ })).not.toBeInTheDocument();
   });
 });
