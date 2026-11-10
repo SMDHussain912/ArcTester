@@ -1185,3 +1185,12 @@ export default function App() {
   );
 }
 
+
+function Brand() {
+  return (
+    <a className="brand" href="#dashboard">
+      <span className="brand-mark">A</span>
+      <span>ArcTester</span>
+    </a>
+  );
+}
