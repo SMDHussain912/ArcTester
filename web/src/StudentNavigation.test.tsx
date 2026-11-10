@@ -53,6 +53,7 @@ describe("StudentNavigation", () => {
     const dashboard = within(navigation).getByRole("button", { name: "Dashboard" });
     expect(dashboard).toBeDisabled();
     expect(dashboard).toHaveAttribute("title", "Navigation is locked while an assigned exam is active");
+    expect(screen.getByRole("button", { name: "ArcTester dashboard" })).toBeDisabled();
     expect(within(navigation).getByRole("button", { name: "Practice" })).toHaveAttribute("aria-current", "page");
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle theme" }));
@@ -61,6 +62,27 @@ describe("StudentNavigation", () => {
     expect(setActivePage).not.toHaveBeenCalled();
     expect(onToggleTheme).toHaveBeenCalledOnce();
     expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
+  it("returns to the dashboard when the brand is clicked outside an active exam", () => {
+    const setActivePage = vi.fn();
+    render(
+      <StudentNavigation
+        activePage="practice"
+        setActivePage={setActivePage}
+        examActive={false}
+        pendingExamCount={0}
+        unreadAnnouncementCount={0}
+        unreadNotificationCount={0}
+        theme="light"
+        onToggleTheme={vi.fn()}
+        email="student@example.com"
+        busy={false}
+        onSignOut={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "ArcTester dashboard" }));
+    expect(setActivePage).toHaveBeenCalledWith("dashboard");
   });
 
   it("disables sign out while an account action is busy", () => {

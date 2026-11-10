@@ -48,10 +48,17 @@ export default function StudentNavigation({
 }: StudentNavigationProps) {
   return (
     <header className="topbar">
-      <a className="brand" href="#dashboard">
-        <span className="brand-mark">A</span>
+      <button
+        type="button"
+        className="brand brand-home-button"
+        onClick={() => setActivePage("dashboard")}
+        disabled={examActive}
+        title={examActive ? "Dashboard navigation is locked while an assigned exam is active" : "Go to student dashboard"}
+        aria-label="ArcTester dashboard"
+      >
+        <span className="brand-mark" aria-hidden="true">A</span>
         <span>ArcTester</span>
-      </a>
+      </button>
       <nav aria-label="Student navigation">
         {NAV_ITEMS.map(({ page, label }) => {
           const count =

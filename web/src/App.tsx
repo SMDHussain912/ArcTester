@@ -846,7 +846,7 @@ export default function App() {
           />
         ) : (
           <>
-            <StudentDashboardWelcome visible={activePage === "dashboard"} />
+            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} />
             {activePage === "dashboard" && announcements.length > 0 ? (
               <StudentAnnouncementPreview
                 announcement={announcements[0]}
