@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AdminInvitations, { type AdminInvitation } from "./AdminInvitations";
 
@@ -7,15 +7,31 @@ const invitations: AdminInvitation[] = [
   { id: "invite-2", email: "used@example.test", expiresAt: "2026-11-09T10:00:00.000Z", status: "USED" },
 ];
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("AdminInvitations", () => {
   it("renders invitation form, status history and revocation for pending codes", () => {
     const onRevoke = vi.fn();
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
     render(<AdminInvitations invitations={invitations} inviteEmail="" createdInvitation={null} busy={false} onInviteEmailChange={vi.fn()} onCreate={vi.fn()} onRevoke={onRevoke} />);
     expect(screen.getByRole("heading", { name: "Invitations" })).toBeTruthy();
     expect(screen.getByText("pending@example.test")).toBeTruthy();
     expect(screen.getByText("used@example.test")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Revoke" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Revoke" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(onRevoke).toHaveBeenCalledWith("invite-1");
+  });
+
+  it("requires confirmation before revoking a pending invitation", () => {
+    const onRevoke = vi.fn();
+    const confirmMock = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirmMock);
+    render(<AdminInvitations invitations={[invitations[0]]} inviteEmail="" createdInvitation={null} busy={false} onInviteEmailChange={vi.fn()} onCreate={vi.fn()} onRevoke={onRevoke} />);
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(confirmMock).toHaveBeenCalledWith("Revoke the invitation for pending@example.test?");
+    expect(onRevoke).not.toHaveBeenCalled();
+    confirmMock.mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     expect(onRevoke).toHaveBeenCalledWith("invite-1");
   });
