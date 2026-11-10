@@ -4,6 +4,7 @@ import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
+import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -130,7 +131,7 @@ export default function App() {
   const practiceRemainingSeconds = Number.isFinite(practiceDeadline)
     ? Math.max(0, Math.ceil((practiceDeadline - (practiceClock + practiceServerOffset)) / 1000))
     : null;
-  const [activePage, setActivePage] = useState<"dashboard" | "practice" | "question-bank" | "announcements" | "assigned-exams" | "progress">("dashboard");
+  const [activePage, setActivePage] = useState<StudentPage>("dashboard");
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
@@ -850,30 +851,18 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <Brand />
-        <nav aria-label="Student navigation">
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "dashboard" ? "nav-active" : "nav-button"} onClick={() => setActivePage("dashboard")}>Dashboard</button>
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "practice" ? "nav-active" : "nav-button"} onClick={() => setActivePage("practice")}>Practice</button>
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "assigned-exams" ? "nav-active" : "nav-button"} onClick={() => setActivePage("assigned-exams")}>Assigned exams{assignedExams.filter((item) => !item.submission).length ? ` (${assignedExams.filter((item) => !item.submission).length})` : ""}</button>
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "question-bank" ? "nav-active" : "nav-button"} onClick={() => setActivePage("question-bank")}>Question bank</button>
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "announcements" ? "nav-active" : "nav-button"} onClick={() => setActivePage("announcements")}>Announcements{announcements.filter((item) => !item.seenAt).length > 0 ? ` (${announcements.filter((item) => !item.seenAt).length})` : ""}</button>
-          <button disabled={Boolean(activeAssignmentPackage)} title={activeAssignmentPackage ? "Navigation is locked while an assigned exam is active" : undefined} className={activePage === "progress" ? "nav-active" : "nav-button"} onClick={() => setActivePage("progress")}>Progress</button>
-        </nav>
-        <div className="top-actions">
-          <button
-            className="icon-button"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            aria-label="Toggle theme"
-          >
-            {theme === "light" ? "☾" : "☀"}
-          </button>
-          <span className="user-email">{user.email}</span>
-          <button className="ghost" disabled={busy} onClick={signOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
+      <StudentNavigation
+        activePage={activePage}
+        setActivePage={setActivePage}
+        examActive={Boolean(activeAssignmentPackage)}
+        pendingExamCount={assignedExams.filter((item) => !item.submission).length}
+        unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length}
+        theme={theme}
+        onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
+        email={user.email}
+        busy={busy}
+        onSignOut={signOut}
+      />
 
       {user.role === "STUDENT" && !test && !result && !activeAssignmentPackage && announcements.some((item) => !item.seenAt) ? (() => {
         const notice = announcements.find((item) => !item.seenAt)!;
@@ -1196,11 +1185,3 @@ export default function App() {
   );
 }
 
-function Brand() {
-  return (
-    <a className="brand" href="#dashboard">
-      <span className="brand-mark">A</span>
-      <span>ArcTester</span>
-    </a>
-  );
-}
