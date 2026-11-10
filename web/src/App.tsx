@@ -14,13 +14,14 @@ import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
 import StudentPracticeQuickActions from "./StudentPracticeQuickActions";
+import StudentPracticeSubjectTopicFilters from "./StudentPracticeSubjectTopicFilters";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number }[] };
+type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
 type Invitation = {
   id: string;
   email: string;
@@ -1075,38 +1076,15 @@ export default function App() {
               <div className="practice-builder-grid">
                 <article className="panel practice-builder">
                   <div className="practice-builder-title"><div><span className="action-icon">◎</span><h3>Create your question paper</h3><p className="muted">Choose subjects first. Topic selection is optional and only filters the subjects you choose.</p></div><span className="status status-used">CUSTOM PAPER</span></div>
-                  <div className="practice-builder-section">
-                    <div className="practice-builder-label"><strong>1. Select subjects</strong><span className="muted">{practiceSubjects.length} selected</span></div>
-                    <div className="practice-subject-grid">
-                      {(bank?.subjects ?? []).map((item) => <label className={practiceSubjects.includes(item.subject) ? "practice-subject-choice selected" : "practice-subject-choice"} key={item.subject}>
-                        <input type="checkbox" checked={practiceSubjects.includes(item.subject)} onChange={(event) => {
-                          if (event.target.checked && practiceSubjects.length >= 30) {
-                            setError("You can select up to 30 subjects in one practice paper.");
-                            return;
-                          }
-                          setError("");
-                          setPracticeSubjects((current) => event.target.checked ? [...current, item.subject] : current.filter((name) => name !== item.subject));
-                          if (!event.target.checked) setPracticeTopicKeys((current) => current.filter((key) => { try { return (JSON.parse(key) as [string, string])[0] !== item.subject; } catch { return false; } }));
-                        }} />
-                        <span><strong>{item.subject}</strong><small>{item.count} questions available</small></span>
-                      </label>)}
-                    </div>
-                    {(!bank || bank.subjects.length === 0) && <p className="muted">No subjects are available in the question bank yet.</p>}
-                    <div className="practice-builder-actions"><button type="button" className="text-button" disabled={!bank?.subjects.length} onClick={() => { const all = bank?.subjects.map((item) => item.subject) ?? []; setPracticeSubjects(all.slice(0, 30)); setError(all.length > 30 ? "Only the first 30 subjects were selected. The API supports up to 30 subjects per paper." : ""); }}>Select all subjects</button><button type="button" className="text-button" disabled={!practiceSubjects.length} onClick={() => { setPracticeSubjects([]); setPracticeTopicKeys([]); }}>Clear selection</button></div>
-                  </div>
-                  <div className="practice-builder-section">
-                    <div className="practice-builder-label"><strong>2. Choose topics <span className="muted">(optional)</span></strong><span className="muted">{practiceTopicKeys.length ? String(practiceTopicKeys.length) + " selected" : "All topics"}</span></div>
-                    {practiceSubjects.length === 0 ? <p className="practice-helper">Select at least one subject to see its topics.</p> : <div className="practice-topic-groups">{practiceSubjects.map((subject) => {
-                      const item = bank?.subjects.find((entry) => entry.subject === subject);
-                      if (!item?.topics.length) return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><p className="muted">No topics are defined. All questions in this subject remain eligible.</p></div>;
-                      return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><div className="practice-topic-list">{item.topics.map((topic) => {
-                        const key = JSON.stringify([subject, topic.topic]);
-                        return <label key={key}><input type="checkbox" checked={practiceTopicKeys.includes(key)} onChange={(event) => setPracticeTopicKeys((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />{topic.topic}<small>{topic.count}</small></label>;
-                      })}</div></div>;
-                    })}</div>}
-                    <p className="practice-helper">Leave all topics unchecked to include every topic in your selected subjects. For each subject, leave its topics unchecked to include all topics; selecting topics restricts only that subject.</p>
-                    {practiceTopicKeys.length > 0 && <button type="button" className="text-button" onClick={() => setPracticeTopicKeys([])}>Clear topic filters</button>}
-                  </div>
+                  <StudentPracticeSubjectTopicFilters
+                    subjects={bank?.subjects ?? []}
+                    showEmptyMessage={!bank || bank.subjects.length === 0}
+                    selectedSubjects={practiceSubjects}
+                    selectedTopicKeys={practiceTopicKeys}
+                    onSubjectsChange={setPracticeSubjects}
+                    onTopicKeysChange={setPracticeTopicKeys}
+                    onError={setError}
+                  />
                   <div className="practice-builder-section">
                     <strong>3. Configure your paper</strong>
                     <div className="practice-config-grid">
