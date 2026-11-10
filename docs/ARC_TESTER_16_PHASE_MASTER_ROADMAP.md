@@ -471,9 +471,9 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 
 ### Overall estimated completion
 
-**59% overall (phase-average estimate).**
+**62% overall (phase-average estimate).**
 
-Calculation: the 16 phase estimates above are equally weighted; their arithmetic mean is 59.4%, rounded to 59%. This is a planning estimate, not a claim that 59% of all possible code or tests are complete.
+Calculation correction: the 16 phase scores sum to 985 percentage points, so their equally weighted arithmetic mean is 61.6%, rounded to 62%. The previous 59.4% calculation and 59% headline were incorrect; this correction changes no individual phase score. This is a planning estimate, not a claim that 62% of all possible code or tests are complete.
 
 ### Phase count
 
