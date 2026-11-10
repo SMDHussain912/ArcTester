@@ -5,6 +5,7 @@ import { safeStorage } from "./safeStorage";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
+import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -1169,17 +1170,10 @@ export default function App() {
         {error && <p className="error">{error}</p>}
       </main>
       {activeAnnouncements[0] && (
-        <div className="student-announcement-backdrop">
-          <section className="student-announcement panel" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
-            <div className="announcement-mark">!</div>
-            <p className="eyebrow">IMPORTANT ANNOUNCEMENT</p>
-            <h2 id="announcement-title">{activeAnnouncements[0].title}</h2>
-            <p className="announcement-message">{activeAnnouncements[0].message}</p>
-            {activeAnnouncements[0].expiresAt && <small className="muted">Expires {new Date(activeAnnouncements[0].expiresAt).toLocaleString()}</small>}
-            <button className="primary full" onClick={() => void dismissAnnouncement(activeAnnouncements[0].id)}>Got it</button>
-            <small className="muted">This announcement will not pop up again after you acknowledge it.</small>
-          </section>
-        </div>
+        <StudentAnnouncementDialog
+          announcement={activeAnnouncements[0]}
+          onAcknowledge={(id) => void dismissAnnouncement(id)}
+        />
       )}
     </div>
   );
