@@ -89,6 +89,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
+  const assignmentSaveConflictRef = useRef(false);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const assignmentAnswersRevisionRef = useRef(0);
   const effectiveAssignmentDeadline = Math.min(
@@ -281,6 +282,7 @@ export default function App() {
         }));
       } catch { safeStorage.removeItem(assignedAnswersKey(assignmentId)); }
       assignmentAnswersRevisionRef.current = serverSaved.revision ?? 0;
+      assignmentSaveConflictRef.current = false;
       const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
       ));
@@ -396,7 +398,7 @@ export default function App() {
   }, [activeAssignmentPackage, assignmentStartedAt]);
 
   useEffect(() => {
-    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || assignmentSaveConflictRef.current || Object.keys(assignmentAnswers).length === 0) return;
     const assignmentId = activeAssignmentPackage.assignmentId;
     const saveVersion = ++assignmentSaveSequenceRef.current;
     setAssignmentSaveStatus("saving");
@@ -419,25 +421,12 @@ export default function App() {
         if (assignmentSaveSequenceRef.current !== saveVersion) return;
         const message = (cause as Error).message;
         if (message.includes("changed in another session")) {
-          try {
-            const latest = await request<{ revision: number; answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
-              `/exams/assignments/${encodeURIComponent(assignmentId)}/answers`,
-            );
-            if (assignmentSaveSequenceRef.current !== saveVersion) return;
-            assignmentAnswersRevisionRef.current = latest.revision;
-            const serverAnswers = Object.fromEntries(
-              latest.answers.flatMap((answer) => answer.selectedIndex === null
-                ? []
-                : [[answer.examQuestionId, answer.selectedIndex] as const]),
-            );
-            const mergedAnswers = { ...serverAnswers, ...assignmentAnswers };
-            safeStorage.setItem(assignedAnswersKey(assignmentId), JSON.stringify(mergedAnswers));
-            setAssignmentAnswers(mergedAnswers);
-            setAssignmentSaveStatus("saving");
-            return;
-          } catch (recoveryError) {
-            setError(`Autosave conflict recovery failed: ${(recoveryError as Error).message}. Your local backup is still available.`);
-          }
+          // Do not silently merge two devices. Preserve this device's local
+          // backup and require a deliberate reload to read the latest revision.
+          assignmentSaveConflictRef.current = true;
+          setAssignmentSaveStatus("error");
+          setError("Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing.");
+          return;
         }
         setAssignmentSaveStatus("error");
         setError(`Server autosave failed: ${message}. Your local backup is still available.`);
