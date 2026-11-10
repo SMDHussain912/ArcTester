@@ -146,6 +146,9 @@ describe("administrator question bank", () => {
     expect(screen.getByText(/ECET Mock 01 · Started/)).toBeInTheDocument();
     expect(screen.getByText("Submission: REVIEW_REQUIRED")).toBeInTheDocument();
     expect(screen.getByText("Focus losses + disconnects")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Inspect session →" }));
+    expect(await screen.findByRole("heading", { name: "Event timeline" })).toBeInTheDocument();
+    expect(screen.getByText("FOCUS LOST")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === "/admin/exams/live-sessions")).toBe(true);
   });
 });
