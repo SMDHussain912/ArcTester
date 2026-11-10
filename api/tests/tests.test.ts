@@ -145,6 +145,39 @@ describe("POST /tests", () => {
     expect(body.questions.every((question) => question.subject === "Maths" && question.topic === "Algebra")).toBe(true);
   });
 
+  it("allows the same topic name to be selected independently across subjects", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
+    const mathsTopic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Algebra" },
+    });
+    const physicsTopic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: physics.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: physics.id, name: "Algebra" },
+    });
+    const mathsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    const physicsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: physics.id } });
+    await server.db.question.update({ where: { id: mathsQuestion.id }, data: { topicId: mathsTopic.id } });
+    await server.db.question.update({ where: { id: physicsQuestion.id }, data: { topicId: physicsTopic.id } });
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topicFilters: [
+        { subject: "Maths", topic: "Algebra" },
+        { subject: "Physics", topic: "Algebra" },
+      ],
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string; topic: string | null }[] };
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Maths", topic: "Algebra" }));
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Physics", topic: "Algebra" }));
+  });
+
   it("keeps all topics for selected subjects without a topic restriction", async () => {
     const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
     const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
@@ -205,29 +238,6 @@ describe("POST /tests", () => {
     expect(status).toBe(201);
     const body = json as { questions: { id: number; subject: string }[] };
     expect(body.questions.map((question) => question.id)).toEqual(expect.arrayContaining([maths.id, physics.id]));
-  });
-
-  it("rejects topic filters for subjects that are not selected", async () => {
-    const { status } = await api.post("/tests", {
-      mode: "practice",
-      subjects: ["Maths"],
-      topicFilters: [{ subject: "Physics", topic: "Mechanics" }],
-      count: 10,
-    });
-    expect(status).toBe(400);
-  });
-
-  it("rejects duplicate subject-topic filters", async () => {
-    const { status } = await api.post("/tests", {
-      mode: "practice",
-      subjects: ["Maths"],
-      topicFilters: [
-        { subject: "Maths", topic: "Algebra" },
-        { subject: "Maths", topic: "Algebra" },
-      ],
-      count: 10,
-    });
-    expect(status).toBe(400);
   });
 
   it("rejects invalid bodies with friendly 400s", async () => {
