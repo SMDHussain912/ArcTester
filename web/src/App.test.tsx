@@ -180,7 +180,7 @@ describe("live Vite application", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
-    expect(await screen.findByText("Awaiting administrator review. Your result will appear after approval.")).toBeInTheDocument();
+    expect(await screen.findByText(/Awaiting administrator review\. Your result will appear after approval\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Review answers" })).not.toBeInTheDocument();
   });
 
