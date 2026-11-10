@@ -510,7 +510,7 @@ describe("analytics", () => {
     ).toBe(true);
     const evidenced = body.recommendations.find((item) => item.evidence !== null);
     expect(evidenced).toMatchObject({
-      id: expect.stringContaining("revise-topic-"),
+      id: expect.stringContaining("revise-subject-"),
       priority: "high",
       mode: "practice",
       questionCount: 15,
@@ -522,7 +522,7 @@ describe("analytics", () => {
         weakAccuracyThreshold: 0.6,
       },
     });
-    expect(body.recommendations.some((item) => item.id.startsWith("review-topic-mistakes-"))).toBe(true);
+    expect(body.recommendations.some((item) => item.id.startsWith("review-subject-mistakes-"))).toBe(true);
   });
 
   it("GET /analytics/history returns a bounded, paginated attempt summary", async () => {
@@ -701,14 +701,14 @@ describe("analytics", () => {
     expect(body.skippedDuplicates).toBeGreaterThan(0);
   });
 
-  it("does not repeat a weak-topic recommendation immediately after the student practiced it", async () => {
+  it("does not repeat a weak-subject recommendation immediately after the student practiced it", async () => {
     await server.db.attempt.updateMany({
       where: { userId: studentId, finishedAt: { not: null } },
       data: { finishedAt: new Date(Date.now() - (RECOMMENDATION_RECENT_PRACTICE_DAYS + 1) * 24 * 60 * 60 * 1000) },
     });
     const before = await api.get("/analytics/recommendations");
     const report = before.json as { recommendations: { id: string; subject: string | null; topic: string | null }[] };
-    const target = report.recommendations.find((item) => item.id.startsWith("revise-topic-"));
+    const target = report.recommendations.find((item) => item.id.startsWith("revise-subject-"));
     expect(target).toBeDefined();
     const answer = await server.db.attemptAnswer.findFirst({
       where: { subjectSnapshot: target!.subject ?? '', topicSnapshot: target!.topic },

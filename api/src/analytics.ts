@@ -6,6 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest } from "./errors.js";
 import { buildPerformanceExplanation, type PerformanceExplanation } from "./intelligence/performanceExplanation.js";
+import { buildRuleBasedRecommendations } from "./intelligence/ruleBasedRecommendations.js";
 
 export interface TopicRow {
   subject: string;
@@ -489,65 +490,16 @@ export async function getStudyRecommendations(
       GROUP BY subject, topic
     `,
   ]);
-  const recommendations: StudyRecommendation[] = [];
-  const cooldownMs = RECOMMENDATION_RECENT_PRACTICE_DAYS * 24 * 60 * 60 * 1000;
-  const now = Date.now();
-  const lastPracticedByTopic = new Map(
-    recentActivity.map((row) => [JSON.stringify([row.subject, row.topic]), new Date(Number(row.lastPracticedAt)).getTime()])
-  );
-  const evidencedWeakTopics = weakTopics.topics
-    .filter((row) =>
-      row.accuracy !== null &&
-      row.seen >= RECOMMENDATION_MINIMUM_ANSWERS &&
-      row.accuracy < RECOMMENDATION_WEAK_ACCURACY
-    )
-    .filter((row) => {
-      const lastPracticed = lastPracticedByTopic.get(JSON.stringify([row.subject, row.topic]));
-      return lastPracticed === undefined || now - lastPracticed >= cooldownMs;
-    })
-    .slice(0, 3);
-  const recentlyPracticedWeakTopics = weakTopics.topics.filter((row) => {
-    if (row.accuracy === null || row.seen < RECOMMENDATION_MINIMUM_ANSWERS || row.accuracy >= RECOMMENDATION_WEAK_ACCURACY) return false;
-    const lastPracticed = lastPracticedByTopic.get(JSON.stringify([row.subject, row.topic]));
-    return lastPracticed !== undefined && now - lastPracticed < cooldownMs;
+  const ruleBased = buildRuleBasedRecommendations({
+    topics: weakTopics.topics,
+    subjects: weakTopics.subjects,
+    recentActivity,
+    minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
+    weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
+    recentPracticeDays: RECOMMENDATION_RECENT_PRACTICE_DAYS,
+    now: Date.now(),
   });
-
-  for (const row of evidencedWeakTopics) {
-    const accuracy = Math.round((row.accuracy ?? 0) * 100);
-    const target = row.topic ?? "Unassigned topic";
-    const evidence = {
-      answeredQuestions: row.seen,
-      incorrectAnswers: row.incorrect,
-      accuracy: row.accuracy,
-      minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
-      weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
-    };
-    const key = encodeURIComponent(`${row.subject}:${target}`);
-    recommendations.push({
-      id: `revise-topic-${key}`,
-      priority: accuracy < 40 || row.seen >= 10 ? "high" : "medium",
-      title: `Revise ${target}`,
-      reason: `${accuracy}% accuracy across ${row.seen} answered practice questions in ${row.subject}. This meets the minimum evidence threshold; focus practice here before another full mock.`,
-      subject: row.subject,
-      topic: row.topic,
-      mode: "practice",
-      questionCount: 15,
-      evidence,
-    });
-    if (row.incorrect >= 3) {
-      recommendations.push({
-        id: `review-topic-mistakes-${key}`,
-        priority: "medium",
-        title: `Review mistakes in ${target}`,
-        reason: `${row.incorrect} incorrect answers are recorded for this topic. Revisit their explanations, then retry related questions.`,
-        subject: row.subject,
-        topic: row.topic,
-        mode: "mistakes",
-        questionCount: Math.min(10, row.incorrect),
-        evidence,
-      });
-    }
-  }
+  const recommendations: StudyRecommendation[] = [...ruleBased.recommendations];
 
   if (recommendations.length === 0) {
     const hasAnsweredEvidence = weakTopics.topics.some((row) => row.seen > 0);
@@ -556,9 +508,9 @@ export async function getStudyRecommendations(
       priority: "low",
       title: history.total > 0 ? "Build a stronger topic baseline" : "Start with a diagnostic practice session",
       reason: history.total > 0
-        ? recentlyPracticedWeakTopics.length > 0
-          ? `Your weak-topic evidence is valid, but ${recentlyPracticedWeakTopics.length} topic(s) were practiced within the last ${RECOMMENDATION_RECENT_PRACTICE_DAYS} days. Review those recent answers and explanations before receiving another revision prompt.`
-          : `No topic currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
+        ? ruleBased.recentlyPracticedWeakCount > 0
+          ? `Your weak-topic evidence is valid, but ${ruleBased.recentlyPracticedWeakCount} weak area(s) were practiced within the last ${RECOMMENDATION_RECENT_PRACTICE_DAYS} days. Review those recent answers and explanations before receiving another revision prompt.`
+          : `No area currently meets both evidence rules: at least ${RECOMMENDATION_MINIMUM_ANSWERS} answered questions and accuracy below ${Math.round(RECOMMENDATION_WEAK_ACCURACY * 100)}%. ${hasAnsweredEvidence ? "Continue focused practice to build reliable topic-level evidence." : "Complete a focused practice session to begin collecting answered-question evidence."}`
         : "There is not enough attempt history yet. Complete your first practice session to unlock recommendations based on your results.",
       subject: null,
       topic: null,
@@ -577,6 +529,7 @@ export async function getStudyRecommendations(
       weakTopics.topics,
       RECOMMENDATION_MINIMUM_ANSWERS,
       RECOMMENDATION_WEAK_ACCURACY,
+      weakTopics.subjects,
     ),
     recommendations,
   };
