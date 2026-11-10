@@ -143,7 +143,9 @@ export function announcementRouter(db: PrismaClient): Router {
           },
         },
         create: { announcementId: announcement.id, userId: req.user!.id, acknowledgedAt: now },
-        update: { seenAt: now, acknowledgedAt: now },
+        // Acknowledgement is a durable per-student fact. Repeated requests
+        // must not move the original acknowledgement timestamp forward.
+        update: {},
         select: { seenAt: true, acknowledgedAt: true },
       });
       res.json({ ok: true, seenAt: view.seenAt.toISOString(), acknowledgedAt: view.acknowledgedAt?.toISOString() ?? null });
