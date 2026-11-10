@@ -73,4 +73,79 @@ describe("administrator question bank", () => {
     await waitFor(() => expect(screen.queryByText("Stale matching question")).not.toBeInTheDocument());
     expect(screen.getByText("Newest matching question")).toBeInTheDocument();
   });
+
+  it("shows live candidate connectivity and integrity signals in the invigilation monitor", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/admin/question-catalog") return Promise.resolve(response({ subjects: [] }));
+      if (path === "/admin/questions") return Promise.resolve(response({ questions: [], total: 0 }));
+      if (path === "/admin/exams") return Promise.resolve(response({ exams: [] }));
+      if (path === "/admin/students") return Promise.resolve(response({ students: [] }));
+      if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
+      if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
+      if (path === "/admin/exams/live-sessions") return Promise.resolve(response({
+        ok: true,
+        serverTime: "2026-11-10T06:00:00.000Z",
+        total: 2,
+        sessions: [
+          {
+            id: "session-connected",
+            status: "ACTIVE",
+            student: { id: 7, email: "connected@example.com" },
+            exam: { id: "exam-1", title: "ECET Mock 01" },
+            assignmentId: "assignment-1",
+            startedAt: "2026-11-10T05:30:00.000Z",
+            lastHeartbeatAt: "2026-11-10T05:59:55.000Z",
+            connectivity: "CONNECTED",
+            heartbeatCount: 42,
+            focusLossCount: 1,
+            disconnectCount: 0,
+            submission: null,
+            events: [{ id: "event-1", type: "FOCUS_LOST", detail: "", createdAt: "2026-11-10T05:55:00.000Z", actor: null }],
+          },
+          {
+            id: "session-stale",
+            status: "INTERRUPTED",
+            student: { id: 8, email: "stale@example.com" },
+            exam: { id: "exam-2", title: "ECET Mock 02" },
+            assignmentId: "assignment-2",
+            startedAt: "2026-11-10T05:00:00.000Z",
+            lastHeartbeatAt: "2026-11-10T05:10:00.000Z",
+            connectivity: "STALE",
+            heartbeatCount: 12,
+            focusLossCount: 0,
+            disconnectCount: 2,
+            submission: { id: "submission-2", status: "REVIEW_REQUIRED" },
+            events: [],
+          },
+        ],
+      }));
+      return Promise.resolve(response({}));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AdminWorkspace
+      email="admin@example.com"
+      theme="light"
+      setTheme={vi.fn()}
+      signOut={vi.fn()}
+      invitations={[]}
+      createInvitation={vi.fn()}
+      inviteEmail=""
+      setInviteEmail={vi.fn()}
+      createdInvitation={null}
+      revokeInvitation={vi.fn()}
+      busy={false}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Live invigilation" }));
+    expect(await screen.findByText("connected@example.com")).toBeInTheDocument();
+    expect(screen.getByText("stale@example.com")).toBeInTheDocument();
+    expect(screen.getByText("CONNECTED")).toBeInTheDocument();
+    expect(screen.getByText("STALE")).toBeInTheDocument();
+    expect(screen.getByText("ECET Mock 01")).toBeInTheDocument();
+    expect(screen.getByText("Submission: REVIEW_REQUIRED")).toBeInTheDocument();
+    expect(screen.getByText("Focus losses + disconnects")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === "/admin/exams/live-sessions")).toBe(true);
+  });
 });
