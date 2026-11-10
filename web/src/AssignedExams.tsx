@@ -436,12 +436,12 @@ export default function AssignedExams() {
                 <button className="ghost" onClick={close}>Back to dashboard</button>
               </div>
               <div className="panel score-panel">
-                {result.status === "REVIEW_REQUIRED" ? (
+                {result.status === "REVIEW_REQUIRED" || result.score === null ? (
                   <strong>Submitted - awaiting invigilator review</strong>
                 ) : (
                   <strong>{result.score} / {result.maximumScore}</strong>
                 )}
-                <span className="muted">{result.status === "REVIEW_REQUIRED" ? "Awaiting review" : "Submitted · final score"}</span>
+                <span className="muted">{result.status === "REVIEW_REQUIRED" || result.score === null ? "Awaiting review" : "Submitted · final score"}</span>
               </div>
               {result.questions.map((question, index) => (
                 <article className="panel question-card" key={question.id}>
