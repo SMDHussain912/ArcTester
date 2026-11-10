@@ -676,7 +676,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).parse(req.query);
+      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25), eventLimit: z.coerce.number().int().min(1).max(100).default(12) }).parse(req.query);
       const where = { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } };
       const [sessions, total] = await Promise.all([
         db.examSession.findMany({
@@ -685,7 +685,7 @@ export function examRouter(db: PrismaClient): Router {
           include: {
             student: { select: { id: true, email: true } },
             assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
-            events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
+            events: { orderBy: { createdAt: "desc" }, take: query.eventLimit, include: { actor: { select: { email: true, role: true } } } },
           },
         }),
         db.examSession.count({ where }),
