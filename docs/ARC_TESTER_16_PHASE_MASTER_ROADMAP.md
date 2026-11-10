@@ -182,7 +182,19 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Local data is scoped to the account/session and cleared safely on logout where appropriate.
 - [ ] Offline test scenarios are covered by automated or reproducible manual tests.
 
-**Current assessment:** Offline-first foundations and local answer backups exist. Comprehensive offline behavior, conflict handling and device-level verification remain.
+**Current assessment:** Assigned-exam local backup, reload restoration, reconnect synchronization, account isolation and explicit sync states are covered by automated tests. Downloaded-learning-content offline availability, app-shell qualification and real-device verification remain.
+
+**Evidence — PR #28, CI run #997:** [All four CI jobs green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053).
+- `restores the local backup after reload and lets it win over the last server save`
+- `syncs offline answers once after reconnect and then shows the synced state`
+- `clears exam backups when a different user signs in but preserves unrelated preferences`
+- `clears every local exam backup on logout and removes the owner marker`
+- `clears local assigned-exam backups after successful logout`
+- `shows submitted and awaiting-review states without exposing an ungraded score`
+- `shows the review-pending message instead of an empty score for ungraded submissions`
+- `rejects terminated and expired sessions, grades inside the grace window and reviews late submissions`
+
+**NOT VERIFIED:** downloaded learning content and app shell while fully offline; real-device background/force-close/restart recovery; production clock/network latency.
 
 ## Phase 7 — Synchronization, reconnect and recovery engine
 
@@ -205,7 +217,18 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Reload, reconnect, app restart and concurrent-submit cases are tested.
 - [ ] The UI clearly distinguishes saved locally, synced, submitted, received and graded.
 
-**Current assessment:** Revisioned server autosave and local backup/recovery logic are documented for assigned exams; end-to-end offline and concurrency qualification remains.
+**Current assessment:** Revisioned answer saves, local-backup-wins reconciliation, reconnect sync, stale-revision HTTP 409 conflict messaging and retry-safe concurrent submission are documented and covered by tests. Full physical multi-device and production network qualification remain.
+
+**Evidence — PR #28, CI run #997:** [All four CI jobs green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053).
+- `saves assigned-exam answers on the server and restores them after a reload`
+- `restores the local backup after reload and lets it win over the last server save`
+- `syncs offline answers once after reconnect and then shows the synced state`
+- `shows an actionable conflict when a stale answer revision receives HTTP 409`
+- `scores offline submissions on the server and safely handles retries` (also verifies concurrent duplicate submit returns one result)
+- `retains local answers and allows an idempotent retry after temporary offline submission failure`
+- `caps failed automatic submission at five retries with exponential backoff`
+
+**NOT VERIFIED:** two physically separate devices under real concurrent edits; offline app restart on Android/iOS; production latency and packet-loss behavior.
 
 ## Phase 8 — Formal examination authoring, versioning and assignment
 
@@ -254,7 +277,17 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Expired, paused, terminated and already-submitted states are handled explicitly.
 - [ ] Full API + browser workflow tests cover normal and failure paths.
 
-**Current assessment:** Session records, server-side start/deadline enforcement, heartbeats and invigilator actions exist. Complete candidate UI integration and end-to-end recovery verification remain.
+**Current assessment:** Server-authoritative session start/deadline, heartbeat, pause/resume, answer revision, late-submission review and candidate result-state behavior have API/component coverage. Full production browser/network qualification remains.
+
+**Evidence — PR #28, CI run #997:** [All four CI jobs green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053).
+- `keeps answer keys private and creates a server-authoritative session with heartbeat and autosave`
+- `holds the server deadline during pause, resumes with the pause duration, and rejects student invigilator actions`
+- `rejects terminated and expired sessions, grades inside the grace window and reviews late submissions`
+- `retains deadline-crossing submissions for invigilator review`
+- `scores offline submissions on the server and safely handles retries`
+- `shows the review-pending message instead of an empty score for ungraded submissions`
+
+**NOT VERIFIED:** physical device clock manipulation, real network latency, browser/device interruption and production invigilator workflows.
 
 ## Phase 10 — Invigilation, ArcGuard, attendance and audit
 
@@ -281,7 +314,17 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Candidate receives clear recovery/invigilator guidance.
 - [ ] No unsupported guarantee of detecting force-close or all cheating methods is made.
 
-**Current assessment:** Session audit events, invigilator actions and attendance-related backend foundations exist. Complete live operational workflow, policy verification and cross-platform signal qualification remain.
+**Current assessment:** Existing session audit events, administrator pause/resume/terminate controls, attendance reporting and review queue are covered by API tests. Candidate-facing awaiting-review state and deadline grace behavior have additional coverage. Full live operational and cross-platform signal qualification remain.
+
+**Evidence — PR #28, CI run #997:** [All four CI jobs green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053).
+- `holds the server deadline during pause, resumes with the pause duration, and rejects student invigilator actions`
+- `preserves elapsed pause duration when an invigilator terminates a paused session`
+- `returns paginated review-required submissions`
+- `returns exam attendance and question-level report data`
+- `submits, grades once, returns the same result on duplicate submit, and isolates student records`
+- `shows the review-pending message instead of an empty score for ungraded submissions`
+
+**NOT VERIFIED:** real-time invigilator operation under production load, physical device lifecycle signals, and cross-platform integrity-policy qualification.
 
 ## Phase 11 — Announcements, notifications and student communication
 
@@ -457,11 +500,11 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 | 3 | Question bank and content management | 75% | Core implementation exists; complete workflow verification remains |
 | 4 | Practice and mock-test engine | 85% | Core engine exists; full UX/resilience acceptance remains |
 | 5 | Results and analytics foundation | 75% | Major analytics implemented; deeper coverage and UI verification remain |
-| 6 | Offline-first operation | 50% | Foundations exist; comprehensive offline qualification remains |
-| 7 | Synchronization and recovery | 40% | Autosave/local recovery foundations exist; conflict/E2E testing remains |
+| 6 | Offline-first operation | 70% | Improved assigned-exam recovery evidence; downloaded-content offline and device checks remain |
+| 7 | Synchronization and recovery | 65% | Documented local-wins reconciliation, conflict handling and idempotent submit; physical multi-device qualification remains |
 | 8 | Exam authoring and assignments | 80% | Core authoring/version/assignment implementation exists; full E2E remains |
-| 9 | Server-authoritative exam runtime | 65% | Server session foundations exist; candidate lifecycle E2E remains |
-| 10 | Invigilation, ArcGuard, attendance and audit | 70% | Backend foundations exist; full operational/policy qualification remains |
+| 9 | Server-authoritative exam runtime | 75% | Expanded deadline, pause/resume, submission and candidate result tests; production qualification remains |
+| 10 | Invigilation, ArcGuard, attendance and audit | 72% | Existing invigilation/attendance/review coverage strengthened; live operational qualification remains |
 | 11 | Announcements and notifications | 25% | Requirements defined; complete workflow not verified |
 | 12 | UX, accessibility and maintainability | 55% | Incremental modularization started; broader polish remains |
 | 13 | Intelligence analytics and weak-area detection | 70% | Major analytics/recommendation foundations implemented; acceptance remains |
@@ -469,11 +512,41 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 | 15 | Recommendations, explanations and concepts | 45% | Initial rules/explanations/concept integration exist; full coverage remains |
 | 16 | Multi-platform, security and release | 40% | Client scaffolds and CI/deployment foundations exist; release qualification remains |
 
+### Score change evidence — PR #28, CI run #997
+
+Only Phases 6, 7, 9 and 10 changed in this audit. No phase is marked complete.
+
+| Phase | Previous | Proposed/current audit | Evidence and remaining qualification |
+|---:|---:|---:|---|
+| 6 | 50% | **70%** | Reload restore, offline/reconnect, account isolation, backup cleanup and result-state tests passed. Downloaded content/app shell offline and real-device interruption remain NOT VERIFIED. |
+| 7 | 40% | **65%** | Local-backup-wins, stale revision conflict, retry and concurrent submit tests passed. Real simultaneous edits across separate physical devices remain NOT VERIFIED. |
+| 9 | 65% | **75%** | Server-authoritative session, pause/resume, heartbeat, grace-window, late-review and result-state tests passed. Production clock/network qualification remains NOT VERIFIED. |
+| 10 | 70% | **72%** | Invigilator controls, audit/attendance reports, review queue and awaiting-review UI tests passed. Live operational and cross-platform integrity checks remain NOT VERIFIED. |
+
+**CI evidence:** [ArcTester CI run #997](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053) — all four jobs passed: Test/lint/build, Mobile typecheck, SQLite migration utility tests, and TensorFlow dataset preparation tests.
+
+**Test names recorded for this score change:**
+- `restores the local backup after reload and lets it win over the last server save`
+- `syncs offline answers once after reconnect and then shows the synced state`
+- `shows an actionable conflict when a stale answer revision receives HTTP 409`
+- `clears exam backups when a different user signs in but preserves unrelated preferences`
+- `clears every local exam backup on logout and removes the owner marker`
+- `clears local assigned-exam backups after successful logout`
+- `rejects terminated and expired sessions, grades inside the grace window and reviews late submissions`
+- `retains deadline-crossing submissions for invigilator review`
+- `keeps answer keys private and creates a server-authoritative session with heartbeat and autosave`
+- `holds the server deadline during pause, resumes with the pause duration, and rejects student invigilator actions`
+- `preserves elapsed pause duration when an invigilator terminates a paused session`
+- `returns paginated review-required submissions`
+- `returns exam attendance and question-level report data`
+- `submits, grades once, returns the same result on duplicate submit, and isolates student records`
+- `shows the review-pending message instead of an empty score for ungraded submissions`
+
 ### Overall estimated completion
 
-**62% overall (phase-average estimate).**
+**65% overall (phase-average estimate).**
 
-Calculation correction: the 16 phase scores sum to 985 percentage points, so their equally weighted arithmetic mean is 61.6%, rounded to 62%. The previous 59.4% calculation and 59% headline were incorrect; this correction changes no individual phase score. This is a planning estimate, not a claim that 62% of all possible code or tests are complete.
+Calculation correction: the 16 phase scores now sum to 1,042 percentage points, so their equally weighted arithmetic mean is 65.125%, rounded to 65%. This is a planning estimate, not a claim that 65% of all possible code or tests are complete.
 
 ### Phase count
 
