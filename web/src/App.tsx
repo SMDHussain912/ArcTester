@@ -13,6 +13,7 @@ import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
+import StudentPracticeQuickActions from "./StudentPracticeQuickActions";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
@@ -1116,10 +1117,11 @@ export default function App() {
                   </div>
                   <div className="practice-builder-footer"><span className="muted">Your paper will use your selected filters.</span><button className="primary" disabled={busy || practiceSubjects.length === 0 || !bank?.total} onClick={createStudentPracticePaper}>{busy ? "Building paper…" : "Create " + practiceQuestionCount + "-question paper"}</button></div>
                 </article>
-                <div className="practice-side-actions">
-                  <article className="panel action-card"><span className="action-icon">◈</span><h3>ECET mock test</h3><p className="muted">Take a full-length paper using the configured AP ECET test pattern.</p><button className="ghost" disabled={busy} onClick={() => void startTest("mock")}>Start mock test</button></article>
-                  <article className="panel action-card"><span className="action-icon">↻</span><h3>Review mistakes</h3><p className="muted">Revisit questions you have answered incorrectly.</p><button className="ghost" disabled={busy} onClick={() => void startTest("mistakes")}>Review mistakes</button></article>
-                </div>
+                <StudentPracticeQuickActions
+                  disabled={busy}
+                  onStartMock={() => void startTest("mock")}
+                  onReviewMistakes={() => void startTest("mistakes")}
+                />
               </div>
             </section>
             {activePage === "progress" ? <StudentProgress /> : null}
