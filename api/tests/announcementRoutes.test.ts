@@ -106,6 +106,15 @@ describe("announcement API", () => {
     );
     expect(acknowledged.status).toBe(200);
     expect((acknowledged.json as { seenAt: string }).seenAt).toBeTruthy();
+    const firstAcknowledgedAt = (acknowledged.json as { acknowledgedAt: string }).acknowledgedAt;
+    expect(firstAcknowledgedAt).toBeTruthy();
+    const repeatedAcknowledgement = await postJson(
+      `${server.baseUrl}/announcements/${announcementId}/acknowledge`,
+      {},
+      studentCookie,
+    );
+    expect(repeatedAcknowledgement.status).toBe(200);
+    expect((repeatedAcknowledgement.json as { acknowledgedAt: string }).acknowledgedAt).toBe(firstAcknowledgedAt);
     expect((await postJson(`${server.baseUrl}/announcements/${announcementId}/read`, {}, studentCookie)).status).toBe(200);
 
     const activeAfterRead = await getJson(`${server.baseUrl}/announcements/active`, studentCookie);
