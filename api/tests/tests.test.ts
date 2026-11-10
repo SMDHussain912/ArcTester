@@ -207,6 +207,29 @@ describe("POST /tests", () => {
     expect(body.questions.map((question) => question.id)).toEqual(expect.arrayContaining([maths.id, physics.id]));
   });
 
+  it("rejects topic filters for subjects that are not selected", async () => {
+    const { status } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths"],
+      topicFilters: [{ subject: "Physics", topic: "Mechanics" }],
+      count: 10,
+    });
+    expect(status).toBe(400);
+  });
+
+  it("rejects duplicate subject-topic filters", async () => {
+    const { status } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths"],
+      topicFilters: [
+        { subject: "Maths", topic: "Algebra" },
+        { subject: "Maths", topic: "Algebra" },
+      ],
+      count: 10,
+    });
+    expect(status).toBe(400);
+  });
+
   it("rejects invalid bodies with friendly 400s", async () => {
     const { status, json } = await api.post(`/tests`, { mode: "nope" });
     expect(status).toBe(400);
