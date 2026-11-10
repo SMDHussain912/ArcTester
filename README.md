@@ -200,7 +200,7 @@ Question bank (run from the repo root):
 
 ## Product requirements
 
-The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md). It defines role boundaries, subject-first practice, the formal examination lifecycle, invigilation, attendance, announcements, UX standards, verification requirements, and the prioritized roadmap. Treat roadmap items as planned until their end-to-end workflow is implemented and verified.
+The maintained product and engineering baseline is in [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md). The consolidated 16-phase master roadmap, phase-by-phase acceptance criteria, progress audit and current completion estimate are in [`docs/ARC_TESTER_16_PHASE_MASTER_ROADMAP.md`](docs/ARC_TESTER_16_PHASE_MASTER_ROADMAP.md). It defines role boundaries, subject-first practice, the formal examination lifecycle, invigilation, attendance, announcements, UX standards, verification requirements, and the prioritized roadmap. Treat roadmap items as planned until their end-to-end workflow is implemented and verified.
 
 ## Phases
 
