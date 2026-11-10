@@ -25,6 +25,10 @@ type AdminAnnouncementsProps = {
 };
 
 export default function AdminAnnouncements({ announcements, title, message, expiry, busy, onTitleChange, onMessageChange, onExpiryChange, onCreate, onRefresh, onDelete }: AdminAnnouncementsProps) {
+  function confirmDelete(id: string) {
+    if (!window.confirm("Delete this announcement? Students will no longer see it.")) return;
+    onDelete(id);
+  }
   return (
     <>
       <div className="admin-page-title"><div><p className="eyebrow">STUDENT COMMUNICATION</p><h1>Announcements</h1><p>Publish important notices. Students see each announcement once, and expired notices disappear automatically.</p></div></div>
@@ -38,7 +42,7 @@ export default function AdminAnnouncements({ announcements, title, message, expi
         </form>
         <section className="admin-panel">
           <div className="admin-panel-head"><div><p className="eyebrow">NOTICE HISTORY</p><h2>Published notices</h2></div><button className="ghost" onClick={onRefresh}>Refresh</button></div>
-          {announcements.length ? announcements.map((announcement) => <article className="announcement-row" key={announcement.id}><div><b>{announcement.title}</b><p>{announcement.message}</p><small>{announcement._count.views} students have seen this · {announcement.expiresAt ? "Expires " + new Date(announcement.expiresAt).toLocaleString() : "No expiry"}</small></div><button className="ghost danger-button" onClick={() => onDelete(announcement.id)}>Delete</button></article>) : <div className="empty-state">No announcements published yet.</div>}
+          {announcements.length ? announcements.map((announcement) => <article className="announcement-row" key={announcement.id}><div><b>{announcement.title}</b><p>{announcement.message}</p><small>{announcement._count.views} students have seen this · {announcement.expiresAt ? "Expires " + new Date(announcement.expiresAt).toLocaleString() : "No expiry"}</small></div><button className="ghost danger-button" onClick={() => confirmDelete(announcement.id)}>Delete</button></article>) : <div className="empty-state">No announcements published yet.</div>}
         </section>
       </div>
     </>
