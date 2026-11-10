@@ -59,6 +59,131 @@ describe("live Vite application", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/exams/assigned"))).toBe(true);
   });
 
+  it("stops autosaving after a cross-device revision conflict and preserves the local answer backup", async () => {
+    const serverNow = new Date().toISOString();
+    const deadline = new Date(Date.now() + 60_000).toISOString();
+    const assignment = {
+      id: "assignment-revision-conflict",
+      availableFrom: null,
+      dueAt: null,
+      exam: { title: "Revision conflict exam", description: "Sync test" },
+      version: 1,
+      questionCount: 1,
+      durationMinutes: 1,
+      submission: null,
+    };
+    const examPackage = {
+      assignmentId: assignment.id,
+      title: assignment.exam.title,
+      version: 1,
+      durationMinutes: 1,
+      dueAt: null,
+      instructions: "",
+      questions: [{
+        id: "exam-question-conflict",
+        position: 0,
+        subject: "Maths",
+        topic: null,
+        text: "Conflict question?",
+        options: ["A", "B", "C", "D"],
+        marks: 1,
+        negativeMarks: 0,
+      }],
+    };
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [assignment] }));
+      if (path.endsWith(`/exams/assignments/${assignment.id}/package`)) {
+        return Promise.resolve(response(200, { package: examPackage }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/session/start`)) {
+        return Promise.resolve(response(200, { session: { startedAt: serverNow, serverTime: serverNow, deadline, status: "ACTIVE" } }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method !== "PUT") {
+        return Promise.resolve(response(200, { revision: 1, answers: [] }));
+      }
+      if (path.endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT") {
+        return Promise.resolve(response(409, { error: "These answers were changed in another session. Reload the exam before continuing." }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
+    expect(await screen.findByText("Conflict question?")).toBeInTheDocument();
+
+    const backupKey = `arctester-assignment-answers-${assignment.id}`;
+    const questionCard = screen.getByText("Conflict question?").closest("article");
+    expect(questionCard).not.toBeNull();
+    fireEvent.click(within(questionCard!).getAllByRole("button")[0]);
+
+    expect(await screen.findByText(
+      "Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing."
+    )).toBeInTheDocument();
+    const firstBackup = JSON.stringify({ "exam-question-conflict": 0 });
+    expect(localStorageValues.get(backupKey)).toBe(firstBackup);
+    const initialSaveCount = fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT"
+    ).length;
+    expect(initialSaveCount).toBe(1);
+
+    fireEvent.click(within(questionCard!).getAllByRole("button")[1]);
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 550));
+    });
+    const finalSaveCount = fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT"
+    ).length;
+    expect(finalSaveCount).toBe(1);
+    expect(localStorageValues.get(backupKey)).toBe(JSON.stringify({ "exam-question-conflict": 1 }));
+  });
+
+  it("shows a review-pending message and hides answer review when an assigned result has no score", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, {
+        assignments: [{
+          id: "assignment-ungraded",
+          assignedAt: new Date().toISOString(),
+          availableFrom: null,
+          dueAt: null,
+          exam: { id: "exam-ungraded", title: "Pending review exam", description: "" },
+          version: 1,
+          durationMinutes: 30,
+          questionCount: 1,
+          submission: {
+            id: "submission-ungraded",
+            status: "RECEIVED",
+            score: null,
+            maximumScore: null,
+            submittedAt: new Date().toISOString(),
+          },
+        }],
+      }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    expect(await screen.findByText("Awaiting administrator review. Your result will appear after approval.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review answers" })).not.toBeInTheDocument();
+  });
+
   it("shows and acknowledges in-app notices for newly assigned exams and results", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);

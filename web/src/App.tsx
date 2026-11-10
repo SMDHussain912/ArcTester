@@ -89,6 +89,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [assignmentSaveStatus, setAssignmentSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const assignmentSaveSequenceRef = useRef(0);
+  const assignmentSaveConflictRef = useRef(false);
   const assignmentSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const assignmentAnswersRevisionRef = useRef(0);
   const effectiveAssignmentDeadline = Math.min(
@@ -281,6 +282,7 @@ export default function App() {
         }));
       } catch { safeStorage.removeItem(assignedAnswersKey(assignmentId)); }
       assignmentAnswersRevisionRef.current = serverSaved.revision ?? 0;
+      assignmentSaveConflictRef.current = false;
       const serverAnswers = Object.fromEntries(serverSaved.answers.flatMap((answer) =>
         answer.selectedIndex === null ? [] : [[answer.examQuestionId, answer.selectedIndex] as const]
       ));
@@ -396,7 +398,7 @@ export default function App() {
   }, [activeAssignmentPackage, assignmentStartedAt]);
 
   useEffect(() => {
-    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || Object.keys(assignmentAnswers).length === 0) return;
+    if (!activeAssignmentPackage || !assignmentStartedAt || assignmentSessionPaused || assignmentSaveConflictRef.current || Object.keys(assignmentAnswers).length === 0) return;
     const assignmentId = activeAssignmentPackage.assignmentId;
     const saveVersion = ++assignmentSaveSequenceRef.current;
     setAssignmentSaveStatus("saving");
@@ -419,25 +421,12 @@ export default function App() {
         if (assignmentSaveSequenceRef.current !== saveVersion) return;
         const message = (cause as Error).message;
         if (message.includes("changed in another session")) {
-          try {
-            const latest = await request<{ revision: number; answers: { examQuestionId: string; selectedIndex: number | null }[] }>(
-              `/exams/assignments/${encodeURIComponent(assignmentId)}/answers`,
-            );
-            if (assignmentSaveSequenceRef.current !== saveVersion) return;
-            assignmentAnswersRevisionRef.current = latest.revision;
-            const serverAnswers = Object.fromEntries(
-              latest.answers.flatMap((answer) => answer.selectedIndex === null
-                ? []
-                : [[answer.examQuestionId, answer.selectedIndex] as const]),
-            );
-            const mergedAnswers = { ...serverAnswers, ...assignmentAnswers };
-            safeStorage.setItem(assignedAnswersKey(assignmentId), JSON.stringify(mergedAnswers));
-            setAssignmentAnswers(mergedAnswers);
-            setAssignmentSaveStatus("saving");
-            return;
-          } catch (recoveryError) {
-            setError(`Autosave conflict recovery failed: ${(recoveryError as Error).message}. Your local backup is still available.`);
-          }
+          // Do not silently merge two devices. Preserve this device's local
+          // backup and require a deliberate reload to read the latest revision.
+          assignmentSaveConflictRef.current = true;
+          setAssignmentSaveStatus("error");
+          setError("Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing.");
+          return;
         }
         setAssignmentSaveStatus("error");
         setError(`Server autosave failed: ${message}. Your local backup is still available.`);
@@ -838,7 +827,7 @@ export default function App() {
               return <article className="panel assigned-exam-card" key={item.id}>
                 <div className="admin-exam-meta"><div><strong>{item.exam.title}</strong><p className="muted">{item.exam.description || "No description"} · Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div><span className={item.submission ? "status status-used" : expired ? "status status-expired" : "status status-pending"}>{item.submission ? "SUBMITTED" : expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span></div>
                 <div className="assigned-exam-dates"><small>Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</small><small>Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</small></div>
-                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · {item.submission.status === "REVIEW_REQUIRED" ? "Awaiting administrator review. Your result will appear after approval." : `Score: ${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}`}</p>{item.submission.status !== "REVIEW_REQUIRED" && <button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>}{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p><strong>{assignmentResult.score ?? "Pending"} / {assignmentResult.maximumScore ?? "—"}</strong> · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
+                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · {item.submission.status === "REVIEW_REQUIRED" || item.submission.score === null ? "Awaiting administrator review. Your result will appear after approval." : `Score: ${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}`}</p>{item.submission.status !== "REVIEW_REQUIRED" && item.submission.score !== null && <button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>}{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p>{assignmentResult.score === null ? <strong>Awaiting invigilator review</strong> : <strong>{assignmentResult.score} / {assignmentResult.maximumScore ?? "—"}</strong>} · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
               </article>;
             })}
           </section>
