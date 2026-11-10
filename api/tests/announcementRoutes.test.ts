@@ -14,6 +14,7 @@ let server: TestServer;
 describe("announcement API", () => {
   let adminCookie = "";
   let studentCookie = "";
+  let secondStudentCookie = "";
 
   beforeAll(async () => {
     server = await startTestServer(buildApp);
@@ -35,10 +36,39 @@ describe("announcement API", () => {
     expect(student.id).toBeGreaterThan(0);
     adminCookie = (await signIn(server.baseUrl, admin.email)).cookie;
     studentCookie = (await signIn(server.baseUrl, student.email)).cookie;
+    const secondStudent = await server.db.user.create({
+      data: { email: "announcement-second-student@example.test", passwordHash: hashPassword("correct-horse-battery"), role: "STUDENT" },
+    });
+    secondStudentCookie = (await signIn(server.baseUrl, secondStudent.email)).cookie;
   });
 
   afterAll(async () => {
     await server.close();
+  });
+
+  it("rejects an already-expired announcement and hides notices after their expiry", async () => {
+    const rejected = await postJson(
+      `${server.baseUrl}/admin/announcements`,
+      { title: "Expired notice", message: "This should not publish.", expiresAt: new Date(Date.now() - 60_000).toISOString() },
+      adminCookie,
+    );
+    expect(rejected.status).toBe(400);
+
+    const expired = await server.db.announcement.create({
+      data: {
+        title: "Expired announcement",
+        message: "This notice is no longer active.",
+        createdById: (await server.db.user.findUniqueOrThrow({ where: { email: "announcement-admin@example.test" } })).id,
+        startsAt: new Date(Date.now() - 120_000),
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const active = await getJson(`${server.baseUrl}/announcements/active`, studentCookie);
+    expect((active.json as { announcements: { id: string }[] }).announcements)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: expired.id })]));
+    const inbox = await getJson(`${server.baseUrl}/announcements`, studentCookie);
+    expect((inbox.json as { announcements: { id: string }[] }).announcements)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: expired.id })]));
   });
 
   it("publishes, lists, acknowledges, and deletes announcements", async () => {
@@ -70,20 +100,28 @@ describe("announcement API", () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId, seenAt: null })]));
 
     const acknowledged = await postJson(
-      `${server.baseUrl}/announcements/${announcementId}/read`,
+      `${server.baseUrl}/announcements/${announcementId}/acknowledge`,
       {},
       studentCookie,
     );
     expect(acknowledged.status).toBe(200);
     expect((acknowledged.json as { seenAt: string }).seenAt).toBeTruthy();
+    expect((await postJson(`${server.baseUrl}/announcements/${announcementId}/read`, {}, studentCookie)).status).toBe(200);
 
     const activeAfterRead = await getJson(`${server.baseUrl}/announcements/active`, studentCookie);
     expect((activeAfterRead.json as { announcements: { id: string }[] }).announcements)
       .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId })]));
 
     const historyAfterRead = await getJson(`${server.baseUrl}/announcements`, studentCookie);
-    expect((historyAfterRead.json as { announcements: { id: string; seenAt: string | null }[] }).announcements)
-      .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId, seenAt: expect.any(String) })]));
+    expect((historyAfterRead.json as { announcements: { id: string; seenAt: string | null; acknowledgedAt: string | null }[] }).announcements)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId, seenAt: expect.any(String), acknowledgedAt: expect.any(String) })]));
+
+    const secondStudentFeed = await getJson(`${server.baseUrl}/announcements/active`, secondStudentCookie);
+    expect((secondStudentFeed.json as { announcements: { id: string }[] }).announcements)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId })]));
+    const secondStudentHistory = await getJson(`${server.baseUrl}/announcements`, secondStudentCookie);
+    expect((secondStudentHistory.json as { announcements: { id: string; acknowledgedAt: string | null }[] }).announcements)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId, acknowledgedAt: null })]));
 
     const deleted = await fetch(`${server.baseUrl}/admin/announcements/${announcementId}`, {
       method: "DELETE",

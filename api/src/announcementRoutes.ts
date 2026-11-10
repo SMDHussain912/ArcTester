@@ -123,7 +123,7 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/announcements/:id/read", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.post(["/announcements/:id/read", "/announcements/:id/acknowledge"], requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const now = new Date();
       const announcement = await db.announcement.findFirst({
@@ -142,11 +142,11 @@ export function announcementRouter(db: PrismaClient): Router {
             userId: req.user!.id,
           },
         },
-        create: { announcementId: announcement.id, userId: req.user!.id },
-        update: { seenAt: now },
-        select: { seenAt: true },
+        create: { announcementId: announcement.id, userId: req.user!.id, acknowledgedAt: now },
+        update: { seenAt: now, acknowledgedAt: now },
+        select: { seenAt: true, acknowledgedAt: true },
       });
-      res.json({ ok: true, seenAt: view.seenAt.toISOString() });
+      res.json({ ok: true, seenAt: view.seenAt.toISOString(), acknowledgedAt: view.acknowledgedAt?.toISOString() ?? null });
     } catch (error) {
       next(error);
     }
@@ -174,7 +174,7 @@ export function announcementRouter(db: PrismaClient): Router {
           expiresAt: true,
           views: {
             where: { userId: req.user!.id },
-            select: { seenAt: true },
+            select: { seenAt: true, acknowledgedAt: true },
             take: 1,
           },
         },
@@ -185,9 +185,75 @@ export function announcementRouter(db: PrismaClient): Router {
           ...announcement,
           publishedAt: announcement.startsAt,
           seenAt: views[0]?.seenAt ?? null,
+          acknowledgedAt: views[0]?.acknowledgedAt ?? null,
         })),
         serverTime: now.toISOString(),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+
+  router.get("/notifications", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const now = new Date();
+      const unreadOnly = req.query.unread === "true";
+      const notifications = await db.studentNotification.findMany({
+        where: {
+          userId: req.user!.id,
+          ...(unreadOnly ? { readAt: null } : {}),
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 100,
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          message: true,
+          href: true,
+          createdAt: true,
+          readAt: true,
+          expiresAt: true,
+        },
+      });
+      const unreadCount = await db.studentNotification.count({
+        where: {
+          userId: req.user!.id,
+          readAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      });
+      res.json({ ok: true, notifications, unreadCount, serverTime: now.toISOString() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/notifications/:id/read", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const notification = await db.studentNotification.findFirst({
+        where: { id: req.params.id, userId: req.user!.id },
+        select: { id: true, readAt: true, expiresAt: true },
+      });
+      if (!notification) return next(badRequest("Notification not found."));
+      if (notification.expiresAt && notification.expiresAt <= new Date()) {
+        return next(badRequest("This notification has expired."));
+      }
+      if (notification.readAt) {
+        return res.json({ ok: true, readAt: notification.readAt.toISOString(), alreadyRead: true });
+      }
+      const now = new Date();
+      const updated = await db.studentNotification.updateMany({
+        where: { id: notification.id, userId: req.user!.id, readAt: null },
+        data: { readAt: now },
+      });
+      const saved = await db.studentNotification.findFirstOrThrow({
+        where: { id: notification.id, userId: req.user!.id },
+        select: { readAt: true },
+      });
+      res.json({ ok: true, readAt: saved.readAt?.toISOString() ?? now.toISOString(), alreadyRead: updated.count === 0 });
     } catch (error) {
       next(error);
     }

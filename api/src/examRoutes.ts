@@ -1107,7 +1107,7 @@ export function examRouter(db: PrismaClient): Router {
             select: { id: true },
           });
           if (existing) continue;
-          results.push(await tx.examAssignment.create({
+          const assignment = await tx.examAssignment.create({
             data: {
               examVersionId: version.id,
               studentId,
@@ -1116,7 +1116,18 @@ export function examRouter(db: PrismaClient): Router {
               dueAt: input.dueAt ? new Date(input.dueAt) : null,
             },
             select: { id: true, studentId: true, assignedAt: true, dueAt: true },
-          }));
+          });
+          await tx.studentNotification.create({
+            data: {
+              userId: studentId,
+              kind: "EXAM_ASSIGNMENT",
+              title: "New exam assigned",
+              message: `${exam.title} has been assigned to you. Open your assigned exams for details.`,
+              href: "/assignments",
+              dedupeKey: `exam-assignment:${assignment.id}`,
+            },
+          });
+          results.push(assignment);
         }
         return results;
       });
@@ -1555,7 +1566,12 @@ export function examRouter(db: PrismaClient): Router {
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
         include: {
-          examVersion: { include: { questions: { orderBy: { position: "asc" } } } },
+          examVersion: {
+            include: {
+              exam: { select: { title: true } },
+              questions: { orderBy: { position: "asc" } },
+            },
+          },
           submission: true,
           session: true,
         },
@@ -1784,6 +1800,18 @@ export function examRouter(db: PrismaClient): Router {
           await tx.examAssignment.update({
             where: { id: assignment.id },
             data: { status: "SUBMITTED" },
+          });
+          await tx.studentNotification.create({
+            data: {
+              userId: req.user!.id,
+              kind: suspiciousTiming ? "EXAM_REVIEW" : "EXAM_RESULT",
+              title: suspiciousTiming ? "Submission awaiting review" : "Exam result available",
+              message: suspiciousTiming
+                ? `Your submission for ${assignment.examVersion.exam.title} was received and is awaiting invigilator review.`
+                : `Your submission for ${assignment.examVersion.exam.title} has been graded. Open the result to see your score.`,
+              href: `/assignments/${assignment.id}/result`,
+              dedupeKey: `exam-submission:${created.id}`,
+            },
           });
           await tx.examSessionEvent.create({
             data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },

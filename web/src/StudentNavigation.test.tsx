@@ -11,6 +11,7 @@ describe("StudentNavigation", () => {
         examActive={false}
         pendingExamCount={3}
         unreadAnnouncementCount={2}
+        unreadNotificationCount={4}
         theme="light"
         onToggleTheme={vi.fn()}
         email="student@example.com"
@@ -23,6 +24,7 @@ describe("StudentNavigation", () => {
     expect(within(navigation).getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
     expect(within(navigation).getByRole("button", { name: "Assigned exams (3)" })).toBeEnabled();
     expect(within(navigation).getByRole("button", { name: "Announcements (2)" })).toBeEnabled();
+    expect(within(navigation).getByRole("button", { name: "Notifications (4)" })).toBeEnabled();
     expect(screen.getByText("student@example.com")).toBeInTheDocument();
   });
 
@@ -38,6 +40,7 @@ describe("StudentNavigation", () => {
         examActive
         pendingExamCount={0}
         unreadAnnouncementCount={0}
+        unreadNotificationCount={0}
         theme="dark"
         onToggleTheme={onToggleTheme}
         email="student@example.com"

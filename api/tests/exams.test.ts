@@ -315,6 +315,15 @@ describe("versioned exam management", () => {
       where: { studentId },
     });
     assignmentId = assignment.id;
+    const assignmentNotices = await server.db.studentNotification.findMany({
+      where: { userId: studentId, kind: "EXAM_ASSIGNMENT" },
+    });
+    expect(assignmentNotices).toHaveLength(1);
+    expect(assignmentNotices[0]).toMatchObject({
+      title: "New exam assigned",
+      href: "/assignments",
+      dedupeKey: `exam-assignment:${assignment.id}`,
+    });
   });
 
   describe("PostgreSQL formal exam lifecycle", () => {
@@ -385,9 +394,21 @@ describe("versioned exam management", () => {
       expect(submitted.status).toBe(201);
       const submission = submitted.json.submission as { id: string; status: string; score: number; maximumScore: number };
       expect(submission).toMatchObject({ status: "GRADED", score: 2, maximumScore: 2 });
+      const resultNotices = await server.db.studentNotification.findMany({
+        where: { userId: assignment.studentId, kind: "EXAM_RESULT" },
+      });
+      expect(resultNotices).toHaveLength(1);
+      expect(resultNotices[0]).toMatchObject({
+        title: "Exam result available",
+        href: `/assignments/${assignment.id}/result`,
+        dedupeKey: `exam-submission:${submission.id}`,
+      });
       const duplicate = await request("/exams/assignments/" + assignment.id + "/submission", "POST", body, student);
       expect(duplicate.status).toBe(200); expect(duplicate.json.duplicate).toBe(true);
       expect((duplicate.json.submission as { id: string }).id).toBe(submission.id);
+      expect(await server.db.studentNotification.count({
+        where: { userId: assignment.studentId, kind: "EXAM_RESULT" },
+      })).toBe(1);
       const result = await request("/exams/assignments/" + assignment.id + "/result", "GET", undefined, student);
       expect(result.status).toBe(200); expect((result.json.result as { score: number }).score).toBe(2);
       expect((await request("/exams/assignments/" + assignment.id + "/answers", "GET", undefined, fixture.cookies[1])).status).toBe(404);

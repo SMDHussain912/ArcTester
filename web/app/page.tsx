@@ -50,6 +50,8 @@ export default function HomePage() {
             <Link className="button button-primary" href="/practice">Browse practice papers →</Link>
             <Link className="button button-secondary" href="/assignments">My assigned exams</Link>
             <Link className="button button-secondary" href="/analytics">Performance and analytics</Link>
+            <Link className="button button-secondary" href="/announcements">Announcements</Link>
+            <Link className="button button-secondary" href="/notifications">Notification inbox</Link>
             <Link className="button button-secondary" href="/materials">Study materials</Link>
           </section>
           <aside className="panel stack">

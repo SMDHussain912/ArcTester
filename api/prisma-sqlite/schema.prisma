@@ -81,6 +81,7 @@ model User {
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementReads   AnnouncementRead[]
+  notifications       StudentNotification[]
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
@@ -280,6 +281,7 @@ model AnnouncementRead {
   announcementId String
   studentId      Int
   seenAt         DateTime     @default(now())
+  acknowledgedAt DateTime?
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -288,6 +290,24 @@ model AnnouncementRead {
 }
 
  
+
+model StudentNotification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  kind      String
+  title     String
+  message   String
+  href      String
+  dedupeKey String   @unique
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  expiresAt DateTime?
+
+  @@index([userId, readAt, createdAt])
+  @@index([expiresAt])
+}
+
 model ExamSession {
   id               String             @id @default(cuid())
   assignment       ExamAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)

@@ -81,6 +81,7 @@ model User {
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementViews AnnouncementView[]
+  notifications StudentNotification[]
   examSessions      ExamSession[]
   examSessionEvents ExamSessionEvent[] @relation("ExamSessionEventActor")
   modelDatasetsCreated ModelDataset[] @relation("ModelDatasetCreator")
@@ -336,9 +337,28 @@ model AnnouncementView {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         Int
   seenAt         DateTime     @default(now())
+  acknowledgedAt DateTime?
 
   @@unique([announcementId, userId])
   @@index([userId, seenAt])
+}
+
+
+model StudentNotification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  kind      String
+  title     String
+  message   String
+  href      String
+  dedupeKey String   @unique
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  expiresAt DateTime?
+
+  @@index([userId, readAt, createdAt])
+  @@index([expiresAt])
 }
 
 // Model registry and evaluation records. These models must remain represented in

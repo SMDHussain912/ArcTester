@@ -59,6 +59,83 @@ describe("live Vite application", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/exams/assigned"))).toBe(true);
   });
 
+  it("shows and acknowledges in-app notices for newly assigned exams and results", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/notifications?unread=true")) return Promise.resolve(response(200, {
+        notifications: [{
+          id: "notification-assignment-1",
+          kind: "EXAM_ASSIGNMENT",
+          title: "New exam assigned",
+          message: "AP ECET Mock 1 is ready.",
+          href: "/assignments",
+          createdAt: "2026-11-10T09:00:00.000Z",
+          readAt: null,
+          expiresAt: null,
+        }],
+      }));
+      if (path.endsWith("/notifications/notification-assignment-1/read") && init?.method === "POST") {
+        return Promise.resolve(response(200, { ok: true, readAt: "2026-11-10T09:01:00.000Z", alreadyRead: false }));
+      }
+      return Promise.resolve(response(200, { ok: true, announcements: [] }));
+    });
+
+    render(<App />);
+
+    const notice = await screen.findByRole("status", { name: "New notification" });
+    expect(within(notice).getByRole("heading", { name: "New exam assigned" })).toBeInTheDocument();
+    expect(within(notice).getByRole("button", { name: "Open" })).toBeEnabled();
+    fireEvent.click(within(notice).getByRole("button", { name: "Mark as read" }));
+    await waitFor(() => expect(screen.queryByRole("status", { name: "New notification" })).not.toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/notification-assignment-1/read"),
+      expect.objectContaining({ method: "POST", credentials: "include" })
+    );
+  });
+
+  it("opens the notification inbox and marks assignment/result notices as read", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/notifications?unread=true") || path.endsWith("/notifications")) {
+        return Promise.resolve(response(200, {
+          notifications: [{
+            id: "notification-result-1",
+            kind: "EXAM_RESULT",
+            title: "Exam result available",
+            message: "Your mock exam has been graded.",
+            href: "/assignments/assignment-1/result",
+            createdAt: "2026-11-10T09:00:00.000Z",
+            readAt: null,
+            expiresAt: null,
+          }],
+        }));
+      }
+      if (path.endsWith("/notifications/notification-result-1/read") && init?.method === "POST") {
+        return Promise.resolve(response(200, { ok: true, readAt: "2026-11-10T09:01:00.000Z" }));
+      }
+      return Promise.resolve(response(200, { ok: true, announcements: [] }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Notifications (1)" }));
+    expect(await screen.findByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getAllByRole("heading", { name: "Exam result available" }).length).toBeGreaterThan(0);
+    fireEvent.click(within(screen.getByRole("main")).getByRole("button", { name: "Mark as read" }));
+    await waitFor(() => expect(screen.getByText("READ")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/notification-result-1/read"),
+      expect.objectContaining({ method: "POST", credentials: "include" })
+    );
+  });
+
   it("loads published announcements into the student dashboard and announcements view", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const path = String(input);
@@ -70,7 +147,7 @@ describe("live Vite application", () => {
       if (path.endsWith("/bank")) {
         return Promise.resolve(response(200, { total: 1, subjects: [{ subject: "Maths", count: 1, topics: [{ topic: "Algebra", count: 1 }] }] }));
       }
-      if (path.endsWith("/announcements/notice-1/read")) {
+      if (path.endsWith("/announcements/notice-1/acknowledge")) {
         return Promise.resolve(response(200, { ok: true, seenAt: "2026-11-08T09:00:00.000Z" }));
       }
       if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
@@ -95,7 +172,7 @@ describe("live Vite application", () => {
 
     fireEvent.click(within(popup).getByRole("button", { name: /Got it/ }));
     await waitFor(() => expect(document.querySelector('[aria-labelledby="announcement-popup-title"]')).not.toBeInTheDocument());
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/read"))).toBe(true);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/acknowledge"))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /Announcements/ }));
     await waitFor(() => {

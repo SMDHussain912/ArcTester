@@ -5,6 +5,7 @@ export type StudentPage =
   | "practice"
   | "question-bank"
   | "announcements"
+  | "notifications"
   | "assigned-exams"
   | "progress";
 
@@ -14,6 +15,7 @@ interface StudentNavigationProps {
   examActive: boolean;
   pendingExamCount: number;
   unreadAnnouncementCount: number;
+  unreadNotificationCount: number;
   theme: "light" | "dark";
   onToggleTheme: () => void;
   email: string;
@@ -27,6 +29,7 @@ const NAV_ITEMS: { page: StudentPage; label: string }[] = [
   { page: "assigned-exams", label: "Assigned exams" },
   { page: "question-bank", label: "Question bank" },
   { page: "announcements", label: "Announcements" },
+  { page: "notifications", label: "Notifications" },
   { page: "progress", label: "Progress" },
 ];
 
@@ -36,6 +39,7 @@ export default function StudentNavigation({
   examActive,
   pendingExamCount,
   unreadAnnouncementCount,
+  unreadNotificationCount,
   theme,
   onToggleTheme,
   email,
@@ -55,7 +59,9 @@ export default function StudentNavigation({
               ? pendingExamCount
               : page === "announcements"
                 ? unreadAnnouncementCount
-                : 0;
+                : page === "notifications"
+                  ? unreadNotificationCount
+                  : 0;
 
           return (
             <button

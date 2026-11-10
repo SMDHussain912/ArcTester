@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
+import StudentNotificationBanner from "./StudentNotificationBanner";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
@@ -24,7 +25,8 @@ type Invitation = {
   status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
-type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null; seenAt?: string | null };
+type Announcement = { id: string; title: string; message: string; createdAt: string; publishedAt: string; expiresAt: string | null; seenAt?: string | null; acknowledgedAt?: string | null };
+type StudentNotification = { id: string; kind: string; title: string; message: string; href: string; createdAt: string; readAt: string | null; expiresAt: string | null };
 type Question = {
   id: number;
   subject: string;
@@ -91,6 +93,7 @@ export default function App() {
   const [invitationToken, setInvitationToken] = useState("");
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [activeAnnouncements, setActiveAnnouncements] = useState<Announcement[]>([]);
+  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [assignedExams, setAssignedExams] = useState<AssignedExam[]>([]);
@@ -180,6 +183,29 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.role !== "STUDENT") {
+      setStudentNotifications([]);
+      return;
+    }
+    let cancelled = false;
+    const refreshNotifications = () => {
+      request<{ notifications: StudentNotification[] }>(activePage === "notifications" ? "/notifications" : "/notifications?unread=true")
+        .then(({ notifications: items }) => {
+          if (!cancelled) setStudentNotifications(Array.isArray(items) ? items : []);
+        })
+        .catch(() => {
+          // Notification delivery is supplementary; keep the core student workspace usable.
+        });
+    };
+    refreshNotifications();
+    const interval = window.setInterval(refreshNotifications, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [user, activePage]);
+
+  useEffect(() => {
     if (user?.role !== "STUDENT" || !["dashboard", "announcements"].includes(activePage)) return;
     request<{ announcements: Announcement[] }>("/announcements")
       .then(({ announcements: items }) => setAnnouncements(Array.isArray(items) ? items : []))
@@ -252,9 +278,33 @@ export default function App() {
     return () => { cancelled = true; };
   }, [user, test, result]);
 
+  async function markStudentNotificationRead(id: string) {
+    try {
+      const result = await request<{ readAt: string }>(`/notifications/${id}/read`, { method: "POST", body: JSON.stringify({}) });
+      setStudentNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+    } catch (cause) {
+      setError((cause as Error).message);
+    }
+  }
+
+  async function openStudentNotification(id: string) {
+    const notification = studentNotifications.find((item) => item.id === id);
+    if (!notification) return;
+    await markStudentNotificationRead(id);
+    if (notification.href === "/assignments") {
+      setActivePage("assigned-exams");
+      return;
+    }
+    const resultMatch = notification.href.match(/^\/assignments\/([^/]+)\/result$/);
+    if (resultMatch) {
+      setActivePage("assigned-exams");
+      void reviewAssignedExam(resultMatch[1]);
+    }
+  }
+
   async function dismissAnnouncement(id: string) {
     try {
-      await request("/announcements/" + id + "/read", { method: "POST" });
+      await request("/announcements/" + id + "/acknowledge", { method: "POST" });
       setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
     } catch (cause) {
       setError((cause as Error).message);
@@ -556,8 +606,8 @@ export default function App() {
   async function acknowledgeAnnouncement(id: string) {
     setBusy(true);
     try {
-      const result = await request<{ seenAt: string }>(`/announcements/${id}/read`, { method: "POST" });
-      setAnnouncements((current) => current.map((item) => item.id === id ? { ...item, seenAt: result.seenAt } : item));
+      const result = await request<{ seenAt: string; acknowledgedAt: string | null }>(`/announcements/${id}/acknowledge`, { method: "POST" });
+      setAnnouncements((current) => current.map((item) => item.id === id ? { ...item, seenAt: result.seenAt, acknowledgedAt: result.acknowledgedAt } : item));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -866,6 +916,7 @@ export default function App() {
         examActive={Boolean(activeAssignmentPackage)}
         pendingExamCount={assignedExams.filter((item) => !item.submission).length}
         unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length}
+        unreadNotificationCount={studentNotifications.filter((item) => !item.readAt).length}
         theme={theme}
         onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
         email={user.email}
@@ -1005,6 +1056,23 @@ export default function App() {
               </article>;
             })}
           </section>
+        ) : activePage === "notifications" ? (
+          <section className="student-notifications-page">
+            <div className="page-heading">
+              <div><p className="eyebrow">STUDENT COMMUNICATION</p><h1>Notification inbox</h1><p className="muted">New exam assignments, graded results and submissions awaiting review.</p></div>
+              <button className="ghost" onClick={() => request<{ notifications: StudentNotification[] }>("/notifications").then(({ notifications: items }) => setStudentNotifications(items)).catch((cause) => setError((cause as Error).message))}>Refresh</button>
+            </div>
+            {studentNotifications.length === 0 ? <div className="panel empty-state"><h2>No notifications yet</h2><p className="muted">New assignments and exam results will appear here.</p></div> : studentNotifications.map((item) => (
+              <article className="panel notification-row" key={item.id}>
+                <div className="announcement-meta"><span className={item.readAt ? "status status-used" : "status status-pending"}>{item.readAt ? "READ" : "UNREAD"}</span><small>{new Date(item.createdAt).toLocaleString()}</small></div>
+                <h2>{item.title}</h2><p>{item.message}</p>
+                <div className="row">
+                  <button className="ghost" onClick={() => openStudentNotification(item.id)}>Open</button>
+                  {!item.readAt ? <button className="ghost" onClick={() => void markStudentNotificationRead(item.id)}>Mark as read</button> : null}
+                </div>
+              </article>
+            ))}
+          </section>
         ) : activePage === "announcements" ? (
           <section className="student-announcements">
             <div className="page-heading">
@@ -1016,6 +1084,7 @@ export default function App() {
                 <div className="announcement-meta"><span className={item.seenAt ? "status status-used" : "status status-pending"}>{item.seenAt ? "SEEN" : "UNREAD"}</span><small>{new Date(item.publishedAt).toLocaleString()}</small></div>
                 <h2>{item.title}</h2><p>{item.message}</p>
                 {item.expiresAt ? <small className="muted">Expires {new Date(item.expiresAt).toLocaleString()}</small> : null}
+                {item.acknowledgedAt ? <small className="muted" role="status">Acknowledged {new Date(item.acknowledgedAt).toLocaleString()}</small> : <button className="ghost" onClick={() => void acknowledgeAnnouncement(item.id)}>Acknowledge</button>}
               </article>
             ))}
           </section>
@@ -1156,6 +1225,13 @@ export default function App() {
         )}
         {error && <p className="error">{error}</p>}
       </main>
+      {!activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+        <StudentNotificationBanner
+          notification={studentNotifications.find((item) => !item.readAt)!}
+          onRead={(id) => void markStudentNotificationRead(id)}
+          onOpen={(notification) => void openStudentNotification(notification.id)}
+        />
+      )}
       {activeAnnouncements[0] && (
         <StudentAnnouncementDialog
           announcement={activeAnnouncements[0]}
