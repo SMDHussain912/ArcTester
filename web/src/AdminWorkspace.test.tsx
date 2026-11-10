@@ -143,7 +143,7 @@ describe("administrator question bank", () => {
     expect(screen.getByText("stale@example.com")).toBeInTheDocument();
     expect(screen.getByText("CONNECTED")).toBeInTheDocument();
     expect(screen.getByText("STALE")).toBeInTheDocument();
-    expect(screen.getByText("ECET Mock 01")).toBeInTheDocument();
+    expect(screen.getByText(/ECET Mock 01 · Started/)).toBeInTheDocument();
     expect(screen.getByText("Submission: REVIEW_REQUIRED")).toBeInTheDocument();
     expect(screen.getByText("Focus losses + disconnects")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === "/admin/exams/live-sessions")).toBe(true);
