@@ -1,5 +1,5 @@
-import { afterEach, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 
 const announcement: AdminAnnouncement = { id: "notice-1", title: "Mock schedule", message: "The mock test opens Friday.", startsAt: "2026-11-10T08:00:00.000Z", expiresAt: null, createdAt: "2026-11-10T08:00:00.000Z", _count: { views: 12 } };
