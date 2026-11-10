@@ -12,6 +12,7 @@ import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
+import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
@@ -1122,30 +1123,12 @@ export default function App() {
               </div>
             </section>
             {activePage === "progress" ? <StudentProgress /> : null}
-            <section hidden={activePage !== "question-bank"}>
-              <div className="section-head">
-                <div>
-                  <p className="eyebrow">QUESTION BANK</p>
-                  <h2>Practice by subject</h2>
-                </div>
-              </div>
-              <div className="grid two">
-                {bank?.subjects.map((item) => (
-                  <button
-                    className="panel subject-card"
-                    key={item.subject}
-                    disabled={busy}
-                    onClick={() => void startTest("practice", item.subject)}
-                  >
-                    <span>
-                      <strong>{item.subject}</strong>
-                      <small>{item.count} questions</small>
-                    </span>
-                    <b>→</b>
-                  </button>
-                ))}
-              </div>
-            </section>
+            <StudentQuestionBankBrowser
+              subjects={bank?.subjects ?? []}
+              visible={activePage === "question-bank"}
+              disabled={busy}
+              onChooseSubject={(subject) => void startTest("practice", subject)}
+            />
           </>
         )}
         {error && <p className="error">{error}</p>}
