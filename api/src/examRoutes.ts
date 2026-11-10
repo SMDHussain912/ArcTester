@@ -13,6 +13,11 @@ import {
   QUESTION_ANALYTICS_WEAK_ACCURACY,
 } from "./analytics.js";
 
+// A deadline-triggered client submit may arrive up to 10 seconds after the
+// authoritative deadline because of request scheduling and network transit.
+// Requests received later than this window are retained for invigilator review.
+const AUTO_SUBMIT_GRACE_MS = 10_000;
+
 const CreateExamSchema = z.object({
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(2000).default(""),
@@ -1654,114 +1659,161 @@ export function examRouter(db: PrismaClient): Router {
       const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + sessionPausedDurationMs;
       const staleHeartbeat = !sessionLastHeartbeatAt ||
         serverSubmittedAt.getTime() - sessionLastHeartbeatAt.getTime() > 90000;
+      const durationDeadlineMs = startedAt.getTime() + durationMs;
+      const assignmentDueAtMs = assignment.dueAt?.getTime() ?? Number.POSITIVE_INFINITY;
+      const authoritativeDeadlineMs = Math.min(durationDeadlineMs, assignmentDueAtMs);
+      const pastAutoSubmitGraceWindow =
+        serverSubmittedAt.getTime() > authoritativeDeadlineMs + AUTO_SUBMIT_GRACE_MS;
       const suspiciousTiming =
         offlineSessionReconciled ||
-        serverSubmittedAt.getTime() >= startedAt.getTime() + durationMs + 60000 ||
+        pastAutoSubmitGraceWindow ||
         staleHeartbeat ||
         (assignment.availableFrom !== null && startedAt < assignment.availableFrom) ||
-        (assignment.dueAt !== null && submittedAt >= assignment.dueAt) ||
         new Date(input.startedAt).getTime() < startedAt.getTime() - 60000 ||
         new Date(input.startedAt).getTime() > startedAt.getTime() + 60000;
 
-      const submission = await db.$transaction(async (tx) => {
-        const existing = await tx.examSubmission.findUnique({
-          where: { assignmentId: assignment.id },
-        });
-        if (existing) {
-          if (existing.attemptUuid === input.attemptUuid) return existing;
-          throw conflict("An attempt has already been submitted for this assignment.");
-        }
+      let submission: {
+        id: string;
+        attemptUuid: string;
+        status: string;
+        score: number | null;
+        maximumScore: number | null;
+        submittedAt: Date;
+        receivedAt: Date;
+      };
+      let duplicateSubmission = false;
+      try {
+        submission = await db.$transaction(async (tx) => {
+          const existing = await tx.examSubmission.findUnique({
+            where: { assignmentId: assignment.id },
+          });
+          if (existing) {
+            if (existing.attemptUuid === input.attemptUuid) {
+              duplicateSubmission = true;
+              return existing;
+            }
+            throw conflict("An attempt has already been submitted for this assignment.");
+          }
 
-        const duplicateAttempt = await tx.examSubmission.findUnique({
-          where: { attemptUuid: input.attemptUuid },
-        });
-        if (duplicateAttempt) {
-          throw conflict("This attempt identifier has already been used.");
-        }
+          const duplicateAttempt = await tx.examSubmission.findUnique({
+            where: { attemptUuid: input.attemptUuid },
+          });
+          if (duplicateAttempt) {
+            throw conflict("This attempt identifier has already been used.");
+          }
 
-        // Check idempotency before reconciling an offline session. The session
-        // and its audit event are created inside this transaction so any later
-        // failure (including a reused attempt UUID) rolls them back together.
-        const submissionSession = examSession ?? await tx.examSession.create({
-          data: {
-            assignmentId: assignment.id,
-            studentId: req.user!.id,
-            status: "ACTIVE",
-            startedAt: serverStartedAt,
-            lastHeartbeatAt: serverSubmittedAt,
-            lastActivityAt: serverSubmittedAt,
-            events: {
-              create: {
-                actorId: req.user!.id,
-                type: "OFFLINE_SESSION_RECONCILED",
-                detail: "An offline exam attempt was reconciled when the device reconnected.",
+          // Check idempotency before reconciling an offline session. The session
+          // and its audit event are created inside this transaction so any later
+          // failure (including a reused attempt UUID) rolls them back together.
+          const submissionSession = examSession ?? await tx.examSession.create({
+            data: {
+              assignmentId: assignment.id,
+              studentId: req.user!.id,
+              status: "ACTIVE",
+              startedAt: serverStartedAt,
+              lastHeartbeatAt: serverSubmittedAt,
+              lastActivityAt: serverSubmittedAt,
+              events: {
+                create: {
+                  actorId: req.user!.id,
+                  type: "OFFLINE_SESSION_RECONCILED",
+                  detail: "An offline exam attempt was reconciled when the device reconnected.",
+                },
               },
             },
-          },
-        });
+          });
 
-        if (!offlineSessionReconciled && input.revision !== undefined) {
-          const currentRevision = await tx.examSession.updateMany({
+          if (!offlineSessionReconciled && input.revision !== undefined) {
+            const currentRevision = await tx.examSession.updateMany({
+              where: {
+                id: submissionSession.id,
+                status: "ACTIVE",
+                startedAt: serverStartedAt,
+                answersRevision: input.revision,
+              },
+              data: { answersRevision: { increment: 1 } },
+            });
+            if (currentRevision.count !== 1) {
+              throw conflict("These answers were changed in another session. Reload the exam before submitting.");
+            }
+          }
+
+          // Finalize only if the session is still active with the same start time
+          // observed before the transaction. This prevents a concurrent invigilator
+          // pause or termination from being overwritten by a late submission.
+          const completedSession = await tx.examSession.updateMany({
             where: {
               id: submissionSession.id,
               status: "ACTIVE",
               startedAt: serverStartedAt,
-              answersRevision: input.revision,
             },
-            data: { answersRevision: { increment: 1 } },
+            data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
           });
-          if (currentRevision.count !== 1) {
-            throw conflict("These answers were changed in another session. Reload the exam before submitting.");
+          if (completedSession.count !== 1) {
+            const concurrentSubmission = await tx.examSubmission.findUnique({
+              where: { assignmentId: assignment.id },
+            });
+            if (concurrentSubmission?.attemptUuid === input.attemptUuid) {
+              duplicateSubmission = true;
+              return concurrentSubmission;
+            }
+            throw conflict("The exam session changed before submission was finalized. Refresh and contact the invigilator.");
           }
-        }
 
-        // Finalize only if the session is still active with the same start time
-        // observed before the transaction. This prevents a concurrent invigilator
-        // pause or termination from being overwritten by a late submission.
-        const completedSession = await tx.examSession.updateMany({
-          where: {
-            id: submissionSession.id,
-            status: "ACTIVE",
-            startedAt: serverStartedAt,
-          },
-          data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
-        });
-        if (completedSession.count !== 1) {
-          throw conflict("The exam session changed before submission was finalized. Refresh and contact the invigilator.");
-        }
-
-        const created = await tx.examSubmission.create({
-          data: {
-            assignmentId: assignment.id,
-            attemptUuid: input.attemptUuid,
-            startedAt,
-            submittedAt,
-            status: suspiciousTiming ? "REVIEW_REQUIRED" : "GRADED",
-            score,
-            maximumScore,
-            answers: { create: answerRows },
-          },
-          select: {
-            id: true,
-            attemptUuid: true,
-            status: true,
-            score: true,
-            maximumScore: true,
-            submittedAt: true,
-            receivedAt: true,
-          },
-        });
-        await tx.examAssignment.update({
-          where: { id: assignment.id },
-          data: { status: "SUBMITTED" },
-        });
-        await tx.examSessionEvent.create({
-          data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
-        });
-        return created;
+          const created = await tx.examSubmission.create({
+            data: {
+              assignmentId: assignment.id,
+              attemptUuid: input.attemptUuid,
+              startedAt,
+              submittedAt,
+              status: suspiciousTiming ? "REVIEW_REQUIRED" : "GRADED",
+              score,
+              maximumScore,
+              answers: { create: answerRows },
+            },
+            select: {
+              id: true,
+              attemptUuid: true,
+              status: true,
+              score: true,
+              maximumScore: true,
+              submittedAt: true,
+              receivedAt: true,
+            },
+          });
+          await tx.examAssignment.update({
+            where: { id: assignment.id },
+            data: { status: "SUBMITTED" },
+          });
+          await tx.examSessionEvent.create({
+            data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
+          });
+          return created;
       });
 
-      res.status(201).json({ ok: true, duplicate: false, submission });
+      } catch (error) {
+        const errorCode = typeof error === "object" && error !== null && "code" in error
+          ? (error as { code?: string }).code
+          : undefined;
+        if (errorCode === "P2002") {
+          // Two identical submit requests can both pass the initial read.
+          // The unique assignment constraint elects one winner; the loser
+          // returns that committed result instead of surfacing a 500.
+          const duplicate = await db.examSubmission.findUnique({
+            where: { assignmentId: assignment.id },
+            select: {
+              id: true, attemptUuid: true, status: true, score: true,
+              maximumScore: true, submittedAt: true, receivedAt: true,
+            },
+          });
+          if (duplicate?.attemptUuid === input.attemptUuid) {
+            return res.json({ ok: true, duplicate: true, submission: duplicate });
+          }
+        }
+        throw error;
+      }
+
+      res.status(duplicateSubmission ? 200 : 201).json({ ok: true, duplicate: duplicateSubmission, submission });
     } catch (error) {
       next(error);
     }

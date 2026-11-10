@@ -48,8 +48,8 @@ type ExamPackage = {
 };
 type ExamResult = {
   status: string;
-  score: number;
-  maximumScore: number;
+  score: number | null;
+  maximumScore: number | null;
   questions: {
     id: string;
     position: number;
@@ -144,11 +144,14 @@ export default function AssignedExams() {
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(!navigator.onLine);
   const [paused, setPaused] = useState(false);
-  const [syncState, setSyncState] = useState<"saved locally" | "synced" | "submitted">("saved locally");
+  const [syncState, setSyncState] = useState<"saved locally" | "synced" | "submitted" | "awaiting review">("saved locally");
   const [reconnecting, setReconnecting] = useState(false);
   const revision = useRef(0);
   const answersRef = useRef<Record<string, number>>({});
   const submitting = useRef(false);
+  const syncInFlight = useRef(false);
+  const answersDirty = useRef(false);
+  const syncConflict = useRef(false);
   const clockAnchorRef = useRef<ServerClockAnchor | null>(null);
   const remainingRef = useRef(0);
   const autoSubmitStarted = useRef(false);
@@ -221,6 +224,8 @@ export default function AssignedExams() {
         }
       }
       const merged = { ...restoredAnswers, ...(backup?.answers ?? {}) };
+      answersDirty.current = Boolean(backup) && JSON.stringify(merged) !== JSON.stringify(restoredAnswers);
+      syncConflict.current = false;
       setActive(packageResponse.package);
       setActiveId(id);
       setSession(serverSession);
@@ -243,7 +248,8 @@ export default function AssignedExams() {
   }
 
   async function syncAnswers() {
-    if (!active || !activeId || !session || paused || offline || result) return;
+    if (!active || !activeId || !session || paused || offline || result || !answersDirty.current || syncConflict.current || syncInFlight.current) return;
+    syncInFlight.current = true;
     const payload = active.questions.map((question) => ({
       examQuestionId: question.id,
       selectedIndex: answersRef.current[question.id] === undefined
@@ -256,13 +262,17 @@ export default function AssignedExams() {
         body: JSON.stringify({ revision: revision.current, answers: payload }),
       });
       revision.current = saved.revision;
+      answersDirty.current = false;
       setSyncState("synced");
     } catch (caught) {
       if (isNetworkError(caught)) setOffline(true);
       else if (caught instanceof HttpError && caught.status === 409) {
-        setPaused(true);
-        setHeldSeconds(clockAnchorRef.current ? holdServerClock(clockAnchorRef.current, performance.now()) : remainingRef.current);
+        syncConflict.current = true;
+        setSyncState("saved locally");
+        setError("Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing.");
       } else setError((caught as Error).message);
+    } finally {
+      syncInFlight.current = false;
     }
   }
 
@@ -382,14 +392,17 @@ export default function AssignedExams() {
       if (!submitted) throw new TypeError("Could not reach the server.");
       const response = await request<{ result: ExamResult }>("/exams/assignments/" + activeId + "/result");
       setResult({ ...response.result, questions: Array.isArray(response.result?.questions) ? response.result.questions : [] });
-      setSyncState("submitted"); localStorage.removeItem(backupKey(activeId)); await load();
+      setSyncState(response.result.status === "REVIEW_REQUIRED" ? "awaiting review" : "submitted");
+      localStorage.removeItem(backupKey(activeId)); await load();
     } catch (caught) {
       if (isNetworkError(caught)) { setOffline(true); setError("Could not reach the server. Your answers are saved on this device. Press Retry submission when you are back online."); }
-      else { const httpError = caught as HttpError; setError(httpError.message); if (httpError.status === 409 || httpError.status === 403) autoSubmitStarted.current = true; }
+      else { const httpError = caught as HttpError; setError(httpError.message); if (httpError.status === 409 || httpError.status === 403) { autoSubmitStarted.current = true; if (httpError.status === 409) syncConflict.current = true; } }
     } finally { setBusy(false); submitting.current = false; }
   }
 
   function chooseAnswer(questionId: string, index: number) {
+    answersDirty.current = true;
+    setSyncState("saved locally");
     setAnswers((current) => ({ ...current, [questionId]: index }));
   }
 
@@ -422,7 +435,14 @@ export default function AssignedExams() {
                 <div><p className="eyebrow">EXAM SUBMITTED</p><h2>{active.title}</h2></div>
                 <button className="ghost" onClick={close}>Back to dashboard</button>
               </div>
-              <div className="panel score-panel"><strong>{result.score} / {result.maximumScore}</strong><span className="muted">Final score · {result.status}</span></div>
+              <div className="panel score-panel">
+                {result.status === "REVIEW_REQUIRED" ? (
+                  <strong>Submitted - awaiting invigilator review</strong>
+                ) : (
+                  <strong>{result.score} / {result.maximumScore}</strong>
+                )}
+                <span className="muted">{result.status === "REVIEW_REQUIRED" ? "Awaiting review" : "Submitted · final score"}</span>
+              </div>
               {result.questions.map((question, index) => (
                 <article className="panel question-card" key={question.id}>
                   <p className="eyebrow">QUESTION {index + 1} · {question.subject}</p>
@@ -440,7 +460,7 @@ export default function AssignedExams() {
               </div>
               {paused && <p className="status status-used" role="status">Paused by invigilator · timer held at {Math.floor((heldSeconds ?? remaining) / 60).toString().padStart(2, "0")}:{((heldSeconds ?? remaining) % 60).toString().padStart(2, "0")}. Waiting for resume.</p>}
               {offline && <p className="status status-used" role="status">Offline · answers are saved locally and will sync after reconnect.</p>}
-              {!offline && <p className="muted" role="status">{syncState === "synced" ? "Synced with server" : "Saved locally"}</p>}
+              {!offline && <p className="muted" role="status">{syncState === "synced" ? "Synced with server" : syncState === "submitted" ? "Submitted" : syncState === "awaiting review" ? "Submitted - awaiting invigilator review" : "Saved locally"}</p>}
               {active.questions.map((question, index) => (
                 <article className="panel question-card" key={question.id}>
                   <p className="eyebrow">QUESTION {index + 1} · {question.subject}{question.topic ? " / " + question.topic : ""} · +{question.marks} / −{question.negativeMarks}</p>

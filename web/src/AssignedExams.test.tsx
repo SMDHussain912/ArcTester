@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AssignedExams from "./AssignedExams";
 
@@ -94,6 +94,7 @@ describe("assigned exam server session client", () => {
     expect(await screen.findByText("Could not reach the server. Your answers are saved on this device. Press Retry submission when you are back online.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry submission" }));
     await waitFor(() => expect(screen.getByText("2 / 2")).toBeInTheDocument());
+    expect(screen.getByText("Submitted · final score")).toBeInTheDocument();
   });
   it("holds the timer while paused and automatically resumes after the administrator resumes the session", async () => {
     let resumed = false;
@@ -160,6 +161,107 @@ describe("assigned exam server session client", () => {
     await waitFor(() => expect(screen.getByText(status === 403 ? "Forbidden by administrator." : "The examination time has expired.")).toBeInTheDocument());
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/submission"))).toHaveLength(1);
     expect(screen.getByText(status === 403 ? "Forbidden by administrator." : "The examination time has expired.")).toBeInTheDocument();
+  });
+
+  it("restores the local backup after reload and lets it win over the last server save", async () => {
+    const backup = JSON.stringify({
+      attemptUuid: "f2d3a7a1-5b18-4b9d-8a30-1e6b1d5a7c10",
+      startedAt: session.startedAt,
+      answers: { "question-1": 0 },
+      savedAt: session.serverTime,
+    });
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => key === "arctester:assigned-exam:assignment-1" ? backup : null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    });
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/exams/assigned")) return jsonResponse({ assignments: [{ id: "assignment-1", status: "ASSIGNED", assignedAt: session.serverTime, availableFrom: null, dueAt: null, exam: { id: "exam-1", title: "Lifecycle test", description: "" }, version: 1, durationMinutes: 60, questionCount: 1, submission: null }] });
+      if (path.endsWith("/package")) return jsonResponse({ package: { assignmentId: "assignment-1", title: "Lifecycle test", description: "", version: 1, instructions: "", durationMinutes: 60, serverTime: session.serverTime, questions: [{ id: "question-1", position: 0, subject: "CSE", topic: null, text: "Choose one", options: ["A", "B", "C", "D"], optionOrder: [0, 1, 2, 3], marks: 2, negativeMarks: 0 }] } });
+      if (path.endsWith("/session/start")) return jsonResponse({ session });
+      if (path.endsWith("/answers") && (!init || init.method === undefined)) return jsonResponse({ revision: 2, answers: [{ examQuestionId: "question-1", selectedIndex: 1 }] });
+      if (path.endsWith("/answers") && init?.method === "PUT") return jsonResponse({ revision: 3 });
+      return jsonResponse({});
+    });
+
+    render(<AssignedExams />);
+    fireEvent.click(await screen.findByRole("button", { name: /Start exam/ }));
+    const question = await screen.findByText("Choose one");
+    const card = question.closest("article");
+    expect(card).not.toBeNull();
+    expect(within(card!).getByRole("button", { name: /A/ })).toHaveClass("selected");
+    expect(within(card!).getByRole("button", { name: /B/ })).not.toHaveClass("selected");
+    expect(screen.getByText("Saved locally")).toBeInTheDocument();
+  });
+
+  it("syncs offline answers once after reconnect and then shows the synced state", async () => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    render(<AssignedExams />);
+    fireEvent.click(await screen.findByRole("button", { name: /Start exam/ }));
+    await screen.findByText("Choose one");
+    fireEvent.click(screen.getByRole("button", { name: /A/ }));
+    expect(screen.getByText(/Offline · answers are saved locally/)).toBeInTheDocument();
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    await waitFor(() => expect(screen.getByText("Synced with server")).toBeInTheDocument());
+    const answerSaves = fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/answers") && init?.method === "PUT"
+    );
+    expect(answerSaves).toHaveLength(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/answers") && init?.method === "PUT"
+    )).toHaveLength(1);
+  });
+
+  it("shows an actionable conflict when a stale answer revision receives HTTP 409", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/exams/assigned")) return jsonResponse({ assignments: [{ id: "assignment-1", status: "ASSIGNED", assignedAt: session.serverTime, availableFrom: null, dueAt: null, exam: { id: "exam-1", title: "Lifecycle test", description: "" }, version: 1, durationMinutes: 60, questionCount: 1, submission: null }] });
+      if (path.endsWith("/package")) return jsonResponse({ package: { assignmentId: "assignment-1", title: "Lifecycle test", description: "", version: 1, instructions: "", durationMinutes: 60, serverTime: session.serverTime, questions: [{ id: "question-1", position: 0, subject: "CSE", topic: null, text: "Choose one", options: ["A", "B", "C", "D"], optionOrder: [0, 1, 2, 3], marks: 2, negativeMarks: 0 }] } });
+      if (path.endsWith("/session/start")) return jsonResponse({ session });
+      if (path.endsWith("/answers") && (!init || init.method === undefined)) return jsonResponse({ revision: 4, answers: [] });
+      if (path.endsWith("/answers") && init?.method === "PUT") return jsonResponse({ error: "Revision conflict." }, 409);
+      return jsonResponse({});
+    });
+
+    render(<AssignedExams />);
+    fireEvent.click(await screen.findByRole("button", { name: /Start exam/ }));
+    await screen.findByText("Choose one");
+    fireEvent.click(screen.getByRole("button", { name: /A/ }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing."
+    );
+    expect(screen.queryByText(/Paused by invigilator/)).not.toBeInTheDocument();
+  });
+
+  it("shows submitted and awaiting-review states without exposing an ungraded score", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/exams/assigned")) return jsonResponse({ assignments: [{ id: "assignment-1", status: "ASSIGNED", assignedAt: session.serverTime, availableFrom: null, dueAt: null, exam: { id: "exam-1", title: "Lifecycle test", description: "" }, version: 1, durationMinutes: 60, questionCount: 1, submission: null }] });
+      if (path.endsWith("/package")) return jsonResponse({ package: { assignmentId: "assignment-1", title: "Lifecycle test", description: "", version: 1, instructions: "", durationMinutes: 60, serverTime: session.serverTime, questions: [{ id: "question-1", position: 0, subject: "CSE", topic: null, text: "Choose one", options: ["A", "B", "C", "D"], optionOrder: [0, 1, 2, 3], marks: 2, negativeMarks: 0 }] } });
+      if (path.endsWith("/session/start")) return jsonResponse({ session });
+      if (path.endsWith("/answers")) return jsonResponse({ revision: 0, answers: [] });
+      if (path.endsWith("/submission")) return jsonResponse({ submission: { id: "submission-review-1" } }, 201);
+      if (path.endsWith("/result")) return jsonResponse({ result: { status: "REVIEW_REQUIRED", score: null, maximumScore: null, questions: [] } });
+      return jsonResponse({});
+    });
+
+    render(<AssignedExams />);
+    fireEvent.click(await screen.findByRole("button", { name: /Start exam/ }));
+    await screen.findByText("Choose one");
+    fireEvent.click(screen.getByRole("button", { name: /A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit exam" }));
+
+    expect(await screen.findByText("Submitted - awaiting invigilator review")).toBeInTheDocument();
+    expect(screen.queryByText("null / null")).not.toBeInTheDocument();
   });
 
 });

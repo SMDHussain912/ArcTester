@@ -12,14 +12,18 @@ function response(status: number, body: unknown): Response {
 
 describe("live Vite application", () => {
   const fetchMock = vi.fn();
+  let localStorageValues = new Map<string, string>();
 
   beforeEach(() => {
     fetchMock.mockReset();
+    localStorageValues = new Map();
     vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => null),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
+      get length() { return localStorageValues.size; },
+      key: vi.fn((index: number) => [...localStorageValues.keys()][index] ?? null),
+      getItem: vi.fn((key: string) => localStorageValues.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => { localStorageValues.set(key, value); }),
+      removeItem: vi.fn((key: string) => { localStorageValues.delete(key); }),
+      clear: vi.fn(() => { localStorageValues.clear(); }),
     });
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -323,6 +327,33 @@ describe("live Vite application", () => {
       count: 5,
       difficulty: "easy",
     });
+  });
+
+  it("clears local assigned-exam backups after successful logout", async () => {
+    localStorage.setItem("arctester:exam-backup-owner", "9");
+    localStorage.setItem("arctester:assigned-exam:assignment-1", "private answers");
+    localStorage.setItem("arctester-assignment-answers-assignment-1", "private answers");
+    localStorage.setItem("arctester-theme", "dark");
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 9, email: "learner@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements")) return Promise.resolve(response(200, { announcements: [] }));
+      if (path.endsWith("/auth/logout") && init?.method === "POST") return Promise.resolve(response(200, { ok: true }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText("learner@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+
+    await waitFor(() => expect(localStorage.getItem("arctester:assigned-exam:assignment-1")).toBeNull());
+    expect(localStorage.getItem("arctester-assignment-answers-assignment-1")).toBeNull();
+    expect(localStorage.getItem("arctester:exam-backup-owner")).toBeNull();
+    expect(localStorage.getItem("arctester-theme")).toBe("dark");
   });
 
   it("keeps the user signed in when server-side logout fails", async () => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
+import { bindLocalExamBackupOwner, clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
@@ -144,7 +145,10 @@ export default function App() {
 
   useEffect(() => {
     request<{ user: User }>("/auth/me")
-      .then(({ user: current }) => setUser(current))
+      .then(({ user: current }) => {
+        bindLocalExamBackupOwner(current.id);
+        setUser(current);
+      })
       .catch(() => setUser(null));
   }, []);
 
@@ -589,6 +593,7 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({ email, password }),
         });
+        bindLocalExamBackupOwner(session.user.id);
         setUser(session.user);
       }
       setPassword("");
@@ -741,6 +746,7 @@ export default function App() {
       setBusy(false);
       return;
     }
+    clearLocalExamBackupsOnLogout();
     setUser(null);
     setBank(null);
     const activePracticeId = safeStorage.getItem("arctester-active-practice-attempt");
