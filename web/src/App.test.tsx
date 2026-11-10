@@ -149,6 +149,44 @@ describe("live Vite application", () => {
     expect(localStorageValues.get(backupKey)).toBe(laterBackup);
   });
 
+  it("shows a review-pending message and hides answer review when an assigned result has no score", async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, {
+        assignments: [{
+          id: "assignment-ungraded",
+          assignedAt: new Date().toISOString(),
+          availableFrom: null,
+          dueAt: null,
+          exam: { id: "exam-ungraded", title: "Pending review exam", description: "" },
+          version: 1,
+          durationMinutes: 30,
+          questionCount: 1,
+          submission: {
+            id: "submission-ungraded",
+            status: "RECEIVED",
+            score: null,
+            maximumScore: null,
+            submittedAt: new Date().toISOString(),
+          },
+        }],
+      }));
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    expect(await screen.findByText("Awaiting administrator review. Your result will appear after approval.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review answers" })).not.toBeInTheDocument();
+  });
+
   it("shows and acknowledges in-app notices for newly assigned exams and results", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
