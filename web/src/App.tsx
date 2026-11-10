@@ -2,9 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
+import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
+import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
+import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
+import { buildPracticeConfig } from "./practiceConfig";
+import { createApiClient } from "./apiClient";
+import { getRemainingPracticeSeconds } from "./practiceTimer";
 import { bindLocalExamBackupOwner, clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
+import AuthScreen from "./AuthScreen";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentNotificationBanner from "./StudentNotificationBanner";
@@ -13,13 +20,17 @@ import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
+import StudentQuestionBankStats from "./StudentQuestionBankStats";
+import StudentDashboardWelcome from "./StudentDashboardWelcome";
 import StudentPracticeQuickActions from "./StudentPracticeQuickActions";
 import StudentPracticeSubjectTopicFilters from "./StudentPracticeSubjectTopicFilters";
+import StudentPracticePaperConfiguration from "./StudentPracticePaperConfiguration";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const request = createApiClient(API);
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
 type Invitation = {
@@ -32,63 +43,14 @@ type Invitation = {
   status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
-type Question = {
-  id: number;
-  subject: string;
-  topic: string | null;
-  text: string;
-  options: string[];
-};
-type Test = {
-  attemptId: number;
-  mode: string;
-  deadline: string | null;
-  serverNow?: string;
-  questions: Question[];
-  warnings: string[];
-};
+type Test = PracticeSessionTest;
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
 function practiceAnswersKey(attemptId: number | string): string { return `arctester-practice-answers-${attemptId}`; }
 function assignedAnswersKey(assignmentId: string): string { return `arctester-assignment-answers-${assignmentId}`; }
 function assignedAttemptKey(assignmentId: string): string { return `arctester-assigned-attempt-${assignmentId}`; }
-type Result = {
-  attemptId: number;
-  score: number;
-  total: number;
-  breakdown: { subject: string; correct: number; total: number }[];
-  questions: {
-    questionId: number;
-    text: string;
-    options: string[];
-    selectedIndex: number | null;
-    correctIndex: number;
-    isCorrect: boolean;
-    explanation: string;
-  }[];
-};
+type Result = PracticeResult;
 
-function browserDeviceFingerprint(): string {
-  const key = "arctester-device-fingerprint";
-  const existing = safeStorage.getItem(key);
-  if (existing) return existing;
-  const fingerprint =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  safeStorage.setItem(key, fingerprint);
-  return fingerprint;
-}
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: { "content-type": "application/json", ...init.headers },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || "The request failed.");
-  return body as T;
-}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -137,9 +99,7 @@ export default function App() {
     ? Math.max(0, Math.ceil((effectiveAssignmentDeadline - (assignmentClock + assignmentServerOffset)) / 1000))
     : 0;
   const practiceDeadline = test?.deadline ? new Date(test.deadline).getTime() : Number.POSITIVE_INFINITY;
-  const practiceRemainingSeconds = Number.isFinite(practiceDeadline)
-    ? Math.max(0, Math.ceil((practiceDeadline - (practiceClock + practiceServerOffset)) / 1000))
-    : null;
+  const practiceRemainingSeconds = getRemainingPracticeSeconds(practiceDeadline, practiceClock, practiceServerOffset);
   const [activePage, setActivePage] = useState<StudentPage>("dashboard");
   const {
     announcements,
@@ -184,7 +144,7 @@ export default function App() {
       body: JSON.stringify({
         deviceName: "Web browser",
         platform: "web",
-        fingerprint: browserDeviceFingerprint(),
+        fingerprint: getBrowserDeviceFingerprint(safeStorage),
       }),
     }).catch((cause) => setError((cause as Error).message));
     request<Bank>("/bank")
@@ -640,11 +600,7 @@ export default function App() {
   }
 
   function createStudentPracticePaper() {
-    const topicFilters = practiceTopicKeys.flatMap((key) => {
-      try { const parsed = JSON.parse(key) as [string, string]; return [{ subject: parsed[0], topic: parsed[1] }]; }
-      catch { return []; }
-    });
-    void startTest("practice", undefined, { subjects: practiceSubjects, topicFilters, count: practiceQuestionCount, difficulty: practiceDifficulty });
+    void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty));
   }
 
   function selectPracticeAnswer(questionId: number, selectedIndex: number) {
@@ -786,61 +742,19 @@ export default function App() {
 
   if (!user) {
     return (
-      <main className="auth-shell">
-        <section className="auth-card">
-          <Brand />
-          <p className="eyebrow">YOUR PERSONAL PRACTICE SPACE</p>
-          <h1>{register ? "Create your account" : "Welcome back"}</h1>
-          <p className="muted">Sign in to continue your preparation.</p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void authenticate();
-            }}
-          >
-            <label>
-              Email address
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                autoComplete={register ? "new-password" : "current-password"}
-                minLength={register ? 8 : 1}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-            {register && (
-              <label>
-                Invitation code
-                <input
-                  type="text"
-                  autoComplete="one-time-code"
-                  required
-                  value={invitationToken}
-                  onChange={(event) => setInvitationToken(event.target.value)}
-                />
-              </label>
-            )}
-            <button className="primary full" disabled={busy}>
-              {busy ? "Please wait…" : register ? "Create account" : "Sign in"}
-            </button>
-          </form>
-          <button className="text-button" onClick={() => setRegister(!register)}>
-            {register ? "Already have an account? Sign in" : "Have an invitation? Create account"}
-          </button>
-          {error && <p className="error">{error}</p>}
-        </section>
-      </main>
+      <AuthScreen
+        email={email}
+        password={password}
+        invitationToken={invitationToken}
+        register={register}
+        busy={busy}
+        error={error}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onInvitationTokenChange={setInvitationToken}
+        onRegisterChange={setRegister}
+        onAuthenticate={() => void authenticate()}
+      />
     );
   }
 
@@ -904,97 +818,17 @@ export default function App() {
             <div className="assigned-exam-submit"><span className="muted">{Object.keys(assignmentAnswers).length} of {activeAssignmentPackage.questions.length} answered</span><small className={`autosave-status autosave-${assignmentSaveStatus}`}>{assignmentSaveStatus === "saving" ? "Saving to server…" : assignmentSaveStatus === "saved" ? "All answers synced" : assignmentSaveStatus === "error" ? "Sync failed · local backup saved" : "Local backup active"}</small><button className="primary" disabled={busy || assignmentSessionPaused} onClick={() => void submitAssignedExam()}>{assignmentSessionPaused ? "Waiting for invigilator" : busy ? "Submitting…" : "Submit final answers"}</button></div>
           </section>
         ) : activePage === "practice" && test ? (
-          <section>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">PRACTICE SESSION</p>
-                <h1>Stay focused.</h1>
-                <p className="muted">
-                  {test.questions.length} questions · {Object.keys(answers).length} answered
-                  {practiceRemainingSeconds !== null ? <> · <strong className={practiceRemainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{Math.floor(practiceRemainingSeconds / 60).toString().padStart(2, "0")}:{(practiceRemainingSeconds % 60).toString().padStart(2, "0")} remaining</strong></> : null}
-                </p>
-              </div>
-              <button className="ghost" onClick={() => setActivePage("dashboard")}>
-                Leave session
-              </button>
-            </div>
-            {test.warnings.map((warning) => (
-              <p className="notice" key={warning}>
-                {warning}
-              </p>
-            ))}
-            <section className="panel exam-question-navigator" aria-label="Practice question navigator"><div className="exam-progress-heading"><strong>Question progress</strong><span>{Object.keys(answers).length} / {test.questions.length} answered</span></div><div className="exam-progress-track"><span style={{ width: `${test.questions.length ? Object.keys(answers).length / test.questions.length * 100 : 0}%` }} /></div><div className="exam-palette">{test.questions.map((question, index) => <button type="button" key={question.id} aria-label={`Go to question ${index + 1}${answers[question.id] !== undefined ? ", answered" : ", unanswered"}`} className={answers[question.id] !== undefined ? "exam-palette-item answered" : "exam-palette-item"} onClick={() => document.getElementById(`practice-question-${question.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{index + 1}</button>)}</div></section>
-            <div className="question-list">
-              {test.questions.map((question, index) => (
-                <article id={`practice-question-${question.id}`} className="panel question-card" key={question.id}>
-                  <p className="eyebrow">
-                    QUESTION {index + 1} · {question.subject}
-                  </p>
-                  <h2>{question.text}</h2>
-                  <div className="options">
-                    {question.options.map((option, optionIndex) => (
-                      <button
-                        key={optionIndex}
-                        className={
-                          answers[question.id] === optionIndex ? "option selected" : "option"
-                        }
-                        onClick={() =>
-                          selectPracticeAnswer(question.id, optionIndex)
-                        }
-                      >
-                        <span>{String.fromCharCode(65 + optionIndex)}</span>
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-            <button className="primary" disabled={busy} onClick={() => void submitTest()}>
-              {busy ? "Submitting…" : "Submit answers"}
-            </button>
-          </section>
+          <StudentPracticeSession
+            test={test}
+            answers={answers}
+            remainingSeconds={practiceRemainingSeconds}
+            busy={busy}
+            onLeave={() => setActivePage("dashboard")}
+            onSelectAnswer={selectPracticeAnswer}
+            onSubmit={() => void submitTest()}
+          />
         ) : activePage === "practice" && result ? (
-          <section>
-            <div className="page-heading">
-              <div>
-                <p className="eyebrow">SESSION COMPLETE</p>
-                <h1>Your result</h1>
-              </div>
-              <button className="ghost" onClick={() => setResult(null)}>
-                Back to dashboard
-              </button>
-            </div>
-            <div className="panel score-panel">
-              <strong>
-                {result.score} / {result.total}
-              </strong>
-              <span className="muted">Your score</span>
-            </div>
-            <div className="grid two">
-              {result.breakdown.map((item) => (
-                <article className="panel" key={item.subject}>
-                  <h3>{item.subject}</h3>
-                  <p>
-                    {item.correct} / {item.total} correct
-                  </p>
-                </article>
-              ))}
-            </div>
-            <h2 className="section-heading">Answer review</h2>
-            {result.questions.map((question, index) => (
-              <article className="panel question-card" key={question.questionId}>
-                <p className="eyebrow">QUESTION {index + 1}</p>
-                <h3>{question.text}</h3>
-                <p className={question.selectedIndex === null ? "muted" : question.isCorrect ? "success" : "error"}>
-                  {question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"}
-                </p>
-                <p><strong>Your answer:</strong> {question.selectedIndex === null ? "Not answered" : question.options[question.selectedIndex]}</p>
-                <p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p>
-                <p className="muted">{question.explanation}</p>
-              </article>
-            ))}
-          </section>
+          <StudentPracticeResults result={result} onBack={() => setResult(null)} />
         ) : activePage === "assigned-exams" ? (
           <section className="assigned-exams-page">
             <div className="page-heading"><div><p className="eyebrow">EXAM CENTRE</p><h1>Assigned exams</h1><p className="muted">Exams assigned to your account by the administrator.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshAssignedExams()}>Refresh</button></div>
@@ -1023,16 +857,7 @@ export default function App() {
           />
         ) : (
           <>
-            <section hidden={activePage !== "dashboard"} className="welcome panel" id="dashboard">
-              <div>
-                <p className="eyebrow">YOUR LEARNING DASHBOARD</p>
-                <h1>Make every practice count.</h1>
-                <p className="muted">
-                  Pick a subject or start a mixed session. Your progress is saved to your account.
-                </p>
-              </div>
-              <div className="welcome-mark">A</div>
-            </section>
+            <StudentDashboardWelcome visible={activePage === "dashboard"} />
             {activePage === "dashboard" && announcements.length > 0 ? (
               <StudentAnnouncementPreview
                 announcement={announcements[0]}
@@ -1054,18 +879,7 @@ export default function App() {
                 onResume={() => setActivePage("practice")}
               />
             ) : null}
-            <div hidden={activePage !== "dashboard"} className="stats-row">
-              <article className="panel stat">
-                <span className="muted">Question bank</span>
-                <strong>{bank?.total ?? "—"}</strong>
-                <span className="muted">Available questions</span>
-              </article>
-              <article className="panel stat">
-                <span className="muted">Subjects</span>
-                <strong>{bank?.subjects.length ?? "—"}</strong>
-                <span className="muted">In your question bank</span>
-              </article>
-            </div>
+            <StudentQuestionBankStats bank={bank} visible={activePage === "dashboard"} />
             <section hidden={activePage !== "practice"} id="practice">
               <div className="section-head">
                 <div>
@@ -1085,14 +899,13 @@ export default function App() {
                     onTopicKeysChange={setPracticeTopicKeys}
                     onError={setError}
                   />
-                  <div className="practice-builder-section">
-                    <strong>3. Configure your paper</strong>
-                    <div className="practice-config-grid">
-                      <label>Number of questions<input type="number" min={1} max={200} value={practiceQuestionCount} onChange={(event) => setPracticeQuestionCount(Math.max(1, Math.min(200, Math.floor(Number(event.target.value) || 1))))} /></label>
-                      <label>Difficulty<select value={practiceDifficulty} onChange={(event) => setPracticeDifficulty(event.target.value as typeof practiceDifficulty)}><option value="any">All difficulties</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
-                    </div>
-                    <p className="practice-helper">Questions are distributed as evenly as possible across selected subjects. If a subject has too few matching questions, ArcTester will tell you.</p>{practiceSubjects.length > 0 && <div className="practice-quota-preview"><span className="practice-helper">Requested subject distribution</span><div>{practiceSubjects.map((subject, index) => { const base = Math.floor(practiceQuestionCount / practiceSubjects.length); const quota = base + (index < practiceQuestionCount % practiceSubjects.length ? 1 : 0); return <span key={subject}><strong>{subject}</strong><b>{quota}</b></span>; })}</div></div>}
-                  </div>
+                  <StudentPracticePaperConfiguration
+                    selectedSubjects={practiceSubjects}
+                    questionCount={practiceQuestionCount}
+                    difficulty={practiceDifficulty}
+                    onQuestionCountChange={setPracticeQuestionCount}
+                    onDifficultyChange={setPracticeDifficulty}
+                  />
                   <div className="practice-builder-footer"><span className="muted">Your paper will use your selected filters.</span><button className="primary" disabled={busy || practiceSubjects.length === 0 || !bank?.total} onClick={createStudentPracticePaper}>{busy ? "Building paper…" : "Create " + practiceQuestionCount + "-question paper"}</button></div>
                 </article>
                 <StudentPracticeQuickActions
@@ -1130,12 +943,3 @@ export default function App() {
   );
 }
 
-
-function Brand() {
-  return (
-    <a className="brand" href="#dashboard">
-      <span className="brand-mark">A</span>
-      <span>ArcTester</span>
-    </a>
-  );
-}
