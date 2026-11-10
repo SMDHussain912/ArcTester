@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 
 const announcement: AdminAnnouncement = { id: "notice-1", title: "Mock schedule", message: "The mock test opens Friday.", startsAt: "2026-11-10T08:00:00.000Z", expiresAt: null, createdAt: "2026-11-10T08:00:00.000Z", _count: { views: 12 } };
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("AdminAnnouncements", () => {
   it("renders an empty history and the announcement composer", () => {
@@ -13,11 +15,15 @@ describe("AdminAnnouncements", () => {
     expect(screen.getByLabelText(/Expiry date and time/)).toBeTruthy();
   });
 
-  it("renders published notice history and delegates delete", () => {
+  it("requires confirmation before deleting an announcement", () => {
     const onDelete = vi.fn();
+    const confirmMock = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirmMock);
     render(<AdminAnnouncements announcements={[announcement]} title="" message="" expiry="" busy={false} onTitleChange={vi.fn()} onMessageChange={vi.fn()} onExpiryChange={vi.fn()} onCreate={vi.fn()} onRefresh={vi.fn()} onDelete={onDelete} />);
-    expect(screen.getByText("Mock schedule")).toBeTruthy();
-    expect(screen.getByText("12 students have seen this · No expiry")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(confirmMock).toHaveBeenCalledWith("Delete this announcement? Students will no longer see it.");
+    expect(onDelete).not.toHaveBeenCalled();
+    confirmMock.mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("notice-1");
   });
