@@ -76,3 +76,36 @@
 
 /* Keep keyboard focus visible across the student and administrator workspaces. */
 :where(button,a,input,select,textarea,[role="button"],[tabindex]:not([tabindex="-1"])):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+
+/* Student home hero — mirrors the admin workspace hierarchy without mixing roles. */
+.brand-home-button { padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+.brand-home-button:hover:not(:disabled) { opacity: .86; }
+.brand-home-button:disabled { opacity: .65; cursor: not-allowed; }
+.student-home-hero {
+  position: relative; display: flex; min-height: 230px; align-items: center; justify-content: space-between;
+  gap: 28px; overflow: hidden; padding: clamp(26px, 4vw, 42px);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: 20px;
+  background: linear-gradient(118deg, #173f73 0%, #245da2 62%, #3274c5 100%);
+  box-shadow: 0 18px 44px rgba(24, 65, 115, .18); color: #fff;
+}
+.student-home-hero::after {
+  position: absolute; top: -125px; right: 100px; width: 360px; height: 360px;
+  border: 1px solid rgba(255,255,255,.13); border-radius: 50%;
+  box-shadow: 0 0 0 34px rgba(255,255,255,.035), 0 0 0 72px rgba(255,255,255,.025);
+  content: ""; pointer-events: none;
+}
+.student-home-copy { position: relative; z-index: 1; max-width: 690px; }
+.student-home-hero .eyebrow { color: #b9d5fa; }
+.student-home-hero h1 { max-width: 650px; margin: 7px 0 12px; color: #fff; font-size: clamp(30px, 4vw, 43px); }
+.student-home-hero p:not(.eyebrow) { max-width: 610px; margin: 0; color: #e0ecfa; font-size: 14px; line-height: 1.7; }
+.student-home-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 23px; }
+.student-home-actions .primary { background: #fff; color: #194c86; }
+.student-home-secondary { padding: 11px 16px; border: 1px solid rgba(255,255,255,.42); border-radius: 11px; background: rgba(255,255,255,.09); color: #fff; font-weight: 700; }
+.student-home-secondary:hover { background: rgba(255,255,255,.17); }
+.student-home-mark { position: relative; z-index: 1; display: grid; flex: 0 0 170px; justify-items: center; gap: 12px; color: rgba(255,255,255,.92); }
+.student-home-mark span { display: grid; width: 112px; height: 112px; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 32px; background: rgba(255,255,255,.1); font-size: 72px; font-weight: 900; letter-spacing: -6px; box-shadow: 0 16px 40px rgba(0,0,0,.12); }
+.student-home-mark small { color: #c8def8; font-size: 9px; font-weight: 800; letter-spacing: 1.4px; white-space: nowrap; }
+@media(max-width:760px) { .student-home-hero { min-height: 0; align-items: flex-start; padding: 26px; } .student-home-mark { display: none; } }
+@media(max-width:560px) { .student-home-hero { padding: 23px 20px; border-radius: 16px; } .student-home-actions { align-items: stretch; flex-direction: column; } .student-home-actions button { width: 100%; } }
+@media(prefers-reduced-motion:reduce) { .brand-home-button, .student-home-actions button { transition: none; } }
