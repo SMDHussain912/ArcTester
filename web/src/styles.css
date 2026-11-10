@@ -73,3 +73,6 @@
 .dashboard-progress-grid article>span,.dashboard-progress-grid article>small{font-size:11px}
 .dashboard-progress-grid article>strong{font-size:27px;letter-spacing:-.7px}
 @media(max-width:560px){.dashboard-progress{padding:3px 15px 16px}.dashboard-progress .section-head{align-items:flex-start;flex-direction:column}.dashboard-progress .section-head button{width:100%}.dashboard-progress-grid{grid-template-columns:1fr}}
+
+/* Keep keyboard focus visible across the student and administrator workspaces. */
+:where(button,a,input,select,textarea,[role="button"],[tabindex]:not([tabindex="-1"])):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
