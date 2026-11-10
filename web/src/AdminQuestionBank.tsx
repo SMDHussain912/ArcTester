@@ -27,6 +27,11 @@ type AdminQuestionBankProps = {
 
 export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
   const pageCount = Math.max(1, Math.ceil(total / 25));
+  function confirmDeleteSelected() {
+    if (!selected.length) return;
+    if (!window.confirm(`Delete ${selected.length} selected question(s)? Questions used in historical attempts will be protected.`)) return;
+    onDeleteSelected();
+  }
   return (
     <>
       <div className="admin-page-title"><div><p className="eyebrow">CONTENT MANAGEMENT</p><h1>Question bank</h1><p>Search, filter, inspect and curate every MCQ. Correct answers stay hidden from students.</p></div><button className="primary" onClick={onUpload}>＋ Upload questions</button></div>
@@ -37,7 +42,7 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
       </div>
       <div className="admin-panel table-panel">
-        <div className="table-top"><span>{total.toLocaleString()} questions found</span><button className="ghost danger-button" disabled={!selected.length || busy} onClick={onDeleteSelected}>Delete selected ({selected.length})</button></div>
+        <div className="table-top"><span>{total.toLocaleString()} questions found</span><button className="ghost danger-button" disabled={!selected.length || busy} onClick={confirmDeleteSelected}>Delete selected ({selected.length})</button></div>
         {questions.length === 0 ? <div className="empty-state"><b>No questions match these filters</b><span>Upload a question set or add the first question.</span></div> : questions.map((question) => (
           <article className="bank-question" key={question.id}>
             <input type="checkbox" aria-label={`Select question ${question.id}`} checked={selected.includes(question.id)} onChange={() => onToggleSelected(question.id)} />
