@@ -41,11 +41,7 @@ export const CreateTestSchema = z
       });
     }
     if (value.subjects && new Set(value.subjects).size !== value.subjects.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["subjects"],
-        message: "Subjects must be unique.",
-      });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
     }
 
     if (value.topicFilters?.length) {
@@ -394,3 +390,158 @@ export async function submitTest(
       where: { id: attemptId, userId, finishedAt: null },
       data: { finishedAt: now, expired },
     });
+    if (claimed.count !== 1) throw conflict("This test was already submitted.");
+
+    for (const row of rows) {
+      await tx.attemptAnswer.updateMany({
+        where: { attemptId, questionId: row.questionId },
+        data: { chosen: row.chosen, isCorrect: row.isCorrect },
+      });
+      const prev = await tx.stat.findUnique({
+        where: { userId_questionId: { userId, questionId: row.questionId } },
+      });
+      const next = nextStat(
+        prev ? { seen: prev.seen, wrong: prev.wrong, lastSeen: prev.lastSeen } : undefined,
+        outcomeOf(row.chosen, correctById.get(row.questionId) ?? 0),
+        now
+      );
+      await tx.stat.upsert({
+        where: { userId_questionId: { userId, questionId: row.questionId } },
+        update: { seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen },
+        create: {
+          userId,
+          questionId: row.questionId,
+          seen: next.seen,
+          wrong: next.wrong,
+          lastSeen: next.lastSeen,
+        },
+      });
+    }
+  });
+
+  return { attemptId, score, total: memberIds.size, expired };
+}
+
+export interface ResultBreakdown {
+  subject: string;
+  correct: number;
+  total: number;
+}
+
+export interface ResultQuestion {
+  questionId: number;
+  subject: string;
+  topic: string | null;
+  relatedConcepts: { slug: string; title: string }[];
+  text: string;
+  options: string[];
+  selectedIndex: number | null;
+  correctIndex: number;
+  isCorrect: boolean;
+  explanation: string;
+}
+
+export interface TestResult {
+  attemptId: number;
+  mode: string;
+  score: number;
+  total: number;
+  expired: boolean;
+  breakdown: ResultBreakdown[];
+  questions: ResultQuestion[];
+}
+
+/** Full review (answers + explanations) only AFTER submission. */
+export async function getResult(
+  db: PrismaClient,
+  userId: number,
+  attemptId: number
+): Promise<TestResult> {
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, userId },
+    include: { answers: true },
+  });
+  if (!attempt) throw notFound("Test not found.");
+  if (!attempt.finishedAt) throw forbidden("Submit the test before viewing the result.");
+
+  const breakdown = new Map<string, { correct: number; total: number }>();
+  let score = 0;
+  const questions: ResultQuestion[] = attempt.answers.map((a) => {
+    if (a.isCorrect) score += 1;
+    const subject = a.subjectSnapshot;
+    const entry = breakdown.get(subject) ?? { correct: 0, total: 0 };
+    entry.total += 1;
+    if (a.isCorrect) entry.correct += 1;
+    breakdown.set(subject, entry);
+    return {
+      questionId: a.questionId,
+      subject,
+      topic: a.topicSnapshot,
+      relatedConcepts: getLearningConceptsForTopic(a.topicSnapshot),
+      text: a.textSnapshot,
+      options: decodeOptions(a.optionsSnapshot),
+      selectedIndex: a.chosen,
+      correctIndex: a.correctIndexSnapshot,
+      isCorrect: a.isCorrect,
+      explanation: a.explanationSnapshot,
+    };
+  });
+
+  return {
+    attemptId: attempt.id,
+    mode: attempt.mode,
+    score,
+    total: attempt.answers.length,
+    expired: attempt.expired,
+    breakdown: [...breakdown.entries()].map(([subject, v]) => ({ subject, ...v })),
+    questions,
+  };
+}
+
+export interface AttemptView {
+  attemptId: number;
+  mode: TestMode;
+  deadline: string;
+  serverNow: string;
+  questions: PublicQuestion[];
+  /** Saved selections so a refresh can restore the paper. */
+  saved: { questionId: number; selectedIndex: number | null }[];
+}
+
+/** In-progress attempt for restore-on-refresh. 404 if missing, 409 if submitted. */
+export async function getAttemptView(
+  db: PrismaClient,
+  userId: number,
+  attemptId: number,
+  now: Date = new Date()
+): Promise<AttemptView> {
+  const attempt = await db.attempt.findFirst({
+    where: { id: attemptId, userId },
+    include: { answers: true },
+  });
+  if (!attempt) throw notFound("Test not found.");
+  if (attempt.finishedAt) {
+    throw conflict("This test was already submitted. View the result instead.");
+  }
+  if (!attempt.deadline) throw conflict("This test has no deadline. Please start a new test.");
+
+  return {
+    attemptId: attempt.id,
+    mode: attempt.mode as TestMode,
+    deadline: attempt.deadline.toISOString(),
+    serverNow: now.toISOString(),
+    questions: attempt.answers.map((answer) =>
+      toPublicQuestion({
+        id: answer.questionId,
+        subject: answer.subjectSnapshot,
+        topic: answer.topicSnapshot,
+        text: answer.textSnapshot,
+        options: answer.optionsSnapshot,
+      })
+    ),
+    saved: attempt.answers.map((a) => ({
+      questionId: a.questionId,
+      selectedIndex: a.chosen,
+    })),
+  };
+}
