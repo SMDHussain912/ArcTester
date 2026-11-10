@@ -317,6 +317,114 @@ describe("versioned exam management", () => {
     assignmentId = assignment.id;
   });
 
+  describe("PostgreSQL formal exam lifecycle", () => {
+    let fixture!: { examId: string; assignments: Array<{ id: string; studentId: number }>; studentIds: number[]; cookies: string[]; questionSnapshotId: string; lateAssignmentId?: string };
+    const emails = ["lifecycle-a@arctester.test", "lifecycle-b@arctester.test", "lifecycle-c@arctester.test", "lifecycle-d@arctester.test"];
+    beforeAll(async () => {
+      const question = await server.db.question.findFirstOrThrow({ where: { text: "Which structure follows FIFO?" } });
+      const cookies = await Promise.all(emails.map((email) => createSession(email, "STUDENT")));
+      const studentIds = await Promise.all(emails.map(async (email) => (await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } })).id));
+      const created = await request("/admin/exams", "POST", { title: "PostgreSQL lifecycle integration", description: "End-to-end verification", instructions: "Select the correct answer.", durationMinutes: 1, shuffleQuestions: false, shuffleOptions: false, questions: [{ questionId: question.id, marks: 2, negativeMarks: 0 }] }, adminCookie);
+      expect(created.status).toBe(201);
+      const examId = (created.json.exam as { id: string }).id;
+      expect((await request("/admin/exams/" + examId + "/publish", "POST", {}, adminCookie)).status).toBe(200);
+      const assigned = await request("/admin/exams/" + examId + "/assign", "POST", { studentIds }, adminCookie);
+      expect(assigned.status).toBe(201);
+      const assignments = assigned.json.assignments as Array<{ id: string; studentId: number }>;
+      expect(assignments).toHaveLength(4);
+      const snapshot = await server.db.examVersionQuestion.findFirstOrThrow({ where: { examVersion: { examId } } });
+      fixture = { examId, assignments, studentIds, cookies, questionSnapshotId: snapshot.id };
+    });
+    afterAll(async () => {
+      if (!fixture) return;
+      const assignmentIds = fixture.assignments.map((item) => item.id);
+      const cleanupAssignmentIds = fixture.lateAssignmentId ? [...assignmentIds, fixture.lateAssignmentId] : assignmentIds;
+      await server.db.examSubmission.deleteMany({ where: { assignmentId: { in: cleanupAssignmentIds } } });
+      await server.db.examSessionEvent.deleteMany({ where: { session: { assignmentId: { in: cleanupAssignmentIds } } } });
+      await server.db.examSession.deleteMany({ where: { assignmentId: { in: cleanupAssignmentIds } } });
+      await server.db.examAssignment.deleteMany({ where: { id: { in: cleanupAssignmentIds } } });
+      await server.db.exam.delete({ where: { id: fixture.examId } });
+      await server.db.user.deleteMany({ where: { id: { in: fixture.studentIds } } });
+    });
+    it("keeps answer keys private and creates a server-authoritative session with heartbeat and autosave", async () => {
+      const assignment = fixture.assignments[0]; const student = fixture.cookies[0];
+      const packageResponse = await request("/exams/assignments/" + assignment.id + "/package", "GET", undefined, student);
+      expect(packageResponse.status).toBe(200);
+      const packageQuestion = (packageResponse.json.package as { questions: Array<Record<string, unknown>> }).questions[0];
+      expect(packageQuestion.correctIndex).toBeUndefined(); expect(packageQuestion.explanation).toBeUndefined();
+      const started = await request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student);
+      expect(started.status).toBe(200);
+      const session = started.json.session as { id: string; startedAt: string; deadline: string };
+      expect(Date.parse(session.deadline)).toBe(Date.parse(session.startedAt) + 60_000);
+      expect((await request("/exams/assignments/" + assignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, student)).status).toBe(200);
+      const saved = await request("/exams/assignments/" + assignment.id + "/answers", "PUT", { revision: 0, answers: [{ examQuestionId: fixture.questionSnapshotId, selectedIndex: 1 }] }, student);
+      expect(saved.status).toBe(200); expect(saved.json).toMatchObject({ revision: 1, savedCount: 1 });
+    });
+    it("holds the server deadline during pause, resumes with the pause duration, and rejects student invigilator actions", async () => {
+      const assignment = fixture.assignments[0]; const student = fixture.cookies[0];
+      const started = await request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student);
+      const session = started.json.session as { id: string; startedAt: string; deadline: string };
+      const forbiddenAction = await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE", reason: "Unauthorized student action" }, student);
+      expect(forbiddenAction.status).toBe(403);
+      expect((await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE", reason: "Lifecycle integration pause" }, adminCookie)).status).toBe(200);
+      const paused = await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(paused.status).toBe("PAUSED");
+      expect((await request("/exams/assignments/" + assignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, student)).status).toBe(409);
+      expect((await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "RESUME", reason: "Lifecycle integration resume" }, adminCookie)).status).toBe(200);
+      const resumed = await request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student);
+      expect(resumed.status).toBe(200);
+      const pausedDuration = (await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } })).pausedDurationMs;
+      expect(Date.parse((resumed.json.session as { deadline: string }).deadline)).toBe(Date.parse(session.startedAt) + 60_000 + pausedDuration);
+    });
+    it("submits, grades once, returns the same result on duplicate submit, and isolates student records", async () => {
+      const assignment = fixture.assignments[0]; const student = fixture.cookies[0];
+      const started = await request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student);
+      const session = started.json.session as { startedAt: string };
+      const body = { attemptUuid: "c9c79f5b-a1c3-4d65-9c75-0b37d7a98a10", startedAt: session.startedAt, submittedAt: new Date().toISOString(), answers: [{ examQuestionId: fixture.questionSnapshotId, selectedIndex: 1 }] };
+      const submitted = await request("/exams/assignments/" + assignment.id + "/submission", "POST", body, student);
+      expect(submitted.status).toBe(201);
+      const submission = submitted.json.submission as { id: string; status: string; score: number; maximumScore: number };
+      expect(submission).toMatchObject({ status: "GRADED", score: 2, maximumScore: 2 });
+      const duplicate = await request("/exams/assignments/" + assignment.id + "/submission", "POST", body, student);
+      expect(duplicate.status).toBe(200); expect(duplicate.json.duplicate).toBe(true);
+      expect((duplicate.json.submission as { id: string }).id).toBe(submission.id);
+      const result = await request("/exams/assignments/" + assignment.id + "/result", "GET", undefined, student);
+      expect(result.status).toBe(200); expect((result.json.result as { score: number }).score).toBe(2);
+      expect((await request("/exams/assignments/" + assignment.id + "/answers", "GET", undefined, fixture.cookies[1])).status).toBe(404);
+      expect((await request("/exams/assignments/" + assignment.id + "/result", "GET", undefined, fixture.cookies[1])).status).toBe(404);
+    });
+    it("rejects terminated and expired sessions and retains post-deadline submissions for review", async () => {
+      const terminatedAssignment = fixture.assignments[2]; const terminatedStudent = fixture.cookies[2];
+      const startedC = await request("/exams/assignments/" + terminatedAssignment.id + "/session/start", "POST", {}, terminatedStudent);
+      const sessionC = (startedC.json.session as { id: string }).id;
+      expect((await request("/admin/exams/sessions/" + sessionC + "/action", "POST", { action: "TERMINATE", reason: "Failure path" }, adminCookie)).status).toBe(200);
+      expect((await request("/exams/assignments/" + terminatedAssignment.id + "/session/start", "POST", {}, terminatedStudent)).status).toBe(409);
+      expect((await request("/exams/assignments/" + terminatedAssignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, terminatedStudent)).status).toBe(409);
+      const expiredAssignment = fixture.assignments[3]; const expiredStudent = fixture.cookies[3];
+      const startedD = await request("/exams/assignments/" + expiredAssignment.id + "/session/start", "POST", {}, expiredStudent);
+      const sessionD = (startedD.json.session as { id: string }).id;
+      const expiredAt = new Date(Date.now() - 3 * 60_000);
+      await server.db.examSession.update({ where: { id: sessionD }, data: { startedAt: expiredAt, lastHeartbeatAt: expiredAt } });
+      expect((await request("/exams/assignments/" + expiredAssignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, expiredStudent)).status).toBe(409);
+      expect((await server.db.examSession.findUniqueOrThrow({ where: { id: sessionD } })).status).toBe("EXPIRED");
+      const lateCookie = await createSession("lifecycle-late@arctester.test", "STUDENT");
+      const lateStudent = await server.db.user.findUniqueOrThrow({ where: { email: "lifecycle-late@arctester.test" }, select: { id: true } });
+      fixture.studentIds.push(lateStudent.id);
+      const lateAssignment = await server.db.examAssignment.create({ data: { examVersionId: (await server.db.examAssignment.findUniqueOrThrow({ where: { id: fixture.assignments[1].id }, select: { examVersionId: true } })).examVersionId, studentId: lateStudent.id, assignedById: (await server.db.user.findUniqueOrThrow({ where: { email: "exam-admin@arctester.test" }, select: { id: true } })).id } });
+      fixture.lateAssignmentId = lateAssignment.id;
+      const lateStarted = await request("/exams/assignments/" + lateAssignment.id + "/session/start", "POST", {}, lateCookie);
+      const lateSession = lateStarted.json.session as { id: string; startedAt: string };
+      const pastDeadline = new Date(Date.now() - 62_000);
+      await server.db.examSession.update({ where: { id: lateSession.id }, data: { startedAt: pastDeadline, lastHeartbeatAt: new Date() } });
+      const lateBody = { attemptUuid: "b6b7d74c-4f7f-4dd9-a1f4-f0c1b3a1c5f0", startedAt: lateSession.startedAt, submittedAt: new Date().toISOString(), answers: [{ examQuestionId: fixture.questionSnapshotId, selectedIndex: 1 }] };
+      const lateSubmit = await request("/exams/assignments/" + lateAssignment.id + "/submission", "POST", lateBody, lateCookie);
+      expect(lateSubmit.status).toBe(201);
+      expect((lateSubmit.json.submission as { status: string }).status).toBe("REVIEW_REQUIRED");
+      expect((await request("/exams/assignments/" + lateAssignment.id + "/result", "GET", undefined, lateCookie)).status).toBe(200);
+
+    });
+  });
+
   it("lists published papers in the student catalogue without exposing answer data", async () => {
     const catalog = await request("/exams/catalog", "GET", undefined, studentCookie);
     expect(catalog.status).toBe(200);
