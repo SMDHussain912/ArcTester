@@ -242,7 +242,7 @@ describe("assigned exam server session client", () => {
     expect(screen.queryByText(/Paused by invigilator/)).not.toBeInTheDocument();
   });
 
-  it("shows submitted and awaiting-review states without exposing an ungraded score", async () => {
+  it.each(["REVIEW_REQUIRED", "RECEIVED"])("shows awaiting-review state for %s submissions without a released score", async (status) => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith("/exams/assigned")) return jsonResponse({ assignments: [{ id: "assignment-1", status: "ASSIGNED", assignedAt: session.serverTime, availableFrom: null, dueAt: null, exam: { id: "exam-1", title: "Lifecycle test", description: "" }, version: 1, durationMinutes: 60, questionCount: 1, submission: null }] });
@@ -250,7 +250,7 @@ describe("assigned exam server session client", () => {
       if (path.endsWith("/session/start")) return jsonResponse({ session });
       if (path.endsWith("/answers")) return jsonResponse({ revision: 0, answers: [] });
       if (path.endsWith("/submission")) return jsonResponse({ submission: { id: "submission-review-1" } }, 201);
-      if (path.endsWith("/result")) return jsonResponse({ result: { status: "REVIEW_REQUIRED", score: null, maximumScore: null, questions: [] } });
+      if (path.endsWith("/result")) return jsonResponse({ result: { status, score: null, maximumScore: null, questions: [] } });
       return jsonResponse({});
     });
 
