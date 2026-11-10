@@ -8,6 +8,7 @@ import AdminWorkspace from "./AdminWorkspace";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
+import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -1038,33 +1039,11 @@ export default function App() {
               />
             ) : null}
             {activePage === "dashboard" ? <DashboardProgressSummary onOpenProgress={() => setActivePage("progress")} /> : null}
-            {activePage === "dashboard" && assignedExams.some((item) => !item.submission) ? (
-              <section className="panel student-notice-preview" aria-labelledby="upcoming-exams-title">
-                <div className="section-head">
-                  <div>
-                    <p className="eyebrow">EXAM CENTRE</p>
-                    <h2 id="upcoming-exams-title">Your assigned exams</h2>
-                    <p className="muted">{assignedExams.filter((item) => !item.submission).length} exam{assignedExams.filter((item) => !item.submission).length === 1 ? "" : "s"} awaiting submission</p>
-                  </div>
-                  <button type="button" className="ghost" onClick={() => setActivePage("assigned-exams")}>View all exams →</button>
-                </div>
-                <div className="grid two">
-                  {assignedExams.filter((item) => !item.submission).slice(0, 3).map((item) => {
-                    const unavailable = item.availableFrom && new Date(item.availableFrom).getTime() > Date.now();
-                    const expired = item.dueAt && new Date(item.dueAt).getTime() < Date.now();
-                    return (
-                      <article className="panel assigned-exam-card" key={item.id}>
-                        <div className="admin-exam-meta">
-                          <div><strong>{item.exam.title}</strong><p className="muted">Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div>
-                          <span className={expired ? "status status-expired" : unavailable ? "status status-pending" : "status status-used"}>{expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span>
-                        </div>
-                        <p className="muted">Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</p>
-                        <p className="muted">Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</p>
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
+            {activePage === "dashboard" ? (
+              <StudentAssignedExamPreview
+                assignments={assignedExams}
+                onViewAll={() => setActivePage("assigned-exams")}
+              />
             ) : null}
             {activePage === "dashboard" && test ? (
               <section className="panel student-notice-preview" aria-labelledby="practice-resume-title">
