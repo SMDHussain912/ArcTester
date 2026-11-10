@@ -34,7 +34,8 @@ describe("StudentAnnouncementDialog", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
-    expect(onAcknowledge).toHaveBeenCalledExactlyOnceWith("notice-1");
+    expect(onAcknowledge).toHaveBeenCalledOnce();
+    expect(onAcknowledge).toHaveBeenCalledWith("notice-1");
   });
 
   it("omits the expiry label when the announcement has no expiry", () => {
