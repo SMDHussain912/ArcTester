@@ -8,6 +8,7 @@ import AdminWorkspace from "./AdminWorkspace";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
+import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
@@ -1030,10 +1031,11 @@ export default function App() {
               <div className="welcome-mark">A</div>
             </section>
             {activePage === "dashboard" && announcements.length > 0 ? (
-              <section className="panel student-notice-preview">
-                <div className="section-head"><div><p className="eyebrow">IMPORTANT UPDATES</p><h2>Latest announcement</h2></div><button className="ghost" onClick={() => setActivePage("announcements")}>View all ({announcements.length}) →</button></div>
-                <strong>{announcements[0].title}</strong><p>{announcements[0].message}</p><small className="muted">{new Date(announcements[0].publishedAt).toLocaleString()}</small>
-              </section>
+              <StudentAnnouncementPreview
+                announcement={announcements[0]}
+                announcementCount={announcements.length}
+                onViewAll={() => setActivePage("announcements")}
+              />
             ) : null}
             {activePage === "dashboard" ? <DashboardProgressSummary onOpenProgress={() => setActivePage("progress")} /> : null}
             {activePage === "dashboard" && assignedExams.some((item) => !item.submission) ? (
