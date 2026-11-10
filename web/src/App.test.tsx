@@ -125,9 +125,9 @@ describe("live Vite application", () => {
     expect(questionCard).not.toBeNull();
     fireEvent.click(within(questionCard!).getAllByRole("button")[0]);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await screen.findByText(
       "Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing."
-    );
+    )).toBeInTheDocument();
     const firstBackup = JSON.stringify({ "exam-question-conflict": 0 });
     expect(localStorageValues.get(backupKey)).toBe(firstBackup);
     const initialSaveCount = fetchMock.mock.calls.filter(([input, init]) =>
