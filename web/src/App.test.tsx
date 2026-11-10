@@ -121,32 +121,29 @@ describe("live Vite application", () => {
     expect(await screen.findByText("Conflict question?")).toBeInTheDocument();
 
     const backupKey = `arctester-assignment-answers-${assignment.id}`;
-    const firstBackup = JSON.stringify({ "exam-question-conflict": 1 });
-    localStorageValues.set(backupKey, firstBackup);
-    await act(async () => {
-      window.dispatchEvent(new StorageEvent("storage", { key: backupKey, newValue: firstBackup }));
-    });
+    const questionCard = screen.getByText("Conflict question?").closest("article");
+    expect(questionCard).not.toBeNull();
+    fireEvent.click(within(questionCard!).getAllByRole("button")[0]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Your local answers are safe, but another tab or device saved newer answers. Reload the exam to reconcile before continuing."
     );
+    const firstBackup = JSON.stringify({ "exam-question-conflict": 0 });
     expect(localStorageValues.get(backupKey)).toBe(firstBackup);
     const initialSaveCount = fetchMock.mock.calls.filter(([input, init]) =>
       String(input).endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT"
     ).length;
     expect(initialSaveCount).toBe(1);
 
-    const laterBackup = JSON.stringify({ "exam-question-conflict": 2 });
-    localStorageValues.set(backupKey, laterBackup);
+    fireEvent.click(within(questionCard!).getAllByRole("button")[1]);
     await act(async () => {
-      window.dispatchEvent(new StorageEvent("storage", { key: backupKey, newValue: laterBackup }));
       await new Promise((resolve) => window.setTimeout(resolve, 550));
     });
     const finalSaveCount = fetchMock.mock.calls.filter(([input, init]) =>
       String(input).endsWith(`/exams/assignments/${assignment.id}/answers`) && init?.method === "PUT"
     ).length;
     expect(finalSaveCount).toBe(1);
-    expect(localStorageValues.get(backupKey)).toBe(laterBackup);
+    expect(localStorageValues.get(backupKey)).toBe(JSON.stringify({ "exam-question-conflict": 1 }));
   });
 
   it("shows a review-pending message and hides answer review when an assigned result has no score", async () => {
