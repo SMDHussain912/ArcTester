@@ -1872,23 +1872,19 @@ export function examRouter(db: PrismaClient): Router {
       });
 
       } catch (error) {
-        const errorCode = typeof error === "object" && error !== null && "code" in error
-          ? (error as { code?: string }).code
-          : undefined;
-        if (errorCode === "P2002") {
-          // Two identical submit requests can both pass the initial read.
-          // The unique assignment constraint elects one winner; the loser
-          // returns that committed result instead of surfacing a 500.
-          const duplicate = await db.examSubmission.findUnique({
-            where: { assignmentId: assignment.id },
-            select: {
-              id: true, attemptUuid: true, status: true, score: true,
-              maximumScore: true, submittedAt: true, receivedAt: true,
-            },
-          });
-          if (duplicate?.attemptUuid === input.attemptUuid) {
-            return res.json({ ok: true, duplicate: true, submission: duplicate });
-          }
+        // Concurrent retries can lose at different points in the transaction:
+        // the unique assignment insert (P2002), the session-finalization guard,
+        // or the answer-revision guard. Once the winner commits, all of these
+        // paths must return its result when the idempotency key matches.
+        const duplicate = await db.examSubmission.findUnique({
+          where: { assignmentId: assignment.id },
+          select: {
+            id: true, attemptUuid: true, status: true, score: true,
+            maximumScore: true, submittedAt: true, receivedAt: true,
+          },
+        });
+        if (duplicate?.attemptUuid === input.attemptUuid) {
+          return res.json({ ok: true, duplicate: true, submission: duplicate });
         }
         throw error;
       }
