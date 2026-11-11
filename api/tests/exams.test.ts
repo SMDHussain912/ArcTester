@@ -1116,8 +1116,10 @@ describe("versioned exam management", () => {
       request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
     ]);
 
-    expect(responses.every((response) => response.status === 201 || response.status === 409)).toBe(true);
-    expect(responses.some((response) => response.status === 201)).toBe(true);
+    expect(responses.every((response) => response.status === 200 || response.status === 201)).toBe(true);
+    expect(responses.filter((response) => response.status === 201)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.find((response) => response.status === 200)?.json.alreadyAssigned).toBe(true);
     expect(await server.db.examAssignment.count({
       where: { examVersion: { examId }, studentId: thirdStudent.id },
     })).toBe(1);
