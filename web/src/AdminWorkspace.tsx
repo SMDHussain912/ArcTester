@@ -12,7 +12,7 @@ import AdminPaperBuilder, { type AdminPaperDraft, type AdminPaperQuestion, type 
 import AdminQuestionImport, { type AdminImportReport } from "./AdminQuestionImport";
 import AdminOverview from "./AdminOverview";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
-import AdminAttendanceRegister, { type AttendanceRow } from "./AdminAttendanceRegister";
+import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -47,6 +47,8 @@ export default function AdminWorkspace(p:Props){
  const [attendancePage,setAttendancePage]=useState(1);
  const [attendanceLoading,setAttendanceLoading]=useState(false);
  const [attendanceUpdatedAt,setAttendanceUpdatedAt]=useState<string|null>(null);
+ const [auditByAssignment,setAuditByAssignment]=useState<Record<string,AssignmentAudit>>({});
+ const [loadingAuditAssignmentId,setLoadingAuditAssignmentId]=useState<string|null>(null);
  const [selectedDatasetId,setSelectedDatasetId]=useState("");
  const [trainingModelPrefix,setTrainingModelPrefix]=useState("ecet-readiness");
  const selectedSubject=catalog.find(s=>s.name===subject);
@@ -81,6 +83,7 @@ export default function AdminWorkspace(p:Props){
  async function loadReviewQueue(){const r=await api<{submissions:ReviewQueueItem[]}>("/admin/submissions/review-required");setReviewItems(r.submissions??[]);}
  async function loadLiveSessions(){setLiveSessionsLoading(true);try{const r=await api<{sessions:LiveSession[];total:number;serverTime:string}>("/admin/exams/live-sessions?page=1&limit=50&eventLimit=100");setLiveSessions(Array.isArray(r.sessions)?r.sessions:[]);setLiveSessionsTotal(Number.isFinite(r.total)?r.total:0);setLiveSessionsUpdatedAt(r.serverTime||new Date().toISOString());}finally{setLiveSessionsLoading(false);}}
  async function loadAttendance(nextPage=attendancePage){setAttendanceLoading(true);try{const r=await api<{attendance:AttendanceRow[];total:number;serverTime:string}>(`/admin/exams/attendance?page=${nextPage}&limit=25`);setAttendanceRows(Array.isArray(r.attendance)?r.attendance:[]);setAttendanceTotal(Number.isFinite(r.total)?r.total:0);setAttendancePage(nextPage);setAttendanceUpdatedAt(r.serverTime||new Date().toISOString());}finally{setAttendanceLoading(false);}}
+ async function loadAssignmentAudit(id:string){if(auditByAssignment[id])return;setLoadingAuditAssignmentId(id);try{const r=await api<{audit:AssignmentAudit}>(`/admin/exams/assignments/${encodeURIComponent(id)}/audit`);setAuditByAssignment((current)=>({...current,[id]:r.audit}));}finally{setLoadingAuditAssignmentId(null);}}
  async function actOnLiveSession(id:string,action:"PAUSE"|"RESUME"|"TERMINATE",reason:string){
   await run(async()=>{
    await api(`/admin/exams/sessions/${encodeURIComponent(id)}/action`,{method:"POST",body:JSON.stringify({action,reason})});
@@ -140,6 +143,9 @@ export default function AdminWorkspace(p:Props){
     updatedAt={attendanceUpdatedAt}
     onPageChange={(page) => void loadAttendance(page).catch(e=>setError(e.message))}
     onRefresh={() => void loadAttendance(attendancePage).catch(e=>setError(e.message))}
+    auditByAssignment={auditByAssignment}
+    loadingAuditAssignmentId={loadingAuditAssignmentId}
+    onLoadAudit={(id) => void loadAssignmentAudit(id).catch(e=>setError(e.message))}
    />}
    {tab==="review-queue"&&<AdminReviewQueue
     items={reviewItems}
