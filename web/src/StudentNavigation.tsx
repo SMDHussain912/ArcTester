@@ -76,11 +76,12 @@ export default function StudentNavigation({
                   title={examActive ? "Navigation is locked while an assigned exam is active" : undefined}
                   className={activePage === page ? "student-nav-item active" : "student-nav-item"}
                   aria-current={activePage === page ? "page" : undefined}
+                  aria-label={count > 0 ? `${label} (${count})` : label}
                   onClick={() => setActivePage(page)}
                 >
                   <span className="student-nav-icon" aria-hidden="true">{icon}</span>
                   <span>{label}</span>
-                  {count > 0 ? <small>{count}</small> : null}
+                  {count > 0 ? <small aria-hidden="true">{count}</small> : null}
                 </button>
               );
             })}
@@ -97,11 +98,12 @@ export default function StudentNavigation({
                   title={examActive ? "Navigation is locked while an assigned exam is active" : undefined}
                   className={activePage === page ? "student-nav-item active" : "student-nav-item"}
                   aria-current={activePage === page ? "page" : undefined}
+                  aria-label={count > 0 ? `${label} (${count})` : label}
                   onClick={() => setActivePage(page)}
                 >
                   <span className="student-nav-icon" aria-hidden="true">{icon}</span>
                   <span>{label}</span>
-                  {count > 0 ? <small>{count}</small> : null}
+                  {count > 0 ? <small aria-hidden="true">{count}</small> : null}
                 </button>
               );
             })}
