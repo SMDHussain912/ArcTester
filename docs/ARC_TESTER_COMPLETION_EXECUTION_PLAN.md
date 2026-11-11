@@ -460,6 +460,28 @@ Do not burn the day on speculative redesigns or optional integrations:
 - No production data migration or destructive cleanup without a tested backup/restore and explicit approval.
 - No release sign-off for platforms/devices that were not actually tested.
 
+### 0.3 Verified changes merged after PR #106
+
+**Current main SHA at this evidence update:** `a20fbde1a6b4e629fb0a88f571a9bc005dda781a`.
+
+The following implementation batches are merged; they do not imply that the whole related workstream is complete:
+
+- [PR #108](https://github.com/smdgamekingindo-TN/ArcTester/pull/108): account-isolated student communications state and authoritative unread counts. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42970039296).
+- [PR #109](https://github.com/smdgamekingindo-TN/ArcTester/pull/109): preserve web practice recovery after transient restore failures. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42969068077).
+- [PR #110](https://github.com/smdgamekingindo-TN/ArcTester/pull/110): create result notifications transactionally when reviewed exam results are released. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42969307401).
+- [PR #111](https://github.com/smdgamekingindo-TN/ArcTester/pull/111): align the announcement message limit with API validation. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42969430206).
+- [PR #112](https://github.com/smdgamekingindo-TN/ArcTester/pull/112): mobile notification inbox, unread count, mark-read and announcement acknowledgement. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42970348800).
+- [PR #113](https://github.com/smdgamekingindo-TN/ArcTester/pull/113): mobile practice-attempt persistence, resume, server-deadline timer recovery and in-app result review. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971079913).
+- [PR #114](https://github.com/smdgamekingindo-TN/ArcTester/pull/114): cross-student practice-attempt ownership regression tests. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971389338).
+- [PR #115](https://github.com/smdgamekingindo-TN/ArcTester/pull/115): scheduled announcement publishing and removal of duplicate announcement handlers that previously shadowed the dedicated router. [Actions](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42972911817).
+- [PR #116](https://github.com/smdgamekingindo-TN/ArcTester/pull/116): Expo SDK-compatible native dependencies and a CI-built Android standalone APK artifact. [Main CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974335120) · [Android APK build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974338953).
+- [PR #117](https://github.com/smdgamekingindo-TN/ArcTester/pull/117): Windows NSIS installer packaging and downloadable CI artifact. [Main CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974783000) · [Windows installer build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974783052).
+
+The four standard CI jobs passed on the exact merged heads for these PRs. The Android and Windows workflows additionally completed native/package builds and uploaded artifacts. These are build/CI results, not device installation or runtime qualification.
+
+**Still unverified:** Android physical-device sign-in/backend connectivity, offline/background/restart recovery and notification behavior; iOS build and device qualification; Windows installer runtime smoke tests; staging deployment, production migration and backup/restore; representative real-data qualification for Intelligence.
+
+
 ---
 
 ## 12. Execution status log
@@ -468,12 +490,12 @@ Update this table as work proceeds. Link every row to the implementation PR and 
 
 | Workstream | Status | PR | Actions / evidence | Remaining blocker |
 |---|---|---|---|---|
-| A — Baseline audit | NOT STARTED | — | — | Complete current-main source/test inventory |
-| B — Practice correctness | NOT STARTED | — | — | Audit exact remaining acceptance gaps |
-| C — Formal exam lifecycle | NOT STARTED | — | — | Audit exact remaining acceptance gaps |
-| D — Communications | NOT STARTED | — | — | Verify current end-to-end event delivery |
-| E — UX and maintainability | NOT STARTED | — | PR #106 merged; run #1306 passed | Broader acceptance audit |
-| F — Intelligence | NOT STARTED | — | Existing roadmap and CI pipeline | Real-data qualification and remaining acceptance |
-| G — Security/release | NOT STARTED | — | CI run #1306 passed four jobs | Staging, device, security and restore checks |
+| A — Baseline audit | IN PROGRESS | [#115](https://github.com/smdgamekingindo-TN/ArcTester/pull/115) | [CI #42972911817](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42972911817) confirmed the duplicate announcement route shadowing and its fix | Finish full route-to-test, navigation and model-ownership inventories |
+| B — Practice correctness | IN PROGRESS | [#109](https://github.com/smdgamekingindo-TN/ArcTester/pull/109), [#113](https://github.com/smdgamekingindo-TN/ArcTester/pull/113), [#114](https://github.com/smdgamekingindo-TN/ArcTester/pull/114) | [#113 CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971079913) · [#114 CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971389338) | Finish full student UI/API lifecycle audit and Android device recovery smoke tests |
+| C — Formal exam lifecycle | NOT STARTED | — | Existing phase evidence predates this audit; no new completion claim | Trace and test assignment → session → heartbeat → pause/resume → submit → review |
+| D — Communications | IN PROGRESS | [#108](https://github.com/smdgamekingindo-TN/ArcTester/pull/108), [#110](https://github.com/smdgamekingindo-TN/ArcTester/pull/110), [#111](https://github.com/smdgamekingindo-TN/ArcTester/pull/111), [#112](https://github.com/smdgamekingindo-TN/ArcTester/pull/112), [#115](https://github.com/smdgamekingindo-TN/ArcTester/pull/115) | [#108 CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42970039296) · [#112 CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42970348800) · [#115 CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42972911817) | Complete delivery/acknowledgement audit and verify behavior on installed clients |
+| E — UX and maintainability | IN PROGRESS | [#116](https://github.com/smdgamekingindo-TN/ArcTester/pull/116), [#117](https://github.com/smdgamekingindo-TN/ArcTester/pull/117) | [Android APK build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974338953) · [Windows installer build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974783052) | Install and smoke-test both artifacts; iOS build/device qualification remains |
+| F — Intelligence | BLOCKED / UNVERIFIED | — | Existing intelligence roadmap and dataset CI only | Requires representative privacy-approved real data and staging qualification; finish remaining code acceptance audit |
+| G — Security/release | IN PROGRESS | [#114](https://github.com/smdgamekingindo-TN/ArcTester/pull/114), [#116](https://github.com/smdgamekingindo-TN/ArcTester/pull/116), [#117](https://github.com/smdgamekingindo-TN/ArcTester/pull/117) | [Ownership CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971389338) · [Android build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974338953) · [Windows build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974783052) | Staging security checks, backup/restore drill, installed-device tests and production release validation |
 
-**Next action:** Execute Workstream A against the current `main`, update this status log with verified findings, then start the highest-severity complete workflow slice. Do not wait for another planning conversation.
+**Next action:** Complete Workstream A's route-to-test and ownership maps, then investigate the highest-severity remaining formal-exam lifecycle gap in Workstream C. Continue independent code work while device/staging/real-data gates remain explicitly unverified.
