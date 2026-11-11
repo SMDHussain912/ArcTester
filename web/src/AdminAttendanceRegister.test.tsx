@@ -20,7 +20,7 @@ const rows: AttendanceRow[] = [
 
 describe("AdminAttendanceRegister", () => {
   it("shows not-started candidates and submitted results in the same register", () => {
-    render(<AdminAttendanceRegister rows={rows} total={2} page={1} pageSize={25} loading={false} updatedAt="2026-11-10T12:00:00.000Z" onPageChange={vi.fn()} onRefresh={vi.fn()} />);
+    render(<AdminAttendanceRegister rows={rows} total={2} page={1} pageSize={25} loading={false} updatedAt="2026-11-10T12:00:00.000Z" onPageChange={vi.fn()} onRefresh={vi.fn()} auditByAssignment={{}} loadingAuditAssignmentId={null} onLoadAudit={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Attendance register" })).toBeTruthy();
     expect(screen.getByText("not-started@example.test")).toBeTruthy();
     expect(screen.getAllByText("NOT STARTED")).toHaveLength(2);
@@ -32,7 +32,7 @@ describe("AdminAttendanceRegister", () => {
 
   it("delegates refresh and pagination while respecting the page boundaries", () => {
     const onPageChange = vi.fn(), onRefresh = vi.fn();
-    render(<AdminAttendanceRegister rows={rows} total={60} page={2} pageSize={25} loading={false} updatedAt={null} onPageChange={onPageChange} onRefresh={onRefresh} />);
+    render(<AdminAttendanceRegister rows={rows} total={60} page={2} pageSize={25} loading={false} updatedAt={null} onPageChange={onPageChange} onRefresh={onRefresh} auditByAssignment={{}} loadingAuditAssignmentId={null} onLoadAudit={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Refresh attendance" }));
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -42,9 +42,9 @@ describe("AdminAttendanceRegister", () => {
   });
 
   it("shows loading and empty states", () => {
-    const { rerender } = render(<AdminAttendanceRegister rows={[]} total={0} page={1} pageSize={25} loading={true} updatedAt={null} onPageChange={vi.fn()} onRefresh={vi.fn()} />);
+    const { rerender } = render(<AdminAttendanceRegister rows={[]} total={0} page={1} pageSize={25} loading={true} updatedAt={null} onPageChange={vi.fn()} onRefresh={vi.fn()} auditByAssignment={{}} loadingAuditAssignmentId={null} onLoadAudit={vi.fn()} />);
     expect(screen.getByRole("status").textContent).toContain("Loading attendance");
-    rerender(<AdminAttendanceRegister rows={[]} total={0} page={1} pageSize={25} loading={false} updatedAt={null} onPageChange={vi.fn()} onRefresh={vi.fn()} />);
+    rerender(<AdminAttendanceRegister rows={[]} total={0} page={1} pageSize={25} loading={false} updatedAt={null} onPageChange={vi.fn()} onRefresh={vi.fn()} auditByAssignment={{}} loadingAuditAssignmentId={null} onLoadAudit={vi.fn()} />);
     expect(screen.getByText("No exam assignments have been created yet.")).toBeTruthy();
   });
   it("loads and displays the full audit timeline for completed assignments", () => {
@@ -67,7 +67,8 @@ describe("AdminAttendanceRegister", () => {
     expect(screen.getByText("INVIGILATOR PAUSE")).toBeTruthy();
     expect(screen.getByText("Candidate requested assistance")).toBeTruthy();
     expect(screen.getByText(/admin@example\.test \(ADMIN\)/)).toBeTruthy();
-    expect(screen.getByText("Session COMPLETED · 12 heartbeats · 2 focus losses · 1 disconnects")).toBeTruthy();
+    expect(screen.getByText(/Session COMPLETED · Started/)).toBeTruthy();
+    expect(screen.getByText("12 heartbeats · 2 focus losses · 1 disconnects")).toBeTruthy();
   });
 
 });
