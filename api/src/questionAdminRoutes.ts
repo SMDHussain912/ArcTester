@@ -2,10 +2,9 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
-import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema, hashQuestion, encodeOptions } from "./questions.js";
-import { insertQuestion } from "./questionRepository.js";
+import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
 
 const ListSchema = z.object({
   q: z.string().trim().max(300).optional(),
@@ -87,17 +86,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.get("/admin/students", async (_req, res, next) => {
-    try {
-      const students = await db.user.findMany({
-        where: { role: "STUDENT" },
-        orderBy: { createdAt: "desc" },
-        select: { id: true, email: true, createdAt: true },
-      });
-      res.json({ ok: true, students });
-    } catch (error) { next(error); }
-  });
-
   router.get("/admin/question-catalog", async (_req, res, next) => {
     try {
       const subjects = await db.subject.findMany({ orderBy: { name: "asc" }, include: {
@@ -105,17 +93,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
         _count: { select: { questions: true } },
       } });
       res.json({ ok: true, subjects: subjects.map(s => ({ id: s.id, name: s.name, count: s._count.questions, topics: s.topics })) });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/admin/questions", async (req: AuthedRequest, res, next) => {
-    try {
-      const input = QuestionInputSchema.parse(req.body);
-      const result = await insertQuestion(db, input);
-      if (result === "duplicate") return next(badRequest("A question with the same text already exists in the bank."));
-      const created = await db.question.findFirst({ where: { questionHash: hashQuestion(input.text), },
-        include: { subject: true, topic: true } });
-      res.status(201).json({ ok: true, question: created });
     } catch (error) { next(error); }
   });
 
@@ -148,21 +125,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.delete("/admin/questions/:id", async (req, res, next) => {
-    try {
-      const id = Number(req.params.id);
-      if (!Number.isSafeInteger(id) || id < 1) return next(badRequest("Invalid question ID."));
-      const [answers, snapshots, stats] = await Promise.all([
-        db.attemptAnswer.count({ where: { questionId: id } }),
-        db.examVersionQuestion.count({ where: { sourceQuestionId: id } }),
-        db.stat.count({ where: { questionId: id } }),
-      ]);
-      if (answers || snapshots || stats) return next(badRequest("This question has student history or an exam snapshot. Keep it in the bank instead of deleting historical data."));
-      await db.question.delete({ where: { id } });
-      res.json({ ok: true });
-    } catch (error) { next(error); }
-  });
-
   router.post("/admin/questions/bulk-delete", async (req, res, next) => {
     try {
       const { ids } = BulkSchema.parse(req.body);
@@ -175,20 +137,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
       const safeIds = ids.filter(id => !blocked.has(id));
       const deleted = await db.question.deleteMany({ where: { id: { in: safeIds } } });
       res.json({ ok: true, deleted: deleted.count, blocked: [...blocked] });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/admin/questions/import/preview", async (req, res, next) => {
-    try {
-      const body = z.object({ format: z.enum(["csv", "json"]), content: z.string().min(1).max(8_000_000) }).parse(req.body);
-      let report;
-      if (body.format === "csv") report = await importFromCsv(db, body.content, { dryRun: true });
-      else {
-        let parsed: unknown;
-        try { parsed = JSON.parse(body.content); } catch { return next(badRequest("The JSON file is not valid JSON.")); }
-        report = await importFromJson(db, parsed, { dryRun: true });
-      }
-      res.json({ ok: true, report });
     } catch (error) { next(error); }
   });
 

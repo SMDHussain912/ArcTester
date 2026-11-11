@@ -372,6 +372,92 @@ describe("versioned exam management", () => {
     expect((await request(`/admin/exams/${examId}/latest-version`, "GET", undefined, studentCookie)).status).toBe(403);
   });
 
+  it("protects practice history while preserving immutable exam snapshots on question deletion", async () => {
+    const usedQuestion = await server.db.question.findUniqueOrThrow({
+      where: { questionHash: "exam-route-question-fifo-unique" },
+    });
+    await server.db.attempt.create({
+      data: {
+        userId: studentId,
+        mode: "practice",
+        startedAt: new Date(Date.now() - 60_000),
+        finishedAt: new Date(),
+        answers: {
+          create: {
+            questionId: usedQuestion.id,
+            chosen: usedQuestion.correctIndex,
+            isCorrect: true,
+            subjectSnapshot: "Computer Science",
+            topicSnapshot: "Data Structures",
+            difficultySnapshot: "easy",
+            textSnapshot: usedQuestion.text,
+            optionsSnapshot: usedQuestion.options,
+            correctIndexSnapshot: usedQuestion.correctIndex,
+            explanationSnapshot: usedQuestion.explanation,
+          },
+        },
+      },
+    });
+    const blocked = await request(`/admin/questions/${usedQuestion.id}`, "DELETE", undefined, adminCookie);
+    expect(blocked.status).toBe(409);
+    expect(await server.db.question.findUnique({ where: { id: usedQuestion.id } })).not.toBeNull();
+
+    // Do not let this regression fixture affect the analytics sample-size
+    // assertions later in this same integration suite.
+    const historyAttempt = await server.db.attempt.findFirstOrThrow({
+      where: { userId: studentId, answers: { some: { questionId: usedQuestion.id } } },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    });
+    await server.db.attemptAnswer.deleteMany({ where: { attemptId: historyAttempt.id } });
+    await server.db.attempt.delete({ where: { id: historyAttempt.id } });
+
+    const options = ["Snapshot A", "Snapshot B", "Snapshot C", "Snapshot D"];
+    const source = await server.db.question.create({
+      data: {
+        subjectId: usedQuestion.subjectId,
+        text: "Snapshot-only source question for deletion regression",
+        options: JSON.stringify(options),
+        correctIndex: 2,
+        explanation: "The immutable snapshot must survive source deletion.",
+        source: "test",
+        difficulty: "easy",
+        questionHash: "exam-route-question-delete-snapshot-unique",
+      },
+    });
+    const created = await request("/admin/exams", "POST", {
+      title: "Snapshot deletion safety regression",
+      description: "Verify that source deletion preserves the immutable version.",
+      instructions: "Choose the correct answer.",
+      durationMinutes: 15,
+      shuffleQuestions: false,
+      shuffleOptions: false,
+      questions: [{ questionId: source.id, marks: 2, negativeMarks: 0.5 }],
+    }, adminCookie);
+    expect(created.status).toBe(201);
+    const snapshotExamId = (created.json.exam as { id: string }).id;
+    const version = await server.db.examVersion.findFirstOrThrow({
+      where: { examId: snapshotExamId },
+    });
+
+    const deleted = await request(`/admin/questions/${source.id}`, "DELETE", undefined, adminCookie);
+    expect(deleted.status).toBe(200);
+    expect(await server.db.question.findUnique({ where: { id: source.id } })).toBeNull();
+    const snapshot = await server.db.examVersionQuestion.findFirstOrThrow({
+      where: { examVersionId: version.id },
+    });
+    expect(snapshot).toMatchObject({
+      sourceQuestionId: null,
+      text: source.text,
+      options: JSON.stringify(options),
+      correctIndex: 2,
+      explanation: source.explanation,
+      marks: 2,
+      negativeMarks: 0.5,
+    });
+    await server.db.exam.delete({ where: { id: snapshotExamId } });
+  });
+
   describe("PostgreSQL formal exam lifecycle", () => {
     let fixture!: { examId: string; assignments: Array<{ id: string; studentId: number }>; studentIds: number[]; cookies: string[]; questionSnapshotId: string; lateAssignmentId?: string };
     const emails = ["lifecycle-a@arctester.test", "lifecycle-b@arctester.test", "lifecycle-c@arctester.test", "lifecycle-d@arctester.test", "lifecycle-race@arctester.test"];
