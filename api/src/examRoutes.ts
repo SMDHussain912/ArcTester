@@ -663,16 +663,52 @@ export function examRouter(db: PrismaClient): Router {
   router.post("/admin/submissions/:id/release", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const submission = await db.examSubmission.findUnique({
-        where: { id: req.params.id }, select: { id: true, status: true },
+        where: { id: req.params.id },
+        include: {
+          assignment: {
+            select: {
+              studentId: true,
+              id: true,
+              examVersion: { select: { exam: { select: { title: true } } } },
+            },
+          },
+        },
       });
       if (!submission) return next(notFound("Submission not found."));
       if (submission.status === "GRADED") {
         return res.json({ ok: true, submissionId: submission.id, status: "GRADED", alreadyReleased: true });
       }
-      const released = await db.examSubmission.updateMany({
-        where: { id: submission.id, status: "REVIEW_REQUIRED" }, data: { status: "GRADED" },
+      const released = await db.$transaction(async (tx) => {
+        const changed = await tx.examSubmission.updateMany({
+          where: { id: submission.id, status: "REVIEW_REQUIRED" },
+          data: { status: "GRADED" },
+        });
+        if (changed.count !== 1) return false;
+        // Retire the old "awaiting review" notice and publish the result notice
+        // atomically with release so the inbox cannot keep showing stale status.
+        await tx.studentNotification.updateMany({
+          where: {
+            userId: submission.assignment.studentId,
+            dedupeKey: `exam-submission:${submission.id}`,
+            kind: "EXAM_REVIEW",
+            readAt: null,
+          },
+          data: { readAt: new Date() },
+        });
+        // A failed result-notification write must not leave a graded result undisclosed.
+        await tx.studentNotification.create({
+          data: {
+            userId: submission.assignment.studentId,
+            kind: "EXAM_RESULT",
+            title: "Exam result available",
+            message: `Your submission for ${submission.assignment.examVersion.exam.title} has been reviewed and graded. Open the result to see your score.`,
+            href: `/assignments/${submission.assignment.id}/result`,
+            dedupeKey: `exam-review-release:${submission.id}`,
+          },
+        });
+        return true;
       });
-      if (released.count !== 1) return next(conflict("This submission is no longer awaiting review."));
+      if (!released) return next(conflict("This submission is no longer awaiting review."));
       res.json({ ok: true, submissionId: submission.id, status: "GRADED" });
     } catch (error) {
       next(error);

@@ -991,6 +991,25 @@ describe("versioned exam management", () => {
     expect(heldResult.json.result).toMatchObject({ score: null, maximumScore: null, questions: [] });
     const released = await request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie);
     expect(released.status).toBe(200);
+    const releasedNotices = await server.db.studentNotification.findMany({
+      where: { userId: secondStudent.id, dedupeKey: `exam-review-release:${submission.id}` },
+    });
+    expect(releasedNotices).toHaveLength(1);
+    expect(releasedNotices[0]).toMatchObject({
+      kind: "EXAM_RESULT",
+      title: "Exam result available",
+      href: `/assignments/${offlineAssignment.id}/result`,
+    });
+    const retiredReviewNotice = await server.db.studentNotification.findFirstOrThrow({
+      where: { userId: secondStudent.id, dedupeKey: `exam-submission:${submission.id}` },
+    });
+    expect(retiredReviewNotice).toMatchObject({ kind: "EXAM_REVIEW", readAt: expect.any(Date) });
+    const repeatedRelease = await request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie);
+    expect(repeatedRelease.status).toBe(200);
+    expect(repeatedRelease.json).toMatchObject({ alreadyReleased: true });
+    expect(await server.db.studentNotification.count({
+      where: { userId: secondStudent.id, dedupeKey: `exam-review-release:${submission.id}` },
+    })).toBe(1);
     const availableResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
     expect(availableResult.status).toBe(200);
     expect((availableResult.json.result as { questions: unknown[] }).questions).toHaveLength(1);
