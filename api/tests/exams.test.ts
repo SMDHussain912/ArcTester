@@ -308,9 +308,11 @@ describe("versioned exam management", () => {
       request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
       request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
     ]);
-    expect([first.status, second.status].sort()).toEqual([200, 201]);
+    expect([first, second].every((response) => [200, 201].includes(response.status))).toBe(true);
     expect([first, second].filter((response) => response.json.created === 1)).toHaveLength(1);
     expect([first, second].filter((response) => response.json.created === 0)).toHaveLength(1);
+    expect([first, second].filter((response) => response.status === 200)
+      .every((response) => response.json.alreadyAssigned === true)).toBe(true);
 
     const assignment = await server.db.examAssignment.findFirstOrThrow({
       where: { studentId },
