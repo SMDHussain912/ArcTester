@@ -250,6 +250,36 @@ describe("POST /tests", () => {
 });
 
 describe("submit + result", () => {
+  it("reports incorrect and unanswered counts separately in overall and subject results", async () => {
+    const isolatedSession = await signUp(server.baseUrl, "result-breakdown@example.com");
+    const isolatedApi = bindSession(server.baseUrl, isolatedSession.cookie);
+    const created = await isolatedApi.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 2,
+    });
+    expect(created.status).toBe(201);
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    expect(attempt.questions).toHaveLength(2);
+    const question = await server.db.question.findUniqueOrThrow({
+      where: { id: attempt.questions[0].id },
+    });
+    const submitted = await isolatedApi.post(`/tests/${attempt.attemptId}/submit`, {
+      answers: [{ questionId: question.id, selectedIndex: (question.correctIndex + 1) % 4 }],
+    });
+    expect(submitted.status).toBe(200);
+
+    const response = await isolatedApi.get(`/tests/${attempt.attemptId}/result`);
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({
+      score: 0,
+      incorrect: 1,
+      unanswered: 1,
+      total: 2,
+      breakdown: [{ subject: "Maths", correct: 0, incorrect: 1, unanswered: 1, total: 2 }],
+    });
+  });
+
   it("scores, persists, and reveals answers only after submit", async () => {
     const created = (await api.post(`/tests`, {
       mode: "practice",
@@ -280,7 +310,7 @@ describe("submit + result", () => {
       questions: { correctIndex: number; explanation: string; isCorrect: boolean }[];
     };
     expect(body.score).toBe(1);
-    expect(body.breakdown).toEqual([{ subject: "Physics", correct: 1, total: 1 }]);
+    expect(body.breakdown).toEqual([{ subject: "Physics", correct: 1, incorrect: 0, unanswered: 0, total: 1 }]);
     expect(body.questions[0]).toMatchObject({
       correctIndex: correct.correctIndex,
       explanation: "exp-p1",
@@ -347,6 +377,9 @@ describe("submit + result", () => {
       count: 1,
     })) as { json: { attemptId: number; questions: { id: number }[] } };
     const questionId = created.json.questions[0].id;
+    const previousStat = await server.db.stat.findUnique({
+      where: { userId_questionId: { userId, questionId } },
+    });
     const payload = { answers: [{ questionId, selectedIndex: 0 }] };
     const [first, second] = await Promise.all([
       api.post(`/tests/${created.json.attemptId}/submit`, payload),
@@ -356,7 +389,7 @@ describe("submit + result", () => {
     const stat = await server.db.stat.findUniqueOrThrow({
       where: { userId_questionId: { userId, questionId } },
     });
-    expect(stat.seen).toBe(1);
+    expect(stat.seen).toBe((previousStat?.seen ?? 0) + 1);
   });
 
   it("rejects answers for foreign questions", async () => {

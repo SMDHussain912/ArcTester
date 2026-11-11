@@ -425,6 +425,8 @@ export async function submitTest(
 export interface ResultBreakdown {
   subject: string;
   correct: number;
+  incorrect: number;
+  unanswered: number;
   total: number;
 }
 
@@ -445,6 +447,8 @@ export interface TestResult {
   attemptId: number;
   mode: string;
   score: number;
+  incorrect: number;
+  unanswered: number;
   total: number;
   expired: boolean;
   breakdown: ResultBreakdown[];
@@ -464,14 +468,20 @@ export async function getResult(
   if (!attempt) throw notFound("Test not found.");
   if (!attempt.finishedAt) throw forbidden("Submit the test before viewing the result.");
 
-  const breakdown = new Map<string, { correct: number; total: number }>();
+  const breakdown = new Map<string, { correct: number; incorrect: number; unanswered: number; total: number }>();
   let score = 0;
+  let incorrect = 0;
+  let unanswered = 0;
   const questions: ResultQuestion[] = attempt.answers.map((a) => {
     if (a.isCorrect) score += 1;
+    else if (a.chosen === null) unanswered += 1;
+    else incorrect += 1;
     const subject = a.subjectSnapshot;
-    const entry = breakdown.get(subject) ?? { correct: 0, total: 0 };
+    const entry = breakdown.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, total: 0 };
     entry.total += 1;
     if (a.isCorrect) entry.correct += 1;
+    else if (a.chosen === null) entry.unanswered += 1;
+    else entry.incorrect += 1;
     breakdown.set(subject, entry);
     return {
       questionId: a.questionId,
@@ -491,6 +501,8 @@ export async function getResult(
     attemptId: attempt.id,
     mode: attempt.mode,
     score,
+    incorrect,
+    unanswered,
     total: attempt.answers.length,
     expired: attempt.expired,
     breakdown: [...breakdown.entries()].map(([subject, v]) => ({ subject, ...v })),

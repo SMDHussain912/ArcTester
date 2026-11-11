@@ -66,9 +66,11 @@ type PracticeResult = {
   attemptId: number;
   mode: string;
   score: number;
+  incorrect: number;
+  unanswered: number;
   total: number;
   expired: boolean;
-  breakdown: { subject: string; correct: number; total: number }[];
+  breakdown: { subject: string; correct: number; incorrect: number; unanswered: number; total: number }[];
   questions: {
     questionId: number;
     subject: string;
@@ -777,11 +779,12 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <Text style={styles.heading}>Practice result</Text>
             <Text style={styles.statValue}>{result.score} / {result.total}</Text>
+            <Text style={styles.muted}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
             <Text style={styles.muted}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
             {result.breakdown.map((item) => (
               <View key={item.subject} style={styles.announcementCard}>
                 <Text style={styles.announcementTitle}>{item.subject}</Text>
-                <Text style={styles.muted}>{item.correct} correct out of {item.total}</Text>
+                <Text style={styles.muted}>{item.correct} correct · {item.incorrect} incorrect · {item.unanswered} unanswered</Text>
               </View>
             ))}
             <Text style={styles.sectionTitle}>Answer review</Text>
