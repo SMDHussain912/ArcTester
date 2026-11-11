@@ -914,7 +914,7 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-      {!activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+      {activePage !== "notifications" && !activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
         <StudentNotificationBanner
           notification={studentNotifications.find((item) => !item.readAt)!}
           onRead={(id) => void markNotificationRead(id)}
