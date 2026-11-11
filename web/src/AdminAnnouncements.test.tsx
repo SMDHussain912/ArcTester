@@ -12,6 +12,7 @@ describe("AdminAnnouncements", () => {
     expect(screen.getByRole("heading", { name: "Announcements" })).toBeTruthy();
     expect(screen.getByText("No announcements published yet.")).toBeTruthy();
     expect(screen.getByLabelText("Title")).toBeTruthy();
+    expect(screen.getByLabelText("Message")).toHaveAttribute("maxLength", "4000");
     expect(screen.getByLabelText(/Expiry date and time/)).toBeTruthy();
   });
 
