@@ -40,7 +40,32 @@ export const CreateTestSchema = z
         message: "Select at least one subject for practice mode.",
       });
     }
-    if (value.subjects && new Set(value.subjects).size !== value.subjects.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
+    if (value.subjects && new Set(value.subjects).size !== value.subjects.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
+    }
+
+    if (value.topicFilters?.length) {
+      const selectedSubjects = new Set(value.subjects ?? (value.subject ? [value.subject] : []));
+      const seenFilters = new Set<string>();
+      for (const [index, filter] of value.topicFilters.entries()) {
+        if (!selectedSubjects.has(filter.subject)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["topicFilters", index, "subject"],
+            message: "Topic filters must belong to a selected subject.",
+          });
+        }
+        const identity = JSON.stringify([filter.subject, filter.topic]);
+        if (seenFilters.has(identity)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["topicFilters", index],
+            message: "Duplicate topic filters are not allowed.",
+          });
+        }
+        seenFilters.add(identity);
+      }
+    }
   });
 
 export const SubmitTestSchema = z.object({
