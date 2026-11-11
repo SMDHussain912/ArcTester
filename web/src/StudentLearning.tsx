@@ -1,53 +1,51 @@
-"use client";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { request } from "./apiClient";
+import type { LearningConcept } from "./lib/api";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { api, ApiError, type LearningConcept } from "../../lib/api";
-import { useSession } from "../../lib/session";
+export interface StudentLearningProps {
+  setActivePage: (page: string) => void;
+}
 
-export default function LearningPage() {
-  const { status } = useSession();
+export default function StudentLearning({ setActivePage }: StudentLearningProps) {
   const [concepts, setConcepts] = useState<LearningConcept[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
-  async function loadConcepts(search = "") {
+  const loadConcepts = useCallback(async (search = "") => {
+    cancelledRef.current = true;
+    const generation = ++cancelledRef.current;
     setLoading(true);
     setError(null);
     try {
-      const result = await api.learningConcepts(search);
+      const params = new URLSearchParams();
+      if (search.trim()) params.set("q", search.trim());
+      const suffix = params.toString();
+      const result = await request<{ total: number; concepts: LearningConcept[] }>(
+        "/learning/concepts" + (suffix ? "?" + suffix : ""),
+      );
+      if (generation !== cancelledRef.current) return;
       setConcepts(result.concepts);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Could not load the concept library.");
+      if (generation !== cancelledRef.current) return;
+      setError(cause instanceof Error ? cause.message : "Could not load the concept library.");
     } finally {
-      setLoading(false);
+      if (generation === cancelledRef.current) setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    if (status !== "authenticated") return;
-    let cancelled = false;
-    setLoading(true);
-    api.learningConcepts()
-      .then((result) => { if (!cancelled) setConcepts(result.concepts); })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof ApiError ? cause.message : "Could not load the concept library.");
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [status]);
+    loadConcepts();
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [loadConcepts]);
 
-  if (status === "loading") return <p className="mute">Checking your session…</p>;
-  if (status !== "authenticated") {
-    return (
-      <section className="panel">
-        <h1>Concept library</h1>
-        <p className="muted">Sign in to browse concise explanations, examples and common mistakes.</p>
-        <Link className="button button-primary" href="/login">Sign in</Link>
-      </section>
-    );
-  }
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void loadConcepts(query);
+  };
 
   return (
     <div className="stack">
@@ -59,7 +57,7 @@ export default function LearningPage() {
           </div>
           <span className="pill">{concepts.length} concepts</span>
         </div>
-        <form className="row" onSubmit={(event) => { event.preventDefault(); void loadConcepts(query); }}>
+        <form className="row" onSubmit={handleSearch}>
           <input
             aria-label="Search concepts"
             placeholder="Search concepts, subjects or keywords"
@@ -100,8 +98,8 @@ export default function LearningPage() {
         ))}
       </div>
       <div className="row">
-        <Link className="button button-secondary" href="/analytics">Back to analytics</Link>
-        <Link className="button button-secondary" href="/">Study dashboard</Link>
+        <button className="button button-secondary" onClick={() => setActivePage("analytics")}>Back to analytics</button>
+        <button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Study dashboard</button>
       </div>
     </div>
   );

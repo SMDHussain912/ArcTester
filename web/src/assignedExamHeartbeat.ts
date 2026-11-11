@@ -1,14 +1,13 @@
 export type AssignmentHeartbeatFailure = "deadline" | "paused" | "transient";
 
-/** Deadline failures must not pause the local timer: the client must still submit
- * its saved answers so the server can retain a late submission for review. */
-export function classifyAssignmentHeartbeatFailure(message: string): AssignmentHeartbeatFailure {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("time has expired") || normalized.includes("deadline has passed") || normalized.includes("submission deadline has passed")) {
-    return "deadline";
-  }
-  if (normalized.includes("no active exam session") || normalized.includes("paused") || normalized.includes("locked by the invigilator")) {
-    return "paused";
-  }
+/**
+ * Classify a heartbeat failure from an HTTP status code instead of message text.
+ * The server returns 409 for a paused session; 403/404 for deadline expiry so the
+ * client keeps its local timer running and can still submit saved answers for
+ * server-side review.
+ */
+export function classifyAssignmentHeartbeatFailure(status: number | null): AssignmentHeartbeatFailure {
+  if (status === 409) return "paused";
+  if (status === 404 || status === 403) return "deadline";
   return "transient";
 }

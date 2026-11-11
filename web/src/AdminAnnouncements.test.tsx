@@ -32,7 +32,7 @@ describe("AdminAnnouncements", () => {
 
   it("delegates field changes, form submission and refresh", () => {
     const onTitleChange = vi.fn(), onMessageChange = vi.fn(), onExpiryChange = vi.fn(), onPublishAtChange = vi.fn(), onCreate = vi.fn(), onRefresh = vi.fn();
-    render(<AdminAnnouncements announcements={[]} title="" message="" expiry="" busy={false} onTitleChange={onTitleChange} onMessageChange={onMessageChange} onExpiryChange={onExpiryChange} onPublishAtChange={onPublishAtChange} onCreate={onCreate} onRefresh={onRefresh} onDelete={vi.fn()} />);
+    render(<AdminAnnouncements announcements={[]} title="" message="" expiry="" publishAt="" busy={false} onTitleChange={onTitleChange} onMessageChange={onMessageChange} onExpiryChange={onExpiryChange} onPublishAtChange={onPublishAtChange} onCreate={onCreate} onRefresh={onRefresh} onDelete={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Notice" } });
     fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Details" } });
     fireEvent.change(screen.getByLabelText(/Publish date and time/), { target: { value: "2026-11-20T08:00" } });

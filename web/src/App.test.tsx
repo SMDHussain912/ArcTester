@@ -252,9 +252,9 @@ describe("live Vite application", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Notifications (1)" }));
     expect(await screen.findByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
-    const resultNotification = screen.getByRole("main").querySelector(".notification-row");
+    const resultNotification = screen.getByRole("main").querySelector(".notification-row") as HTMLElement | null;
     expect(resultNotification).not.toBeNull();
-    fireEvent.click(within(resultNotification!).getByRole("button", { name: "Mark as read" }));
+    fireEvent.click(within(resultNotification as HTMLElement).getByRole("button", { name: "Mark as read" }));
     await waitFor(() => expect(screen.getByText("READ")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/notifications/notification-result-1/read"),

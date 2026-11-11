@@ -2,34 +2,56 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as tf from "@tensorflow/tfjs";
 import { createTensorflowBrowserPredictor, type BrowserTensorflowArtifact } from "./tensorflowInference.js";
 
-async function makeArtifact(): Promise<BrowserTensorflowArtifact> {
-  await tf.setBackend("cpu");
-  await tf.ready();
-  const model = tf.sequential();
-  model.add(tf.layers.dense({ inputShape: [1], units: 1, activation: "linear" }));
-  model.setWeights([tf.tensor2d([[2]]), tf.tensor1d([1])]);
+// The published @tensorflow/tfjs-layers package ships only compiled JS (no .d.ts) in
+// this environment, so the `export * from '@tensorflow/tfjs-layers'` re-export in
+// @tensorflow/tfjs is empty. The layers/weights APIs are cast to `any` here.
+const TF = tf as unknown as {
+  setBackend(backend: string): Promise<void>;
+  ready(): Promise<void>;
+  sequential(layers?: unknown[]): { add(layer: unknown): void; setWeights(weights: unknown[]): void; dispose(): void; save(handler: unknown): Promise<unknown>; predict(input: unknown): unknown; };
+  layers: { dense(config: unknown): unknown; [key: string]: (config: unknown) => unknown };
+  tensor2d(data: unknown, shape?: number[]): { data(): Promise<unknown>; dispose(): void };
+  tensor1d(data: unknown): { data(): Promise<unknown>; dispose(): void };
+  io: {
+    fromMemory(modelTopology: unknown, weightSpecs?: unknown, weightData?: unknown): unknown;
+    withSaveHandler(saveHandler: (artifacts: unknown) => Promise<unknown>): unknown;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
 
-  let saved: tf.io.ModelArtifacts | undefined;
-  await model.save(tf.io.withSaveHandler(async (artifacts) => {
+async function makeArtifact(): Promise<BrowserTensorflowArtifact> {
+  await TF.setBackend("cpu");
+  await TF.ready();
+  const model = TF.sequential();
+  model.add(TF.layers.dense({ inputShape: [1], units: 1, activation: "linear" }));
+  model.setWeights([TF.tensor2d([[2]]), TF.tensor1d([1])]);
+
+  let saved: unknown;
+  await model.save(TF.io.withSaveHandler(async (artifacts: unknown) => {
     saved = artifacts;
+    const topo = (artifacts as { modelTopology?: unknown })?.modelTopology ?? {};
+    const specs = (artifacts as { weightSpecs?: unknown })?.weightSpecs ?? [];
+    const weightData = (artifacts as { weightData?: unknown })?.weightData;
     return {
       modelArtifactsInfo: {
         dateSaved: new Date(),
         modelTopologyType: "JSON",
-        modelTopologyBytes: JSON.stringify(artifacts.modelTopology ?? {}).length,
-        weightSpecsBytes: JSON.stringify(artifacts.weightSpecs ?? []).length,
-        weightDataBytes: Array.isArray(artifacts.weightData)
-          ? artifacts.weightData.reduce((sum, part) => sum + part.byteLength, 0)
-          : artifacts.weightData?.byteLength ?? 0,
+        modelTopologyBytes: JSON.stringify(topo).length,
+        weightSpecsBytes: JSON.stringify(specs).length,
+        weightDataBytes: Array.isArray(weightData)
+          ? weightData.reduce((sum: number, part: { byteLength: number }) => sum + part.byteLength, 0)
+          : (weightData as { byteLength?: number })?.byteLength ?? 0,
       },
     };
   }));
   model.dispose();
-  if (!saved?.modelTopology || !saved.weightSpecs || !saved.weightData) {
+  const savedArtifacts = saved as { modelTopology: unknown; weightSpecs: unknown; weightData: unknown };
+  if (!savedArtifacts?.modelTopology || !savedArtifacts.weightSpecs || !savedArtifacts.weightData) {
     throw new Error("Test model export failed");
   }
-  const buffers = Array.isArray(saved.weightData) ? saved.weightData : [saved.weightData];
-  const weights = Buffer.concat(buffers.map((buffer) => Buffer.from(buffer))).toString("base64");
+  const buffers = Array.isArray(savedArtifacts.weightData) ? savedArtifacts.weightData : [savedArtifacts.weightData];
+  const weights = Buffer.concat(buffers.map((buffer) => Buffer.from(buffer as ArrayBuffer))).toString("base64");
   return {
     schemaVersion: 1,
     format: "tensorflow-js-layers-model",
@@ -38,8 +60,8 @@ async function makeArtifact(): Promise<BrowserTensorflowArtifact> {
     task: "regression",
     featureSchema: [{ name: "practice_score", type: "numeric" }],
     normalization: { means: [1], scales: [2] },
-    modelTopology: saved.modelTopology as Record<string, unknown>,
-    weightSpecs: saved.weightSpecs as BrowserTensorflowArtifact["weightSpecs"],
+    modelTopology: savedArtifacts.modelTopology as Record<string, unknown>,
+    weightSpecs: savedArtifacts.weightSpecs as BrowserTensorflowArtifact["weightSpecs"],
     weightDataBase64: weights,
     evaluation: {
       candidateMae: 0.1,

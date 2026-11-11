@@ -117,7 +117,7 @@ describe("useStudentCommunications", () => {
         setError,
         setBusy,
       }),
-      { initialProps: { role: "STUDENT" as const } },
+      { initialProps: { role: "STUDENT" as "STUDENT" | "ADMIN" } },
     );
     await waitFor(() => expect(request).toHaveBeenCalled());
     act(() => result.current.clear());

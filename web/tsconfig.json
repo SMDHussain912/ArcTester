@@ -3,13 +3,12 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
     "allowJs": true,
     "noEmit": true,
-    "incremental": true
+    "incremental": true,
+    "skipLibCheck": true
   },
   "include": [
     "vite-env.d.ts",

@@ -7,7 +7,10 @@ export type StudentPage =
   | "announcements"
   | "notifications"
   | "assigned-exams"
-  | "progress";
+  | "progress"
+  | "analytics"
+  | "learning"
+  | "materials";
 
 interface StudentNavigationProps {
   activePage: StudentPage;
@@ -29,6 +32,9 @@ const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN
   { page: "assigned-exams", label: "Assigned exams", icon: "▤", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },
   { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },
+  { page: "analytics", label: "Analytics", icon: "▩", group: "LEARN" },
+  { page: "learning", label: "Concept library", icon: "◎", group: "LEARN" },
+  { page: "materials", label: "Study materials", icon: "⇣", group: "LEARN" },
   { page: "announcements", label: "Announcements", icon: "◉", group: "ACCOUNT" },
   { page: "notifications", label: "Notifications", icon: "♢", group: "ACCOUNT" },
 ];

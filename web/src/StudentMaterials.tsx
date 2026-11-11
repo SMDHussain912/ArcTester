@@ -1,24 +1,26 @@
-"use client";
+import { useCallback, useRef, useState } from "react";
+import { request } from "./apiClient";
+import type { OfflineLearningPackage } from "./lib/api";
 
-import { useState } from "react";
-import Link from "next/link";
-import { api, ApiError, type OfflineLearningPackage } from "../../lib/api";
-import { useSession } from "../../lib/session";
+export interface StudentMaterialsProps {
+  setActivePage: (page: string) => void;
+}
 
-export default function MaterialsPage() {
-  const { status } = useSession();
+export default function StudentMaterials({ setActivePage }: StudentMaterialsProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState<OfflineLearningPackage | null>(null);
+  const cancelledRef = useRef(false);
 
-  async function downloadPackage() {
+  const downloadPackage = useCallback(async () => {
+    cancelledRef.current = true;
+    const generation = ++cancelledRef.current;
     setLoading(true);
     setError(null);
     try {
-      const studyPackage = await api.offlineLearningPackage();
-      const blob = new Blob([JSON.stringify(studyPackage, null, 2)], {
-        type: "application/json",
-      });
+      const studyPackage = await request<OfflineLearningPackage>("/learning/package");
+      if (generation !== cancelledRef.current) return;
+      const blob = new Blob([JSON.stringify(studyPackage, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -29,22 +31,12 @@ export default function MaterialsPage() {
       URL.revokeObjectURL(url);
       setDownloaded(studyPackage);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Could not download the study package.");
+      if (generation !== cancelledRef.current) return;
+      setError(cause instanceof Error ? cause.message : "Could not download the study package.");
     } finally {
-      setLoading(false);
+      if (generation === cancelledRef.current) setLoading(false);
     }
-  }
-
-  if (status === "loading") return <p className="mute">Checking your session…</p>;
-  if (status !== "authenticated") {
-    return (
-      <section className="panel">
-        <h1>Offline study materials</h1>
-        <p className="muted">Sign in to download the question bank and its explanations for offline revision.</p>
-        <Link className="button button-primary" href="/login">Sign in</Link>
-      </section>
-    );
-  }
+  }, []);
 
   return (
     <div className="stack">
@@ -82,8 +74,8 @@ export default function MaterialsPage() {
         ) : null}
       </section>
       <div className="row">
-        <Link className="button button-secondary" href="/">Back to dashboard</Link>
-        <Link className="button button-secondary" href="/analytics">Study analytics</Link>
+        <button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Back to dashboard</button>
+        <button className="button button-secondary" onClick={() => setActivePage("analytics")}>Study analytics</button>
       </div>
     </div>
   );
