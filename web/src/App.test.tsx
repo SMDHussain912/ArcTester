@@ -252,7 +252,7 @@ describe("live Vite application", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Notifications (1)" }));
     expect(await screen.findByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
-    const resultNotification = screen.getByRole("heading", { name: "Exam result available" }).closest("article");
+    const resultNotification = screen.getByRole("main").querySelector(".notification-row");
     expect(resultNotification).not.toBeNull();
     fireEvent.click(within(resultNotification!).getByRole("button", { name: "Mark as read" }));
     await waitFor(() => expect(screen.getByText("READ")).toBeInTheDocument());
