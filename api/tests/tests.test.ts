@@ -460,6 +460,29 @@ describe("submit + result", () => {
       expect((res.json as { error: string }).error).toBe("Test not found.");
     });
 
+    it("prevents another student from reading or submitting a practice attempt", async () => {
+      const created = await api.post("/tests", {
+        mode: "practice",
+        subject: "Maths",
+        count: 1,
+      }) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
+      expect(created.status).toBe(201);
+
+      const otherSession = await signUp(server.baseUrl, "other-student@example.com");
+      const otherApi = bindSession(server.baseUrl, otherSession.cookie);
+      const attemptPath = `/tests/${created.json.attemptId}`;
+
+      expect((await otherApi.get(attemptPath)).status).toBe(404);
+      expect((await otherApi.get(`${attemptPath}/result`)).status).toBe(404);
+      expect((await otherApi.post(`${attemptPath}/submit`, {
+        answers: [{ questionId: created.json.questions[0].id, selectedIndex: 0 }],
+      })).status).toBe(404);
+
+      // The rejected cross-user requests must leave the real owner's attempt intact.
+      expect((await api.get(attemptPath)).status).toBe(200);
+      expect((await api.get(`${attemptPath}/result`)).status).toBe(403);
+    });
+
     it("returns 409 after submission, pointing at the result", async () => {
       const created = (await api.post(`/tests`, {
         mode: "practice",
