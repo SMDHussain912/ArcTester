@@ -531,6 +531,11 @@ describe("versioned exam management", () => {
       const session = started.json.session as { id: string; startedAt: string; deadline: string };
       const forbiddenAction = await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE", reason: "Unauthorized student action" }, student);
       expect(forbiddenAction.status).toBe(403);
+      const missingReason = await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE" }, adminCookie);
+      expect(missingReason.status).toBe(400);
+      expect((await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } })).status).toBe("ACTIVE");
+      const blankReason = await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE", reason: "   " }, adminCookie);
+      expect(blankReason.status).toBe(400);
       expect((await request("/admin/exams/sessions/" + session.id + "/action", "POST", { action: "PAUSE", reason: "Lifecycle integration pause" }, adminCookie)).status).toBe(200);
       const paused = await server.db.examSession.findUniqueOrThrow({ where: { id: session.id } });
       expect(paused.status).toBe("PAUSED");
@@ -747,7 +752,7 @@ describe("versioned exam management", () => {
     expect(afterPausedHeartbeat.lastHeartbeatAt?.getTime()).toBe(beforePausedHeartbeat.lastHeartbeatAt?.getTime());
     const pausedState = await server.db.examSession.findUniqueOrThrow({ where: { id: sessionId } });
     expect(pausedState.answersRevision).toBe(1);
-    const resumed = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "RESUME" }, adminCookie);
+    const resumed = await request(`/admin/exams/sessions/${sessionId}/action`, "POST", { action: "RESUME", reason: "Resume after review" }, adminCookie);
     expect(resumed.status).toBe(200);
 
     const restored = await request(`/exams/assignments/${assignmentId}/answers`, "GET", undefined, studentCookie);
@@ -812,7 +817,7 @@ describe("versioned exam management", () => {
     expect(blockedSubmission.status).toBe(409);
     expect(await server.db.examSubmission.findUnique({ where: { assignmentId } })).toBeNull();
     expect((await server.db.examSession.findUniqueOrThrow({ where: { id: activeSession.id } })).status).toBe("PAUSED");
-    const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME" }, adminCookie);
+    const resumed = await request(`/admin/exams/sessions/${activeSession.id}/action`, "POST", { action: "RESUME", reason: "Resume after review" }, adminCookie);
     expect(resumed.status).toBe(200);
     const resumedHeartbeat = await request(`/exams/assignments/${assignmentId}/session/heartbeat`, "POST", { event: "HEARTBEAT" }, studentCookie);
     expect(resumedHeartbeat.status).toBe(200);
@@ -900,7 +905,7 @@ describe("versioned exam management", () => {
     const started = await request(`/exams/assignments/${extraAssignment.id}/session/start`, "POST", {}, cookie);
     expect(started.status).toBe(200);
     const session = started.json.session as { id: string };
-    const paused = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "PAUSE" }, adminCookie);
+    const paused = await request(`/admin/exams/sessions/${session.id}/action`, "POST", { action: "PAUSE", reason: "Pause for termination test" }, adminCookie);
     expect(paused.status).toBe(200);
 
     const pausedAt = new Date(Date.now() - 5 * 60 * 1000);

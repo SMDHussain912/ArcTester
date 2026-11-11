@@ -74,6 +74,13 @@ export default function AdminWorkspace(p:Props){
  async function loadModelLab(){const [d,j]=await Promise.all([api<{datasets:ModelLabDataset[]}>("/admin/model-datasets"),api<{jobs:ModelLabJob[]}>("/admin/model-training-jobs")]);setModelDatasets(d.datasets??[]);setTrainingJobs(j.jobs??[]);if(!selectedDatasetId&&d.datasets?.[0])setSelectedDatasetId(d.datasets[0].id);}
  async function loadReviewQueue(){const r=await api<{submissions:ReviewQueueItem[]}>("/admin/submissions/review-required");setReviewItems(r.submissions??[]);}
  async function loadLiveSessions(){setLiveSessionsLoading(true);try{const r=await api<{sessions:LiveSession[];total:number;serverTime:string}>("/admin/exams/live-sessions?page=1&limit=50&eventLimit=100");setLiveSessions(Array.isArray(r.sessions)?r.sessions:[]);setLiveSessionsTotal(Number.isFinite(r.total)?r.total:0);setLiveSessionsUpdatedAt(r.serverTime||new Date().toISOString());}finally{setLiveSessionsLoading(false);}}
+ async function actOnLiveSession(id:string,action:"PAUSE"|"RESUME"|"TERMINATE",reason:string){
+  await run(async()=>{
+   await api(`/admin/exams/sessions/${encodeURIComponent(id)}/action`,{method:"POST",body:JSON.stringify({action,reason})});
+   await loadLiveSessions();
+   setNotice(action==="PAUSE"?"Candidate session paused.":action==="RESUME"?"Candidate session resumed.":"Candidate session terminated.");
+  });
+ }
  useEffect(()=>{if(tab==="model-lab")void loadModelLab().catch(e=>setError(e.message));if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="live-monitor")return;let active=true;const refresh=()=>{if(active)void loadLiveSessions().catch(e=>setError(e.message));};refresh();const timer=window.setInterval(refresh,15000);return()=>{active=false;window.clearInterval(timer);};},[tab]);
  async function queueTensorflowTraining(){if(!selectedDatasetId)throw new Error("Register a dataset before queueing training.");await run(async()=>{const r=await api<{job:ModelLabJob}>(`/admin/model-datasets/${encodeURIComponent(selectedDatasetId)}/tensorflow-jobs`,{method:"POST",body:JSON.stringify({modelId:`${trainingModelPrefix}-tensorflow`,seed:42,epochs:80,batchSize:32})});setNotice(`TensorFlow.js job ${r.job.id} queued.`);await loadModelLab();});}
@@ -113,6 +120,8 @@ export default function AdminWorkspace(p:Props){
     selectedSessionId={selectedLiveSessionId}
     onSelectSession={setSelectedLiveSessionId}
     onRefresh={() => void loadLiveSessions()}
+    busy={busy}
+    onSessionAction={(id,action,reason) => actOnLiveSession(id,action,reason)}
    />}
    {tab==="review-queue"&&<AdminReviewQueue
     items={reviewItems}
