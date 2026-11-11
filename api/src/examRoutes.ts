@@ -1262,6 +1262,22 @@ export function examRouter(db: PrismaClient): Router {
               startedAt: now, lastHeartbeatAt: now, lastActivityAt: now,
               events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
+          }).catch(async (error: unknown) => {
+            const errorCode = typeof error === "object" && error !== null && "code" in error
+              ? (error as { code?: string }).code
+              : undefined;
+            if (errorCode !== "P2002") throw error;
+
+            // Two devices can request the first session at the same time. The
+            // unique assignment constraint elects one creator; the other
+            // request should attach to that active session, not return HTTP 500.
+            const concurrentSession = await db.examSession.findUnique({
+              where: { assignmentId: assignment.id },
+            });
+            if (!concurrentSession || concurrentSession.status !== "ACTIVE" || !concurrentSession.startedAt) {
+              throw conflict("The exam session changed while starting. Refresh and try again.");
+            }
+            return concurrentSession;
           });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
