@@ -47,4 +47,27 @@ describe("AdminAttendanceRegister", () => {
     rerender(<AdminAttendanceRegister rows={[]} total={0} page={1} pageSize={25} loading={false} updatedAt={null} onPageChange={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByText("No exam assignments have been created yet.")).toBeTruthy();
   });
+  it("loads and displays the full audit timeline for completed assignments", () => {
+    const onLoadAudit = vi.fn();
+    const audit = {
+      assignmentId: "assignment-2",
+      candidate: { id: 8, email: "submitted@example.test" },
+      exam: { title: "AP ECET Mock" },
+      version: 2,
+      session: { id: "session-2", status: "COMPLETED", startedAt: "2026-11-10T09:00:00.000Z", lastHeartbeatAt: "2026-11-10T10:59:00.000Z", endedAt: "2026-11-10T11:00:00.000Z", heartbeatCount: 12, focusLossCount: 2, disconnectCount: 1 },
+      submission: { id: "submission-1", status: "GRADED", submittedAt: "2026-11-10T11:00:00.000Z", receivedAt: "2026-11-10T11:00:01.000Z", score: 82, maximumScore: 100 },
+      events: [{ id: "event-1", type: "INVIGILATOR_PAUSE", detail: "Candidate requested assistance", createdAt: "2026-11-10T10:00:00.000Z", actor: { id: 1, email: "admin@example.test", role: "ADMIN" } }],
+    };
+    const props = { rows, total: 2, page: 1, pageSize: 25, loading: false, updatedAt: null, onPageChange: vi.fn(), onRefresh: vi.fn(), auditByAssignment: {}, loadingAuditAssignmentId: null, onLoadAudit };
+    const { rerender } = render(<AdminAttendanceRegister {...props} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "View audit" })[1]);
+    expect(onLoadAudit).toHaveBeenCalledWith("assignment-2");
+    rerender(<AdminAttendanceRegister {...props} auditByAssignment={{ "assignment-2": audit }} />);
+    expect(screen.getByText("Event timeline")).toBeTruthy();
+    expect(screen.getByText("INVIGILATOR PAUSE")).toBeTruthy();
+    expect(screen.getByText("Candidate requested assistance")).toBeTruthy();
+    expect(screen.getByText("admin@example.test (ADMIN)")).toBeTruthy();
+    expect(screen.getByText("Session COMPLETED · 12 heartbeats · 2 focus losses · 1 disconnects")).toBeTruthy();
+  });
+
 });
