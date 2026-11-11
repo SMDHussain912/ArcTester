@@ -308,7 +308,7 @@ describe("versioned exam management", () => {
       request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
       request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
     ]);
-    expect([first.status, second.status].sort()).toEqual([201, 201]);
+    expect([first.status, second.status].sort()).toEqual([200, 201]);
     expect([first, second].filter((response) => response.json.created === 1)).toHaveLength(1);
     expect([first, second].filter((response) => response.json.created === 0)).toHaveLength(1);
 
