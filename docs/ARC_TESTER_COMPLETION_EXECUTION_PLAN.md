@@ -6,6 +6,8 @@
 **Purpose:** A code-level execution contract for finishing the existing product. This plan is intentionally implementation-focused: target files, expected changes, reasons, dependencies, tests, acceptance gates and PR boundaries.
 
 > **Important:** This is a plan, not evidence that the listed work has already been implemented. A checkbox is only checked after the code is merged and the required verification passes on the exact commit. Do not treat old phase percentages as current measurements without re-auditing them.
+>
+> **Detailed execution instructions:** Follow [ARC_TESTER_AGENT_EXECUTION_SPEC.md](./ARC_TESTER_AGENT_EXECUTION_SPEC.md) for task IDs, source-to-database tracing, exact investigation/implementation loops, test scenarios, parallelization rules, status meanings and required reporting. The parent plan defines scope; the execution spec defines how the agent must carry it out.
 
 ---
 
