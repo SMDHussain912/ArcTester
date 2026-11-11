@@ -683,7 +683,15 @@ export function examRouter(db: PrismaClient): Router {
           where: { id: submission.id, status: "REVIEW_REQUIRED" },
           data: { status: "GRADED" },
         });
-        if (changed.count !== 1) return false;
+        if (changed.count !== 1) {
+          // Concurrent release requests should converge on the same successful
+          // outcome once the winning transaction commits, not report a false conflict.
+          const current = await tx.examSubmission.findUnique({
+            where: { id: submission.id },
+            select: { status: true },
+          });
+          return current?.status === "GRADED" ? "already-released" as const : "conflict" as const;
+        }
         // Retire the old "awaiting review" notice and publish the result notice
         // atomically with release so the inbox cannot keep showing stale status.
         await tx.studentNotification.updateMany({
@@ -706,10 +714,15 @@ export function examRouter(db: PrismaClient): Router {
             dedupeKey: `exam-review-release:${submission.id}`,
           },
         });
-        return true;
+        return "released" as const;
       });
-      if (!released) return next(conflict("This submission is no longer awaiting review."));
-      res.json({ ok: true, submissionId: submission.id, status: "GRADED" });
+      if (released === "conflict") return next(conflict("This submission is no longer awaiting review."));
+      res.json({
+        ok: true,
+        submissionId: submission.id,
+        status: "GRADED",
+        ...(released === "already-released" ? { alreadyReleased: true } : {}),
+      });
     } catch (error) {
       next(error);
     }
