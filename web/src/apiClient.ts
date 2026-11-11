@@ -29,3 +29,7 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
     return body as T;
   };
 }
+
+/** Default cookie-authenticated JSON request using the configured API base. */
+export const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+export const request = createApiClient(API);

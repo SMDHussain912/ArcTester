@@ -94,6 +94,7 @@ describe("StudentNavigation", () => {
         examActive={false}
         pendingExamCount={0}
         unreadAnnouncementCount={0}
+        unreadNotificationCount={0}
         theme="light"
         onToggleTheme={vi.fn()}
         email="student@example.com"
