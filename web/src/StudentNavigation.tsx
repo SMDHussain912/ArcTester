@@ -110,7 +110,7 @@ export default function StudentNavigation({
 
         <div className="student-sidebar-footer">
           <span className="student-avatar" aria-hidden="true">{email.slice(0, 1).toUpperCase()}</span>
-          <span className="student-account-copy"><b>Student account</b><small title={email}>{email}</small></span>
+          <span className="student-account-copy"><b>Student account</b><small>Signed in</small></span>
         </div>
       </aside>
 
