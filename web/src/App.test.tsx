@@ -53,7 +53,7 @@ describe("live Vite application", () => {
     render(<App />);
 
     expect(screen.queryByRole("heading", { name: "Assigned mock tests" })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     expect(await screen.findByRole("heading", { name: "Assigned exams" })).toBeInTheDocument();
     expect(screen.getByText("No assigned exams")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/exams/assigned"))).toBe(true);
@@ -116,7 +116,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
     expect(await screen.findByText("Conflict question?")).toBeInTheDocument();
 
@@ -179,7 +179,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     expect(await screen.findByText(/Awaiting administrator review\. Your result will appear after approval\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Review answers" })).not.toBeInTheDocument();
   });
@@ -300,7 +300,7 @@ describe("live Vite application", () => {
     await waitFor(() => expect(document.querySelector('[aria-labelledby="announcement-popup-title"]')).not.toBeInTheDocument());
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/acknowledge"))).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: /Announcements/ }));
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: /Announcements/ }));
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Announcements" })).toBeInTheDocument();
     });
@@ -812,7 +812,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
     expect(await screen.findByText("What is 2 + 2?")).toBeInTheDocument();
     const assignedQuestion = screen.getByText("What is 2 + 2?").closest("article");
@@ -880,7 +880,7 @@ describe("live Vite application", () => {
     });
     const intervalSpy = vi.spyOn(window, "setInterval");
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
     expect(await screen.findByText("Choose one")).toBeInTheDocument();
     const initialHeartbeat = intervalSpy.mock.calls.find(([, delay]) => delay === 15000)?.[0] as (() => void) | undefined;
@@ -927,7 +927,7 @@ describe("live Vite application", () => {
     });
     const intervalSpy = vi.spyOn(window, "setInterval");
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Assigned exams/ }));
+    fireEvent.click(await within(screen.getByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: /Assigned exams/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start examination" }));
     expect(await screen.findByText("Reconnect question")).toBeInTheDocument();
     const heartbeat = intervalSpy.mock.calls.find(([, delay]) => delay === 15000)?.[0] as (() => void) | undefined;
