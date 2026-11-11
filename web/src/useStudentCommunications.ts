@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { StudentPage } from "./StudentNavigation";
 
 export interface StudentAnnouncement {
@@ -45,95 +45,144 @@ export function useStudentCommunications({
   const [announcements, setAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [activeAnnouncements, setActiveAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<StudentNotification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  // Requests can outlive the authenticated account that started them. Keep an
+  // identity token in a ref so late responses cannot populate another account's UI.
+  const identity = `${userRole ?? "anonymous"}:${userId ?? "none"}`;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
 
   const refreshAnnouncements = useCallback(async () => {
+    const requestIdentity = identity;
     const response = await request<{ announcements: StudentAnnouncement[] }>("/announcements");
+    if (identityRef.current !== requestIdentity) return;
     setAnnouncements(Array.isArray(response.announcements) ? response.announcements : []);
-  }, [request]);
+  }, [identity, request]);
 
   const refreshNotifications = useCallback(async () => {
+    const requestIdentity = identity;
     if (userRole !== "STUDENT") {
-      setNotifications([]);
+      if (identityRef.current === requestIdentity) {
+        setNotifications([]);
+        setUnreadNotificationCount(0);
+      }
       return;
     }
     const path = activePage === "notifications" ? "/notifications" : "/notifications?unread=true";
-    const response = await request<{ notifications: StudentNotification[] }>(path);
-    setNotifications(Array.isArray(response.notifications) ? response.notifications : []);
-  }, [activePage, request, userRole]);
+    const response = await request<{ notifications: StudentNotification[]; unreadCount?: number }>(path);
+    if (identityRef.current !== requestIdentity) return;
+    const items = Array.isArray(response.notifications) ? response.notifications : [];
+    setNotifications(items);
+    setUnreadNotificationCount(
+      typeof response.unreadCount === "number" && Number.isFinite(response.unreadCount)
+        ? Math.max(0, Math.floor(response.unreadCount))
+        : items.filter((item) => !item.readAt).length,
+    );
+  }, [activePage, identity, request, userRole]);
 
   useEffect(() => {
     setAnnouncements([]);
     setActiveAnnouncements([]);
     setNotifications([]);
-  }, [userId, userRole]);
+    setUnreadNotificationCount(0);
+  }, [identity]);
 
   useEffect(() => {
     if (userRole !== "STUDENT") {
       setActiveAnnouncements([]);
       return;
     }
+    const requestIdentity = identity;
+    let cancelled = false;
     request<{ announcements: StudentAnnouncement[] }>("/announcements/active")
-      .then(({ announcements: items }) => setActiveAnnouncements(Array.isArray(items) ? items : []))
-      .catch((cause) => setError((cause as Error).message));
-  }, [request, setError, userId, userRole]);
+      .then(({ announcements: items }) => {
+        if (cancelled || identityRef.current !== requestIdentity) return;
+        setActiveAnnouncements(Array.isArray(items) ? items : []);
+      })
+      .catch((cause) => {
+        if (!cancelled && identityRef.current === requestIdentity) setError((cause as Error).message);
+      });
+    return () => { cancelled = true; };
+  }, [identity, request, setError, userRole]);
 
   useEffect(() => {
     if (userRole !== "STUDENT") {
       setNotifications([]);
+      setUnreadNotificationCount(0);
       return;
     }
+    let cancelled = false;
     const refresh = () => {
-      void refreshNotifications().catch(() => {
-        // Notification delivery is supplementary; keep the core student workspace usable.
+      void refreshNotifications().catch((cause) => {
+        if (!cancelled && identityRef.current === identity) {
+          // Notification delivery is supplementary; keep the core student workspace usable.
+          setError((cause as Error).message);
+        }
       });
     };
     refresh();
     const interval = window.setInterval(refresh, 30_000);
     return () => {
+      cancelled = true;
       window.clearInterval(interval);
     };
-  }, [refreshNotifications, userId, userRole]);
+  }, [identity, refreshNotifications, setError, userRole]);
 
   useEffect(() => {
     if (userRole !== "STUDENT" || !["dashboard", "announcements"].includes(activePage)) return;
-    refreshAnnouncements().catch((cause) => setError((cause as Error).message));
-  }, [activePage, refreshAnnouncements, setError, userId, userRole]);
+    const requestIdentity = identity;
+    refreshAnnouncements().catch((cause) => {
+      if (identityRef.current === requestIdentity) setError((cause as Error).message);
+    });
+  }, [activePage, identity, refreshAnnouncements, setError, userRole]);
 
   async function dismissAnnouncement(id: string) {
+    const requestIdentity = identity;
     try {
       await request(`/announcements/${encodeURIComponent(id)}/acknowledge`, { method: "POST" });
-      setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
+      if (identityRef.current === requestIdentity) setActiveAnnouncements((items) => items.filter((item) => item.id !== id));
     } catch (cause) {
-      setError((cause as Error).message);
+      if (identityRef.current === requestIdentity) setError((cause as Error).message);
     }
   }
 
   async function acknowledgeAnnouncement(id: string) {
+    const requestIdentity = identity;
     setBusy(true);
     try {
       const result = await request<{ seenAt: string; acknowledgedAt: string | null }>(
         `/announcements/${encodeURIComponent(id)}/acknowledge`,
         { method: "POST" },
       );
-      setAnnouncements((items) => items.map((item) => item.id === id
-        ? { ...item, seenAt: result.seenAt, acknowledgedAt: result.acknowledgedAt }
-        : item));
+      if (identityRef.current === requestIdentity) {
+        setAnnouncements((items) => items.map((item) => item.id === id
+          ? { ...item, seenAt: result.seenAt, acknowledgedAt: result.acknowledgedAt }
+          : item));
+      }
     } catch (cause) {
-      setError((cause as Error).message);
+      if (identityRef.current === requestIdentity) setError((cause as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   async function markNotificationRead(id: string) {
+    const requestIdentity = identity;
     try {
-      const result = await request<{ readAt: string }>(
+      const result = await request<{ readAt: string; alreadyRead?: boolean }>(
         `/notifications/${encodeURIComponent(id)}/read`,
         { method: "POST", body: JSON.stringify({}) },
       );
-      setNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+      if (identityRef.current === requestIdentity) {
+        const current = notifications.find((item) => item.id === id);
+        if (current && !current.readAt && result.alreadyRead !== true) {
+          setUnreadNotificationCount((count) => Math.max(0, count - 1));
+        }
+        setNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+      }
     } catch (cause) {
-      setError((cause as Error).message);
+      if (identityRef.current === requestIdentity) setError((cause as Error).message);
     }
   }
 
@@ -141,12 +190,14 @@ export function useStudentCommunications({
     setAnnouncements([]);
     setActiveAnnouncements([]);
     setNotifications([]);
+    setUnreadNotificationCount(0);
   }, []);
 
   return {
     announcements,
     activeAnnouncements,
     notifications,
+    unreadNotificationCount,
     refreshAnnouncements,
     refreshNotifications,
     dismissAnnouncement,
