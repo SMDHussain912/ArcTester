@@ -356,11 +356,12 @@ describe("versioned exam management", () => {
       await server.db.user.deleteMany({ where: { id: { in: fixture.studentIds } } });
     });
     it("returns one server-authoritative session when two devices start the same assignment concurrently", async () => {
-      const assignment = fixture.assignments[4];
-      const student = fixture.cookies[4];
+      const assignment = fixture.assignments.find((item) => item.studentId === fixture.studentIds[4])!;
+      const firstDevice = fixture.cookies[4];
+      const secondDevice = await loginExistingSession(emails[4]);
       const [first, second] = await Promise.all([
-        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student),
-        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, student),
+        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, firstDevice),
+        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, secondDevice),
       ]);
 
       expect(first.status).toBe(200);
