@@ -914,7 +914,6 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-      </main>
       {!activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
         <StudentNotificationBanner
           notification={studentNotifications.find((item) => !item.readAt)!}
@@ -922,6 +921,7 @@ export default function App() {
           onOpen={(notification) => void openStudentNotification(notification.id)}
         />
       )}
+      </main>
       {activeAnnouncements[0] && (
         <StudentAnnouncementDialog
           announcement={activeAnnouncements[0]}
