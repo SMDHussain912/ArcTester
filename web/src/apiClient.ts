@@ -1,4 +1,15 @@
 export type ApiErrorBody = { error?: unknown };
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
 /** Creates the shared cookie-authenticated JSON API request function used by the web client. */
 export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
   let base = apiBase;
@@ -13,7 +24,7 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
       const message = body && typeof body === "object" && "error" in body &&
         typeof (body as ApiErrorBody).error === "string"
         ? (body as { error: string }).error : "The request failed.";
-      throw new Error(message);
+      throw new ApiRequestError(message, response.status);
     }
     return body as T;
   };

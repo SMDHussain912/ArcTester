@@ -6,7 +6,7 @@ import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
 import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
 import { buildPracticeConfig } from "./practiceConfig";
-import { createApiClient } from "./apiClient";
+import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
 import { bindLocalExamBackupOwner, clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import type { FormEvent } from "react";
@@ -212,8 +212,13 @@ export default function App() {
       })
       .catch((cause) => {
         if (cancelled) return;
-        // A stale local attempt must not prevent the student from using the app.
-        safeStorage.removeItem("arctester-active-practice-attempt");
+        // Only definitive server responses prove this attempt cannot be resumed.
+        // Preserve the local pointer and answers on network/5xx failures so the
+        // student can retry recovery after reconnecting.
+        if (cause instanceof ApiRequestError && (cause.status === 404 || cause.status === 409)) {
+          safeStorage.removeItem("arctester-active-practice-attempt");
+          safeStorage.removeItem(practiceAnswersKey(attemptId));
+        }
         setError(`Your previous practice attempt could not be restored: ${(cause as Error).message}`);
       });
     return () => { cancelled = true; };

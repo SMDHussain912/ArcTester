@@ -492,6 +492,54 @@ describe("live Vite application", () => {
     expect(screen.getByText("2 / 2 answered")).toBeInTheDocument();
   });
 
+  it("preserves practice recovery data when restore fails because the network is unavailable", async () => {
+    localStorageValues.set("arctester-active-practice-attempt", "42");
+    localStorageValues.set("arctester-practice-answers-42", JSON.stringify({ "7": 2 }));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/tests/42")) return Promise.reject(new TypeError("Failed to fetch"));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText(/Your previous practice attempt could not be restored: Failed to fetch/)).toBeInTheDocument();
+    expect(localStorageValues.get("arctester-active-practice-attempt")).toBe("42");
+    expect(localStorageValues.get("arctester-practice-answers-42")).toBe(JSON.stringify({ "7": 2 }));
+  });
+
+  it("clears practice recovery data when the server confirms the attempt is unavailable", async () => {
+    localStorageValues.set("arctester-active-practice-attempt", "42");
+    localStorageValues.set("arctester-practice-answers-42", JSON.stringify({ "7": 2 }));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("/auth/me")) return Promise.resolve(response(200, {
+        user: { id: 4, email: "student@example.com", role: "STUDENT" },
+      }));
+      if (path.endsWith("/tests/42")) return Promise.resolve(response(404, { error: "Test not found." }));
+      if (path.endsWith("/bank")) return Promise.resolve(response(200, { total: 0, subjects: [] }));
+      if (path.endsWith("/exams/assigned")) return Promise.resolve(response(200, { assignments: [] }));
+      if (path.endsWith("/announcements/active") || path.endsWith("/announcements")) {
+        return Promise.resolve(response(200, { announcements: [] }));
+      }
+      return Promise.resolve(response(200, { ok: true }));
+    });
+
+    render(<App />);
+    expect(await screen.findByText(/Your previous practice attempt could not be restored: Test not found/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(localStorageValues.has("arctester-active-practice-attempt")).toBe(false);
+      expect(localStorageValues.has("arctester-practice-answers-42")).toBe(false);
+    });
+  });
+
   it("builds a student paper by selected subjects with optional subject-scoped topics", async () => {
     let paperPayload: Record<string, unknown> | null = null;
     fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {

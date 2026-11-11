@@ -17,6 +17,11 @@ describe("API client", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Invitation expired." }), { status: 410 }));
     await expect(createApiClient("http://localhost:4000", fetcher)("/auth/register")).rejects.toThrow("Invitation expired.");
   });
+  it("exposes the HTTP status on API errors for recovery decisions", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Test not found." }), { status: 404 }));
+    await expect(createApiClient("http://localhost:4000", fetcher)("/tests/42"))
+      .rejects.toMatchObject({ name: "ApiRequestError", message: "Test not found.", status: 404 });
+  });
   it("uses a stable fallback for non-JSON and invalid error payloads", async () => {
     const nonJson = vi.fn<typeof fetch>().mockResolvedValue(new Response("not json", { status: 502 }));
     const invalidError = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: { detail: "bad" } }), { status: 400 }));
