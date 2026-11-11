@@ -21,10 +21,11 @@ describe("StudentNavigation", () => {
     );
 
     const navigation = screen.getByRole("navigation", { name: "Student navigation" });
+    const updates = screen.getByRole("navigation", { name: "Student updates" });
     expect(within(navigation).getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
-    expect(within(navigation).getByRole("button", { name: "Assigned exams 3" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Announcements 2" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Notifications 4" })).toBeEnabled();
+    expect(within(navigation).getByRole("button", { name: "Assigned exams (3)" })).toBeEnabled();
+    expect(within(updates).getByRole("button", { name: "Announcements (2)" })).toBeEnabled();
+    expect(within(updates).getByRole("button", { name: "Notifications (4)" })).toBeEnabled();
     expect(screen.getByText("student@example.com")).toBeInTheDocument();
   });
 
@@ -103,6 +104,7 @@ describe("StudentNavigation", () => {
 
     expect(screen.getByRole("button", { name: "Sign out" })).toBeDisabled();
   });
+
   it("groups learning and update links and exposes the active workspace in the top bar", () => {
     render(
       <StudentNavigation
@@ -148,5 +150,4 @@ describe("StudentNavigation", () => {
     expect(screen.getByRole("navigation", { name: "Student updates" })).toHaveTextContent("Announcements2");
     expect(screen.getByRole("navigation", { name: "Student updates" })).toHaveTextContent("Notifications4");
   });
-
 });
