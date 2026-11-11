@@ -764,7 +764,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell student-shell">
       <StudentNavigation
         activePage={activePage}
         setActivePage={setActivePage}
