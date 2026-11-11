@@ -225,7 +225,7 @@
   .student-nav-label-secondary { display: none; }
   .student-sidebar nav + .student-nav-label-secondary { display: none; }
   .student-sidebar nav[aria-label="Student updates"] { margin-top: 3px; }
-  .student-topbar { position: sticky; top: 0; height: 58px; padding: 0 15px; }
+  .student-topbar { position: relative; top: auto; height: 58px; padding: 0 15px; }
   .student-topbar .user-email { display: none; }
   .student-shell > .main-content { padding: 22px 14px 50px; }
 }
