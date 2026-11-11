@@ -590,7 +590,7 @@ describe("versioned exam management", () => {
       const sessionD = (startedD.json.session as { id: string }).id;
       const expiredAt = new Date(Date.now() - 3 * 60_000);
       await server.db.examSession.update({ where: { id: sessionD }, data: { startedAt: expiredAt, lastHeartbeatAt: expiredAt } });
-      expect((await request("/exams/assignments/" + expiredAssignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, expiredStudent)).status).toBe(409);
+      expect((await request("/exams/assignments/" + expiredAssignment.id + "/session/heartbeat", "POST", { event: "HEARTBEAT" }, expiredStudent)).status).toBe(403);
       expect((await server.db.examSession.findUniqueOrThrow({ where: { id: sessionD } })).status).toBe("EXPIRED");
       const examVersion = await server.db.examVersion.findFirstOrThrow({
         where: { examId: fixture.examId },

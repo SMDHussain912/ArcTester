@@ -41,7 +41,12 @@ jobs:
         run: npm ci
 
       - name: Build web application
+        env:
+          VITE_API_URL: http://localhost:4000
         run: npm run build:web
+
+      - name: Run desktop smoke test
+        run: npm test --prefix desktop
 
       - name: Install Electron packaging dependencies
         run: npm install --prefix desktop --no-audit --no-fund

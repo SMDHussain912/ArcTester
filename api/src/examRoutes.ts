@@ -1466,7 +1466,9 @@ export function examRouter(db: PrismaClient): Router {
             });
           }
         });
-        return next(conflict("The examination time has expired."));
+        // 403 (not 409) so the candidate client can keep its local timer running
+        // and still submit saved answers for invigilator review.
+        return next(forbidden("The examination time has expired."));
       }
       if (assignment.dueAt && assignment.dueAt <= now) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;

@@ -32,7 +32,10 @@ function localCors(
   );
   const isLocalOrigin =
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-  if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
+  // file:// (desktop) sends Origin: "null"; allow it so the packaged desktop
+  // app can reach the API on localhost.
+  const isFileOrigin = origin === "null";
+  if (origin && (isLocalOrigin || isFileOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
