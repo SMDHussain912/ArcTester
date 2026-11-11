@@ -1188,6 +1188,15 @@ export function examRouter(db: PrismaClient): Router {
         "code" in error &&
         (error as { code?: string }).code === "P2002"
       ) {
+        // A concurrent request may have won the unique assignment race. Treat
+        // it as an idempotent retry only when every requested assignment now exists.
+        const existing = await db.examAssignment.findMany({
+          where: { examVersionId: version!.id, studentId: { in: input.studentIds } },
+          select: { id: true, studentId: true, assignedAt: true, dueAt: true },
+        });
+        if (existing.length === input.studentIds.length) {
+          return res.status(200).json({ ok: true, created: 0, assignments: existing, alreadyAssigned: true });
+        }
         return next(conflict("One or more students already have an assignment for this exam version. Refresh the assignment list before retrying."));
       }
       next(error);
