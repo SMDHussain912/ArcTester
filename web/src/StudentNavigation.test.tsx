@@ -21,10 +21,11 @@ describe("StudentNavigation", () => {
     );
 
     const navigation = screen.getByRole("navigation", { name: "Student navigation" });
+    const updates = screen.getByRole("navigation", { name: "Student updates" });
     expect(within(navigation).getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
     expect(within(navigation).getByRole("button", { name: "Assigned exams (3)" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Announcements (2)" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Notifications (4)" })).toBeEnabled();
+    expect(within(updates).getByRole("button", { name: "Announcements (2)" })).toBeEnabled();
+    expect(within(updates).getByRole("button", { name: "Notifications (4)" })).toBeEnabled();
     expect(screen.getByText("student@example.com")).toBeInTheDocument();
   });
 
@@ -102,5 +103,51 @@ describe("StudentNavigation", () => {
     );
 
     expect(screen.getByRole("button", { name: "Sign out" })).toBeDisabled();
+  });
+
+  it("groups learning and update links and exposes the active workspace in the top bar", () => {
+    render(
+      <StudentNavigation
+        activePage="progress"
+        setActivePage={vi.fn()}
+        examActive={false}
+        pendingExamCount={1}
+        unreadAnnouncementCount={2}
+        unreadNotificationCount={3}
+        theme="light"
+        onToggleTheme={vi.fn()}
+        email="learner@example.test"
+        busy={false}
+        onSignOut={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("complementary", { name: "Student workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Student navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Student updates" })).toBeInTheDocument();
+    expect(screen.getByText("Progress", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("STUDENT WORKSPACE")).toBeInTheDocument();
+  });
+
+  it("shows update counts independently from the active navigation state", () => {
+    render(
+      <StudentNavigation
+        activePage="dashboard"
+        setActivePage={vi.fn()}
+        examActive={false}
+        pendingExamCount={5}
+        unreadAnnouncementCount={2}
+        unreadNotificationCount={4}
+        theme="light"
+        onToggleTheme={vi.fn()}
+        email="learner@example.test"
+        busy={false}
+        onSignOut={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("navigation", { name: "Student navigation" })).toHaveTextContent("Assigned exams5");
+    expect(screen.getByRole("navigation", { name: "Student updates" })).toHaveTextContent("Announcements2");
+    expect(screen.getByRole("navigation", { name: "Student updates" })).toHaveTextContent("Notifications4");
   });
 });

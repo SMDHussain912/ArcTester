@@ -764,7 +764,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell student-shell">
       <StudentNavigation
         activePage={activePage}
         setActivePage={setActivePage}
@@ -846,7 +846,7 @@ export default function App() {
           />
         ) : (
           <>
-            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} />
+            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} pendingExamCount={assignedExams.filter((item) => !item.submission).length} unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length} unreadNotificationCount={studentNotifications.filter((item) => !item.readAt).length} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
             {activePage === "dashboard" && announcements.length > 0 ? (
               <StudentAnnouncementPreview
                 announcement={announcements[0]}
@@ -914,14 +914,14 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-      </main>
-      {!activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+      {activePage !== "notifications" && !activeAssignmentPackage && !test && !result && studentNotifications.find((item) => !item.readAt) && (
         <StudentNotificationBanner
           notification={studentNotifications.find((item) => !item.readAt)!}
           onRead={(id) => void markNotificationRead(id)}
           onOpen={(notification) => void openStudentNotification(notification.id)}
         />
       )}
+      </main>
       {activeAnnouncements[0] && (
         <StudentAnnouncementDialog
           announcement={activeAnnouncements[0]}
