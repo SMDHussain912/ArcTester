@@ -45,18 +45,23 @@ function AssignmentResult() {
         <p className="muted">Submitted {new Date(result.submittedAt).toLocaleString()}</p>
       </div>
       {result.status === "REVIEW_REQUIRED" ? (
-        <p className="warn">
-          Your submission was received, but its timing needs administrator review. The displayed
-          score may be provisional.
+        <p className="warn" role="status">
+          Submitted - awaiting invigilator review
         </p>
       ) : null}
       <section className="panel result-summary">
         <div className="result-score">
-          <span className="mute">Your score</span>
-          <strong>
-            {result.score ?? "—"} <span>/ {result.maximumScore ?? "—"}</span>
-          </strong>
-          <span className="pill pill-accent">{percentage}%</span>
+          {result.status === "REVIEW_REQUIRED" ? (
+            <strong>Submitted - awaiting invigilator review</strong>
+          ) : (
+            <>
+              <span className="mute">Your score</span>
+              <strong>
+                {result.score ?? "—"} <span>/ {result.maximumScore ?? "—"}</span>
+              </strong>
+              <span className="pill pill-accent">{percentage}%</span>
+            </>
+          )}
         </div>
         <div className="result-breakdown">
           <h2>Submission details</h2>

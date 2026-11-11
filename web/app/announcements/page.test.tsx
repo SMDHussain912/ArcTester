@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -29,7 +29,7 @@ describe("student announcements page", () => {
   });
 
   it("shows published announcements to the signed-in student", async () => {
-    fetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (String(url).endsWith("/auth/me")) {
         return Promise.resolve(jsonResponse(200, {
           ok: true,
@@ -47,7 +47,15 @@ describe("student announcements page", () => {
             createdAt: "2026-11-08T08:00:00.000Z",
             publishedAt: "2026-11-08T08:00:00.000Z",
             expiresAt: null,
+            acknowledgedAt: null,
           }],
+        }));
+      }
+      if (String(url).endsWith("/announcements/notice-1/acknowledge") && init?.method === "POST") {
+        return Promise.resolve(jsonResponse(200, {
+          ok: true,
+          seenAt: "2026-11-08T09:05:00.000Z",
+          acknowledgedAt: "2026-11-08T09:05:00.000Z",
         }));
       }
       return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
@@ -57,10 +65,10 @@ describe("student announcements page", () => {
 
     expect(await screen.findByRole("heading", { name: "Exam schedule updated" })).toBeInTheDocument();
     expect(screen.getByText("Your mock exam starts at 10 AM tomorrow.")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/announcements"),
-      expect.objectContaining({ credentials: "include" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Acknowledge" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Acknowledged");
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/announcements/notice-1/acknowledge") && init?.method === "POST" && init.credentials === "include")).toBe(true);
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/announcements") && init?.credentials === "include")).toBe(true);
   });
 
   it("does not request the student feed for a signed-out visitor", async () => {

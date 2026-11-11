@@ -1,10 +1,11 @@
 name: ArcTester CI
+# Run the full verification suite on consolidated development branches as well as main.
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'chatgpt/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'chatgpt/**']
   workflow_dispatch:
 
 permissions:

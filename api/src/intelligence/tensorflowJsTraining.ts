@@ -26,6 +26,8 @@ export interface TensorflowTrainingOptions {
   testFraction?: number;
   epochs?: number;
   batchSize?: number;
+  /** Persist epoch-level progress without coupling the trainer to a database. */
+  onEpochEnd?: (epoch: number) => void | Promise<void>;
 }
 
 export interface TensorflowTrainingResult {
@@ -158,6 +160,11 @@ export async function trainTensorflowRegressionCandidate(
       batchSize: Math.min(batchSize, train.length),
       shuffle: false,
       verbose: 0,
+      callbacks: {
+        onEpochEnd: async (epoch) => {
+          await options.onEpochEnd?.(epoch);
+        },
+      },
     });
     const output = model.predict(testFeatures) as tf.Tensor;
     let candidate: RegressionMetrics;

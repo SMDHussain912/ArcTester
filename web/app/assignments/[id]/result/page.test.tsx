@@ -88,4 +88,41 @@ describe("assigned exam result page", () => {
     expect(screen.getByRole("link", { name: "Stack" })).toHaveAttribute("href", "/learning#stack");
     expect(screen.getByText("Correct answer")).toBeInTheDocument();
   });
+  it("shows the review-pending message instead of an empty score for ungraded submissions", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      const path = String(url);
+      if (path.endsWith("/auth/me")) {
+        return Promise.resolve(jsonResponse(200, {
+          ok: true,
+          user: { id: 12, email: "student@example.com", role: "STUDENT" },
+        }));
+      }
+      if (path.endsWith("/exams/assignments/assignment-1/result")) {
+        return Promise.resolve(jsonResponse(200, {
+          ok: true,
+          result: {
+            submissionId: "submission-review-1",
+            status: "REVIEW_REQUIRED",
+            score: null,
+            maximumScore: null,
+            submittedAt: "2026-11-10T10:00:00.000Z",
+            receivedAt: "2026-11-10T10:00:02.000Z",
+            questions: [],
+          },
+        }));
+      }
+      return Promise.resolve(jsonResponse(404, { error: "Unknown route." }));
+    });
+
+    render(
+      <SessionProvider>
+        <AssignedExamResultPage />
+      </SessionProvider>
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Submitted - awaiting invigilator review");
+    expect(screen.queryByText(/— \/ —/)).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
 });

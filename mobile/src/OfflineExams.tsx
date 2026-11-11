@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, Alert, Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
   configureOfflineStore,
@@ -58,14 +58,31 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const questionTransition = useRef(new Animated.Value(1)).current;
+  const progress = useRef(new Animated.Value(0)).current;
   const [pendingCount, setPendingCount] = useState(0);
   const [online, setOnline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [error, setError] = useState("");
   const autoSubmitStarted = useRef(false);
   const syncLock = useRef(false);
+  const answerSaveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotion(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   const refreshLocalState = useCallback(async () => {
     configureOfflineStore(userId);
@@ -198,6 +215,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       const started = await startOfflineAttempt(assignmentId);
       const restored = await restoreActiveAttempt(assignmentId);
       setActivePackage(started.examPackage);
+      setCurrentQuestionIndex(0);
       setActiveAttemptUuid(started.attemptUuid);
       setAnswers(restored?.answers ?? {});
       setRemainingSeconds(await getRemainingSeconds(assignmentId));
@@ -213,8 +231,11 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     setBusyId(activePackage.assignmentId);
     setError("");
     try {
+      // Finish every queued SQLite answer write before freezing the submission snapshot.
+      await answerSaveQueue.current;
       await queueOfflineSubmission(activePackage.assignmentId);
       setActivePackage(null);
+      setCurrentQuestionIndex(0);
       setActiveAttemptUuid("");
       setAnswers({});
       await refreshLocalState();
@@ -231,6 +252,22 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     }
   }, [activeAttemptUuid, activePackage, refreshLocalState, syncOutbox]);
 
+  const confirmSubmitExam = () => {
+    if (!activePackage || busyId !== null) return;
+    const answered = Object.values(answers).filter((value) => value !== null && value !== undefined).length;
+    const unanswered = activePackage.questions.length - answered;
+    Alert.alert(
+      "Submit assigned exam?",
+      unanswered > 0
+        ? `You answered ${answered} of ${activePackage.questions.length} questions. ${unanswered} will remain unanswered. Your submission will be saved on this device and synced when possible.`
+        : `All ${activePackage.questions.length} questions are answered. Save and submit this exam now?`,
+      [
+        { text: "Keep working", style: "cancel" },
+        { text: "Submit exam", style: "default", onPress: () => { void submitExam(); } },
+      ],
+    );
+  };
+
   useEffect(() => {
     if (activePackage && remainingSeconds === 0 && !autoSubmitStarted.current) {
       autoSubmitStarted.current = true;
@@ -238,14 +275,39 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     }
   }, [activePackage, remainingSeconds, submitExam]);
 
-  const chooseAnswer = async (questionId: string, selectedIndex: number) => {
+  useEffect(() => {
     if (!activePackage) return;
-    try {
-      await saveOfflineAnswer(activePackage.assignmentId, questionId, selectedIndex);
-      setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save your answer.");
+    if (reduceMotion) {
+      questionTransition.setValue(1);
+      progress.setValue((currentQuestionIndex + 1) / activePackage.questions.length);
+      return;
     }
+    questionTransition.setValue(0);
+    Animated.timing(questionTransition, {
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    Animated.timing(progress, {
+      toValue: (currentQuestionIndex + 1) / activePackage.questions.length,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [activePackage, currentQuestionIndex, progress, questionTransition, reduceMotion]);
+
+  const chooseAnswer = (questionId: string, selectedIndex: number) => {
+    if (!activePackage || busyId !== null) return;
+    const assignmentId = activePackage.assignmentId;
+    // Update the UI immediately, but serialize SQLite read-modify-write operations.
+    setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
+    answerSaveQueue.current = answerSaveQueue.current
+      .catch(() => undefined)
+      .then(() => saveOfflineAnswer(assignmentId, questionId, selectedIndex));
+    void answerSaveQueue.current.catch((cause) => {
+      setError(cause instanceof Error ? cause.message : "Could not save your answer.");
+    });
   };
 
   if (activePackage) {
@@ -261,18 +323,66 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         <Text style={styles.muted}>
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
         </Text>
-        {activePackage.questions.map((question, index) => (
-          <View key={question.id} style={styles.question}>
+        <Text style={styles.muted}>
+          Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.keys(answers).length} answered
+        </Text>
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+        </View>
+        <View style={styles.navigator}>
+          <Text style={styles.navigatorTitle}>QUESTION NAVIGATOR</Text>
+          <View style={styles.navigatorGrid}>
+            {activePackage.questions.map((question, index) => {
+              const answered = answers[question.id] !== undefined && answers[question.id] !== null;
+              const current = index === currentQuestionIndex;
+              return (
+                <TouchableOpacity
+                  key={question.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Question ${index + 1}${answered ? ", answered" : ", unanswered"}`}
+                  accessibilityState={{ selected: current }}
+                  onPress={() => setCurrentQuestionIndex(index)}
+                  style={[
+                    styles.navigatorItem,
+                    answered && styles.navigatorAnswered,
+                    current && styles.navigatorCurrent,
+                  ]}
+                >
+                  <Text style={[
+                    styles.navigatorNumber,
+                    answered && styles.navigatorNumberAnswered,
+                    current && styles.navigatorNumberCurrent,
+                  ]}>{index + 1}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.navigatorLegend}>
+            <Text style={styles.navigatorLegendText}>● Answered</Text>
+            <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
+          </View>
+        </View>
+        {activePackage.questions[currentQuestionIndex] && (
+          <Animated.View
+            key={activePackage.questions[currentQuestionIndex].id}
+            style={[
+              styles.question,
+              {
+                opacity: questionTransition,
+                transform: [{ translateX: questionTransition.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+              },
+            ]}
+          >
             <Text style={styles.questionTitle}>
-              {index + 1}. {question.text}
+              {currentQuestionIndex + 1}. {activePackage.questions[currentQuestionIndex].text}
             </Text>
-            {question.options.map((option, optionIndex) => (
+            {activePackage.questions[currentQuestionIndex].options.map((option, optionIndex) => (
               <TouchableOpacity
                 key={optionIndex}
-                onPress={() => void chooseAnswer(question.id, optionIndex)}
+                onPress={() => void chooseAnswer(activePackage.questions[currentQuestionIndex].id, optionIndex)}
                 style={[
                   styles.option,
-                  answers[question.id] === optionIndex && styles.optionSelected,
+                  answers[activePackage.questions[currentQuestionIndex].id] === optionIndex && styles.optionSelected,
                 ]}
               >
                 <Text style={styles.optionText}>
@@ -280,15 +390,38 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
-        ))}
-        <TouchableOpacity
-          disabled={busyId !== null}
-          onPress={() => void submitExam()}
-          style={styles.primary}
-        >
-          <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
-        </TouchableOpacity>
+          </Animated.View>
+        )}
+        <View style={styles.examActions}>
+          <TouchableOpacity
+            disabled={currentQuestionIndex === 0 || busyId !== null}
+            onPress={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
+            style={[styles.secondaryButton, currentQuestionIndex === 0 && styles.disabled]}
+          >
+            <Text style={styles.secondaryText}>Previous</Text>
+          </TouchableOpacity>
+          {currentQuestionIndex < activePackage.questions.length - 1 ? (
+            <TouchableOpacity
+              onPress={() => setCurrentQuestionIndex((index) => Math.min(activePackage.questions.length - 1, index + 1))}
+              style={styles.primarySmall}
+            >
+              <Text style={styles.primaryText}>Next question ›</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              disabled={busyId !== null}
+              onPress={confirmSubmitExam}
+              style={styles.primarySmall}
+            >
+              <Text style={styles.primaryText}>{busyId ? "Saving…" : "Submit exam"}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {currentQuestionIndex < activePackage.questions.length - 1 && (
+          <TouchableOpacity disabled={busyId !== null} onPress={confirmSubmitExam} style={styles.submitLink}>
+            <Text style={styles.link}>Submit exam now</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           disabled={busyId !== null}
           onPress={() => setActivePackage(null)}
@@ -404,6 +537,21 @@ const styles = StyleSheet.create({
   heading: { color: "#172033", fontSize: 21, fontWeight: "800" },
   timer: { color: "#b42318", fontWeight: "800", fontSize: 18, marginTop: 12 },
   question: { borderTopWidth: 1, borderTopColor: "#edf0f5", paddingTop: 16, marginTop: 16 },
+  progressTrack: { height: 6, backgroundColor: "#e8edf5", borderRadius: 99, overflow: "hidden", marginTop: 12 },
+  progressFill: { height: 6, backgroundColor: "#2563eb", borderRadius: 99 },
+  navigator: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: "#f7f9fc", borderWidth: 1, borderColor: "#e8edf5" },
+  navigatorTitle: { color: "#748096", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  navigatorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  navigatorItem: { width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: "#dce2eb", backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  navigatorAnswered: { backgroundColor: "#eaf7f0", borderColor: "#9bd4b5" },
+  navigatorCurrent: { borderColor: "#2563eb", borderWidth: 2, backgroundColor: "#eff6ff" },
+  navigatorNumber: { color: "#526078", fontSize: 12, fontWeight: "700" },
+  navigatorNumberAnswered: { color: "#167647" },
+  navigatorNumberCurrent: { color: "#2563eb" },
+  navigatorLegend: { flexDirection: "row", gap: 14, marginTop: 10 },
+  navigatorLegendText: { color: "#748096", fontSize: 10 },
+  examActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 18 },
+  submitLink: { alignSelf: "center", padding: 10, marginTop: 4 },
   questionTitle: { color: "#172033", fontSize: 15, fontWeight: "700", lineHeight: 22 },
   option: { borderWidth: 1, borderColor: "#e0e5ed", borderRadius: 10, padding: 12, marginTop: 8 },
   optionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },

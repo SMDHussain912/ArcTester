@@ -7,11 +7,16 @@ import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
-import { importFromCsv, importFromJson, previewImport } from "./importService.js";
+import { importFromCsv, importFromJson } from "./importService.js";
 import {
   QUESTION_ANALYTICS_MINIMUM_ANSWERS,
   QUESTION_ANALYTICS_WEAK_ACCURACY,
 } from "./analytics.js";
+
+// A deadline-triggered client submit may arrive up to 10 seconds after the
+// authoritative deadline because of request scheduling and network transit.
+// Requests received later than this window are retained for invigilator review.
+const AUTO_SUBMIT_GRACE_MS = 10_000;
 
 const CreateExamSchema = z.object({
   title: z.string().trim().min(2).max(120),
@@ -20,7 +25,7 @@ const CreateExamSchema = z.object({
   durationMinutes: z.number().int().min(1).max(600),
   shuffleQuestions: z.boolean().default(false),
   shuffleOptions: z.boolean().default(false),
-  subjectRules: z.record(z.object({
+  subjectRules: z.record(z.string(), z.object({
     marks: z.number().finite().min(0).max(100),
     negativeMarks: z.number().finite().min(0).max(100),
   })).default({}),
@@ -110,11 +115,20 @@ export function examRouter(db: PrismaClient): Router {
   router.post("/admin/questions/import/preview", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const format = z.enum(["csv", "json"]).parse(req.body?.format);
-      const payload = format === "csv"
-        ? z.string().min(1).max(8_000_000).parse(req.body?.content)
-        : req.body?.questions;
-      const preview = await previewImport(db, format, payload);
-      res.json({ ok: true, preview });
+      const content = z.string().min(1).max(8_000_000).parse(req.body?.content);
+      let report;
+      if (format === "csv") {
+        report = await importFromCsv(db, content, { dryRun: true });
+      } else {
+        let payload: unknown;
+        try {
+          payload = JSON.parse(content);
+        } catch {
+          return next(badRequest("The JSON file is not valid JSON."));
+        }
+        report = await importFromJson(db, payload, { dryRun: true });
+      }
+      res.json({ ok: true, report });
     } catch (error) { next(error); }
   });
 
@@ -286,7 +300,13 @@ export function examRouter(db: PrismaClient): Router {
       const result = await db.question.deleteMany({ where: { id: { in: input.ids } } });
       res.json({ ok: true, deleted: result.count });
     } catch (error) {
-      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2003") {
+      const databaseError = error instanceof Error ? error.message : "";
+      const errorCode = typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: string }).code
+        : undefined;
+      // Prisma reports P2003 on some providers; PostgreSQL may surface its
+      // RESTRICT foreign-key violation as SQLSTATE 23001 inside the message.
+      if (errorCode === "P2003" || /violates RESTRICT setting of foreign key constraint|SQLSTATE 23001|code: "23001"/i.test(databaseError)) {
         return next(conflict("Some selected questions are already used by attempts or reports and cannot be deleted. Archive or keep those questions instead."));
       }
       next(error);
@@ -643,16 +663,52 @@ export function examRouter(db: PrismaClient): Router {
   router.post("/admin/submissions/:id/release", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const submission = await db.examSubmission.findUnique({
-        where: { id: req.params.id }, select: { id: true, status: true },
+        where: { id: req.params.id },
+        include: {
+          assignment: {
+            select: {
+              studentId: true,
+              id: true,
+              examVersion: { select: { exam: { select: { title: true } } } },
+            },
+          },
+        },
       });
       if (!submission) return next(notFound("Submission not found."));
       if (submission.status === "GRADED") {
         return res.json({ ok: true, submissionId: submission.id, status: "GRADED", alreadyReleased: true });
       }
-      const released = await db.examSubmission.updateMany({
-        where: { id: submission.id, status: "REVIEW_REQUIRED" }, data: { status: "GRADED" },
+      const released = await db.$transaction(async (tx) => {
+        const changed = await tx.examSubmission.updateMany({
+          where: { id: submission.id, status: "REVIEW_REQUIRED" },
+          data: { status: "GRADED" },
+        });
+        if (changed.count !== 1) return false;
+        // Retire the old "awaiting review" notice and publish the result notice
+        // atomically with release so the inbox cannot keep showing stale status.
+        await tx.studentNotification.updateMany({
+          where: {
+            userId: submission.assignment.studentId,
+            dedupeKey: `exam-submission:${submission.id}`,
+            kind: "EXAM_REVIEW",
+            readAt: null,
+          },
+          data: { readAt: new Date() },
+        });
+        // A failed result-notification write must not leave a graded result undisclosed.
+        await tx.studentNotification.create({
+          data: {
+            userId: submission.assignment.studentId,
+            kind: "EXAM_RESULT",
+            title: "Exam result available",
+            message: `Your submission for ${submission.assignment.examVersion.exam.title} has been reviewed and graded. Open the result to see your score.`,
+            href: `/assignments/${submission.assignment.id}/result`,
+            dedupeKey: `exam-review-release:${submission.id}`,
+          },
+        });
+        return true;
       });
-      if (released.count !== 1) return next(conflict("This submission is no longer awaiting review."));
+      if (!released) return next(conflict("This submission is no longer awaiting review."));
       res.json({ ok: true, submissionId: submission.id, status: "GRADED" });
     } catch (error) {
       next(error);
@@ -661,7 +717,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.get("/admin/exams/live-sessions", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
-      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25) }).parse(req.query);
+      const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(25), eventLimit: z.coerce.number().int().min(1).max(100).default(12) }).parse(req.query);
       const where = { status: { in: ["ACTIVE", "PAUSED", "INTERRUPTED"] } };
       const [sessions, total] = await Promise.all([
         db.examSession.findMany({
@@ -670,7 +726,7 @@ export function examRouter(db: PrismaClient): Router {
           include: {
             student: { select: { id: true, email: true } },
             assignment: { include: { examVersion: { include: { exam: { select: { id: true, title: true } } } }, submission: { select: { id: true, status: true } } } },
-            events: { orderBy: { createdAt: "desc" }, take: 12, include: { actor: { select: { email: true, role: true } } } },
+            events: { orderBy: { createdAt: "desc" }, take: query.eventLimit, include: { actor: { select: { email: true, role: true } } } },
           },
         }),
         db.examSession.count({ where }),
@@ -1087,7 +1143,7 @@ export function examRouter(db: PrismaClient): Router {
             select: { id: true },
           });
           if (existing) continue;
-          results.push(await tx.examAssignment.create({
+          const assignment = await tx.examAssignment.create({
             data: {
               examVersionId: version.id,
               studentId,
@@ -1096,7 +1152,18 @@ export function examRouter(db: PrismaClient): Router {
               dueAt: input.dueAt ? new Date(input.dueAt) : null,
             },
             select: { id: true, studentId: true, assignedAt: true, dueAt: true },
-          }));
+          });
+          await tx.studentNotification.create({
+            data: {
+              userId: studentId,
+              kind: "EXAM_ASSIGNMENT",
+              title: "New exam assigned",
+              message: `${exam.title} has been assigned to you. Open your assigned exams for details.`,
+              href: "/assignments",
+              dedupeKey: `exam-assignment:${assignment.id}`,
+            },
+          });
+          results.push(assignment);
         }
         return results;
       });
@@ -1231,6 +1298,22 @@ export function examRouter(db: PrismaClient): Router {
               startedAt: now, lastHeartbeatAt: now, lastActivityAt: now,
               events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
+          }).catch(async (error: unknown) => {
+            const errorCode = typeof error === "object" && error !== null && "code" in error
+              ? (error as { code?: string }).code
+              : undefined;
+            if (errorCode !== "P2002") throw error;
+
+            // Two devices can request the first session at the same time. The
+            // unique assignment constraint elects one creator; the other
+            // request should attach to that active session, not return HTTP 500.
+            const concurrentSession = await db.examSession.findUnique({
+              where: { assignmentId: assignment.id },
+            });
+            if (!concurrentSession || concurrentSession.status !== "ACTIVE" || !concurrentSession.startedAt) {
+              throw conflict("The exam session changed while starting. Refresh and try again.");
+            }
+            return concurrentSession;
           });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, session: { id: session.id, status: session.status, startedAt: session.startedAt, lastHeartbeatAt: session.lastHeartbeatAt, serverTime: now, deadline } });
@@ -1419,7 +1502,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
-      const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().max(300).default("") }).parse(req.body);
+      const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().min(1, "An audit reason is required.").max(300) }).parse(req.body);
       const session = await db.examSession.findUnique({ where: { id: req.params.id } });
       if (!session) return next(notFound("Exam session not found."));
       if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(session.status)) return next(conflict("This exam session is already closed."));
@@ -1505,8 +1588,9 @@ export function examRouter(db: PrismaClient): Router {
         serverTime: new Date(now).toISOString(),
         questions: orderedQuestions.map((question) => {
           const originalOptions = parseOptions(question.options);
-          const optionOrder = [0, 1, 2, 3];
-          if (assignment.examVersion.shuffleOptions) optionOrder.sort(() => Math.random() - 0.5);
+          const optionOrder = assignment.examVersion.shuffleOptions
+            ? stableOptionOrder(assignment.id, question.id, originalOptions.length)
+            : originalOptions.map((_, index) => index);
           return {
             id: question.id,
             position: question.position,
@@ -1534,7 +1618,12 @@ export function examRouter(db: PrismaClient): Router {
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
         include: {
-          examVersion: { include: { questions: { orderBy: { position: "asc" } } } },
+          examVersion: {
+            include: {
+              exam: { select: { title: true } },
+              questions: { orderBy: { position: "asc" } },
+            },
+          },
           submission: true,
           session: true,
         },
@@ -1638,114 +1727,169 @@ export function examRouter(db: PrismaClient): Router {
       const durationMs = assignment.examVersion.durationMinutes * 60 * 1000 + sessionPausedDurationMs;
       const staleHeartbeat = !sessionLastHeartbeatAt ||
         serverSubmittedAt.getTime() - sessionLastHeartbeatAt.getTime() > 90000;
+      const durationDeadlineMs = startedAt.getTime() + durationMs;
+      const assignmentDueAtMs = assignment.dueAt?.getTime() ?? Number.POSITIVE_INFINITY;
+      const authoritativeDeadlineMs = Math.min(durationDeadlineMs, assignmentDueAtMs);
+      const pastAutoSubmitGraceWindow =
+        serverSubmittedAt.getTime() > authoritativeDeadlineMs + AUTO_SUBMIT_GRACE_MS;
       const suspiciousTiming =
         offlineSessionReconciled ||
-        serverSubmittedAt.getTime() >= startedAt.getTime() + durationMs + 60000 ||
+        pastAutoSubmitGraceWindow ||
         staleHeartbeat ||
         (assignment.availableFrom !== null && startedAt < assignment.availableFrom) ||
-        (assignment.dueAt !== null && submittedAt >= assignment.dueAt) ||
         new Date(input.startedAt).getTime() < startedAt.getTime() - 60000 ||
         new Date(input.startedAt).getTime() > startedAt.getTime() + 60000;
 
-      const submission = await db.$transaction(async (tx) => {
-        const existing = await tx.examSubmission.findUnique({
-          where: { assignmentId: assignment.id },
-        });
-        if (existing) {
-          if (existing.attemptUuid === input.attemptUuid) return existing;
-          throw conflict("An attempt has already been submitted for this assignment.");
-        }
+      let submission: {
+        id: string;
+        attemptUuid: string;
+        status: string;
+        score: number | null;
+        maximumScore: number | null;
+        submittedAt: Date;
+        receivedAt: Date;
+      };
+      let duplicateSubmission = false;
+      try {
+        submission = await db.$transaction(async (tx) => {
+          const existing = await tx.examSubmission.findUnique({
+            where: { assignmentId: assignment.id },
+          });
+          if (existing) {
+            if (existing.attemptUuid === input.attemptUuid) {
+              duplicateSubmission = true;
+              return existing;
+            }
+            throw conflict("An attempt has already been submitted for this assignment.");
+          }
 
-        const duplicateAttempt = await tx.examSubmission.findUnique({
-          where: { attemptUuid: input.attemptUuid },
-        });
-        if (duplicateAttempt) {
-          throw conflict("This attempt identifier has already been used.");
-        }
+          const duplicateAttempt = await tx.examSubmission.findUnique({
+            where: { attemptUuid: input.attemptUuid },
+          });
+          if (duplicateAttempt) {
+            throw conflict("This attempt identifier has already been used.");
+          }
 
-        // Check idempotency before reconciling an offline session. The session
-        // and its audit event are created inside this transaction so any later
-        // failure (including a reused attempt UUID) rolls them back together.
-        const submissionSession = examSession ?? await tx.examSession.create({
-          data: {
-            assignmentId: assignment.id,
-            studentId: req.user!.id,
-            status: "ACTIVE",
-            startedAt: serverStartedAt,
-            lastHeartbeatAt: serverSubmittedAt,
-            lastActivityAt: serverSubmittedAt,
-            events: {
-              create: {
-                actorId: req.user!.id,
-                type: "OFFLINE_SESSION_RECONCILED",
-                detail: "An offline exam attempt was reconciled when the device reconnected.",
+          // Check idempotency before reconciling an offline session. The session
+          // and its audit event are created inside this transaction so any later
+          // failure (including a reused attempt UUID) rolls them back together.
+          const submissionSession = examSession ?? await tx.examSession.create({
+            data: {
+              assignmentId: assignment.id,
+              studentId: req.user!.id,
+              status: "ACTIVE",
+              startedAt: serverStartedAt,
+              lastHeartbeatAt: serverSubmittedAt,
+              lastActivityAt: serverSubmittedAt,
+              events: {
+                create: {
+                  actorId: req.user!.id,
+                  type: "OFFLINE_SESSION_RECONCILED",
+                  detail: "An offline exam attempt was reconciled when the device reconnected.",
+                },
               },
             },
-          },
-        });
+          });
 
-        if (!offlineSessionReconciled && input.revision !== undefined) {
-          const currentRevision = await tx.examSession.updateMany({
+          if (!offlineSessionReconciled && input.revision !== undefined) {
+            const currentRevision = await tx.examSession.updateMany({
+              where: {
+                id: submissionSession.id,
+                status: "ACTIVE",
+                startedAt: serverStartedAt,
+                answersRevision: input.revision,
+              },
+              data: { answersRevision: { increment: 1 } },
+            });
+            if (currentRevision.count !== 1) {
+              throw conflict("These answers were changed in another session. Reload the exam before submitting.");
+            }
+          }
+
+          // Finalize only if the session is still active with the same start time
+          // observed before the transaction. This prevents a concurrent invigilator
+          // pause or termination from being overwritten by a late submission.
+          const completedSession = await tx.examSession.updateMany({
             where: {
               id: submissionSession.id,
               status: "ACTIVE",
               startedAt: serverStartedAt,
-              answersRevision: input.revision,
             },
-            data: { answersRevision: { increment: 1 } },
+            data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
           });
-          if (currentRevision.count !== 1) {
-            throw conflict("These answers were changed in another session. Reload the exam before submitting.");
+          if (completedSession.count !== 1) {
+            const concurrentSubmission = await tx.examSubmission.findUnique({
+              where: { assignmentId: assignment.id },
+            });
+            if (concurrentSubmission?.attemptUuid === input.attemptUuid) {
+              duplicateSubmission = true;
+              return concurrentSubmission;
+            }
+            throw conflict("The exam session changed before submission was finalized. Refresh and contact the invigilator.");
           }
-        }
 
-        // Finalize only if the session is still active with the same start time
-        // observed before the transaction. This prevents a concurrent invigilator
-        // pause or termination from being overwritten by a late submission.
-        const completedSession = await tx.examSession.updateMany({
-          where: {
-            id: submissionSession.id,
-            status: "ACTIVE",
-            startedAt: serverStartedAt,
-          },
-          data: { status: "COMPLETED", endedAt: serverSubmittedAt, lastActivityAt: serverSubmittedAt },
-        });
-        if (completedSession.count !== 1) {
-          throw conflict("The exam session changed before submission was finalized. Refresh and contact the invigilator.");
-        }
-
-        const created = await tx.examSubmission.create({
-          data: {
-            assignmentId: assignment.id,
-            attemptUuid: input.attemptUuid,
-            startedAt,
-            submittedAt,
-            status: suspiciousTiming ? "REVIEW_REQUIRED" : "GRADED",
-            score,
-            maximumScore,
-            answers: { create: answerRows },
-          },
-          select: {
-            id: true,
-            attemptUuid: true,
-            status: true,
-            score: true,
-            maximumScore: true,
-            submittedAt: true,
-            receivedAt: true,
-          },
-        });
-        await tx.examAssignment.update({
-          where: { id: assignment.id },
-          data: { status: "SUBMITTED" },
-        });
-        await tx.examSessionEvent.create({
-          data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
-        });
-        return created;
+          const created = await tx.examSubmission.create({
+            data: {
+              assignmentId: assignment.id,
+              attemptUuid: input.attemptUuid,
+              startedAt,
+              submittedAt,
+              status: suspiciousTiming ? "REVIEW_REQUIRED" : "GRADED",
+              score,
+              maximumScore,
+              answers: { create: answerRows },
+            },
+            select: {
+              id: true,
+              attemptUuid: true,
+              status: true,
+              score: true,
+              maximumScore: true,
+              submittedAt: true,
+              receivedAt: true,
+            },
+          });
+          await tx.examAssignment.update({
+            where: { id: assignment.id },
+            data: { status: "SUBMITTED" },
+          });
+          await tx.studentNotification.create({
+            data: {
+              userId: req.user!.id,
+              kind: suspiciousTiming ? "EXAM_REVIEW" : "EXAM_RESULT",
+              title: suspiciousTiming ? "Submission awaiting review" : "Exam result available",
+              message: suspiciousTiming
+                ? `Your submission for ${assignment.examVersion.exam.title} was received and is awaiting invigilator review.`
+                : `Your submission for ${assignment.examVersion.exam.title} has been graded. Open the result to see your score.`,
+              href: `/assignments/${assignment.id}/result`,
+              dedupeKey: `exam-submission:${created.id}`,
+            },
+          });
+          await tx.examSessionEvent.create({
+            data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
+          });
+          return created;
       });
 
-      res.status(201).json({ ok: true, duplicate: false, submission });
+      } catch (error) {
+        // Concurrent retries can lose at different points in the transaction:
+        // the unique assignment insert (P2002), the session-finalization guard,
+        // or the answer-revision guard. Once the winner commits, all of these
+        // paths must return its result when the idempotency key matches.
+        const duplicate = await db.examSubmission.findUnique({
+          where: { assignmentId: assignment.id },
+          select: {
+            id: true, attemptUuid: true, status: true, score: true,
+            maximumScore: true, submittedAt: true, receivedAt: true,
+          },
+        });
+        if (duplicate?.attemptUuid === input.attemptUuid) {
+          return res.json({ ok: true, duplicate: true, submission: duplicate });
+        }
+        throw error;
+      }
+
+      res.status(duplicateSubmission ? 200 : 201).json({ ok: true, duplicate: duplicateSubmission, submission });
     } catch (error) {
       next(error);
     }

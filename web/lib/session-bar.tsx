@@ -20,6 +20,7 @@ export function SessionBar() {
         {user?.role === "STUDENT" ? <Link href="/assignments" className="nav-link">My exams</Link> : null}
         {user?.role === "STUDENT" ? <Link href="/analytics" className="nav-link">Performance</Link> : null}
         {user?.role === "STUDENT" ? <Link href="/announcements" className="nav-link">Announcements</Link> : null}
+        {user?.role === "STUDENT" ? <Link href="/notifications" className="nav-link">Notifications</Link> : null}
         {user ? <Link href="/materials" className="nav-link">Study materials</Link> : null}
         {user?.role === "ADMIN" ? <Link href="/admin" className="nav-link">Admin workspace</Link> : null}
         {user?.role === "ADMIN" ? <Link href="/admin/questions" className="nav-link">Question bank</Link> : null}

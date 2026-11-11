@@ -3,6 +3,18 @@ import { buildApp } from "../src/index.js";
 import { runNextModelTrainingJob } from "../src/modelTrainingWorker.js";
 import { signUp, startTestServer, type TestServer } from "./server.js";
 
+type TrainingJobResponseBody = Record<string, unknown> & {
+  dataset: { id: string };
+  job: {
+    id: string;
+    status: string;
+    progress: number;
+    modelId: string;
+    errorMessage: string;
+    result: unknown;
+  };
+};
+
 describe("durable TensorFlow training jobs", () => {
   let server: TestServer;
   let adminCookie: string;
@@ -18,7 +30,7 @@ describe("durable TensorFlow training jobs", () => {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    return { status: response.status, body: await response.json() as Record<string, any> };
+    return { status: response.status, body: await response.json() as TrainingJobResponseBody };
   }
 
   beforeAll(async () => {
@@ -81,6 +93,22 @@ describe("durable TensorFlow training jobs", () => {
     const status = await request(`/admin/model-training-jobs/${jobId}`);
     expect(status.body.job).toMatchObject({ status: "SUCCEEDED", progress: 100, errorMessage: "" });
     expect(status.body.job.result).toMatchObject({ promoted: false, split: { trainRows: 80, testRows: 20 } });
+    const result = status.body.job.result as {
+      model: { modelId: string; version: number } | null;
+    };
+    const audits = await server.db.modelRegistryAudit.findMany({
+      where: { modelId: "worker-training-fixture" },
+      orderBy: { version: "asc" },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0].version).toBe(1);
+    if (result.model) {
+      const saved = await server.db.registeredModel.findUnique({
+        where: { modelId_version: { modelId: result.model.modelId, version: result.model.version } },
+      });
+      expect(saved).not.toBeNull();
+      expect(JSON.parse(saved!.artifactJson).version).toBe(saved!.version);
+    }
     expect(await runNextModelTrainingJob(server.db, "test-worker-two")).toBe(false);
   });
 
@@ -104,5 +132,57 @@ describe("durable TensorFlow training jobs", () => {
     });
     expect(response.status).toBe(400);
     expect(await server.db.modelTrainingJob.count({ where: { datasetId: invalid.id } })).toBe(0);
+
+    const mismatched = await server.db.modelDataset.create({
+      data: {
+        name: "mismatched-tensorflow-job-fixture",
+        task: "regression",
+        targetColumn: "target",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({
+          features: { score: index },
+          target: index,
+          groupId: index.toString(16).padStart(64, "0"),
+        }))),
+        rowCount: 29,
+        sourceDescription: "Row-count mismatch must be rejected before queueing.",
+        sourceAttested: true,
+        datasetKind: "synthetic",
+        fingerprint: "mismatched-training-job-fingerprint",
+      },
+    });
+    const mismatchResponse = await request(
+      `/admin/model-datasets/${mismatched.id}/tensorflow-jobs`,
+      "POST",
+      { modelId: "mismatched-training-fixture" },
+    );
+    expect(mismatchResponse.status).toBe(400);
+    expect(await server.db.modelTrainingJob.count({ where: { datasetId: mismatched.id } })).toBe(0);
+
+    const extraFeature = await server.db.modelDataset.create({
+      data: {
+        name: "extra-feature-tensorflow-job-fixture",
+        task: "regression",
+        targetColumn: "target",
+        featureSchemaJson: JSON.stringify([{ name: "score", type: "numeric" }]),
+        samplesJson: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({
+          features: { score: index, undeclared_feature: index + 1 },
+          target: index,
+          groupId: index.toString(16).padStart(64, "0"),
+        }))),
+        rowCount: 30,
+        sourceDescription: "Undeclared feature must be rejected before queueing.",
+        sourceAttested: true,
+        datasetKind: "synthetic",
+        fingerprint: "extra-feature-training-job-fingerprint",
+      },
+    });
+    const extraFeatureResponse = await request(
+      `/admin/model-datasets/${extraFeature.id}/tensorflow-jobs`,
+      "POST",
+      { modelId: "extra-feature-training-fixture" },
+    );
+    expect(extraFeatureResponse.status).toBe(400);
+    expect(await server.db.modelTrainingJob.count({ where: { datasetId: extraFeature.id } })).toBe(0);
   });
 });

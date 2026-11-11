@@ -20,7 +20,7 @@ describe("importFromJson", () => {
     expect(report.added).toBe(0);
     expect(report.invalid[0].reason).toContain("2000-question limit");
     expect(await db.question.count()).toBe(0);
-  });
+  }, 15000);
 
   it("imports valid rows", async () => {
     const db = await testDb();

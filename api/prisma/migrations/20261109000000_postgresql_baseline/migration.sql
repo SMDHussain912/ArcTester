@@ -207,21 +207,22 @@ CREATE TABLE "Announcement" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "startsAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "expiresAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdById" INTEGER NOT NULL,
 
     CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "AnnouncementRead" (
+CREATE TABLE "AnnouncementView" (
+    "id" TEXT NOT NULL,
     "announcementId" TEXT NOT NULL,
-    "studentId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
     "seenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "AnnouncementRead_pkey" PRIMARY KEY ("announcementId","studentId")
+    CONSTRAINT "AnnouncementView_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -433,13 +434,16 @@ CREATE INDEX "Stat_questionId_idx" ON "Stat"("questionId");
 CREATE UNIQUE INDEX "Stat_userId_questionId_key" ON "Stat"("userId", "questionId");
 
 -- CreateIndex
-CREATE INDEX "Announcement_publishedAt_expiresAt_idx" ON "Announcement"("publishedAt", "expiresAt");
+CREATE INDEX "Announcement_startsAt_expiresAt_idx" ON "Announcement"("startsAt", "expiresAt");
 
 -- CreateIndex
 CREATE INDEX "Announcement_createdById_idx" ON "Announcement"("createdById");
 
 -- CreateIndex
-CREATE INDEX "AnnouncementRead_studentId_seenAt_idx" ON "AnnouncementRead"("studentId", "seenAt");
+CREATE UNIQUE INDEX "AnnouncementView_announcementId_userId_key" ON "AnnouncementView"("announcementId", "userId");
+
+-- CreateIndex
+CREATE INDEX "AnnouncementView_userId_seenAt_idx" ON "AnnouncementView"("userId", "seenAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ExamSession_assignmentId_key" ON "ExamSession"("assignmentId");
@@ -562,10 +566,10 @@ ALTER TABLE "Stat" ADD CONSTRAINT "Stat_userId_fkey" FOREIGN KEY ("userId") REFE
 ALTER TABLE "Announcement" ADD CONSTRAINT "Announcement_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AnnouncementRead" ADD CONSTRAINT "AnnouncementRead_announcementId_fkey" FOREIGN KEY ("announcementId") REFERENCES "Announcement"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AnnouncementView" ADD CONSTRAINT "AnnouncementView_announcementId_fkey" FOREIGN KEY ("announcementId") REFERENCES "Announcement"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AnnouncementRead" ADD CONSTRAINT "AnnouncementRead_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AnnouncementView" ADD CONSTRAINT "AnnouncementView_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ExamSession" ADD CONSTRAINT "ExamSession_assignmentId_fkey" FOREIGN KEY ("assignmentId") REFERENCES "ExamAssignment"("id") ON DELETE CASCADE ON UPDATE CASCADE;

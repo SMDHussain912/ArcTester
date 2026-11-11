@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useSession } from "../lib/session";
+import "./student-dashboard.css";
+
+const studentActions = [
+  { href: "/practice", icon: "✦", eyebrow: "Practice", title: "Build a practice paper", description: "Choose a full mock, focus on selected subjects, or revise previous mistakes.", action: "Start practicing" },
+  { href: "/assignments", icon: "▣", eyebrow: "Examinations", title: "Assigned exams", description: "Check availability windows, deadlines and submitted examination results.", action: "View my exams" },
+  { href: "/analytics", icon: "↗", eyebrow: "Progress", title: "Performance insights", description: "Review your practice history, accuracy and subject-wise progress.", action: "View performance" },
+  { href: "/learning", icon: "⌘", eyebrow: "Study", title: "Concept library", description: "Study concise explanations, worked examples and common mistakes.", action: "Explore concepts" },
+  { href: "/materials", icon: "▤", eyebrow: "Resources", title: "Study materials", description: "Open the learning resources shared for your preparation.", action: "Browse materials" },
+  { href: "/announcements", icon: "◉", eyebrow: "Updates", title: "Announcements", description: "Read important notices and updates from your administrators.", action: "Read announcements" },
+];
 
 export default function HomePage() {
   const { status, user } = useSession();
 
-  if (status === "loading") return <p className="mute">Loading your workspace…</p>;
+  if (status === "loading") return <section className="panel dashboard-loading" role="status">Loading your workspace…</section>;
 
   if (user?.role === "ADMIN") {
     return (
@@ -29,41 +39,75 @@ export default function HomePage() {
     );
   }
 
-  return (
-    <>
-      <section className="page-intro">
-        <p className="eyebrow">Student workspace</p>
-        <h1>{user ? "Ready for your next practice session?" : "Prepare for AP ECET with purpose."}</h1>
-        <p className="muted">Choose a paper, read the instructions, and start when you're ready. Your progress stays connected to your account.</p>
-      </section>
-      {!user ? (
-        <section className="panel">
-          <h2>Sign in to continue</h2>
-          <p className="muted">Sign in to access practice papers, assigned exams and saved results.</p>
-          <Link className="button button-primary" href="/login">Sign in</Link>
+  if (!user) {
+    return (
+      <>
+        <section className="student-hero">
+          <p className="eyebrow">Your AP ECET CSE preparation space</p>
+          <h1>Prepare with focus. Track your progress.</h1>
+          <p className="muted">Practice with configurable papers, complete assigned examinations and build stronger subject knowledge in one place.</p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/login">Sign in to your workspace →</Link>
+          </div>
         </section>
-      ) : (
-        <div className="dashboard-grid">
-          <section className="panel stack">
-            <div className="panel-header"><h2>Examination and practice</h2><span className="pill pill-accent">Student</span></div>
-            <p className="muted">Start with a practice paper or open an exam assigned by your administrator.</p>
-            <Link className="button button-primary" href="/practice">Browse practice papers →</Link>
-            <Link className="button button-secondary" href="/assignments">My assigned exams</Link>
-            <Link className="button button-secondary" href="/analytics">Performance and analytics</Link>
-            <Link className="button button-secondary" href="/materials">Study materials</Link>
-          </section>
-          <aside className="panel stack">
-            <h2>Before you start an exam</h2>
-            <ul>
-              <li>Check the paper duration and question count.</li>
-              <li>Read all instructions before starting.</li>
-              <li>Keep your device charged and network stable.</li>
-              <li>Submit before the timer reaches zero.</li>
-            </ul>
-            <Link href="/announcements" className="button button-quiet">View announcements</Link>
-          </aside>
+        <section className="panel student-welcome">
+          <h2>Your preparation, organised</h2>
+          <p className="muted">Sign in to access your assigned exams, practice papers, study materials and saved results.</p>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <div className="student-dashboard">
+      <section className="student-hero">
+        <div>
+          <p className="eyebrow">Student workspace</p>
+          <h1>Welcome back.</h1>
+          <p className="muted">Your next step towards AP ECET starts here. Pick up your preparation where you need it most.</p>
         </div>
-      )}
-    </>
+        <div className="hero-actions">
+          <Link className="button button-primary" href="/practice">Start a practice paper →</Link>
+          <Link className="button button-secondary" href="/assignments">Check assigned exams</Link>
+        </div>
+      </section>
+
+      <section className="student-section" aria-labelledby="student-tools-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Your workspace</p>
+            <h2 id="student-tools-title">Learn, practice and improve</h2>
+          </div>
+          <p>Everything you need, one place.</p>
+        </div>
+        <div className="student-action-grid">
+          {studentActions.map((item) => (
+            <Link className="student-action-card" href={item.href} key={item.href}>
+              <span className="student-action-icon" aria-hidden="true">{item.icon}</span>
+              <span className="eyebrow">{item.eyebrow}</span>
+              <span className="student-action-title">{item.title}</span>
+              <span className="student-action-description">{item.description}</span>
+              <span className="student-action-link">{item.action} <span aria-hidden="true">→</span></span>
+            </Link>
+          ))}
+          <Link className="student-action-card student-notification-card" href="/notifications">
+            <span className="student-action-icon" aria-hidden="true">✉</span>
+            <span className="eyebrow">Inbox</span>
+            <span className="student-action-title">Notifications</span>
+            <span className="student-action-description">Check messages and mark updates as read when you have reviewed them.</span>
+            <span className="student-action-link">Open notification inbox <span aria-hidden="true">→</span></span>
+          </Link>
+        </div>
+      </section>
+
+      <section className="student-reminder" aria-label="Examination preparation reminder">
+        <span className="student-reminder-mark" aria-hidden="true">i</span>
+        <div>
+          <h2>Before an examination</h2>
+          <p>Check the exam instructions, availability window and deadline. Keep your device charged, and make sure your answers are saved before submitting.</p>
+        </div>
+        <Link href="/assignments">Review exams →</Link>
+      </section>
+    </div>
   );
 }

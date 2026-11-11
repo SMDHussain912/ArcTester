@@ -1,0 +1,58 @@
+name: ArcTester Windows Desktop Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - "web/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/desktop-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - "web/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/desktop-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    name: Build Windows NSIS installer
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install repository workspaces
+        run: npm ci
+
+      - name: Build web application
+        run: npm run build:web
+
+      - name: Install Electron packaging dependencies
+        run: npm install --prefix desktop --no-audit --no-fund
+
+      - name: Build Windows installer
+        run: npm run dist:win --prefix desktop
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctester-windows-installer
+          path: desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
