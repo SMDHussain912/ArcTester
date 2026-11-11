@@ -328,7 +328,7 @@ describe("versioned exam management", () => {
 
   describe("PostgreSQL formal exam lifecycle", () => {
     let fixture!: { examId: string; assignments: Array<{ id: string; studentId: number }>; studentIds: number[]; cookies: string[]; questionSnapshotId: string; lateAssignmentId?: string };
-    const emails = ["lifecycle-a@arctester.test", "lifecycle-b@arctester.test", "lifecycle-c@arctester.test", "lifecycle-d@arctester.test"];
+    const emails = ["lifecycle-a@arctester.test", "lifecycle-b@arctester.test", "lifecycle-c@arctester.test", "lifecycle-d@arctester.test", "lifecycle-race@arctester.test"];
     beforeAll(async () => {
       const question = await server.db.question.findFirstOrThrow({ where: { text: "Which structure follows FIFO?" } });
       const cookies = await Promise.all(emails.map((email) => createSession(email, "STUDENT")));
@@ -340,7 +340,7 @@ describe("versioned exam management", () => {
       const assigned = await request("/admin/exams/" + examId + "/assign", "POST", { studentIds }, adminCookie);
       expect(assigned.status).toBe(201);
       const assignments = assigned.json.assignments as Array<{ id: string; studentId: number }>;
-      expect(assignments).toHaveLength(4);
+      expect(assignments).toHaveLength(5);
       const snapshot = await server.db.examVersionQuestion.findFirstOrThrow({ where: { examVersion: { examId } } });
       fixture = { examId, assignments, studentIds, cookies, questionSnapshotId: snapshot.id };
     });
@@ -355,6 +355,30 @@ describe("versioned exam management", () => {
       await server.db.exam.delete({ where: { id: fixture.examId } });
       await server.db.user.deleteMany({ where: { id: { in: fixture.studentIds } } });
     });
+    it("returns one server-authoritative session when two devices start the same assignment concurrently", async () => {
+      const assignment = fixture.assignments.find((item) => item.studentId === fixture.studentIds[4])!;
+      const firstDevice = fixture.cookies[4];
+      const secondDevice = await loginExistingSession(emails[4]);
+      const [first, second] = await Promise.all([
+        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, firstDevice),
+        request("/exams/assignments/" + assignment.id + "/session/start", "POST", {}, secondDevice),
+      ]);
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const firstSession = first.json.session as { id: string; status: string; startedAt: string };
+      const secondSession = second.json.session as { id: string; status: string; startedAt: string };
+      expect(secondSession).toMatchObject({
+        id: firstSession.id,
+        status: "ACTIVE",
+        startedAt: firstSession.startedAt,
+      });
+      expect(await server.db.examSession.count({ where: { assignmentId: assignment.id } })).toBe(1);
+      expect(await server.db.examSessionEvent.count({
+        where: { sessionId: firstSession.id, type: "SESSION_STARTED" },
+      })).toBe(1);
+    });
+
     it("keeps answer keys private and creates a server-authoritative session with heartbeat and autosave", async () => {
       const assignment = fixture.assignments[0]; const student = fixture.cookies[0];
       const packageResponse = await request("/exams/assignments/" + assignment.id + "/package", "GET", undefined, student);
