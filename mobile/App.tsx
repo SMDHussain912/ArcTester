@@ -28,6 +28,18 @@ type Announcement = {
   message: string;
   publishedAt: string;
   expiresAt: string | null;
+  seenAt?: string | null;
+  acknowledgedAt?: string | null;
+};
+type Notification = {
+  id: string;
+  kind: string;
+  title: string;
+  message: string;
+  href: string;
+  createdAt: string;
+  readAt: string | null;
+  expiresAt: string | null;
 };
 type Question = {
   id: number;
@@ -48,6 +60,9 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [refreshingNotifications, setRefreshingNotifications] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [showExams, setShowExams] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "profile">("home");
@@ -56,6 +71,9 @@ export default function App() {
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
   const [busy, setBusy] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const sessionIdentity = token && user ? `${user.id}:${token}` : null;
+  const sessionIdentityRef = useRef<string | null>(sessionIdentity);
+  sessionIdentityRef.current = sessionIdentity;
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const [error, setError] = useState("");
@@ -185,6 +203,9 @@ export default function App() {
 
   useEffect(() => {
     if (!token || !user) return;
+    const requestIdentity = `${user.id}:${token}`;
+    let cancelled = false;
+    const isCurrentSession = () => !cancelled && sessionIdentityRef.current === requestIdentity;
     const registerDevice = async () => {
       let fingerprint = await SecureStore.getItemAsync("arctester-device-fingerprint");
       if (!fingerprint) {
@@ -206,24 +227,100 @@ export default function App() {
         }),
       });
     };
-    registerDevice().catch((cause) => setError((cause as Error).message));
+    registerDevice().catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<Bank>("/bank")
-      .then(setBank)
-      .catch((cause) => setError((cause as Error).message));
+      .then((result) => { if (isCurrentSession()) setBank(result); })
+      .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<{ announcements: Announcement[] }>("/announcements")
-      .then((result) => setAnnouncements(result.announcements))
+      .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
+    api<{ notifications: Notification[]; unreadCount?: number }>("/notifications")
+      .then((result) => {
+        if (!isCurrentSession()) return;
+        const items = Array.isArray(result.notifications) ? result.notifications : [];
+        setNotifications(items);
+        setUnreadNotificationCount(
+          typeof result.unreadCount === "number" && Number.isFinite(result.unreadCount)
+            ? Math.max(0, Math.floor(result.unreadCount))
+            : items.filter((item) => !item.readAt).length,
+        );
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
   }, [token, user]);
 
   async function refreshAnnouncements() {
+    const requestIdentity = sessionIdentityRef.current;
     setRefreshingAnnouncements(true);
     try {
       const result = await api<{ announcements: Announcement[] }>("/announcements");
-      setAnnouncements(result.announcements);
+      if (sessionIdentityRef.current === requestIdentity) setAnnouncements(result.announcements);
     } catch (cause) {
-      setError((cause as Error).message);
+      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
     } finally {
-      setRefreshingAnnouncements(false);
+      if (sessionIdentityRef.current === requestIdentity) setRefreshingAnnouncements(false);
+    }
+  }
+
+  async function refreshNotifications() {
+    const requestIdentity = sessionIdentityRef.current;
+    setRefreshingNotifications(true);
+    try {
+      const result = await api<{ notifications: Notification[]; unreadCount?: number }>("/notifications");
+      if (sessionIdentityRef.current !== requestIdentity) return;
+      const items = Array.isArray(result.notifications) ? result.notifications : [];
+      setNotifications(items);
+      setUnreadNotificationCount(
+        typeof result.unreadCount === "number" && Number.isFinite(result.unreadCount)
+          ? Math.max(0, Math.floor(result.unreadCount))
+          : items.filter((item) => !item.readAt).length,
+      );
+    } catch (cause) {
+      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
+    } finally {
+      if (sessionIdentityRef.current === requestIdentity) setRefreshingNotifications(false);
+    }
+  }
+
+  async function acknowledgeAnnouncement(id: string) {
+    const requestIdentity = sessionIdentityRef.current;
+    try {
+      const result = await api<{ seenAt: string; acknowledgedAt: string | null }>(
+        `/announcements/${encodeURIComponent(id)}/acknowledge`,
+        { method: "POST" },
+      );
+      if (sessionIdentityRef.current === requestIdentity) {
+        setAnnouncements((items) => items.map((item) => item.id === id
+          ? { ...item, seenAt: result.seenAt, acknowledgedAt: result.acknowledgedAt }
+          : item));
+      }
+    } catch (cause) {
+      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
+    }
+  }
+
+  async function markNotificationRead(id: string) {
+    const requestIdentity = sessionIdentityRef.current;
+    try {
+      const result = await api<{ readAt: string; alreadyRead?: boolean }>(
+        `/notifications/${encodeURIComponent(id)}/read`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      if (sessionIdentityRef.current !== requestIdentity) return;
+      const current = notifications.find((item) => item.id === id);
+      if (current && !current.readAt && result.alreadyRead !== true) {
+        setUnreadNotificationCount((count) => Math.max(0, count - 1));
+      }
+      setNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+    } catch (cause) {
+      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
+    }
+  }
+
+  function openNotification(notification: Notification) {
+    void markNotificationRead(notification.id);
+    if (notification.href === "/assignments" || /^\/assignments\/[^/]+\/result$/.test(notification.href)) {
+      setShowExams(true);
     }
   }
 
@@ -375,11 +472,16 @@ export default function App() {
   }
 
   async function signOut() {
+    sessionIdentityRef.current = null;
     await SecureStore.deleteItemAsync("arctester-token");
     setToken(null);
     setUser(null);
     setBank(null);
     setAnnouncements([]);
+    setNotifications([]);
+    setUnreadNotificationCount(0);
+    setRefreshingAnnouncements(false);
+    setRefreshingNotifications(false);
     setTest(null);
     setCurrentQuestionIndex(0);
     setShowExams(false);
@@ -620,7 +722,46 @@ export default function App() {
                   <Text style={styles.announcementDate}>
                     {new Date(announcement.publishedAt).toLocaleString()}
                   </Text>
+                  {announcement.seenAt ? (
+                    <Text style={styles.announcementDate}>Seen</Text>
+                  ) : (
+                    <TouchableOpacity onPress={() => void acknowledgeAnnouncement(announcement.id)} style={styles.secondary}>
+                      <Text style={styles.secondaryText}>Mark as seen</Text>
+                    </TouchableOpacity>
+                  )}
                 </Animated.View>
+              ))
+            )}
+            <View style={styles.announcementHeader}>
+              <Text style={styles.sectionTitle}>
+                Notifications{unreadNotificationCount > 0 ? ` · ${unreadNotificationCount} unread` : ""}
+              </Text>
+              <TouchableOpacity onPress={refreshNotifications} disabled={refreshingNotifications}>
+                <Text style={styles.refreshText}>
+                  {refreshingNotifications ? "Refreshing…" : "Refresh"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {notifications.length === 0 ? (
+              <View style={styles.announcementCard}>
+                <Text style={styles.muted}>No notifications right now.</Text>
+              </View>
+            ) : (
+              notifications.map((notification) => (
+                <TouchableOpacity
+                  key={notification.id}
+                  onPress={() => openNotification(notification)}
+                  style={[styles.announcementCard, !notification.readAt && styles.notificationUnread]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${notification.readAt ? "Read" : "Unread"} notification: ${notification.title}`}
+                >
+                  <View style={styles.announcementHeader}>
+                    <Text style={styles.announcementTitle}>{notification.title}</Text>
+                    {!notification.readAt ? <Text style={styles.notificationBadge}>NEW</Text> : null}
+                  </View>
+                  <Text style={styles.announcementMessage}>{notification.message}</Text>
+                  <Text style={styles.announcementDate}>{new Date(notification.createdAt).toLocaleString()}</Text>
+                </TouchableOpacity>
               ))
             )}
             <TouchableOpacity
@@ -855,6 +996,8 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 7,
   },
+  notificationUnread: { borderColor: "#93c5fd", borderWidth: 1.5 },
+  notificationBadge: { color: "#2563eb", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   announcementDate: { color: "#9aa3b2", fontSize: 11, marginTop: 10 },
   sectionTitle: {
     color: "#172033",
