@@ -252,8 +252,9 @@ describe("live Vite application", () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Notifications (1)" }));
     expect(await screen.findByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
-    expect(within(screen.getByRole("main")).getAllByRole("heading", { name: "Exam result available" }).length).toBeGreaterThan(0);
-    fireEvent.click(within(screen.getByRole("main")).getByRole("button", { name: "Mark as read" }));
+    const resultNotification = screen.getByRole("heading", { name: "Exam result available" }).closest("article");
+    expect(resultNotification).not.toBeNull();
+    fireEvent.click(within(resultNotification!).getByRole("button", { name: "Mark as read" }));
     await waitFor(() => expect(screen.getByText("READ")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/notifications/notification-result-1/read"),
