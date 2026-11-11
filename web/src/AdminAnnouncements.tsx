@@ -15,16 +15,18 @@ type AdminAnnouncementsProps = {
   title: string;
   message: string;
   expiry: string;
+  publishAt: string;
   busy: boolean;
   onTitleChange: (value: string) => void;
   onMessageChange: (value: string) => void;
   onExpiryChange: (value: string) => void;
+  onPublishAtChange: (value: string) => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onRefresh: () => void;
   onDelete: (id: string) => void;
 };
 
-export default function AdminAnnouncements({ announcements, title, message, expiry, busy, onTitleChange, onMessageChange, onExpiryChange, onCreate, onRefresh, onDelete }: AdminAnnouncementsProps) {
+export default function AdminAnnouncements({ announcements, title, message, expiry, publishAt, busy, onTitleChange, onMessageChange, onExpiryChange, onPublishAtChange, onCreate, onRefresh, onDelete }: AdminAnnouncementsProps) {
   function confirmDelete(id: string) {
     if (!window.confirm("Delete this announcement? Students will no longer see it.")) return;
     onDelete(id);
@@ -37,6 +39,7 @@ export default function AdminAnnouncements({ announcements, title, message, expi
           <div className="admin-panel-head"><div><p className="eyebrow">NEW NOTICE</p><h2>Compose announcement</h2></div></div>
           <label>Title<input required minLength={2} maxLength={120} value={title} onChange={(event) => onTitleChange(event.target.value)} placeholder="e.g. Mock test schedule update" /></label>
           <label>Message<textarea required maxLength={4000} value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder="Write the announcement for students…" /></label>
+          <label>Publish date and time <small>Leave empty to publish immediately.</small><input type="datetime-local" value={publishAt} onChange={(event) => onPublishAtChange(event.target.value)} /></label>
           <label>Expiry date and time <small>Leave empty for no expiry.</small><input type="datetime-local" value={expiry} onChange={(event) => onExpiryChange(event.target.value)} /></label>
           <button className="primary" disabled={busy}>Publish announcement</button>
         </form>

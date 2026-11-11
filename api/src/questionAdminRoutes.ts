@@ -17,16 +17,6 @@ const ListSchema = z.object({
 });
 const UpdateSchema = QuestionInputSchema.partial().refine((value) => Object.keys(value).length > 0);
 const BulkSchema = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) });
-const AnnouncementSchema = z.object({
-  title: z.string().trim().min(2).max(120),
-  message: z.string().trim().min(2).max(5000),
-  startsAt: z.string().datetime().optional(),
-  expiresAt: z.string().datetime().nullable().optional(),
-}).refine(value => !value.expiresAt || new Date(value.expiresAt).getTime() > new Date(value.startsAt ?? Date.now()).getTime(), {
-  message: "Expiry must be later than the announcement start time.",
-  path: ["expiresAt"],
-});
-
 export function questionAdminRouter(db: PrismaClient): Router {
   const router = Router();
   router.use("/admin", requireAuth, requireAdmin(db));
@@ -56,72 +46,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
         questions: questions.map((q) => ({ id: q.id, subject: q.subject.name, topic: q.topic?.name ?? "General",
           text: q.text, options: JSON.parse(q.options), correctIndex: q.correctIndex,
           explanation: q.explanation, source: q.source, difficulty: q.difficulty, createdAt: q.createdAt })) });
-    } catch (error) { next(error); }
-  });
-
-  router.get("/admin/announcements", async (_req, res, next) => {
-    try {
-      const announcements = await db.announcement.findMany({
-        orderBy: { createdAt: "desc" },
-        include: { _count: { select: { views: true } } },
-      });
-      res.json({ ok: true, announcements });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/admin/announcements", async (req: AuthedRequest, res, next) => {
-    try {
-      const input = AnnouncementSchema.parse(req.body);
-      const announcement = await db.announcement.create({
-        data: {
-          title: input.title,
-          message: input.message,
-          startsAt: input.startsAt ? new Date(input.startsAt) : new Date(),
-          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-          createdById: req.user!.id,
-        },
-      });
-      res.status(201).json({ ok: true, announcement });
-    } catch (error) { next(error); }
-  });
-
-  router.delete("/admin/announcements/:id", async (req, res, next) => {
-    try {
-      await db.announcement.delete({ where: { id: req.params.id } });
-      res.json({ ok: true });
-    } catch (error) { next(error); }
-  });
-
-  router.get("/announcements/active", requireAuth, async (req: AuthedRequest, res, next) => {
-    try {
-      const now = new Date();
-      const announcements = await db.announcement.findMany({
-        where: {
-          startsAt: { lte: now },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          views: { none: { userId: req.user!.id } },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        select: { id: true, title: true, message: true, startsAt: true, expiresAt: true, createdAt: true },
-      });
-      res.json({ ok: true, announcements });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/announcements/:id/seen", requireAuth, async (req: AuthedRequest, res, next) => {
-    try {
-      const announcement = await db.announcement.findFirst({
-        where: { id: req.params.id, startsAt: { lte: new Date() }, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-        select: { id: true },
-      });
-      if (!announcement) return next(notFound("Announcement not found or expired."));
-      await db.announcementView.upsert({
-        where: { announcementId_userId: { announcementId: announcement.id, userId: req.user!.id } },
-        create: { announcementId: announcement.id, userId: req.user!.id },
-        update: {},
-      });
-      res.json({ ok: true });
     } catch (error) { next(error); }
   });
 

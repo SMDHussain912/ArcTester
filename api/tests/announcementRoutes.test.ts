@@ -71,6 +71,60 @@ describe("announcement API", () => {
       .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: expired.id })]));
   });
 
+  it("schedules announcements and rejects expiry before the publish time", async () => {
+    const startsAt = new Date(Date.now() + 60_000);
+    const expiresAt = new Date(Date.now() + 120_000);
+    const invalid = await postJson(
+      `${server.baseUrl}/admin/announcements`,
+      {
+        title: "Invalid schedule",
+        message: "Expiry cannot precede publication.",
+        startsAt: startsAt.toISOString(),
+        expiresAt: new Date(startsAt.getTime() - 1).toISOString(),
+      },
+      adminCookie,
+    );
+    expect(invalid.status).toBe(400);
+
+    const alreadyExpired = await postJson(
+      `${server.baseUrl}/admin/announcements`,
+      {
+        title: "Backdated expired notice",
+        message: "A past publish time cannot make a past expiry valid.",
+        startsAt: new Date(Date.now() - 120_000).toISOString(),
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+      adminCookie,
+    );
+    expect(alreadyExpired.status).toBe(400);
+
+    const created = await postJson(
+      `${server.baseUrl}/admin/announcements`,
+      {
+        title: "Scheduled notice",
+        message: "This notice is not visible yet.",
+        startsAt: startsAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      },
+      adminCookie,
+    );
+    expect(created.status).toBe(201);
+    const announcementId = (created.json as { announcement: { id: string; startsAt: string } }).announcement.id;
+    expect((created.json as { announcement: { startsAt: string } }).announcement.startsAt).toBe(startsAt.toISOString());
+
+    const beforePublish = await getJson(`${server.baseUrl}/announcements/active`, studentCookie);
+    expect((beforePublish.json as { announcements: { id: string }[] }).announcements)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId })]));
+
+    await server.db.announcement.update({
+      where: { id: announcementId },
+      data: { startsAt: new Date(Date.now() - 1_000) },
+    });
+    const afterPublish = await getJson(`${server.baseUrl}/announcements/active`, studentCookie);
+    expect((afterPublish.json as { announcements: { id: string }[] }).announcements)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: announcementId })]));
+  });
+
   it("publishes, lists, acknowledges, and deletes announcements", async () => {
     const created = await postJson(
       `${server.baseUrl}/admin/announcements`,

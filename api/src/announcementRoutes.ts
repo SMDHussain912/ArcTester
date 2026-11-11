@@ -7,6 +7,7 @@ import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 const CreateAnnouncementSchema = z.object({
   title: z.string().trim().min(2).max(120),
   message: z.string().trim().min(1).max(4000),
+  startsAt: z.string().datetime().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
 });
 
@@ -22,15 +23,17 @@ export function announcementRouter(db: PrismaClient): Router {
     async (req: AuthedRequest, res, next) => {
       try {
         const input = CreateAnnouncementSchema.parse(req.body);
+        const startsAt = input.startsAt ? new Date(input.startsAt) : new Date();
         const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
-        if (expiresAt && expiresAt.getTime() <= Date.now()) {
-          return next(badRequest("Announcement expiry must be in the future."));
+        if (expiresAt && expiresAt.getTime() <= Math.max(startsAt.getTime(), Date.now())) {
+          return next(badRequest("Announcement expiry must be after its publish time and in the future."));
         }
 
         const announcement = await db.announcement.create({
           data: {
             title: input.title,
             message: input.message,
+            startsAt,
             expiresAt,
             createdById: req.user!.id,
           },
