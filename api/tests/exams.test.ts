@@ -304,12 +304,13 @@ describe("versioned exam management", () => {
     expect(published.status).toBe(200);
 
     const body = { studentIds: [studentId] };
-    const first = await request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie);
-    const second = await request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie);
-    expect(first.status).toBe(201);
-    expect((first.json.assignments as unknown[])).toHaveLength(1);
-    expect(second.status).toBe(201);
-    expect(second.json.created).toBe(0);
+    const [first, second] = await Promise.all([
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+      request(`/admin/exams/${examId}/assign`, "POST", body, adminCookie),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([201, 201]);
+    expect([first, second].filter((response) => response.json.created === 1)).toHaveLength(1);
+    expect([first, second].filter((response) => response.json.created === 0)).toHaveLength(1);
 
     const assignment = await server.db.examAssignment.findFirstOrThrow({
       where: { studentId },
