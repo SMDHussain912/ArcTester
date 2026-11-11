@@ -12,7 +12,7 @@ const session: LiveSession = {
 
 describe("AdminLiveMonitor", () => {
   it("renders session totals, connectivity and integrity counts", () => {
-    render(<AdminLiveMonitor sessions={[session]} total={3} loading={false} updatedAt="2026-11-10T08:02:00.000Z" selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} />);
+    render(<AdminLiveMonitor sessions={[session]} total={3} loading={false} updatedAt="2026-11-10T08:02:00.000Z" selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={vi.fn(async () => {})} />);
     expect(screen.getByRole("heading", { name: "Live invigilation" })).toBeTruthy();
     expect(screen.getAllByText("3")).toHaveLength(2);
     expect(screen.getByText("1 of 3 sessions")).toBeTruthy();
@@ -23,7 +23,7 @@ describe("AdminLiveMonitor", () => {
   });
 
   it("shows loading and empty states", () => {
-    const { rerender } = render(<AdminLiveMonitor sessions={[]} total={0} loading={true} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} />);
+    const { rerender } = render(<AdminLiveMonitor sessions={[]} total={0} loading={true} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={vi.fn(async () => {})} />);
     expect(screen.getByRole("status").textContent).toContain("Loading live sessions");
     rerender(<AdminLiveMonitor sessions={[]} total={0} loading={false} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByText("No active or interrupted exam sessions right now.")).toBeTruthy();
@@ -31,10 +31,34 @@ describe("AdminLiveMonitor", () => {
 
   it("delegates refresh and opens the selected session timeline", () => {
     const onRefresh = vi.fn(), onSelectSession = vi.fn();
-    render(<AdminLiveMonitor sessions={[session]} total={1} loading={false} updatedAt={null} selectedSessionId={null} onSelectSession={onSelectSession} onRefresh={onRefresh} />);
+    render(<AdminLiveMonitor sessions={[session]} total={1} loading={false} updatedAt={null} selectedSessionId={null} onSelectSession={onSelectSession} onRefresh={onRefresh} busy={false} onSessionAction={vi.fn(async () => {})} />);
     fireEvent.click(screen.getByRole("button", { name: "Refresh sessions" }));
     fireEvent.click(screen.getByRole("button", { name: "Inspect session →" }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
     expect(onSelectSession).toHaveBeenCalledWith(expect.any(Function));
   });
+  it("requires an audit reason and delegates allowed invigilator actions", () => {
+    const onSessionAction = vi.fn(async () => {});
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<AdminLiveMonitor sessions={[session]} total={1} loading={false} updatedAt={null} selectedSessionId={session.id} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={onSessionAction} />);
+    const reason = screen.getByLabelText("Audit reason for student@example.test");
+    const pause = screen.getByRole("button", { name: "Pause session" });
+    expect(pause).toBeDisabled();
+    fireEvent.change(reason, { target: { value: "Candidate requested assistance" } });
+    expect(pause).not.toBeDisabled();
+    fireEvent.click(pause);
+    expect(onSessionAction).toHaveBeenCalledWith("session-1", "PAUSE", "Candidate requested assistance");
+    fireEvent.click(screen.getByRole("button", { name: "Terminate session" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(onSessionAction).toHaveBeenCalledWith("session-1", "TERMINATE", "Candidate requested assistance");
+    confirm.mockRestore();
+  });
+
+  it("offers resume for paused sessions and disables actions while busy", () => {
+    const paused = { ...session, status: "PAUSED" };
+    render(<AdminLiveMonitor sessions={[paused]} total={1} loading={false} updatedAt={null} selectedSessionId={paused.id} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={true} onSessionAction={vi.fn(async () => {})} />);
+    expect(screen.getByRole("button", { name: "Resume session" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Terminate session" })).toBeDisabled();
+  });
+
 });
