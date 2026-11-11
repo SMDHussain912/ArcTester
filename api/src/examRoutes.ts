@@ -1130,14 +1130,18 @@ export function examRouter(db: PrismaClient): Router {
   });
 
   router.post("/admin/exams/:id/assign", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    let requestedStudentIds: number[] = [];
+    let assignedVersionId: string | null = null;
     try {
       const input = AssignExamSchema.parse(req.body);
+      requestedStudentIds = input.studentIds;
       const exam = await db.exam.findUnique({
         where: { id: req.params.id },
         include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: "desc" }, take: 1 } },
       });
       const version = exam?.versions[0];
       if (!exam || !version) return next(notFound("No published exam version is available to assign."));
+      assignedVersionId = version.id;
       if (exam.status === "ARCHIVED") return next(conflict("Archived exams cannot receive new assignments."));
 
       const students = await db.user.findMany({
@@ -1190,11 +1194,13 @@ export function examRouter(db: PrismaClient): Router {
       ) {
         // A concurrent request may have won the unique assignment race. Treat
         // it as an idempotent retry only when every requested assignment now exists.
-        const existing = await db.examAssignment.findMany({
-          where: { examVersionId: version!.id, studentId: { in: input.studentIds } },
-          select: { id: true, studentId: true, assignedAt: true, dueAt: true },
-        });
-        if (existing.length === input.studentIds.length) {
+        const existing = assignedVersionId && requestedStudentIds.length > 0
+          ? await db.examAssignment.findMany({
+              where: { examVersionId: assignedVersionId, studentId: { in: requestedStudentIds } },
+              select: { id: true, studentId: true, assignedAt: true, dueAt: true },
+            })
+          : [];
+        if (existing.length === requestedStudentIds.length && requestedStudentIds.length > 0) {
           return res.status(200).json({ ok: true, created: 0, assignments: existing, alreadyAssigned: true });
         }
         return next(conflict("One or more students already have an assignment for this exam version. Refresh the assignment list before retrying."));
