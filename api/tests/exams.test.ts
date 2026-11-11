@@ -1377,4 +1377,31 @@ describe("versioned exam management", () => {
     expect(submitted.json.submission).toMatchObject({ status: "REVIEW_REQUIRED" });
   });
 
+
+  it("archives a published exam idempotently and blocks further publication and assignment", async () => {
+    const studentArchive = await request(`/admin/exams/${examId}/archive`, "POST", {}, studentCookie);
+    expect(studentArchive.status).toBe(403);
+
+    const archived = await request(`/admin/exams/${examId}/archive`, "POST", {}, adminCookie);
+    expect(archived.status).toBe(200);
+    expect(archived.json).toMatchObject({ ok: true, examId, status: "ARCHIVED" });
+
+    const repeated = await request(`/admin/exams/${examId}/archive`, "POST", {}, adminCookie);
+    expect(repeated.status).toBe(200);
+    expect(repeated.json).toMatchObject({ ok: true, examId, status: "ARCHIVED" });
+
+    const publish = await request(`/admin/exams/${examId}/publish`, "POST", {}, adminCookie);
+    expect(publish.status).toBe(409);
+    expect(publish.json.error).toContain("Archived exams");
+
+    const assign = await request(
+      `/admin/exams/${examId}/assign`,
+      "POST",
+      { studentIds: [studentId] },
+      adminCookie,
+    );
+    expect(assign.status).toBe(409);
+    expect(assign.json.error).toContain("Archived exams");
+    expect((await server.db.exam.findUniqueOrThrow({ where: { id: examId } })).status).toBe("ARCHIVED");
+  });
 });
