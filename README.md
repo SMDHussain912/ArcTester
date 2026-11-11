@@ -190,6 +190,8 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | `EXPO_PUBLIC_API_URL=https://YOUR-API npm run build:mobile:android` | Build a standalone Android APK signed with the debug keystore (JDK 17 + Android SDK required) |
 | `npm run build:desktop:win` | Package Windows installer (after web build) |
 
+Windows installer builds are also validated by GitHub Actions and uploaded as a workflow artifact.
+
 Question bank (run from the repo root):
 
 | Command                                              | What it does                       |
