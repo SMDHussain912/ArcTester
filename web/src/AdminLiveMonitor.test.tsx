@@ -25,7 +25,7 @@ describe("AdminLiveMonitor", () => {
   it("shows loading and empty states", () => {
     const { rerender } = render(<AdminLiveMonitor sessions={[]} total={0} loading={true} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={vi.fn(async () => {})} />);
     expect(screen.getByRole("status").textContent).toContain("Loading live sessions");
-    rerender(<AdminLiveMonitor sessions={[]} total={0} loading={false} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} />);
+    rerender(<AdminLiveMonitor sessions={[]} total={0} loading={false} updatedAt={null} selectedSessionId={null} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={vi.fn(async () => {})} />);
     expect(screen.getByText("No active or interrupted exam sessions right now.")).toBeTruthy();
   });
 
@@ -43,9 +43,9 @@ describe("AdminLiveMonitor", () => {
     render(<AdminLiveMonitor sessions={[session]} total={1} loading={false} updatedAt={null} selectedSessionId={session.id} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={false} onSessionAction={onSessionAction} />);
     const reason = screen.getByLabelText("Audit reason for student@example.test");
     const pause = screen.getByRole("button", { name: "Pause session" });
-    expect(pause).toBeDisabled();
+    expect((pause as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(reason, { target: { value: "Candidate requested assistance" } });
-    expect(pause).not.toBeDisabled();
+    expect((pause as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(pause);
     expect(onSessionAction).toHaveBeenCalledWith("session-1", "PAUSE", "Candidate requested assistance");
     fireEvent.click(screen.getByRole("button", { name: "Terminate session" }));
@@ -57,8 +57,8 @@ describe("AdminLiveMonitor", () => {
   it("offers resume for paused sessions and disables actions while busy", () => {
     const paused = { ...session, status: "PAUSED" };
     render(<AdminLiveMonitor sessions={[paused]} total={1} loading={false} updatedAt={null} selectedSessionId={paused.id} onSelectSession={vi.fn()} onRefresh={vi.fn()} busy={true} onSessionAction={vi.fn(async () => {})} />);
-    expect(screen.getByRole("button", { name: "Resume session" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Terminate session" })).toBeDisabled();
+    expect((screen.getByRole("button", { name: "Resume session" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Terminate session" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
 });
