@@ -1502,7 +1502,7 @@ export function examRouter(db: PrismaClient): Router {
 
   router.post("/admin/exams/sessions/:id/action", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
-      const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().max(300).default("") }).parse(req.body);
+      const input = z.object({ action: z.enum(["PAUSE", "RESUME", "TERMINATE"]), reason: z.string().trim().min(1, "An audit reason is required.").max(300) }).parse(req.body);
       const session = await db.examSession.findUnique({ where: { id: req.params.id } });
       if (!session) return next(notFound("Exam session not found."));
       if (["COMPLETED", "TERMINATED", "EXPIRED"].includes(session.status)) return next(conflict("This exam session is already closed."));
