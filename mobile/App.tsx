@@ -48,7 +48,46 @@ type Question = {
   text: string;
   options: string[];
 };
-type Test = { attemptId: number; questions: Question[]; warnings: string[] };
+type Test = {
+  attemptId: number;
+  mode: string;
+  deadline: string | null;
+  serverNow: string;
+  questions: Question[];
+  warnings?: string[];
+  saved?: { questionId: number; selectedIndex: number | null }[];
+};
+type PracticeRecovery = {
+  attemptId: number;
+  answers: Record<number, number>;
+  currentQuestionIndex: number;
+};
+type PracticeResult = {
+  attemptId: number;
+  mode: string;
+  score: number;
+  total: number;
+  expired: boolean;
+  breakdown: { subject: string; correct: number; total: number }[];
+  questions: {
+    questionId: number;
+    subject: string;
+    topic: string | null;
+    text: string;
+    options: string[];
+    selectedIndex: number | null;
+    correctIndex: number;
+    isCorrect: boolean;
+    explanation: string;
+  }[];
+};
+class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+const practiceRecoveryKey = (userId: number) => `arctester-practice-recovery:${userId}`;
 
 export default function App() {
   const [email, setEmail] = useState("");
@@ -64,6 +103,9 @@ export default function App() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [refreshingNotifications, setRefreshingNotifications] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
+  const [result, setResult] = useState<PracticeResult | null>(null);
+  const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
+  const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [showExams, setShowExams] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "profile">("home");
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -76,6 +118,8 @@ export default function App() {
   sessionIdentityRef.current = sessionIdentity;
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
+  const practiceSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const practiceRestoreLock = useRef(false);
   const [error, setError] = useState("");
   const [startupVisible, setStartupVisible] = useState(true);
   const startupFade = useRef(new Animated.Value(1)).current;
@@ -181,7 +225,7 @@ export default function App() {
       },
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "The server request failed.");
+    if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
     return body as T;
   }
 
@@ -246,6 +290,22 @@ export default function App() {
         );
       })
       .catch(() => undefined);
+    setCheckingPracticeRecovery(true);
+    void SecureStore.getItemAsync(practiceRecoveryKey(user.id)).then((raw) => {
+      if (!isCurrentSession() || !raw) return;
+      try {
+        const recovery = JSON.parse(raw) as Partial<PracticeRecovery>;
+        if (Number.isInteger(recovery.attemptId) && recovery.attemptId! > 0) {
+          setHasSavedPracticeAttempt(true);
+        } else {
+          void SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        }
+      } catch {
+        void SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+      }
+    }).catch(() => undefined).finally(() => {
+      if (isCurrentSession()) setCheckingPracticeRecovery(false);
+    });
     return () => { cancelled = true; };
   }, [token, user]);
 
@@ -356,7 +416,126 @@ export default function App() {
     }
   }
 
+  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number) {
+    if (!user) return;
+    const requestIdentity = sessionIdentityRef.current;
+    const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
+    practiceSaveQueue.current = practiceSaveQueue.current
+      .catch(() => undefined)
+      .then(() => SecureStore.setItemAsync(practiceRecoveryKey(user.id), JSON.stringify(payload)));
+    try {
+      await practiceSaveQueue.current;
+      if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(true);
+    } catch (cause) {
+      if (sessionIdentityRef.current === requestIdentity) {
+        setError(`Practice is running, but its local recovery copy could not be saved: ${(cause as Error).message}`);
+      }
+    }
+  }
+
+  function updatePracticeAnswer(questionId: number, selectedIndex: number) {
+    if (!test) return;
+    const nextAnswers = { ...answers, [questionId]: selectedIndex };
+    setAnswers(nextAnswers);
+    void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex);
+  }
+
+  function updatePracticeQuestionIndex(nextIndex: number) {
+    if (!test) return;
+    const safeIndex = Math.max(0, Math.min(test.questions.length - 1, nextIndex));
+    setCurrentQuestionIndex(safeIndex);
+    void savePracticeRecovery(test.attemptId, answers, safeIndex);
+  }
+
+  async function resumePractice() {
+    if (!user || busy || practiceRestoreLock.current) return;
+    practiceRestoreLock.current = true;
+    const requestIdentity = sessionIdentityRef.current;
+    setBusy(true);
+    setError("");
+    let recoveryAttemptId: number | null = null;
+    try {
+      const raw = await SecureStore.getItemAsync(practiceRecoveryKey(user.id));
+      if (!raw) {
+        if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(false);
+        return;
+      }
+      let recovery: PracticeRecovery;
+      try {
+        recovery = JSON.parse(raw) as PracticeRecovery;
+      } catch {
+        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        setHasSavedPracticeAttempt(false);
+        throw new Error("The saved practice recovery record was corrupted and has been cleared.");
+      }
+      if (
+        !Number.isInteger(recovery.attemptId) || recovery.attemptId <= 0 ||
+        !recovery.answers || typeof recovery.answers !== "object" ||
+        !Number.isInteger(recovery.currentQuestionIndex)
+      ) {
+        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        setHasSavedPracticeAttempt(false);
+        throw new Error("The saved practice recovery record was invalid and has been cleared.");
+      }
+      recoveryAttemptId = recovery.attemptId;
+      const restored = await api<Test>(`/tests/${recovery.attemptId}`);
+      if (sessionIdentityRef.current !== requestIdentity) return;
+      if (restored.mode !== "practice" || !restored.questions.length) {
+        throw new Error("This saved item is not a resumable practice attempt.");
+      }
+      const serverAnswers = Object.fromEntries(
+        (restored.saved ?? [])
+          .filter((answer) => answer.selectedIndex !== null)
+          .map((answer) => [answer.questionId, answer.selectedIndex as number]),
+      );
+      const localAnswers = recovery.answers && typeof recovery.answers === "object" ? recovery.answers : {};
+      setTest(restored);
+      setResult(null);
+      setAnswers({ ...serverAnswers, ...localAnswers });
+      setCurrentQuestionIndex(Math.max(0, Math.min(restored.questions.length - 1, recovery.currentQuestionIndex ?? 0)));
+      const remaining = restored.deadline && restored.serverNow
+        ? Math.ceil((Date.parse(restored.deadline) - Date.parse(restored.serverNow)) / 1000)
+        : 20 * 60;
+      setSecondsLeft(Math.max(0, remaining));
+      setHasSavedPracticeAttempt(false);
+    } catch (cause) {
+      if (sessionIdentityRef.current !== requestIdentity) return;
+      if (cause instanceof ApiRequestError && cause.status === 404) {
+        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        setHasSavedPracticeAttempt(false);
+      } else if (cause instanceof ApiRequestError && cause.status === 409 && recoveryAttemptId !== null) {
+        // The submit may have reached the server before the app lost its response.
+        // Recover the completed result instead of leaving the student stranded.
+        try {
+          const completed = await api<PracticeResult>(`/tests/${recoveryAttemptId}/result`);
+          if (sessionIdentityRef.current === requestIdentity) {
+            await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+            setHasSavedPracticeAttempt(false);
+            setResult(completed);
+            setError("");
+          }
+          return;
+        } catch {
+          // A 409 can also mean an invalid/non-resumable attempt. Preserve the
+          // local copy unless the server definitively says it does not exist.
+        }
+      }
+      setError((cause as Error).message);
+    } finally {
+      practiceRestoreLock.current = false;
+      if (sessionIdentityRef.current === requestIdentity) setBusy(false);
+    }
+  }
+
   async function startPractice(subject?: string) {
+    if (checkingPracticeRecovery) {
+      setError("Checking this account for a saved practice attempt. Try again in a moment.");
+      return;
+    }
+    if (hasSavedPracticeAttempt) {
+      setError("Resume or submit your saved practice before starting another one.");
+      return;
+    }
     if (!subject && !bank?.subjects.length) {
       setError("No subjects are available for mixed practice yet.");
       return;
@@ -364,14 +543,26 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const result = await api<Test>("/tests", {
+      const created = await api<Test>("/tests", {
         method: "POST",
         body: JSON.stringify({ mode: "practice", ...(subject ? { subject } : { subjects: (bank?.subjects ?? []).map((item) => item.subject) }), count: 10 }),
       });
-      setTest(result);
+      setTest(created);
+      setResult(null);
       setAnswers({});
       setCurrentQuestionIndex(0);
-      setSecondsLeft(20 * 60);
+      const remaining = created.deadline && created.serverNow
+        ? Math.ceil((Date.parse(created.deadline) - Date.parse(created.serverNow)) / 1000)
+        : 20 * 60;
+      setSecondsLeft(Math.max(0, remaining));
+      if (user) {
+        await SecureStore.setItemAsync(practiceRecoveryKey(user.id), JSON.stringify({
+          attemptId: created.attemptId,
+          answers: {},
+          currentQuestionIndex: 0,
+        } satisfies PracticeRecovery));
+        setHasSavedPracticeAttempt(true);
+      }
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -381,6 +572,19 @@ export default function App() {
 
   useEffect(() => {
     if (!test) return;
+    const deadlineMs = test.deadline ? Date.parse(test.deadline) : Number.NaN;
+    const serverNowMs = Date.parse(test.serverNow);
+    if (Number.isFinite(deadlineMs) && Number.isFinite(serverNowMs)) {
+      // Recalculate from the server deadline on every tick. This catches up
+      // after the app is backgrounded instead of trusting throttled intervals.
+      const serverOffsetMs = serverNowMs - Date.now();
+      const tick = () => {
+        setSecondsLeft(Math.max(0, Math.ceil((deadlineMs - (Date.now() + serverOffsetMs)) / 1000)));
+      };
+      tick();
+      const timer = setInterval(tick, 1000);
+      return () => clearInterval(timer);
+    }
     const timer = setInterval(() => {
       setSecondsLeft((remaining) => Math.max(0, remaining - 1));
     }, 1000);
@@ -437,31 +641,43 @@ export default function App() {
     Alert.alert(
       "Exit practice?",
       answered > 0
-        ? `Your ${answered} answered question(s) will be lost if you exit now.`
-        : "Your current practice session will be discarded.",
+        ? `Your ${answered} answered question(s) are saved on this device. You can resume later.`
+        : "Your practice attempt is saved on this device and can be resumed later.",
       [
         { text: "Stay", style: "cancel" },
-        { text: "Exit", style: "destructive", onPress: () => { setTest(null); setCurrentQuestionIndex(0); } },
+        { text: "Exit to dashboard", style: "default", onPress: () => { setTest(null); setHasSavedPracticeAttempt(true); } },
       ],
     );
   }
 
   async function submit() {
-    if (!test) return;
+    if (!test || !user) return;
     setBusy(true);
     try {
-      await api(`/tests/${test.attemptId}/submit`, {
-        method: "POST",
-        body: JSON.stringify({
-          answers: test.questions.map((question) => ({
-            questionId: question.id,
-            selectedIndex: answers[question.id] ?? null,
-          })),
-        }),
-      });
+      await practiceSaveQueue.current;
+      const summary = await api<{ attemptId: number; score: number; total: number; expired: boolean }>(
+        `/tests/${test.attemptId}/submit`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            answers: test.questions.map((question) => ({
+              questionId: question.id,
+              selectedIndex: answers[question.id] ?? null,
+            })),
+          }),
+        },
+      );
+      await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+      setHasSavedPracticeAttempt(false);
       setTest(null);
       setCurrentQuestionIndex(0);
-      setError("Practice submitted. Open the web app to review the full result.");
+      try {
+        const review = await api<PracticeResult>(`/tests/${test.attemptId}/result`);
+        setResult(review);
+        setError("");
+      } catch {
+        setError(`Practice submitted: ${summary.score}/${summary.total}. Full review could not be loaded; retry from the web app.`);
+      }
       const fresh = await api<Bank>("/bank");
       setBank(fresh);
     } catch (cause) {
@@ -473,6 +689,7 @@ export default function App() {
 
   async function signOut() {
     sessionIdentityRef.current = null;
+    setBusy(false);
     await SecureStore.deleteItemAsync("arctester-token");
     setToken(null);
     setUser(null);
@@ -483,6 +700,10 @@ export default function App() {
     setRefreshingAnnouncements(false);
     setRefreshingNotifications(false);
     setTest(null);
+    setResult(null);
+    setHasSavedPracticeAttempt(false);
+    setCheckingPracticeRecovery(false);
+    setAnswers({});
     setCurrentQuestionIndex(0);
     setShowExams(false);
     setActiveTab("home");
@@ -552,6 +773,38 @@ export default function App() {
           </Animated.View>
         ) : showExams ? (
           <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
+        ) : result ? (
+          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+            <Text style={styles.heading}>Practice result</Text>
+            <Text style={styles.statValue}>{result.score} / {result.total}</Text>
+            <Text style={styles.muted}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
+            {result.breakdown.map((item) => (
+              <View key={item.subject} style={styles.announcementCard}>
+                <Text style={styles.announcementTitle}>{item.subject}</Text>
+                <Text style={styles.muted}>{item.correct} correct out of {item.total}</Text>
+              </View>
+            ))}
+            <Text style={styles.sectionTitle}>Answer review</Text>
+            {result.questions.map((question, index) => (
+              <View key={question.questionId} style={styles.announcementCard}>
+                <Text style={styles.announcementTitle}>Question {index + 1} · {question.subject}</Text>
+                <Text style={styles.announcementMessage}>{question.text}</Text>
+                {question.options.map((option, optionIndex) => (
+                  <Text key={optionIndex} style={{
+                    color: optionIndex === question.correctIndex ? "#15803d" : optionIndex === question.selectedIndex ? "#b42318" : "#526078",
+                    fontWeight: optionIndex === question.correctIndex || optionIndex === question.selectedIndex ? "800" : "400",
+                    marginTop: 6,
+                  }}>
+                    {String.fromCharCode(65 + optionIndex)}. {option}{optionIndex === question.correctIndex ? " · Correct" : optionIndex === question.selectedIndex ? " · Your answer" : ""}
+                  </Text>
+                ))}
+                <Text style={styles.announcementDate}>{question.explanation || "No explanation provided."}</Text>
+              </View>
+            ))}
+            <TouchableOpacity onPress={() => setResult(null)} style={styles.primary}>
+              <Text style={styles.primaryText}>Back to dashboard</Text>
+            </TouchableOpacity>
+          </Animated.View>
         ) : test ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <View style={styles.examHeader}>
@@ -580,7 +833,7 @@ export default function App() {
                       accessibilityRole="button"
                       accessibilityLabel={`Question ${index + 1}${answered ? ", answered" : ", unanswered"}`}
                       accessibilityState={{ selected: current }}
-                      onPress={() => setCurrentQuestionIndex(index)}
+                      onPress={() => updatePracticeQuestionIndex(index)}
                       style={[
                         styles.navigatorItem,
                         answered && styles.navigatorAnswered,
@@ -619,7 +872,7 @@ export default function App() {
                   return (
                     <TouchableOpacity
                       key={optionIndex}
-                      onPress={() => setAnswers((current) => ({ ...current, [test.questions[currentQuestionIndex].id]: optionIndex }))}
+                      onPress={() => updatePracticeAnswer(test.questions[currentQuestionIndex].id, optionIndex)}
                       style={[styles.option, selected && styles.optionSelected]}
                       activeOpacity={0.78}
                     >
@@ -638,14 +891,14 @@ export default function App() {
             <View style={styles.examActions}>
               <TouchableOpacity
                 disabled={currentQuestionIndex === 0}
-                onPress={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
+                onPress={() => updatePracticeQuestionIndex(currentQuestionIndex - 1)}
                 style={[styles.examSecondary, currentQuestionIndex === 0 && styles.examButtonDisabled]}
               >
                 <MaterialCommunityIcons name="chevron-left" size={20} color={currentQuestionIndex === 0 ? "#aab2c0" : "#526078"} />
                 <Text style={styles.examSecondaryText}>Previous</Text>
               </TouchableOpacity>
               {currentQuestionIndex < test.questions.length - 1 ? (
-                <TouchableOpacity onPress={() => setCurrentQuestionIndex((index) => Math.min(test.questions.length - 1, index + 1))} style={styles.examNext}>
+                <TouchableOpacity onPress={() => updatePracticeQuestionIndex(currentQuestionIndex + 1)} style={styles.examNext}>
                   <Text style={styles.primaryText}>Next question</Text>
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
                 </TouchableOpacity>
@@ -763,6 +1016,11 @@ export default function App() {
                   <Text style={styles.announcementDate}>{new Date(notification.createdAt).toLocaleString()}</Text>
                 </TouchableOpacity>
               ))
+            )}
+            {hasSavedPracticeAttempt && (
+              <TouchableOpacity disabled={busy} onPress={() => void resumePractice()} style={styles.primary}>
+                <Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text>
+              </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={() => setShowExams(true)}
