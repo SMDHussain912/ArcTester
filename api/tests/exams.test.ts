@@ -326,6 +326,52 @@ describe("versioned exam management", () => {
     });
   });
 
+  it("lists versioned exam details and restricts admin read endpoints to administrators", async () => {
+    const list = await request("/admin/exams", "GET", undefined, adminCookie);
+    expect(list.status).toBe(200);
+    const listed = (list.json.exams as Array<{
+      id: string;
+      status: string;
+      versions: Array<{ version: number; _count: { questions: number } }>;
+    }>).find((item) => item.id === examId);
+    expect(listed).toMatchObject({
+      id: examId,
+      status: "PUBLISHED",
+      versions: [{ version: 1, _count: { questions: 1 } }],
+    });
+
+    const detail = await request(`/admin/exams/${examId}`, "GET", undefined, adminCookie);
+    expect(detail.status).toBe(200);
+    expect(detail.json.exam).toMatchObject({
+      id: examId,
+      version: {
+        version: 1,
+        durationMinutes: 45,
+        questions: [{ marks: 2, negativeMarks: 0.5 }],
+      },
+    });
+
+    const latest = await request(`/admin/exams/${examId}/latest-version`, "GET", undefined, adminCookie);
+    expect(latest.status).toBe(200);
+    expect(latest.json.exam).toMatchObject({
+      id: examId,
+      version: {
+        version: 1,
+        questions: [{
+          subject: "Computer Science",
+          topic: "Data Structures",
+          text: "Which structure follows FIFO?",
+          marks: 2,
+          negativeMarks: 0.5,
+        }],
+      },
+    });
+
+    expect((await request("/admin/exams", "GET", undefined, studentCookie)).status).toBe(403);
+    expect((await request(`/admin/exams/${examId}`, "GET", undefined, studentCookie)).status).toBe(403);
+    expect((await request(`/admin/exams/${examId}/latest-version`, "GET", undefined, studentCookie)).status).toBe(403);
+  });
+
   describe("PostgreSQL formal exam lifecycle", () => {
     let fixture!: { examId: string; assignments: Array<{ id: string; studentId: number }>; studentIds: number[]; cookies: string[]; questionSnapshotId: string; lateAssignmentId?: string };
     const emails = ["lifecycle-a@arctester.test", "lifecycle-b@arctester.test", "lifecycle-c@arctester.test", "lifecycle-d@arctester.test", "lifecycle-race@arctester.test"];
@@ -812,17 +858,13 @@ describe("versioned exam management", () => {
   });
 
   it("returns exam attendance and question-level report data", async () => {
-    const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
-    expect(attendance.status).toBe(200);
-    const row = (attendance.json.attendance as Array<{ assignmentId: string; attendanceStatus: string }>).find((item) => item.assignmentId === assignmentId);
-    expect(row?.attendanceStatus).toBe("SUBMITTED");
-
     const report = await request(`/admin/exams/${examId}/report`, "GET", undefined, adminCookie);
     expect(report.status).toBe(200);
     const data = report.json.report as { assigned: number; submitted: number; questions: Array<{ correct: number; responses: number }> };
     expect(data.assigned).toBe(1);
     expect(data.submitted).toBe(1);
     expect(data.questions[0]).toMatchObject({ correct: 1, responses: 1 });
+
     const audit = await request(`/admin/exams/assignments/${assignmentId}/audit`, "GET", undefined, adminCookie);
     expect(audit.status).toBe(200);
     const auditBody = audit.json.audit as { events: Array<{ type: string; actor: { email: string } | null }> };
@@ -830,6 +872,44 @@ describe("versioned exam management", () => {
     expect(auditBody.events.some((event) => event.type === "SUBMITTED" && event.actor?.email === "exam-student@arctester.test")).toBe(true);
     const student = await request(`/admin/exams/${examId}/report`, "GET", undefined, studentCookie);
     expect(student.status).toBe(403);
+
+    const secondStudent = await server.db.user.findUniqueOrThrow({
+      where: { email: "other-student@arctester.test" },
+      select: { id: true },
+    });
+    const notStartedAssignment = await request(
+      `/admin/exams/${examId}/assign`,
+      "POST",
+      { studentIds: [secondStudent.id] },
+      adminCookie,
+    );
+    expect(notStartedAssignment.status).toBe(201);
+    const unstartedId = (notStartedAssignment.json.assignments as Array<{ id: string }>)[0].id;
+
+    const attendance = await request("/admin/exams/attendance", "GET", undefined, adminCookie);
+    expect(attendance.status).toBe(200);
+    const rows = attendance.json.attendance as Array<{
+      assignmentId: string;
+      attendanceStatus: string;
+      connectivity: string;
+      session: unknown;
+      submission: unknown;
+    }>;
+    expect(rows.find((item) => item.assignmentId === assignmentId)?.attendanceStatus).toBe("SUBMITTED");
+    expect(rows.find((item) => item.assignmentId === unstartedId)).toMatchObject({
+      assignmentId: unstartedId,
+      attendanceStatus: "NOT_STARTED",
+      connectivity: "NOT_STARTED",
+      session: null,
+      submission: null,
+    });
+
+    // Keep the shared fixture isolated for later tests that create their own
+    // assignment for this student and exam version.
+    await server.db.studentNotification.deleteMany({
+      where: { userId: secondStudent.id, dedupeKey: `exam-assignment:${unstartedId}` },
+    });
+    await server.db.examAssignment.delete({ where: { id: unstartedId } });
   });
 
   it("shows administrator analytics and blocks student access", async () => {
