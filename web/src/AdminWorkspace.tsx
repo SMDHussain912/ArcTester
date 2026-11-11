@@ -12,6 +12,7 @@ import AdminPaperBuilder, { type AdminPaperDraft, type AdminPaperQuestion, type 
 import AdminQuestionImport, { type AdminImportReport } from "./AdminQuestionImport";
 import AdminOverview from "./AdminOverview";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
+import AdminAttendanceRegister, { type AttendanceRow } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -41,6 +42,11 @@ export default function AdminWorkspace(p:Props){
  const [liveSessionsTotal,setLiveSessionsTotal]=useState(0);
  const [liveSessionsLoading,setLiveSessionsLoading]=useState(false);
  const [liveSessionsUpdatedAt,setLiveSessionsUpdatedAt]=useState<string|null>(null);
+ const [attendanceRows,setAttendanceRows]=useState<AttendanceRow[]>([]);
+ const [attendanceTotal,setAttendanceTotal]=useState(0);
+ const [attendancePage,setAttendancePage]=useState(1);
+ const [attendanceLoading,setAttendanceLoading]=useState(false);
+ const [attendanceUpdatedAt,setAttendanceUpdatedAt]=useState<string|null>(null);
  const [selectedDatasetId,setSelectedDatasetId]=useState("");
  const [trainingModelPrefix,setTrainingModelPrefix]=useState("ecet-readiness");
  const selectedSubject=catalog.find(s=>s.name===subject);
@@ -74,6 +80,7 @@ export default function AdminWorkspace(p:Props){
  async function loadModelLab(){const [d,j]=await Promise.all([api<{datasets:ModelLabDataset[]}>("/admin/model-datasets"),api<{jobs:ModelLabJob[]}>("/admin/model-training-jobs")]);setModelDatasets(d.datasets??[]);setTrainingJobs(j.jobs??[]);if(!selectedDatasetId&&d.datasets?.[0])setSelectedDatasetId(d.datasets[0].id);}
  async function loadReviewQueue(){const r=await api<{submissions:ReviewQueueItem[]}>("/admin/submissions/review-required");setReviewItems(r.submissions??[]);}
  async function loadLiveSessions(){setLiveSessionsLoading(true);try{const r=await api<{sessions:LiveSession[];total:number;serverTime:string}>("/admin/exams/live-sessions?page=1&limit=50&eventLimit=100");setLiveSessions(Array.isArray(r.sessions)?r.sessions:[]);setLiveSessionsTotal(Number.isFinite(r.total)?r.total:0);setLiveSessionsUpdatedAt(r.serverTime||new Date().toISOString());}finally{setLiveSessionsLoading(false);}}
+ async function loadAttendance(nextPage=attendancePage){setAttendanceLoading(true);try{const r=await api<{attendance:AttendanceRow[];total:number;serverTime:string}>(`/admin/exams/attendance?page=${nextPage}&limit=25`);setAttendanceRows(Array.isArray(r.attendance)?r.attendance:[]);setAttendanceTotal(Number.isFinite(r.total)?r.total:0);setAttendancePage(nextPage);setAttendanceUpdatedAt(r.serverTime||new Date().toISOString());}finally{setAttendanceLoading(false);}}
  async function actOnLiveSession(id:string,action:"PAUSE"|"RESUME"|"TERMINATE",reason:string){
   await run(async()=>{
    await api(`/admin/exams/sessions/${encodeURIComponent(id)}/action`,{method:"POST",body:JSON.stringify({action,reason})});
@@ -82,6 +89,7 @@ export default function AdminWorkspace(p:Props){
   });
  }
  useEffect(()=>{if(tab==="model-lab")void loadModelLab().catch(e=>setError(e.message));if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab==="attendance")void loadAttendance(1).catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="live-monitor")return;let active=true;const refresh=()=>{if(active)void loadLiveSessions().catch(e=>setError(e.message));};refresh();const timer=window.setInterval(refresh,15000);return()=>{active=false;window.clearInterval(timer);};},[tab]);
  async function queueTensorflowTraining(){if(!selectedDatasetId)throw new Error("Register a dataset before queueing training.");await run(async()=>{const r=await api<{job:ModelLabJob}>(`/admin/model-datasets/${encodeURIComponent(selectedDatasetId)}/tensorflow-jobs`,{method:"POST",body:JSON.stringify({modelId:`${trainingModelPrefix}-tensorflow`,seed:42,epochs:80,batchSize:32})});setNotice(`TensorFlow.js job ${r.job.id} queued.`);await loadModelLab();});}
  async function releaseReviewItem(id:string){await run(async()=>{await api(`/admin/submissions/${encodeURIComponent(id)}/release`,{method:"POST",body:JSON.stringify({})});await loadReviewQueue();setNotice("Submission approved and released.");});}
@@ -103,7 +111,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["model-lab","Model lab","⌁"]];
+ const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["model-lab","Model lab","⌁"]];
  return <div className="admin-shell">
   <aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
    <div className="admin-nav-label">WORKSPACE</div>{nav.map(([id,label,icon])=><button key={id} aria-label={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>setTab(id)}><span>{icon}</span>{label}{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}
@@ -122,6 +130,16 @@ export default function AdminWorkspace(p:Props){
     onRefresh={() => void loadLiveSessions()}
     busy={busy}
     onSessionAction={(id,action,reason) => actOnLiveSession(id,action,reason)}
+   />}
+   {tab==="attendance"&&<AdminAttendanceRegister
+    rows={attendanceRows}
+    total={attendanceTotal}
+    page={attendancePage}
+    pageSize={25}
+    loading={attendanceLoading}
+    updatedAt={attendanceUpdatedAt}
+    onPageChange={(page) => void loadAttendance(page).catch(e=>setError(e.message))}
+    onRefresh={() => void loadAttendance(attendancePage).catch(e=>setError(e.message))}
    />}
    {tab==="review-queue"&&<AdminReviewQueue
     items={reviewItems}
