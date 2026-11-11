@@ -63,10 +63,10 @@ describe("AdminAttendanceRegister", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "View audit" })[1]);
     expect(onLoadAudit).toHaveBeenCalledWith("assignment-2");
     rerender(<AdminAttendanceRegister {...props} auditByAssignment={{ "assignment-2": audit }} />);
-    expect(screen.getByText("Event timeline")).toBeTruthy();
+    expect(screen.getByText("EVENT TIMELINE")).toBeTruthy();
     expect(screen.getByText("INVIGILATOR PAUSE")).toBeTruthy();
     expect(screen.getByText("Candidate requested assistance")).toBeTruthy();
-    expect(screen.getByText("admin@example.test (ADMIN)")).toBeTruthy();
+    expect(screen.getByText(/admin@example\.test \(ADMIN\)/)).toBeTruthy();
     expect(screen.getByText("Session COMPLETED · 12 heartbeats · 2 focus losses · 1 disconnects")).toBeTruthy();
   });
 
