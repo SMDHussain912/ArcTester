@@ -112,6 +112,69 @@ describe("durable TensorFlow training jobs", () => {
     expect(await runNextModelTrainingJob(server.db, "test-worker-two")).toBe(false);
   });
 
+  it("allows only one worker to claim and finalize a queued job under concurrent polling", async () => {
+    const queued = await request(`/admin/model-datasets/${datasetId}/tensorflow-jobs`, "POST", {
+      modelId: "concurrent-worker-claim-fixture",
+      epochs: 1,
+      batchSize: 16,
+    });
+    expect(queued.status).toBe(202);
+    const jobId = queued.body.job.id;
+
+    // Simulate two API instances polling the same durable queue at once.
+    // The conditional updateMany claim must elect exactly one worker.
+    const claims = await Promise.all([
+      runNextModelTrainingJob(server.db, "test-worker-concurrent-one"),
+      runNextModelTrainingJob(server.db, "test-worker-concurrent-two"),
+    ]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+
+    const status = await request(`/admin/model-training-jobs/${jobId}`);
+    expect(status.body.job).toMatchObject({
+      id: jobId,
+      status: "SUCCEEDED",
+      progress: 100,
+      errorMessage: "",
+    });
+    expect(await server.db.modelRegistryAudit.count({
+      where: { modelId: "concurrent-worker-claim-fixture", action: { in: ["TRAINED_TENSORFLOW", "TENSORFLOW_CANDIDATE_REJECTED"] } },
+    })).toBe(1);
+    expect(await server.db.modelTrainingJob.count({
+      where: { id: jobId, status: "RUNNING" },
+    })).toBe(0);
+  });
+
+  it("reclaims an expired worker lease and completes the interrupted job", async () => {
+    const stale = await server.db.modelTrainingJob.create({
+      data: {
+        datasetId,
+        createdById: (await server.db.user.findFirstOrThrow({ where: { email: "training-job-admin@example.com" } })).id,
+        modelId: "expired-lease-recovery-fixture",
+        epochs: 1,
+        batchSize: 16,
+        status: "RUNNING",
+        progress: 35,
+        workerId: "worker-that-crashed",
+        leaseExpiresAt: new Date(Date.now() - 1_000),
+        startedAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    expect(await runNextModelTrainingJob(server.db, "replacement-worker")).toBe(true);
+
+    const recovered = await server.db.modelTrainingJob.findUniqueOrThrow({ where: { id: stale.id } });
+    expect(recovered).toMatchObject({
+      status: "SUCCEEDED",
+      progress: 100,
+      workerId: "replacement-worker",
+      errorMessage: "",
+      leaseExpiresAt: null,
+    });
+    expect(await server.db.modelRegistryAudit.count({
+      where: { modelId: "expired-lease-recovery-fixture", action: { in: ["TRAINED_TENSORFLOW", "TENSORFLOW_CANDIDATE_REJECTED"] } },
+    })).toBe(1);
+  });
+
   it("rejects invalid datasets before creating a queued job", async () => {
     const invalid = await server.db.modelDataset.create({
       data: {
