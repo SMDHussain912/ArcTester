@@ -3,7 +3,7 @@
 Offline-first mock-test platform for AP ECET CSE personal study. Portfolio-quality monorepo.
 
 - `/web` — React + TypeScript + Vite (browser application)
-- `/mobile` — Expo + React Native + TypeScript (Android/iOS)
+- `/mobile` — Expo + React Native + TypeScript (Android/iOS; Android debug APK build is automated)
 - `/desktop` — Electron (Windows installer)
 - `/api` — Node.js + TypeScript + Express + Prisma + PostgreSQL + Zod
 - Tests: Vitest · Lint/format: ESLint + Prettier
@@ -187,6 +187,7 @@ For a native app, no cookie is needed: use `POST /auth/token` and send
 | `npm run dev:mobile`   | Expo development server |
 | `npm run dev:desktop`  | Electron desktop shell |
 | `npm run build:mobile` | Export Expo app bundles |
+| `EXPO_PUBLIC_API_URL=https://YOUR-API npm run build:mobile:android` | Build a standalone Android APK signed with the debug keystore (JDK 17 + Android SDK required) |
 | `npm run build:desktop:win` | Package Windows installer (after web build) |
 
 Question bank (run from the repo root):
