@@ -252,3 +252,24 @@
   .student-notification-banner .row { flex-wrap: wrap; }
   .student-notification-banner .row button { flex: 1; }
 }
+
+
+/* Student dashboard workspace cards: mirror admin overview hierarchy with student-safe actions. */
+.student-dashboard-home{display:grid;gap:22px}
+.student-dashboard-actions{display:grid;gap:16px}
+.student-dashboard-section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
+.student-dashboard-section-heading h2{font-size:21px;letter-spacing:-.5px;margin:4px 0 0}
+.student-dashboard-section-heading>p{font-size:12px;margin:0}
+.student-dashboard-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.student-dashboard-action{position:relative;display:grid;grid-template-columns:42px 1fr;grid-template-rows:auto auto 1fr auto;align-items:start;gap:6px 12px;min-width:0;padding:18px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);text-align:left;box-shadow:var(--shadow);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.student-dashboard-action:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 12px 28px rgba(25,76,134,.1)}
+.student-dashboard-action:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.student-dashboard-action-icon{grid-column:1;grid-row:1/4;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:21px;font-weight:800}
+.student-dashboard-action-eyebrow{grid-column:2;color:var(--muted);font-size:9px;font-weight:850;letter-spacing:1px}
+.student-dashboard-action strong{grid-column:2;font-size:15px;letter-spacing:-.2px}
+.student-dashboard-action-description{grid-column:1/-1;min-height:36px;color:var(--muted);font-size:11px;line-height:1.6}
+.student-dashboard-action-count{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--border);color:var(--accent);font-size:10px;font-weight:800}
+.student-dashboard-action-arrow{position:absolute;top:20px;right:18px;color:var(--muted);font-size:17px}
+@media(max-width:900px){.student-dashboard-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.student-dashboard-section-heading{align-items:flex-start;flex-direction:column}.student-dashboard-action-grid{grid-template-columns:1fr}.student-dashboard-action{padding:16px}.student-dashboard-action-description{min-height:0}}
+@media(prefers-reduced-motion:reduce){.student-dashboard-action{transition:none}.student-dashboard-action:hover{transform:none}}
