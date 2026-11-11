@@ -22,9 +22,9 @@ describe("StudentNavigation", () => {
 
     const navigation = screen.getByRole("navigation", { name: "Student navigation" });
     expect(within(navigation).getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
-    expect(within(navigation).getByRole("button", { name: "Assigned exams (3)" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Announcements (2)" })).toBeEnabled();
-    expect(within(navigation).getByRole("button", { name: "Notifications (4)" })).toBeEnabled();
+    expect(within(navigation).getByRole("button", { name: "Assigned exams 3" })).toBeEnabled();
+    expect(within(navigation).getByRole("button", { name: "Announcements 2" })).toBeEnabled();
+    expect(within(navigation).getByRole("button", { name: "Notifications 4" })).toBeEnabled();
     expect(screen.getByText("student@example.com")).toBeInTheDocument();
   });
 
