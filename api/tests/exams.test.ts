@@ -1160,8 +1160,12 @@ describe("versioned exam management", () => {
     const heldResult = await request(`/exams/assignments/${offlineAssignment.id}/result`, "GET", undefined, secondStudentCookie);
     expect(heldResult.status).toBe(200);
     expect(heldResult.json.result).toMatchObject({ score: null, maximumScore: null, questions: [] });
-    const released = await request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie);
-    expect(released.status).toBe(200);
+    const concurrentReleases = await Promise.all([
+      request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie),
+      request(`/admin/submissions/${submission.id}/release`, "POST", {}, adminCookie),
+    ]);
+    expect(concurrentReleases.map((response) => response.status)).toEqual([200, 200]);
+    expect(concurrentReleases.filter((response) => response.json.alreadyReleased === true)).toHaveLength(1);
     const releasedNotices = await server.db.studentNotification.findMany({
       where: { userId: secondStudent.id, dedupeKey: `exam-review-release:${submission.id}` },
     });
