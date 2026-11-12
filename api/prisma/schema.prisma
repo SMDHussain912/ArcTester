@@ -493,3 +493,25 @@ model ModelTrainingJob {
   @@index([createdById, createdAt])
   @@index([datasetId, createdAt])
 }
+
+model IntegrityFlag {
+  id              String   @id @default(cuid())
+  assignmentId    String
+  studentIdA      Int
+  studentIdB      Int
+  studentEmailA   String
+  studentEmailB   String
+  sharedWrong     Int
+  totalWrongA     Int
+  totalWrongB     Int
+  threshold       Int
+  sameIp          Boolean
+  fastAnswers     Boolean
+  flaggedAt       DateTime @default(now())
+  dismissed       Boolean  @default(false)
+  dismissedAt     DateTime?
+  dismissedBy     Int?
+
+  @@index([assignmentId])
+  @@index([studentIdA, studentIdB])
+}

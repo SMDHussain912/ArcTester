@@ -10,6 +10,7 @@ import {
   QUESTION_ANALYTICS_WEAK_ACCURACY,
 } from "./analytics.js";
 import { parseOptions } from "./questionRoutes.js";
+import { computeSimilarityFlags } from "./similarity.js";
 
 // A deadline-triggered client submit may arrive up to 10 seconds after the
 // authoritative deadline because of request scheduling and network transit.
@@ -832,6 +833,39 @@ export function examRouter(db: PrismaClient): Router {
       };
       const digest = createHash("sha256").update(JSON.stringify(packageBody)).digest("hex");
       res.json({ ok: true, package: packageBody, sha256: digest });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get integrity flags for an assignment (admin only)
+  router.get("/exams/assignments/:id/integrity-flags", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const flags = await computeSimilarityFlags(db, req.params.id);
+      res.json({ ok: true, flags });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Dismiss an integrity flag (admin only)
+  router.post("/exams/assignments/:id/integrity-flags/:flagId/dismiss", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const flag = await db.integrityFlag.findUnique({
+        where: { id: req.params.flagId },
+      });
+      if (!flag) return next(notFound("Integrity flag not found"));
+      if (flag.assignmentId !== req.params.id) return next(notFound("Flag not found for this assignment"));
+
+      await db.examIntegrityFlag.update({
+        where: { id: req.params.flagId },
+        data: {
+          dismissed: true,
+          dismissedAt: new Date(),
+          dismissedBy: (req as AuthedRequest).user!.id,
+        },
+      });
+      res.json({ ok: true });
     } catch (error) {
       next(error);
     }

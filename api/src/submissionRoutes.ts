@@ -551,7 +551,7 @@ export function submissionRouter(db: PrismaClient): Router {
     }
   });
 
-  router.get("/exams/assignments/:id/result", requireAuth, async (req: AuthedRequest, res, next) => {
+  async function reviewAssignedExam(assignmentId: string): Promise<void> {
     try {
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
@@ -607,4 +607,5 @@ export function submissionRouter(db: PrismaClient): Router {
   });
 
   return router;
+}
 }
