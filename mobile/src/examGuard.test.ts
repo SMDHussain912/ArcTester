@@ -67,10 +67,25 @@ afterEach(() => {
 });
 
 describe("examGuard", () => {
+  it("starts guard: prevents screen capture and starts native module", async () => {
+    const { startExamGuard } = await import("./examGuard");
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1", usePinning: true });
+    expect(mockStart).toHaveBeenCalledWith(true);
+  });
+
   it("starts guard without pinning by default", async () => {
     const { startExamGuard } = await import("./examGuard");
     await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
     expect(mockStart).toHaveBeenCalledWith(false);
+  });
+
+  it("stops guard: allows screen capture, stops native module, clears storage", async () => {
+    const { startExamGuard, stopExamGuard } = await import("./examGuard");
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    await stopExamGuard();
+    expect(mockStop).toHaveBeenCalled();
+    expect(mockRemoveItem).toHaveBeenCalledWith("arctester-exam-in-progress");
+    expect(mockRemoveItem).toHaveBeenCalledWith("arctester-active-assignment");
   });
 
   it("flushes queued violations to the server", async () => {
@@ -83,6 +98,15 @@ describe("examGuard", () => {
     expect(capturedApiCalls[0].body.events.length).toBe(2);
     expect(capturedApiCalls[0].body.events[0].type).toBe("TAB_HIDDEN");
     expect(capturedApiCalls[0].body.events[1].type).toBe("WINDOW_BLUR");
+  });
+
+  it("reports APP_REOPENED if an exam was in progress", async () => {
+    const { reportAppReopened } = await import("./examGuard");
+    mockAsyncStorage["arctester-exam-in-progress"] = "1";
+    await reportAppReopened({ api: fakeApi, assignmentId: "assign-1" });
+    expect(capturedApiCalls.length).toBe(1);
+    expect(capturedApiCalls[0].body.events[0].type).toBe("APP_REOPENED");
+    expect(mockRemoveItem).toHaveBeenCalledWith("arctester-exam-in-progress");
   });
 
   it("does not report APP_REOPENED if no exam was in progress", async () => {
