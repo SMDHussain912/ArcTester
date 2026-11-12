@@ -26,7 +26,14 @@ import {
   type PendingSubmission,
 } from "./examStore";
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const API_URL = (() => {
+  const url = process.env.EXPO_PUBLIC_API_URL;
+  const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : true;
+  if (isDev) return (url || "http://localhost:4000").replace(/\/+$/, "");
+  if (!url) throw new Error("EXPO_PUBLIC_API_URL is required for release builds. Set it to an https URL.");
+  if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
+  return url.replace(/\/+$/, "");
+})();
 
 type Assignment = {
   id: string;

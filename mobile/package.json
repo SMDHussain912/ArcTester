@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build:android:release": "cd android && ./gradlew assembleRelease --no-daemon",
     "prebuild:android": "CI=1 expo prebuild --platform android --no-install"
   },
@@ -27,7 +28,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^2.0.5"
   },
   "overrides": {
     "expo-font": "14.0.12"

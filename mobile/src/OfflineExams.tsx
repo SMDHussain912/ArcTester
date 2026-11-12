@@ -14,6 +14,7 @@ import {
   type OfflineExamPackage,
 } from "./offlineStore";
 import { syncPendingSubmissions } from "./offlineSync";
+import StudentAssignmentResult from "./StudentAssignmentResult";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 
@@ -68,6 +69,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [syncMessage, setSyncMessage] = useState("");
   const [reduceMotion, setReduceMotion] = useState(false);
   const [error, setError] = useState("");
+  const [viewingResultId, setViewingResultId] = useState<string | null>(null);
   const autoSubmitStarted = useRef(false);
   const syncLock = useRef(false);
   const answerSaveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -433,6 +435,22 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     );
   }
 
+  if (viewingResultId) {
+    return (
+      <View style={styles.section}>
+        <TouchableOpacity onPress={() => setViewingResultId(null)} style={styles.linkRow}>
+          <Text style={styles.link}>‹ Back to assigned exams</Text>
+        </TouchableOpacity>
+        <StudentAssignmentResult
+          assignmentId={viewingResultId}
+          api={apiRef.current}
+          token={token}
+          onBack={() => setViewingResultId(null)}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.section}>
       <View style={styles.headerRow}>
@@ -460,9 +478,18 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
                 {assignment.version}
               </Text>
               {assignment.submission ? (
-                <Text style={styles.submitted}>
-                  Submitted · {assignment.submission.score}/{assignment.submission.maximumScore}
-                </Text>
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.submitted}>
+                    Submitted · {assignment.submission.score == null ? "—" : assignment.submission.score}/{assignment.submission.maximumScore ?? "—"}
+                  </Text>
+                  <TouchableOpacity
+                    disabled={busyId !== null}
+                    onPress={() => void setViewingResultId(assignment.id)}
+                    style={[styles.primarySmall, { alignSelf: "flex-start" }]}
+                  >
+                    <Text style={styles.primaryText}>View result</Text>
+                  </TouchableOpacity>
+                </View>
               ) : (
                 <View style={styles.actions}>
                   <TouchableOpacity
@@ -591,4 +618,5 @@ const styles = StyleSheet.create({
   assignmentTitle: { color: "#172033", fontWeight: "800", fontSize: 15 },
   submitted: { color: "#167647", fontWeight: "700", marginTop: 12 },
   error: { color: "#b42318", marginTop: 12, lineHeight: 20 },
+  linkRow: { marginTop: 8, alignSelf: "flex-start" },
 });

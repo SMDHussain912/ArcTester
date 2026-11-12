@@ -19,7 +19,14 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const API_URL = (() => {
+  const url = process.env.EXPO_PUBLIC_API_URL;
+  const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : true;
+  if (isDev) return (url || "http://localhost:4000").replace(/\/+$/, "");
+  if (!url) throw new Error("EXPO_PUBLIC_API_URL is required for release builds. Set it to an https URL.");
+  if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
+  return url.replace(/\/+$/, "");
+})();
 type User = { id: number; email: string };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
 type Announcement = {

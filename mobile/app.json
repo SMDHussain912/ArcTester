@@ -6,19 +6,27 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "arctester",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111827"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.arctester.app"
     },
     "android": {
       "package": "com.arctester.app",
+      "versionCode": 1,
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#111827"
       }
     },
     "plugins": ["expo-secure-store"],
     "extra": {
-      "apiUrl": "http://localhost:4000"
+      "apiUrl": ""
     }
   }
 }
