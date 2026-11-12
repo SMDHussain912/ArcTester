@@ -1,4 +1,10 @@
 import * as tf from "@tensorflow/tfjs";
+
+// @tensorflow/tfjs-layers ships only compiled JS (no .d.ts) in this install, so
+// the layers/initializers/sequential surfaces are absent from the tfjs index types.
+// The trainer only calls them at runtime; cast to `any` for those surfaces.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tfAny = tf as any;
 import {
   evaluateLinearRegression,
   fitLinearRegression,
@@ -128,30 +134,41 @@ export async function trainTensorflowRegressionCandidate(
   const baselineModel = fitLinearRegression(train);
   const baseline = evaluateLinearRegression(baselineModel, test);
 
-  await tf.setBackend("cpu");
-  await tf.ready();
-  const model = tf.sequential({
+  await tfAny.
+setBackend("cpu");
+  await tfAny.
+ready();
+  const model = tfAny.
+sequential({
     layers: [
-      tf.layers.dense({
+      tfAny.
+layers.dense({
         inputShape: [featureCount],
         units: 16,
         activation: "relu",
-        kernelInitializer: tf.initializers.glorotUniform({ seed }),
+        kernelInitializer: tfAny.
+initializers.glorotUniform({ seed }),
       }),
-      tf.layers.dense({
+      tfAny.
+layers.dense({
         units: 1,
         activation: "linear",
-        kernelInitializer: tf.initializers.glorotUniform({ seed: seed + 1 }),
+        kernelInitializer: tfAny.
+initializers.glorotUniform({ seed: seed + 1 }),
       }),
     ],
   });
-  const trainFeatures = tf.tensor2d(normalizedTrain, [normalizedTrain.length, featureCount]);
-  const trainTargets = tf.tensor2d(train.map((sample) => sample.target), [train.length, 1]);
-  const testFeatures = tf.tensor2d(normalizedTest, [normalizedTest.length, featureCount]);
+  const trainFeatures = tfAny.
+tensor2d(normalizedTrain, [normalizedTrain.length, featureCount]);
+  const trainTargets = tfAny.
+tensor2d(train.map((sample) => sample.target), [train.length, 1]);
+  const testFeatures = tfAny.
+tensor2d(normalizedTest, [normalizedTest.length, featureCount]);
 
   try {
     model.compile({
-      optimizer: tf.train.adam(0.01),
+      optimizer: tfAny.
+train.adam(0.01),
       loss: "meanSquaredError",
       metrics: ["mae"],
     });
@@ -161,16 +178,17 @@ export async function trainTensorflowRegressionCandidate(
       shuffle: false,
       verbose: 0,
       callbacks: {
-        onEpochEnd: async (epoch) => {
+        onEpochEnd: async (epoch: number) => {
           await options.onEpochEnd?.(epoch);
         },
       },
     });
-    const output = model.predict(testFeatures) as tf.Tensor;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const output = model.predict(testFeatures) as any;
     let candidate: RegressionMetrics;
     try {
       const predictions = Array.from(await output.data());
-      candidate = metricsForPredictions(test.map((sample) => sample.target), predictions);
+      candidate = metricsForPredictions(test.map((sample) => sample.target), predictions as number[]);
     } finally {
       output.dispose();
     }
@@ -186,13 +204,16 @@ export async function trainTensorflowRegressionCandidate(
       };
     }
 
-    let savedArtifacts: tf.io.ModelArtifacts | undefined;
-    await model.save(tf.io.withSaveHandler(async (artifacts) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let savedArtifacts: any | undefined;
+    await model.save(tfAny.io.withSaveHandler(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (artifacts: any) => {
       savedArtifacts = artifacts;
       const topologyBytes = Buffer.byteLength(JSON.stringify(artifacts.modelTopology ?? {}), "utf8");
       const specsBytes = Buffer.byteLength(JSON.stringify(artifacts.weightSpecs ?? []), "utf8");
       const weightBytes = Array.isArray(artifacts.weightData)
-        ? artifacts.weightData.reduce((sum, buffer) => sum + buffer.byteLength, 0)
+        ? artifacts.weightData.reduce((sum: number, buffer: { byteLength: number }) => sum + buffer.byteLength, 0)
         : artifacts.weightData?.byteLength ?? 0;
       return {
         modelArtifactsInfo: {

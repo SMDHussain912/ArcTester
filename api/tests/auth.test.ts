@@ -134,6 +134,37 @@ describe("auth", () => {
     expect((res.json as { error: string }).error).toBe("Invalid email or password.");
   });
 
+  it("throttles failures per account: one account's failures do not lock out another", async () => {
+    const bobToken = await issueTestInvitation(server.db, "bob@example.com");
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      email: "bob@example.com",
+      password: "secret1234",
+      invitationToken: bobToken,
+    });
+
+    // 8 failed attempts against alice lock alice's account.
+    for (let i = 0; i < 8; i += 1) {
+      await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+        email: "alice@example.com",
+        password: "wrongpassword",
+      });
+    }
+    const aliceBlocked = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+      email: "alice@example.com",
+      password: "wrongpassword",
+    });
+    expect(aliceBlocked.status).toBe(429);
+    expect((aliceBlocked.json as { error: string }).error).toContain("Too many failed sign-in attempts");
+
+    // bob, a different account, can still sign in (not locked out by alice).
+    const bobLogin = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+      email: "bob@example.com",
+      password: "secret1234",
+    });
+    expect(bobLogin.status).toBe(200);
+    expect((bobLogin.json as { ok: boolean }).ok).toBe(true);
+  });
+
   it("requires auth for protected test routes (403 without cookie)", async () => {
     // Clear cookie to simulate signed-out client
     cookieJar.delete("ecet_session");

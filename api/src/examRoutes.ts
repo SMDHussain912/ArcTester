@@ -24,7 +24,7 @@ const CreateExamSchema = z.object({
   instructions: z.string().trim().max(5000).default(""),
   durationMinutes: z.number().int().min(1).max(600),
   shuffleQuestions: z.boolean().default(false),
-  shuffleOptions: z.boolean().default(false),
+  shuffleOptions: z.boolean().default(true),
   subjectRules: z.record(z.string(), z.object({
     marks: z.number().finite().min(0).max(100),
     negativeMarks: z.number().finite().min(0).max(100),
@@ -107,6 +107,27 @@ function parseOptions(raw: string): string[] {
     throw new Error("A question in the bank has invalid options.");
   }
   return value;
+}
+
+/** Deterministic, seeded per-assignment question order. Stable across refreshes
+ * for the same assignment because it derives every random draw from the
+ * assignment id plus a monotonic counter. */
+function seededRandom(seed: string) {
+  let counter = 0;
+  return (): number => {
+    counter += 1;
+    const digest = createHash("sha256").update(`${seed}:${counter}`).digest("hex");
+    return parseInt(digest.slice(0, 8), 16) / 0xffffffff;
+  };
+}
+
+function fisherYatesShuffle<T>(items: readonly T[], random: () => number): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
 
 export function examRouter(db: PrismaClient): Router {
@@ -723,6 +744,89 @@ export function examRouter(db: PrismaClient): Router {
         status: "GRADED",
         ...(released === "already-released" ? { alreadyReleased: true } : {}),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  const ReleaseBulkSchema = z.object({
+    submissionIds: z.array(z.string().min(1)).min(1).max(100),
+  });
+
+  /** Release many held REVIEW_REQUIRED submissions in one audited, transactional action. */
+  router.post("/admin/submissions/release-bulk", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const { submissionIds } = ReleaseBulkSchema.parse(req.body);
+      const now = new Date();
+      const results: Array<{
+        submissionId: string;
+        status: "released" | "already-released" | "not-found" | "not-awaiting-review";
+      }> = [];
+      for (const submissionId of submissionIds) {
+        const submission = await db.examSubmission.findUnique({
+          where: { id: submissionId },
+          select: {
+            id: true,
+            status: true,
+            assignment: {
+              select: {
+                id: true,
+                studentId: true,
+                examVersion: { select: { exam: { select: { title: true } } } },
+              },
+            },
+          },
+        });
+        if (!submission) {
+          results.push({ submissionId, status: "not-found" });
+          continue;
+        }
+        if (submission.status !== "REVIEW_REQUIRED") {
+          results.push({
+            submissionId,
+            status: submission.status === "GRADED" ? "already-released" : "not-awaiting-review",
+          });
+          continue;
+        }
+        await db.$transaction(async (tx) => {
+          const changed = await tx.examSubmission.updateMany({
+            where: { id: submissionId, status: "REVIEW_REQUIRED" },
+            data: { status: "GRADED" },
+          });
+          if (changed.count !== 1) {
+            const current = await tx.examSubmission.findUnique({
+              where: { id: submissionId },
+              select: { status: true },
+            });
+            results.push({
+              submissionId,
+              status: current?.status === "GRADED" ? "already-released" : "not-awaiting-review",
+            });
+            return;
+          }
+          await tx.studentNotification.updateMany({
+            where: {
+              userId: submission.assignment.studentId,
+              dedupeKey: `exam-submission:${submissionId}`,
+              kind: "EXAM_REVIEW",
+              readAt: null,
+            },
+            data: { readAt: now },
+          });
+          await tx.studentNotification.create({
+            data: {
+              userId: submission.assignment.studentId,
+              kind: "EXAM_RESULT",
+              title: "Exam result available",
+              message: `Your submission for ${submission.assignment.examVersion.exam.title} has been reviewed and graded. Open the result to see your score.`,
+              href: `/assignments/${submission.assignment.id}/result`,
+              dedupeKey: `exam-review-release:${submissionId}`,
+            },
+          });
+          results.push({ submissionId, status: "released" });
+        });
+      }
+      res.json({ ok: true, results });
     } catch (error) {
       next(error);
     }
@@ -1603,8 +1707,10 @@ export function examRouter(db: PrismaClient): Router {
       if (assignment.dueAt && assignment.dueAt.getTime() < now) {
         return next(forbidden("The exam deadline has passed."));
       }
-      const orderedQuestions = [...assignment.examVersion.questions];
-      if (assignment.examVersion.shuffleQuestions) orderedQuestions.sort(() => Math.random() - 0.5);
+      let orderedQuestions = [...assignment.examVersion.questions];
+      if (assignment.examVersion.shuffleQuestions) {
+        orderedQuestions = fisherYatesShuffle(orderedQuestions, seededRandom(assignment.id));
+      }
       const packageBody = {
         assignmentId: assignment.id,
         examId: assignment.examVersion.exam.id,

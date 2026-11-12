@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { hashPassword } from "../src/auth.js";
 import { buildApp } from "../src/index.js";
 import { sessionCookie, startTestServer, type TestServer } from "./server.js";
@@ -1198,6 +1199,78 @@ describe("versioned exam management", () => {
       include: { events: true },
     });
     expect(session.events.some((event) => event.type === "OFFLINE_SESSION_RECONCILED")).toBe(true);
+  });
+
+  it("releases many held submissions in one audited bulk action", async () => {
+    const question = await server.db.question.findFirstOrThrow();
+    const created = await request(
+      "/admin/exams",
+      "POST",
+      {
+        title: "Bulk Release Test",
+        description: "",
+        instructions: "",
+        durationMinutes: 45,
+        shuffleQuestions: false,
+        shuffleOptions: false,
+        questions: [{ questionId: question.id, marks: 2, negativeMarks: 0 }],
+      },
+      adminCookie
+    );
+    expect(created.status).toBe(201);
+    const exam = created.json.exam as { id: string };
+    const published = await request(`/admin/exams/${exam.id}/publish`, "POST", {}, adminCookie);
+    expect(published.status).toBe(200);
+
+    const heldSubmissionIds: string[] = [];
+    for (const email of ["exam-student@arctester.test", "other-student@arctester.test"]) {
+      const student = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+      const assigned = await request(
+        `/admin/exams/${exam.id}/assign`,
+        "POST",
+        { studentIds: [student.id] },
+        adminCookie
+      );
+      expect([200, 201].includes(assigned.status)).toBe(true);
+      const assignment = await server.db.examAssignment.findFirstOrThrow({
+        where: { studentId: student.id, examVersion: { examId: exam.id } },
+      });
+      const versionQuestion = await server.db.examVersionQuestion.findFirstOrThrow({
+        where: { examVersionId: assignment.examVersionId },
+      });
+      const cookie = await loginExistingSession(email);
+      const submitted = await request(
+        `/exams/assignments/${assignment.id}/submission`,
+        "POST",
+        {
+          attemptUuid: randomUUID(),
+          startedAt: new Date().toISOString(),
+          submittedAt: new Date().toISOString(),
+          answers: [{ examQuestionId: versionQuestion.id, selectedIndex: null }],
+        },
+        cookie
+      );
+      expect(submitted.status).toBe(201);
+      heldSubmissionIds.push((submitted.json.submission as { id: string }).id);
+    }
+
+    const bulk = await request("/admin/submissions/release-bulk", "POST", { submissionIds: heldSubmissionIds }, adminCookie);
+    expect(bulk.status).toBe(200);
+    expect(Array.isArray(bulk.json.results)).toBe(true);
+    expect(bulk.json.results.map((result: { status: string }) => result.status)).toEqual([
+      "released",
+      "released",
+    ]);
+
+    const remaining = await server.db.examSubmission.count({ where: { status: "REVIEW_REQUIRED" } });
+    expect(remaining).toBe(0);
+
+    const again = await request("/admin/submissions/release-bulk", "POST", { submissionIds: heldSubmissionIds }, adminCookie);
+    expect(again.status).toBe(200);
+    expect(again.json.results.map((result: { status: string }) => result.status)).toEqual([
+      "already-released",
+      "already-released",
+    ]);
   });
 
   it("rejects invalid offline answers without creating a session", async () => {

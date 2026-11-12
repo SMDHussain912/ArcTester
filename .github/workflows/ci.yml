@@ -49,6 +49,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run production dependency audit (high severity gate)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
 

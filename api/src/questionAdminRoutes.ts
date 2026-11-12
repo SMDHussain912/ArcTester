@@ -1,4 +1,5 @@
 import { Router } from "express";
+import express from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
@@ -140,7 +141,7 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/admin/questions/import", async (req, res, next) => {
+  router.post("/admin/questions/import", express.json({ limit: "50mb" }), async (req, res, next) => {
     try {
       const body = z.object({ format: z.enum(["csv", "json"]), content: z.string().min(1).max(8_000_000) }).parse(req.body);
       let payload: unknown;
