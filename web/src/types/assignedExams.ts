@@ -24,6 +24,7 @@ export type AssignedExamPackage = {
   version: number;
   instructions: string;
   durationMinutes: number;
+  integrityLevel: string;
   dueAt: string | null;
   questions: AssignedExamQuestion[];
 };

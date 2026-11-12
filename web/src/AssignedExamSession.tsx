@@ -1,4 +1,7 @@
 import type { AssignedExamPackage } from "./types/assignedExams";
+import { useExamIntegrity } from "./useExamIntegrity";
+import IntegrityOverlay from "./IntegrityOverlay";
+import ExamWatermark from "./ExamWatermark";
 
 export interface AssignedExamSessionProps {
   package: AssignedExamPackage | null;
@@ -10,15 +13,36 @@ export interface AssignedExamSessionProps {
   error: string | null;
   selectAssignedAnswer: (questionId: string, selectedIndex: number) => void;
   submitAssignedExam: (force?: boolean) => Promise<void>;
+  studentName?: string | null;
+  studentId?: string | null;
 }
 
-export default function AssignedExamSession({ package: activePackage, answers, saveStatus, paused, remainingSeconds, busy, error, selectAssignedAnswer, submitAssignedExam }: AssignedExamSessionProps) {
+export default function AssignedExamSession({ package: activePackage, answers, saveStatus, paused, remainingSeconds, busy, error, selectAssignedAnswer, submitAssignedExam, studentName, studentId }: AssignedExamSessionProps) {
   if (!activePackage) return null;
+
+  const integrityLevel = (activePackage.integrityLevel === "OFF" || activePackage.integrityLevel === "BASIC" || activePackage.integrityLevel === "STRICT")
+    ? activePackage.integrityLevel
+    : "OFF";
+  const integrity = useExamIntegrity({
+    assignmentId: activePackage.assignmentId,
+    integrityLevel,
+  });
 
   const clock = `${Math.floor(remainingSeconds / 60).toString().padStart(2, "0")}:${(remainingSeconds % 60).toString().padStart(2, "0")}`;
 
   return (
     <section className="assigned-exam-session">
+      {integrity.flagged || integrity.warn ? (
+        <IntegrityOverlay
+          visible={integrity.flagged || integrity.warn}
+          onReturnToFullscreen={() => void integrity.requestFullscreen()}
+          violationCount={integrity.violationCount}
+          maxViolations={integrity.maxViolations}
+          warn={integrity.warn}
+          flagged={integrity.flagged}
+        />
+      ) : null}
+      <ExamWatermark studentName={studentName} studentId={studentId} enabled={integrityLevel !== "OFF"} />
       <div className="page-heading">
         <div>
           <p className="eyebrow">OFFICIAL ASSIGNED EXAM · VERSION {activePackage.version}</p>

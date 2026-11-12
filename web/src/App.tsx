@@ -549,6 +549,8 @@ export default function App() {
             error={exam.error}
             selectAssignedAnswer={exam.selectAssignedAnswer}
             submitAssignedExam={exam.submitAssignedExam}
+            studentName={user?.email ?? null}
+            studentId={String(user?.id ?? null)}
           />
         ) : activePage === "practice" && test ? (
           <StudentPracticeSession

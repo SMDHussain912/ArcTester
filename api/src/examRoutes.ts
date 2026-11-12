@@ -808,6 +808,7 @@ export function examRouter(db: PrismaClient): Router {
         version: assignment.examVersion.version,
         instructions: assignment.examVersion.instructions,
         durationMinutes: assignment.examVersion.durationMinutes,
+        integrityLevel: assignment.examVersion.integrityLevel,
         availableFrom: assignment.availableFrom,
         dueAt: assignment.dueAt,
         serverTime: new Date(now).toISOString(),
