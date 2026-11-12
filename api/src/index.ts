@@ -6,6 +6,9 @@ import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
+import { questionRouter } from "./questionRoutes.js";
+import { sessionRouter } from "./sessionRoutes.js";
+import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
 import { modelRegistryRouter } from "./modelRoutes.js";
 import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
@@ -128,7 +131,12 @@ export function buildApp(database: PrismaClient = db): express.Express {
 
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
+  // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
+  // and /admin/exams/attendance are matched before the /admin/exams/:id param route.
+  app.use(sessionRouter(database));
   app.use(examRouter(database));
+  app.use(questionRouter(database));
+  app.use(submissionRouter(database));
   app.use(questionAdminRouter(database));
   app.use(modelRegistryRouter(database));
   app.use(modelTrainingJobsRouter(database));
