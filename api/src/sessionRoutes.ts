@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { parseOptions } from "./questionRoutes.js";
@@ -10,12 +11,55 @@ import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 // Requests received later than this window are retained for invigilator review.
 const AUTO_SUBMIT_GRACE_MS = 10_000;
 
+// Violation weights for integrity scoring. Higher weights indicate more serious
+// attempts to subvert the exam. Debounced per type at 2s on the client.
+const INTEGRITY_WEIGHTS: Record<string, number> = {
+  FULLSCREEN_EXIT: 1,
+  WINDOW_BLUR: 1,
+  TAB_HIDDEN: 1,
+  COPY_ATTEMPT: 1,
+  PASTE_ATTEMPT: 1,
+  CONTEXT_MENU: 1,
+  DEVTOOLS_KEY: 2,
+  DISPLAY_EXTENDED: 3,
+  EXTERNAL_DISPLAY: 3,
+  APP_BACKGROUND: 2,
+  WINDOW_FOCUS_LOST: 1,
+  MULTI_WINDOW: 3,
+  SCREEN_CAPTURE_ATTEMPT: 3,
+  UNPINNED: 3,
+  APP_REOPENED: 2,
+  DEVICE_CHANGED: 3,
+} as const;
+
+type IntegrityType = keyof typeof INTEGRITY_WEIGHTS;
+
+const IntegrityEventSchema = z.object({
+  type: z.enum(Object.keys(INTEGRITY_WEIGHTS) as [IntegrityType, ...(IntegrityType[])]),
+  at: z.string().datetime(),
+  detail: z.string().max(200).optional(),
+});
+
+const IntegrityBodySchema = z.object({
+  events: z.array(IntegrityEventSchema).min(1).max(20),
+});
+
+/** How recently a heartbeat must have arrived for a device to be considered
+ *  actively holding the session. Older devices lose the session on takeover. */
+const DEVICE_FRESH_MS = 90_000;
+
 export function sessionRouter(db: PrismaClient): Router {
   const router = Router();
 
   // Server-owned exam session: browser timestamps are never the source of truth.
   router.post("/exams/assignments/:id/session/start", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
+      const deviceId = req.headers["x-arctester-device"] as string | undefined;
+      const clientKind = req.headers["x-arctester-client"] as string | undefined;
+      const ipAddress = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
+        || req.socket.remoteAddress
+        || undefined;
+      const userAgent = req.headers["user-agent"] ?? undefined;
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
         include: { examVersion: { select: { durationMinutes: true, publishedAt: true } }, submission: true, session: true },
@@ -31,6 +75,12 @@ export function sessionRouter(db: PrismaClient): Router {
       }
       if (assignment.session?.status === "PAUSED") {
         return next(conflict("This exam session is paused by the invigilator. Wait for the invigilator to resume it."));
+      }
+      if (deviceId && assignment.session?.deviceId && assignment.session.deviceId !== deviceId) {
+        const fresh = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() < DEVICE_FRESH_MS;
+        if (fresh) {
+          return next(conflict("DEVICE_CONFLICT: another device holds this exam session."));
+        }
       }
       if (assignment.session?.startedAt && now.getTime() >= assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
         await db.$transaction(async (tx) => {
@@ -54,7 +104,13 @@ export function sessionRouter(db: PrismaClient): Router {
                 status: assignment.session!.status,
                 startedAt: { not: null },
               },
-              data: { status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now },
+              data: {
+                status: "ACTIVE", lastHeartbeatAt: now, lastActivityAt: now,
+                ...(deviceId && (!assignment.session!.deviceId || assignment.session!.deviceId !== deviceId)
+                  ? { deviceId, clientKind, ipAddress, userAgent } : {}),
+                ...(deviceId && assignment.session!.deviceId !== deviceId
+                  ? { violationCount: { increment: INTEGRITY_WEIGHTS.DEVICE_CHANGED } } : {}),
+              },
             });
             if (changed.count !== 1) {
               throw conflict("The exam session changed while reconnecting. Refresh and try again.");
@@ -62,6 +118,11 @@ export function sessionRouter(db: PrismaClient): Router {
             const updated = await tx.examSession.findUniqueOrThrow({
               where: { id: assignment.session!.id },
             });
+            if (deviceId && assignment.session!.deviceId !== deviceId) {
+              await tx.examSessionEvent.create({
+                data: { sessionId: updated.id, actorId: req.user!.id, type: "DEVICE_CHANGED", detail: "Session taken over by a different device." },
+              });
+            }
             await tx.examSessionEvent.create({
               data: { sessionId: updated.id, actorId: req.user!.id, type: "SESSION_RESUMED", detail: "Candidate restored an existing active session." },
             });
@@ -71,6 +132,7 @@ export function sessionRouter(db: PrismaClient): Router {
             data: {
               assignmentId: assignment.id, studentId: req.user!.id, status: "ACTIVE",
               startedAt: now, lastHeartbeatAt: now, lastActivityAt: now,
+              clientKind, deviceId, ipAddress, userAgent,
               events: { create: { actorId: req.user!.id, type: "SESSION_STARTED", detail: "Candidate started the assigned examination." } },
             },
           }).catch(async (error: unknown) => {
@@ -230,6 +292,14 @@ export function sessionRouter(db: PrismaClient): Router {
       }
       if (assignment.dueAt && assignment.dueAt <= now) return next(forbidden("The examination submission deadline has passed."));
       const stale = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() > 90000;
+      const deviceId = req.headers["x-arctester-device"] as string | undefined;
+      // Reject heartbeats from a different device while the current holder is fresh.
+      if (deviceId && assignment.session.deviceId && assignment.session.deviceId !== deviceId) {
+        const fresh = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() < DEVICE_FRESH_MS;
+        if (fresh) {
+          return next(conflict("DEVICE_CONFLICT: another device holds this exam session."));
+        }
+      }
       const session = await db.$transaction(async (tx) => {
         const changed = await tx.examSession.updateMany({
           where: {
@@ -241,10 +311,19 @@ export function sessionRouter(db: PrismaClient): Router {
             lastHeartbeatAt: now, lastActivityAt: now, heartbeatCount: { increment: 1 },
             ...(input.event === "FOCUS_LOST" ? { focusLossCount: { increment: 1 } } : {}),
             ...(stale ? { disconnectCount: { increment: 1 } } : {}),
+            ...(deviceId && (!assignment.session!.deviceId || assignment.session!.deviceId !== deviceId)
+              ? { deviceId, clientKind: req.headers["x-arctester-client"] as string, ipAddress: (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress, userAgent: req.headers["user-agent"] ?? undefined } : {}),
+            ...(deviceId && assignment.session!.deviceId !== deviceId
+              ? { violationCount: { increment: INTEGRITY_WEIGHTS.DEVICE_CHANGED } } : {}),
           },
         });
         if (changed.count !== 1) throw conflict("The exam session is no longer active.");
         const updated = await tx.examSession.findUniqueOrThrow({ where: { id: assignment.session!.id } });
+        if (deviceId && assignment.session!.deviceId !== deviceId) {
+          await tx.examSessionEvent.create({
+            data: { sessionId: updated.id, actorId: req.user!.id, type: "DEVICE_CHANGED", detail: "Session taken over by a different device during heartbeat." },
+          });
+        }
         if (input.event !== "HEARTBEAT" || stale) {
           await tx.examSessionEvent.create({
             data: { sessionId: updated.id, actorId: req.user!.id, type: stale ? "CONNECTION_RESTORED" : input.event, detail: stale ? "Heartbeat resumed after a connection gap." : "Candidate browser activity signal." },
@@ -254,6 +333,92 @@ export function sessionRouter(db: PrismaClient): Router {
       });
       const effectiveDeadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
       res.json({ ok: true, serverTime: now, deadline: effectiveDeadline, sessionStatus: session.status });
+    } catch (error) { next(error); }
+  });
+
+  /** Receive integrity violation events from the client. Updates violation
+   *  count, flags the session when the threshold is reached, and optionally
+   *  terminates when autoTerminate is set. */
+  router.post("/exams/assignments/:id/session/integrity", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = IntegrityBodySchema.parse(req.body);
+      const assignment = await db.examAssignment.findFirst({
+        where: { id: req.params.id, studentId: req.user!.id },
+        include: { session: true, examVersion: { select: { integrityLevel: true, maxViolations: true, autoTerminate: true, requireSecureClient: true, sebKeys: true } } },
+      });
+      if (!assignment) return next(notFound("Exam assignment not found."));
+      if (!assignment.session || assignment.session.status !== "ACTIVE") {
+        return next(conflict("There is no active exam session."));
+      }
+      const examVersion = assignment.examVersion;
+      if (examVersion.integrityLevel === "OFF") {
+        return res.json({ ok: true, violationCount: assignment.session!.violationCount, max: examVersion.maxViolations, warn: false, flagged: assignment.session!.integrityFlagged });
+      }
+      // SEB soft control: when requireSecureClient is set and sebKeys exist,
+      // verify the SEB request-hash headers. This is documented as a soft
+      // control; browsers cannot prove cheating.
+      if (examVersion.requireSecureClient && examVersion.sebKeys.length > 0) {
+        const requestHash = req.headers["x-safexambrowser-requesthash"] as string | undefined;
+        const configKeyHash = req.headers["configkeyhash"] as string | undefined;
+        if (requestHash && configKeyHash) {
+          const proto = req.headers["x-forwarded-proto"] ?? (req.secure ? "https" : "http");
+          const host = req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "";
+          const url = `${proto}://${host}${req.url}`;
+          let valid = false;
+          for (const key of examVersion.sebKeys) {
+            const expected = createHash("sha256").update(url + key).digest("hex");
+            if (timingSafeEqual(Buffer.from(configKeyHash, "hex"), Buffer.from(expected, "hex"))) {
+              valid = true;
+              break;
+            }
+          }
+          if (!valid) {
+            return next(forbidden("SEB request-hash verification failed."));
+          }
+        }
+      }
+      const session = assignment.session!;
+      const result = await db.$transaction(async (tx) => {
+        let addedWeight = 0;
+        for (const event of input.events) {
+          addedWeight += INTEGRITY_WEIGHTS[event.type];
+          await tx.examSessionEvent.create({
+            data: {
+              sessionId: session.id,
+              actorId: req.user!.id,
+              type: `INTEGRITY_${event.type}`,
+              detail: event.detail ?? "",
+            },
+          });
+        }
+        const updatedSession = await tx.examSession.update({
+          where: { id: session.id },
+          data: { violationCount: { increment: addedWeight } },
+        });
+        const newCount = updatedSession.violationCount + addedWeight;
+        const max = examVersion.maxViolations;
+        const flagged = newCount >= max;
+        const warn = newCount >= Math.ceil(max / 2);
+        let terminated = false;
+        if (flagged && examVersion.autoTerminate) {
+          await tx.examSession.update({
+            where: { id: session.id },
+            data: { status: "TERMINATED", endedAt: new Date() },
+          });
+          await tx.examSessionEvent.create({
+            data: { sessionId: session.id, actorId: req.user!.id, type: "SESSION_TERMINATED", detail: "Auto-terminated due to integrity violations." },
+          });
+          terminated = true;
+        }
+        if (flagged) {
+          await tx.examSession.update({
+            where: { id: session.id },
+            data: { integrityFlagged: true },
+          });
+        }
+        return { newCount, max, warn, flagged, terminated };
+      });
+      res.json({ ok: true, violationCount: result.newCount, max: result.max, warn: result.warn, flagged: result.flagged });
     } catch (error) { next(error); }
   });
 

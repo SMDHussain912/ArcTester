@@ -145,6 +145,18 @@ model ExamVersion {
   durationMinutes  Int
   shuffleQuestions Boolean                @default(false)
   shuffleOptions   Boolean                @default(false)
+  // Integrity policy for this exam version. OFF disables all violation
+  // detection; BASIC logs violations for review; STRICT can auto-terminate.
+  integrityLevel   String                 @default("BASIC")
+  // When true, the client must present a secure client (SEB / locked-down
+  // Android / Electron kiosk) to start the exam.
+  requireSecureClient Boolean            @default(false)
+  // Maximum accumulated violation weight before the session is flagged.
+  maxViolations    Int                    @default(10)
+  // When true, the server terminates the session once maxViolations is reached.
+  autoTerminate    Boolean                @default(false)
+  // SEB config keys used to verify SEB request-hash headers.
+  sebKeys          String[]
   publishedAt      DateTime?
   createdAt        DateTime               @default(now())
   questions        ExamVersionQuestion[]
@@ -244,12 +256,20 @@ model ExamSession {
   heartbeatCount    Int                @default(0)
   focusLossCount    Int                @default(0)
   disconnectCount   Int                @default(0)
+  // Integrity tracking
+  violationCount    Int                @default(0)
+  integrityFlagged  Boolean            @default(false)
+  clientKind        String?
+  deviceId          String?
+  ipAddress         String?
+  userAgent         String?
   createdAt         DateTime           @default(now())
   events            ExamSessionEvent[]
   answers           ExamSessionAnswer[]
 
   @@index([status, lastHeartbeatAt])
   @@index([studentId, status])
+  @@index([deviceId])
 }
 
 model ExamSessionEvent {
