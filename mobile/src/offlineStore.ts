@@ -227,12 +227,13 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   await db.runAsync(
     `INSERT INTO offline_attempts
       (assignment_id, attempt_uuid, started_at, started_at_monotonic_ms, answers_json, status, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     assignmentId,
     attemptUuid,
     startedAt,
     startedAtMonotonicMs,
     JSON.stringify({}),
+    "ACTIVE",
     startedAt,
   );
   return { attemptUuid, startedAt, examPackage };
@@ -346,7 +347,9 @@ export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
+    console.log("DEBUG getPendingSubmissions: row.assignmentId=", row.assignmentId, "row.submittedAt=", row.submittedAt, "row.answersJson=", row.answersJson?.slice(0, 20));
     const examPackage = await getCachedExamPackage(row.assignmentId);
+    console.log("DEBUG getPendingSubmissions: examPackage=", examPackage ? "found" : "null");
     if (!examPackage || !row.submittedAt) continue;
     const savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
     pending.push({

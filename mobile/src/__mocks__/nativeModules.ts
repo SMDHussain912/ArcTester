@@ -1,6 +1,7 @@
 // Mocks for React Native native modules so the offline store and sync logic
 // can be unit-tested in a plain Node/vitest environment. All database operations
 // operate on an in-memory per-table store that tests can reset via resetFakeStore().
+import { vi } from "vitest";
 
 // --- expo-crypto ---
 const crypto = require("node:crypto");
@@ -140,3 +141,19 @@ module.exports.execAsync = fakeSqlite.execAsync;
 module.exports.getFirstAsync = fakeSqlite.getFirstAsync;
 module.exports.getAllAsync = fakeSqlite.getAllAsync;
 module.exports.runAsync = fakeSqlite.runAsync;
+
+// Mock expo-screen-capture (not installed in this dev environment; real app
+// requires expo-build-config / development build).
+vi.mock("expo-screen-capture", () => ({
+  preventScreenCaptureAsync: vi.fn(async () => undefined),
+  allowScreenCaptureAsync: vi.fn(async () => undefined),
+}));
+
+vi.mock("react-native", () => ({
+  NativeModules: {},
+  AsyncStorage: {
+    getItem: vi.fn(async () => null),
+    setItem: vi.fn(async () => undefined),
+    removeItem: vi.fn(async () => undefined),
+  },
+}));
