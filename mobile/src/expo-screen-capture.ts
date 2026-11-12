@@ -1,2 +1,2 @@
-export const preventScreenCaptureAsync = vi.fn();
-export const allowScreenCaptureAsync = vi.fn();
+export const preventScreenCaptureAsync = async () => {};
+export const allowScreenCaptureAsync = async () => {};
