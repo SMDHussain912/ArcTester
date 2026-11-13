@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
-import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
 
 export function parseOptions(raw: string): string[] {

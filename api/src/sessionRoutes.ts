@@ -6,11 +6,6 @@ import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { parseOptions } from "./questionRoutes.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 
-// A deadline-triggered client submit may arrive up to 10 seconds after the
-// authoritative deadline because of request scheduling and network transit.
-// Requests received later than this window are retained for invigilator review.
-const AUTO_SUBMIT_GRACE_MS = 10_000;
-
 // Violation weights for integrity scoring. Higher weights indicate more serious
 // attempts to subvert the exam. Debounced per type at 2s on the client.
 const INTEGRITY_WEIGHTS: Record<string, number> = {

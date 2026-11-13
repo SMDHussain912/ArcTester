@@ -7,8 +7,6 @@ import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
 import {
   AUTO_SUBMIT_GRACE_MS,
-  fisherYatesShuffle,
-  seededRandom,
   stableOptionOrder,
 } from "./examRoutes.js";
 
@@ -551,7 +549,7 @@ export function submissionRouter(db: PrismaClient): Router {
     }
   });
 
-  async function reviewAssignedExam(assignmentId: string): Promise<void> {
+  router.get("/exams/assignments/:id/result", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
@@ -607,5 +605,4 @@ export function submissionRouter(db: PrismaClient): Router {
   });
 
   return router;
-}
 }

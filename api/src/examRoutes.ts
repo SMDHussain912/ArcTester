@@ -3,7 +3,6 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
-import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import {
   QUESTION_ANALYTICS_MINIMUM_ANSWERS,
@@ -857,7 +856,7 @@ export function examRouter(db: PrismaClient): Router {
       if (!flag) return next(notFound("Integrity flag not found"));
       if (flag.assignmentId !== req.params.id) return next(notFound("Flag not found for this assignment"));
 
-      await db.examIntegrityFlag.update({
+      await db.integrityFlag.update({
         where: { id: req.params.flagId },
         data: {
           dismissed: true,

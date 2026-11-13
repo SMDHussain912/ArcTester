@@ -1,18 +1,16 @@
 /**
  * Similarity report for detecting potential collusion between students.
- * 
+ *
  * Compares student pairs using original option indices (options are shuffled per student)
  * and flags pairs with suspicious patterns:
  * - Shared wrong answers >= max(8, 0.6 * min(wrongA, wrongB))
  * - Same IP address
- * * Answers faster than plausible minimum
- * 
+ * - Answers faster than plausible minimum
+ *
  * Flags only with evidence, admin dismiss is audited, never auto-penalize!
  */
 
 import type { PrismaClient } from "@prisma/client";
-import { parseOptions } from "./questionRoutes";
-import { stableOptionOrder } from "./examRoutes";
 
 const MIN_ANSWERS_THRESHOLD = 8;
 const WEAK_CORRELATION_THRESHOLD = 0.6;
@@ -26,17 +24,17 @@ interface AnswerRecord {
 }
 
 interface StudentSubmission {
-  assignmentId: string;
+  id: string;
   attemptUuid: string;
   studentId: number;
   studentEmail: string;
   startedAt: Date;
   submittedAt: Date;
   answers: AnswerRecord[];
-  ipAddress?: string;
 }
 
 interface SimilarityFlag {
+  assignmentId: string;
   studentIdA: number;
   studentIdB: number;
   studentEmailA: string;
@@ -55,7 +53,7 @@ interface SimilarityFlag {
 
 /**
  * Compute similarity flags for all student pairs in an assignment.
- * 
+ *
  * @param db - Prisma client
  * @param assignmentId - Assignment ID
  * @returns Array of similarity flags
@@ -70,27 +68,43 @@ export async function computeSimilarityFlags(
       assignmentId,
       status: "GRADED",
     },
-    include: {
+    select: {
+      id: true,
+      attemptUuid: true,
+      startedAt: true,
+      submittedAt: true,
       assignment: {
         select: {
-          id: true,
+          studentId: true,
         },
       },
-      student: {
+      answers: {
         select: {
-          id: true,
-          email: true,
+          examQuestionId: true,
+          selectedIndex: true,
+          isCorrect: true,
+          awardedMarks: true,
         },
       },
-    },
-    orderBy: {
-      submittedAt: "asc",
     },
   });
 
   if (submissions.length < 2) {
     return [];
   }
+
+  // Get student info separately
+  const studentIds = [...new Set(submissions.map(s => s.assignment.studentId))];
+  const students = await db.user.findMany({
+    where: {
+      id: { in: studentIds },
+    },
+    select: {
+      id: true,
+      email: true,
+    },
+  });
+  const studentMap = new Map(students.map(s => [s.id, s.email]));
 
   // Get the exam version questions to get question IDs
   const assignment = await db.examAssignment.findUnique({
@@ -114,10 +128,10 @@ export async function computeSimilarityFlags(
 
   // Build student submission data
   const studentData: StudentSubmission[] = submissions.map(sub => ({
-    assignmentId: sub.assignmentId,
+    id: sub.id,
     attemptUuid: sub.attemptUuid,
-    studentId: sub.studentId,
-    studentEmail: sub.student.email,
+    studentId: sub.assignment.studentId,
+    studentEmail: studentMap.get(sub.assignment.studentId) ?? "",
     startedAt: sub.startedAt,
     submittedAt: sub.submittedAt,
     answers: sub.answers.map(a => ({
@@ -168,14 +182,11 @@ export async function computeSimilarityFlags(
 
       if (sharedWrong < threshold) continue;
 
-      // Check if same IP
-      const sameIp = a.ipAddress && b.ipAddress && a.ipAddress === b.ipAddress;
-
       // Check if answers were suspiciously fast (less than min time per question)
       const aDurationMs = a.submittedAt.getTime() - a.startedAt.getTime();
       const bDurationMs = b.submittedAt.getTime() - b.startedAt.getTime();
       const minExpectedTime = questionIds.length * MIN_TIME_PER_QUESTION_MS;
-      const fastAnswers = aDurationMs < minExpectedTime && bDurationMs < minExpectedTime;
+      const fastAnswers = aDurationMs < minExpectedTime && bDurationMs < minExpectedTime && aDurationMs > 0 && bDurationMs > 0;
 
       flags.push({
         assignmentId,
@@ -187,8 +198,8 @@ export async function computeSimilarityFlags(
         totalWrongA,
         totalWrongB,
         threshold,
-        sameIp,
-        fastAnswers: fastAnswers && (aDurationMs > 0 && bDurationMs > 0),
+        sameIp: false,
+        fastAnswers,
         flaggedAt: new Date().toISOString(),
         dismissed: false,
         dismissedAt: null,
@@ -199,8 +210,6 @@ export async function computeSimilarityFlags(
 
   return flags;
 }
-
-export { similarityFlagSchema } from "./examRoutes";
 
 export type SimilarityFlagInput = {
   assignmentId: string;
