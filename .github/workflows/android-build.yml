@@ -1,0 +1,62 @@
+name: ArcTester Android Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - "package.json"
+      - ".github/workflows/android-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - "package.json"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-release:
+    name: Build Android installable APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Expo dependencies
+        run: npm install --prefix mobile --no-audit --no-fund
+
+      - name: Generate Android project
+        run: npm run prebuild:android --prefix mobile
+
+      - name: Validate Expo SDK dependency alignment
+        working-directory: mobile
+        run: npx expo install --check
+
+      - name: Build standalone APK
+        env:
+          EXPO_PUBLIC_API_URL: https://example.invalid
+        run: npm run build:android:release --prefix mobile
+
+      - name: Upload standalone APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: arctester-android-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

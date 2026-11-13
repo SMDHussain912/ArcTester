@@ -40,7 +40,32 @@ export const CreateTestSchema = z
         message: "Select at least one subject for practice mode.",
       });
     }
-    if (value.subjects && new Set(value.subjects).size !== value.subjects.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
+    if (value.subjects && new Set(value.subjects).size !== value.subjects.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
+    }
+
+    if (value.topicFilters?.length) {
+      const selectedSubjects = new Set(value.subjects ?? (value.subject ? [value.subject] : []));
+      const seenFilters = new Set<string>();
+      for (const [index, filter] of value.topicFilters.entries()) {
+        if (!selectedSubjects.has(filter.subject)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["topicFilters", index, "subject"],
+            message: "Topic filters must belong to a selected subject.",
+          });
+        }
+        const identity = JSON.stringify([filter.subject, filter.topic]);
+        if (seenFilters.has(identity)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["topicFilters", index],
+            message: "Duplicate topic filters are not allowed.",
+          });
+        }
+        seenFilters.add(identity);
+      }
+    }
   });
 
 export const SubmitTestSchema = z.object({
@@ -67,6 +92,7 @@ export interface CreatedTest {
   attemptId: number;
   mode: TestMode;
   deadline: string | null;
+  serverNow: string;
   questions: PublicQuestion[];
   warnings: string[];
 }
@@ -300,6 +326,7 @@ export async function createTest(
     attemptId: attempt.id,
     mode: input.mode,
     deadline: attempt.deadline ? attempt.deadline.toISOString() : null,
+    serverNow: now.toISOString(),
     questions: selected
       .map((s) => byId.get(s.id))
       .filter((d) => d !== undefined)
@@ -398,6 +425,8 @@ export async function submitTest(
 export interface ResultBreakdown {
   subject: string;
   correct: number;
+  incorrect: number;
+  unanswered: number;
   total: number;
 }
 
@@ -418,6 +447,8 @@ export interface TestResult {
   attemptId: number;
   mode: string;
   score: number;
+  incorrect: number;
+  unanswered: number;
   total: number;
   expired: boolean;
   breakdown: ResultBreakdown[];
@@ -437,14 +468,20 @@ export async function getResult(
   if (!attempt) throw notFound("Test not found.");
   if (!attempt.finishedAt) throw forbidden("Submit the test before viewing the result.");
 
-  const breakdown = new Map<string, { correct: number; total: number }>();
+  const breakdown = new Map<string, { correct: number; incorrect: number; unanswered: number; total: number }>();
   let score = 0;
+  let incorrect = 0;
+  let unanswered = 0;
   const questions: ResultQuestion[] = attempt.answers.map((a) => {
     if (a.isCorrect) score += 1;
+    else if (a.chosen === null) unanswered += 1;
+    else incorrect += 1;
     const subject = a.subjectSnapshot;
-    const entry = breakdown.get(subject) ?? { correct: 0, total: 0 };
+    const entry = breakdown.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, total: 0 };
     entry.total += 1;
     if (a.isCorrect) entry.correct += 1;
+    else if (a.chosen === null) entry.unanswered += 1;
+    else entry.incorrect += 1;
     breakdown.set(subject, entry);
     return {
       questionId: a.questionId,
@@ -464,6 +501,8 @@ export async function getResult(
     attemptId: attempt.id,
     mode: attempt.mode,
     score,
+    incorrect,
+    unanswered,
     total: attempt.answers.length,
     expired: attempt.expired,
     breakdown: [...breakdown.entries()].map(([subject, v]) => ({ subject, ...v })),

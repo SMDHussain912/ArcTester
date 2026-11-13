@@ -17,6 +17,9 @@ coverage/
 .env.local
 .env*.local
 
+# local database backups (never commit)
+backups/
+
 # logs / os
 *.log
 .DS_Store

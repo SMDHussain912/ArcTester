@@ -32,24 +32,24 @@ export interface Shortfall {
 
 const RequestedCountSchema = z.number().int().min(0, "requested count must be 0 or more");
 
-/** Official APECET 2026 CSE quotas, in paper order. */
-export const MOCK_QUOTAS: readonly { subject: string; count: number }[] = [
-  { subject: "Maths", count: 50 },
+/** Official APECET 2026 CSE unit distribution (APSCHE Annexure-II); aliases preserve existing imported bank labels. Source: https://cets.apsche.ap.gov.in/ECET/PDF/Diploma%20Holders%20in%20Engineering/APECET2026_COMPUTER_SCIENCE_AND_ENGINEERING.pdf */
+export const MOCK_QUOTAS: readonly { subject: string; count: number; aliases?: readonly string[] }[] = [
+  { subject: "Mathematics", count: 50, aliases: ["Maths"] },
   { subject: "Physics", count: 25 },
   { subject: "Chemistry", count: 25 },
   { subject: "Digital Electronics", count: 6 },
   { subject: "Software Engineering", count: 6 },
-  { subject: "Computer Organisation", count: 8 },
-  { subject: "Data Structures", count: 10 },
-  { subject: "Computer Networks", count: 6 },
+  { subject: "Computer Organisation and Microprocessors", count: 8, aliases: ["Computer Organisation", "Computer Organization", "Computer Organization and Microprocessors"] },
+  { subject: "Data Structures through C", count: 10, aliases: ["Data Structures"] },
+  { subject: "Computer Networks", count: 6, aliases: ["Computer Networks & Cyber Security"] },
   { subject: "Operating Systems", count: 10 },
   { subject: "DBMS", count: 8 },
-  { subject: "Java", count: 10 },
+  { subject: "Java Programming", count: 10, aliases: ["Java"] },
   { subject: "Web Technologies", count: 8 },
-  { subject: "Big Data & Cloud", count: 6 },
-  { subject: "Android", count: 6 },
-  { subject: "IoT", count: 8 },
-  { subject: "Python", count: 8 },
+  { subject: "Big-data & Cloud Computing", count: 6, aliases: ["Big Data & Cloud", "Big Data & Cloud Computing", "Bid-data & Cloud Computing"] },
+  { subject: "Android Programming", count: 6, aliases: ["Android"] },
+  { subject: "Internet Of Things(IoT)", count: 8, aliases: ["IoT", "Internet of Things", "Internet of Things (IoT)"] },
+  { subject: "Python Programming", count: 8, aliases: ["Python"] },
 ];
 
 export const MOCK_TOTAL = MOCK_QUOTAS.reduce((sum, q) => sum + q.count, 0); // 200
@@ -137,7 +137,11 @@ export interface MockSelection<T> {
   shortfalls: Shortfall[];
 }
 
-/** Per-subject quotas in paper order; thin bank -> use what exists + warn. */
+function normalizeSubjectName(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Per-subject quotas in official paper order; known legacy labels map to the same unit. */
 export function selectMockTest<T extends SelectableQuestion>(
   candidates: readonly T[],
   stats: StatsById = {},
@@ -146,7 +150,8 @@ export function selectMockTest<T extends SelectableQuestion>(
   const questions: T[] = [];
   const shortfalls: Shortfall[] = [];
   for (const quota of MOCK_QUOTAS) {
-    const pool = candidates.filter((q) => q.subject === quota.subject);
+    const acceptedNames = new Set([quota.subject, ...(quota.aliases ?? [])].map(normalizeSubjectName));
+    const pool = candidates.filter((question) => acceptedNames.has(normalizeSubjectName(question.subject)));
     questions.push(...selectQuestions(pool, stats, quota.count, random));
     if (pool.length < quota.count) {
       shortfalls.push({ subject: quota.subject, requested: quota.count, available: pool.length });

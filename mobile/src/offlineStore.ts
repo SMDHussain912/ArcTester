@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
+import { monotonicNow } from "./clock";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let configuredUserId: string | null = null;
@@ -55,11 +56,13 @@ type AttemptRow = {
   assignmentId: string;
   attemptUuid: string;
   startedAt: string;
+  startedAtMonotonicMs: number;
   submittedAt: string | null;
   answersJson: string;
   status: "ACTIVE" | "PENDING" | "SYNCED";
   submissionId: string | null;
   lastError: string | null;
+  updatedAt: string;
 };
 
 let initialized = false;
@@ -84,6 +87,7 @@ async function database() {
         assignment_id TEXT PRIMARY KEY NOT NULL,
         attempt_uuid TEXT NOT NULL UNIQUE,
         started_at TEXT NOT NULL,
+        started_at_monotonic_ms INTEGER NOT NULL DEFAULT 0,
         submitted_at TEXT,
         answers_json TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PENDING', 'SYNCED')),
@@ -192,7 +196,7 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
 
   const examPackage = parsePackage(row.payload_json);
   const existing = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
     assignmentId,
   );
   if (existing) {
@@ -216,15 +220,20 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   }
 
   const attemptUuid = Crypto.randomUUID();
-  const startedAt = new Date().toISOString();
+  const startedAtMonotonicMs = monotonicNow();
+  // Use the server-adjusted clock captured when the package was downloaded.
+  // This keeps the local deadline consistent when the device clock is inaccurate.
+  const startedAt = new Date(Date.now() + row.server_offset_ms).toISOString();
   await db.runAsync(
     `INSERT INTO offline_attempts
-      (assignment_id, attempt_uuid, started_at, answers_json, status, updated_at)
-      VALUES (?, ?, ?, ?, 'ACTIVE', ?)`,
+      (assignment_id, attempt_uuid, started_at, started_at_monotonic_ms, answers_json, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     assignmentId,
     attemptUuid,
     startedAt,
+    startedAtMonotonicMs,
     JSON.stringify({}),
+    "ACTIVE",
     startedAt,
   );
   return { attemptUuid, startedAt, examPackage };
@@ -237,7 +246,7 @@ export async function restoreActiveAttempt(assignmentId: string): Promise<{
 } | null> {
   const db = await database();
   const row = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!row) return null;
@@ -255,7 +264,7 @@ export async function saveOfflineAnswer(
 ): Promise<void> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) throw new Error("There is no active attempt to save.");
@@ -283,13 +292,15 @@ export async function saveOfflineAnswer(
 export async function getRemainingSeconds(assignmentId: string): Promise<number | null> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) return null;
   const examPackage = await getCachedExamPackage(assignmentId);
   if (!examPackage) return null;
-  const elapsed = Date.now() - new Date(attempt.startedAt).getTime();
+  // Measure elapsed time from the monotonic baseline captured when the attempt
+  // started. This never goes backward even if the device clock is corrected.
+  const elapsed = monotonicNow() - attempt.startedAtMonotonicMs;
   return Math.max(0, examPackage.durationMinutes * 60 - Math.floor(elapsed / 1000));
 }
 
@@ -298,7 +309,7 @@ export async function queueOfflineSubmission(
 ): Promise<PendingAttempt> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
     assignmentId,
   );
   if (!attempt) throw new Error("There is no saved attempt for this assignment.");
@@ -332,11 +343,13 @@ export async function queueOfflineSubmission(
 export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
   const db = await database();
   const rows = await db.getAllAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
+    console.log("DEBUG getPendingSubmissions: row.assignmentId=", row.assignmentId, "row.submittedAt=", row.submittedAt, "row.answersJson=", row.answersJson?.slice(0, 20));
     const examPackage = await getCachedExamPackage(row.assignmentId);
+    console.log("DEBUG getPendingSubmissions: examPackage=", examPackage ? "found" : "null");
     if (!examPackage || !row.submittedAt) continue;
     const savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
     pending.push({

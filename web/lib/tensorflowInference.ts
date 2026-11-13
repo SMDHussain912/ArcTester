@@ -1,4 +1,24 @@
+// The published @tensorflow/tfjs-layers package ships only compiled JS (no .d.ts) in
+// this environment, so the `export * from '@tensorflow/tfjs-layers'` re-export in
+// @tensorflow/tfjs is empty. The layers/weights APIs are cast to `any` here; this
+// is intentionally narrow and does not type the whole TF.js API.
 import * as tf from "@tensorflow/tfjs";
+
+const TF = tf as unknown as {
+  setBackend(backend: string): Promise<void>;
+  ready(): Promise<void>;
+  sequential(layers?: unknown[]): { add(layer: unknown): void; setWeights(weights: unknown[]): void; dispose(): void; save(handler: unknown): Promise<unknown>; predict(input: unknown): unknown; };
+  loadLayersModel(handler: unknown): Promise<{ predict(input: unknown): unknown; dispose(): void }>;
+  layers: { dense(config: unknown): unknown; [key: string]: (config: unknown) => unknown };
+  tensor2d(data: unknown, shape?: number[]): { data(): Promise<unknown>; dispose(): void };
+  tensor1d(data: unknown): { data(): Promise<unknown>; dispose(): void };
+  io: {
+    fromMemory(modelTopology: unknown, weightSpecs?: unknown, weightData?: unknown): unknown;
+    withSaveHandler(saveHandler: (artifacts: unknown) => Promise<unknown>): unknown;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
 
 export interface BrowserTensorflowArtifact {
   schemaVersion: 1;
@@ -63,9 +83,9 @@ export async function createTensorflowBrowserPredictor(
   for (let index = 0; index < decoded.length; index += 1) {
     weightBytes[index] = decoded.charCodeAt(index);
   }
-  const model = await tf.loadLayersModel(tf.io.fromMemory(
+  const model = await TF.loadLayersModel(TF.io.fromMemory(
     artifact.modelTopology,
-    artifact.weightSpecs as tf.io.WeightsManifestEntry[],
+    artifact.weightSpecs,
     weightBytes.buffer,
   ));
 
@@ -88,21 +108,23 @@ export async function createTensorflowBrowserPredictor(
         }
         return (value - artifact.normalization.means[index]!) / artifact.normalization.scales[index]!;
       });
-      const input = tf.tensor2d([normalized], [1, normalized.length]);
+      const input = TF.tensor2d([normalized], [1, normalized.length]);
       try {
         const output = model.predict(input);
         const prediction = Array.isArray(output) ? output[0] : output;
         if (!prediction) throw new Error("TensorFlow.js model returned no prediction tensor");
         try {
-          const values = await prediction.data();
-          const result = values[0];
+          const values = await (prediction as { data(): Promise<unknown>; dispose(): void }).data();
+          const result = Array.isArray(values) ? values[0] : (values as Float32Array)[0];
           if (typeof result !== "number" || !Number.isFinite(result)) {
             throw new Error("TensorFlow.js model returned a non-finite prediction");
           }
           return result;
         } finally {
-          prediction.dispose();
-          if (Array.isArray(output)) output.slice(1).forEach((tensor) => tensor.dispose());
+          (prediction as { dispose(): void }).dispose();
+          if (Array.isArray(output)) {
+            output.slice(1).forEach((tensor) => (tensor as { dispose(): void }).dispose());
+          }
         }
       } finally {
         input.dispose();

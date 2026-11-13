@@ -1,7 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { parseCsv } from "./csv.js";
-import { insertQuestion } from "./questionRepository.js";
-import { BaseRowSchema, QuestionInputSchema, hashQuestion, type QuestionInput } from "./questions.js";
+import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";
 
 export type InvalidRow = { row: number; reason: string };
 export type ImportReport = {
@@ -114,7 +113,6 @@ function describeIssue(error: unknown): string {
 
 /** Import BASE/JSON rows: [subject, text, [A,B,C,D], correctIndex, explanation?]. Row numbers are 1-based. */
 export async function importFromJson(db: PrismaClient, payload: unknown, options: { dryRun?: boolean } = {}): Promise<ImportReport> {
-  const parsed = BaseRowSchema.array().safeParse(payload);
   const report: ImportReport = {
     added: 0,
     duplicates: 0,
@@ -165,14 +163,11 @@ export async function importFromJson(db: PrismaClient, payload: unknown, options
     return report;
   }
 
-  // One transaction: either all valid rows land, or none do.
-  await db.$transaction(async (tx) => {
-    for (const item of valid) {
-      const outcome = await insertQuestion(tx as PrismaClient, item.input);
-      if (outcome === "inserted") report.added += 1;
-      else report.duplicates += 1;
-    }
-  });
+  // Use PostgreSQL ON CONFLICT DO NOTHING; catching a unique violation inside
+  // a transaction leaves PostgreSQL's transaction aborted.
+  const inserted = await insertValidatedQuestions(db, valid.map((item) => item.input));
+  report.added = inserted.added;
+  report.duplicates = inserted.duplicates;
   return report;
 }
 
@@ -239,13 +234,9 @@ export async function importFromCsv(db: PrismaClient, content: string, options: 
     return report;
   }
 
-  await db.$transaction(async (tx) => {
-    for (const input of valid) {
-      const outcome = await insertQuestion(tx as PrismaClient, input);
-      if (outcome === "inserted") report.added += 1;
-      else report.duplicates += 1;
-    }
-  });
+  const inserted = await insertValidatedQuestions(db, valid);
+  report.added = inserted.added;
+  report.duplicates = inserted.duplicates;
   return report;
 }
 

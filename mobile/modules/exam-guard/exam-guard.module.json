@@ -1,0 +1,15 @@
+{
+  "modules": [
+    {
+      "id": "exam-guard",
+      "platforms": ["android"],
+      "autolink": {
+        "android": {
+          "sourceDir": "android/src/main/java",
+          "manifest": "android/src/main/AndroidManifest.xml",
+          "buildGradle": "android/build.gradle"
+        }
+      }
+    }
+  ]
+}

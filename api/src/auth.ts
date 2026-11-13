@@ -156,34 +156,45 @@ const DeviceSchema = z.object({
   fingerprint: z.string().trim().min(16).max(128),
 });
 
-// Best-effort per-process throttle shared by browser and bearer sign-in endpoints.
-// It limits guesses against one account without trusting forwarded client IP headers.
+// Login throttling is keyed by client IP *and* target email:
+// - the ip+email bucket stops one IP from guessing one account's password
+//   without letting a different IP lock that account out;
+// - the ip-only bucket bounds brute force from a single source so one IP
+//   cannot exhaust the shared failure map or hammer many accounts.
+// Both buckets are process-local (not a distributed limiter), matching the
+// existing best-effort throttle.
 const LOGIN_FAILURE_LIMIT = 8;
+const IP_FAILURE_LIMIT = 20;
 const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const loginFailures = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
 
-function loginRetryAfter(email: string, now = Date.now()): number {
-  const bucket = loginFailures.get(email);
+function loginBucketKey(ip: string, email?: string): string {
+  return email ? `${ip}::${email.toLowerCase()}` : `ip-only::${ip}`;
+}
+
+function loginRetryAfter(key: string, now = Date.now()): number {
+  const bucket = loginFailures.get(key);
   if (!bucket) return 0;
   if (now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && bucket.blockedUntil <= now) {
-    loginFailures.delete(email);
+    loginFailures.delete(key);
     return 0;
   }
   return bucket.blockedUntil > now ? Math.ceil((bucket.blockedUntil - now) / 1000) : 0;
 }
 
-function recordLoginFailure(email: string, now = Date.now()): number {
-  let bucket = loginFailures.get(email);
+function recordLoginFailure(key: string, now = Date.now()): number {
+  let bucket = loginFailures.get(key);
   if (!bucket || now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS) {
     bucket = { count: 0, windowStartedAt: now, blockedUntil: 0 };
   }
   bucket.count += 1;
-  if (bucket.count >= LOGIN_FAILURE_LIMIT) bucket.blockedUntil = now + LOGIN_FAILURE_WINDOW_MS;
-  loginFailures.set(email, bucket);
+  const limit = key.startsWith("ip-only::") ? IP_FAILURE_LIMIT : LOGIN_FAILURE_LIMIT;
+  if (bucket.count >= limit) bucket.blockedUntil = now + LOGIN_FAILURE_WINDOW_MS;
+  loginFailures.set(key, bucket);
 
   if (loginFailures.size > 5000) {
-    for (const [key, value] of loginFailures) {
-      if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(key);
+    for (const [bucketKey, value] of loginFailures) {
+      if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(bucketKey);
     }
     while (loginFailures.size > 5000) {
       const oldestKey = loginFailures.keys().next().value;
@@ -191,11 +202,12 @@ function recordLoginFailure(email: string, now = Date.now()): number {
       loginFailures.delete(oldestKey);
     }
   }
-  return loginRetryAfter(email, now);
+  return loginRetryAfter(key, now);
 }
 
-function clearLoginFailures(email: string): void {
-  loginFailures.delete(email);
+function clearLoginFailures(ip: string, email?: string): void {
+  loginFailures.delete(loginBucketKey(ip, email));
+  loginFailures.delete(loginBucketKey(ip));
 }
 
 function rejectThrottledLogin(res: Response, retryAfter: number): void {
@@ -428,15 +440,20 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/login", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
-      const retryAfter = loginRetryAfter(input.email);
+      const ip = req.ip ?? "unknown";
+      const emailKey = loginBucketKey(ip, input.email);
+      const ipKey = loginBucketKey(ip);
+      const retryAfter = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
-        const blockedFor = recordLoginFailure(input.email);
+        recordLoginFailure(emailKey);
+        recordLoginFailure(ipKey);
+        const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      clearLoginFailures(input.email);
+      clearLoginFailures(ip, input.email);
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
@@ -448,15 +465,20 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/token", async (req, res, next) => {
     try {
       const input = LoginSchema.parse(req.body);
-      const retryAfter = loginRetryAfter(input.email);
+      const ip = req.ip ?? "unknown";
+      const emailKey = loginBucketKey(ip, input.email);
+      const ipKey = loginBucketKey(ip);
+      const retryAfter = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
-        const blockedFor = recordLoginFailure(input.email);
+        recordLoginFailure(emailKey);
+        recordLoginFailure(ipKey);
+        const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      clearLoginFailures(input.email);
+      clearLoginFailures(ip, input.email);
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       res.json({
         ok: true,

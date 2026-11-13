@@ -223,7 +223,7 @@ describe("admin model registry API", () => {
     expect(String(rejected.body.error ?? rejected.body.message)).toContain("keyed HMAC-SHA-256 pseudonymous groupId");
   });
 
-  it("runs grouped TensorFlow.js training through the registered dataset route without promotion", async () => {
+  it("queues grouped TensorFlow.js training through the compatibility route", async () => {
     const samples = Array.from({ length: 100 }, (_, index) => ({
       features: { practice_score: index },
       target: index * 0.5 + (index % 4) * 0.1,
@@ -247,15 +247,24 @@ describe("admin model registry API", () => {
       epochs: 12,
       batchSize: 16,
     });
-    expect(trained.status).toBe(201);
+    expect(trained.status).toBe(202);
     expect(trained.body).toMatchObject({
       ok: true,
-      promoted: false,
-      productionEligible: false,
-      split: { trainRows: 80, testRows: 20, trainGroups: 8, testGroups: 2 },
+      job: {
+        datasetId,
+        modelId: "tensorflow-route-fixture",
+        seed: 42,
+        epochs: 12,
+        batchSize: 16,
+        status: "QUEUED",
+        progress: 0,
+        result: null,
+      },
+      statusUrl: expect.stringMatching(/^\/admin\/model-training-jobs\//),
     });
-    expect(trained.body.candidate).toMatchObject({ rows: 20 });
-    expect(trained.body.baseline).toMatchObject({ rows: 20 });
+    const jobId = (trained.body.job as { id: string }).id;
+    const persisted = await server.db.modelTrainingJob.findUnique({ where: { id: jobId } });
+    expect(persisted).toMatchObject({ datasetId, modelId: "tensorflow-route-fixture", status: "QUEUED" });
   });
 
   it("persists explicit model dataset provenance and defaults old-style uploads to synthetic", async () => {

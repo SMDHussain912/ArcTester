@@ -101,6 +101,19 @@ export interface Announcement {
   createdAt: string;
   publishedAt: string;
   expiresAt: string | null;
+  seenAt?: string | null;
+  acknowledgedAt?: string | null;
+}
+
+export interface StudentNotification {
+  id: string;
+  kind: "EXAM_ASSIGNMENT" | "EXAM_RESULT" | "EXAM_REVIEW" | string;
+  title: string;
+  message: string;
+  href: string;
+  createdAt: string;
+  readAt: string | null;
+  expiresAt: string | null;
 }
 
 export interface AuthUser {
@@ -669,6 +682,16 @@ export const api = {
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
   announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),
+  acknowledgeAnnouncement: (id: string) =>
+    request<{ ok: true; seenAt: string; acknowledgedAt: string | null }>(`/announcements/${encodeURIComponent(id)}/acknowledge`, json({})),
+  notifications: (unreadOnly = false) =>
+    request<{ ok: true; notifications: StudentNotification[]; unreadCount: number; serverTime: string }>(
+      `/notifications${unreadOnly ? "?unread=true" : ""}`
+    ),
+  readNotification: (id: string) =>
+    request<{ ok: true; readAt: string; alreadyRead: boolean }>(
+      `/notifications/${encodeURIComponent(id)}/read`, json({})
+    ),
   adminAnnouncements: () => request<{ ok: true; announcements: Announcement[] }>("/admin/announcements"),
   createAnnouncement: (body: { title: string; message: string; expiresAt?: string }) =>
     request<{ ok: true; announcement: Announcement }>("/admin/announcements", json(body)),
