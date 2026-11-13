@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { safeStorage } from "./safeStorage";
 import { clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
@@ -31,6 +31,7 @@ import StudentLearning from "./StudentLearning";
 import StudentMaterials from "./StudentMaterials";
 import { useAssignedExamSession } from "./useAssignedExamSession";
 import AssignedExamSession from "./AssignedExamSession";
+import { OnlineStatusContext } from "./main";
 import type { AssignedExam, AssignedExamResult } from "./types/assignedExams";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
@@ -51,6 +52,17 @@ type Test = PracticeSessionTest;
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
 function practiceAnswersKey(attemptId: number | string): string { return `arctester-practice-answers-${attemptId}`; }
 type Result = PracticeResult;
+
+function OnlineStatusBanner() {
+  const isOnline = useContext(OnlineStatusContext);
+  return (
+    !isOnline && (
+      <div className="error" style={{ padding: "8px 16px", marginBottom: "8px", textAlign: "center" }}>
+        <strong>Offline</strong> &mdash; You are currently offline. Exam results and submissions require a connection.
+      </div>
+    )
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -538,6 +550,7 @@ export default function App() {
         );
       })() : null}
       <main className="main-content">
+        <OnlineStatusBanner />
         {exam.package ? (
           <AssignedExamSession
             package={exam.package}
