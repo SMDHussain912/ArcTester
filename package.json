@@ -28,6 +28,7 @@
     "build:mobile:android": "npm run prebuild:android --prefix mobile && npm run build:android:release --prefix mobile"
   },
   "devDependencies": {
+    "playwright": "^1.65.0",
     "prettier": "^3.3.3"
   },
   "engines": {
