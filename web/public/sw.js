@@ -1,3 +1,4 @@
+/* global self, caches, URL, fetch, Response, console */
 const CACHE_NAME = "arctester-shell-v1";
 const SHELL_URLs = [
   "/",

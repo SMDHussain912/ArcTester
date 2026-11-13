@@ -1,6 +1,6 @@
 # ArcTester — Development Roadmap & Progress Tracker
 
-Last updated: 2026-11-09 (stabilization branch)
+Last updated: 2026-11-13 (stabilization branch)
 Tracking rule: **Update this file in every development commit.** A task is only marked complete after implementation, relevant tests, and CI verification. Do not mark a feature complete based only on a previous status message.
 
 ## Project delivery order
@@ -18,6 +18,7 @@ Tracking rule: **Update this file in every development commit.** A task is only 
 - [ ] All known backend and frontend bugs fixed.
 - [x] PostgreSQL migration completed and tested in CI, including the partial unique index and a real SQLite-to-PostgreSQL data-copy integration test.
 - [x] Stabilization branch CI passed on commit `33316c8` (run `42539952910`): API 36 test files / 289 tests; web 22 test files / 82 tests; lint and production builds; mobile typecheck; TensorFlow dataset checks; SQLite-to-PostgreSQL migration utility tests.
+- [x] PR #19 CI passed: Playwright E2E tests (student practice flow and formal exam flow) added to CI workflow.
 - [ ] Full feature-by-feature end-to-end QA and deployment verification.
 - [x] Server-side logout revocation and frontend failure handling verified in CI.
 
@@ -150,6 +151,7 @@ A task can be checked off only when:
 |---|---|---|---|
 | 2026-11-09 | `6da9d670` | Added this roadmap and initial honest status baseline. | Documentation-only; application tests not run. |
 | 2026-11-09 | Stabilization | Fixed PostgreSQL SQL compatibility, session/attempt correctness, import conflict handling, learner-group holdouts, frontend storage/error handling, and switched the primary Prisma provider to PostgreSQL. | PostgreSQL CI run `42539952910` passed; API 289 tests, web 82 tests, migration integration, lint, builds and mobile typecheck green. |
+| 2026-11-13 | `ec6521d` | PR #19: Playwright E2E tests in CI - student practice flow and formal exam flow added to CI workflow. | Playwright E2E CI job green; student practice flow (start, answer, submit, result) and formal exam flow (start, submit, result) verified. |
 
 
 ## Stabilization work log
@@ -183,6 +185,12 @@ A task can be checked off only when:
 - Lint and web/API production builds passed.
 - Mobile typecheck and TensorFlow dataset preparation checks passed.
 - SQLite-to-PostgreSQL migration utility unit and integration tests passed.
+
+
+- Commit: `ec6521d` (PR #19)
+- Workflow run: Playwright E2E CI job — success.
+- Web: Student practice flow E2E test (login, create practice test, answer, submit, view result) passed.
+- Web: Formal exam flow E2E test (login, start assigned exam, submit, view result) passed.
 
 
 - 2026-11-09: Fixed logout token replay. JWTs now carry a user session-version claim, and every protected API route checks it against PostgreSQL. Logout increments the version, invalidating previously issued browser-cookie and bearer tokens. Legacy tokens without the claim are treated as version 0 until logout. Per-device revocation remains separate work. A follow-up commit also ensures database failures during logout revocation are returned to the client; run CI against the final branch head before merge.

@@ -1,9 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const API_BASE = "http://localhost:4000";
 
 /** Helper: make an authenticated API request */
-async function apiRequest(page: any, path: string, method = "GET", body?: any, cookie?: string) {
+async function apiRequest(page: Page, path: string, method = "GET", body?: Record<string, unknown>, cookie?: string) {
   const headers: Record<string, string> = {};
   if (cookie) headers["Cookie"] = cookie;
   if (body) headers["Content-Type"] = "application/json";
@@ -20,7 +20,7 @@ async function apiRequest(page: any, path: string, method = "GET", body?: any, c
 }
 
 /** Helper: login via API and return session cookie */
-async function loginApi(page: any, email: string, password: string): Promise<string> {
+async function loginApi(page: Page, email: string, password: string): Promise<string> {
   const res = await page.request.fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -31,7 +31,7 @@ async function loginApi(page: any, email: string, password: string): Promise<str
 }
 
 /** Helper: login via UI */
-async function loginUi(page: any, email: string, password: string) {
+async function loginUi(page: Page, email: string, password: string) {
   await page.goto("/");
   await page.waitForSelector('input[type="email"]', { timeout: 10000 });
   await page.fill('input[type="email"]', email);
@@ -41,7 +41,7 @@ async function loginUi(page: any, email: string, password: string) {
 }
 
 /** Setup test data: create admin, student, questions, exam, assignment */
-async function setupExamData(page: any) {
+async function setupExamData(page: Page) {
   // Try to create admin user (may already exist)
   await apiRequest(page, "/auth/register", "POST", {
     email: "admin@arctester.test",

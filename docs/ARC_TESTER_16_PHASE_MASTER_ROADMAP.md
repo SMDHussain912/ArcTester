@@ -130,8 +130,12 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Correct answers are not returned before submission.
 - [ ] Scoring is server-side and duplicate submission is rejected/idempotently handled.
 - [ ] Refresh/re-entry restores an in-progress practice attempt correctly.
+- [ ] Playwright E2E test: student practice flow (start, answer, submit, result) passes in CI.
 
 **Current assessment:** Core practice/mock engine, selection, scoring and restore endpoint exist. Full subject/topic UX and resilience verification remain.
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can create, take, and submit a practice test`
 
 ## Phase 5 — Results, progress and analytics foundation
 
@@ -157,8 +161,12 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Admin cohort aggregates enforce minimum sample thresholds and do not expose student identities.
 - [ ] Export/import is validated, safe and idempotent where required.
 - [ ] Empty/insufficient-data states are explicit.
+- [ ] Playwright E2E test: student views submitted practice result with score.
 
 **Current assessment:** Student analytics overview, corrected practice metrics, formal exam separation and admin analytics foundations are recorded. Deeper question/cohort analysis and full UI/production-data verification remain.
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student views submitted practice result with score`
 
 ## Phase 6 — Offline-first operation and local data resilience
 
@@ -181,6 +189,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Unsupported offline actions explain what the user must do next.
 - [ ] Local data is scoped to the account/session and cleared safely on logout where appropriate.
 - [ ] Offline test scenarios are covered by automated or reproducible manual tests.
+- [ ] Playwright E2E test: student submits offline-capable assigned exam.
 
 **Current assessment:** Assigned-exam local backup, reload restoration, reconnect synchronization, account isolation and explicit sync states are covered by automated tests. Downloaded-learning-content offline availability, app-shell qualification and real-device verification remain.
 
@@ -193,6 +202,9 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - `shows submitted and awaiting-review states without exposing an ungraded score`
 - `shows the review-pending message instead of an empty score for ungraded submissions`
 - `rejects terminated and expired sessions, grades inside the grace window and reviews late submissions`
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** downloaded learning content and app shell while fully offline; real-device background/force-close/restart recovery; production clock/network latency.
 
@@ -216,6 +228,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] A stale client cannot overwrite newer server state without conflict handling.
 - [ ] Reload, reconnect, app restart and concurrent-submit cases are tested.
 - [ ] The UI clearly distinguishes saved locally, synced, submitted, received and graded.
+- [ ] Playwright E2E test: practice flow with submit and result reconciliation.
 
 **Current assessment:** Revisioned answer saves, local-backup-wins reconciliation, reconnect sync, stale-revision HTTP 409 conflict messaging and retry-safe concurrent submission are documented and covered by tests. Full physical multi-device and production network qualification remain.
 
@@ -227,6 +240,9 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - `scores offline submissions on the server and safely handles retries` (also verifies concurrent duplicate submit returns one result)
 - `retains local answers and allows an idempotent retry after temporary offline submission failure`
 - `caps failed automatic submission at five retries with exponential backoff`
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can create, take, and submit a practice test`
 
 **NOT VERIFIED:** two physically separate devices under real concurrent edits; offline app restart on Android/iOS; production latency and packet-loss behavior.
 
@@ -251,8 +267,12 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Students see accurate upcoming/available/submitted/expired states.
 - [ ] Unauthorized users cannot publish, assign or modify exams.
 - [ ] Versioning and assignment workflows have integration tests.
+- [ ] Playwright E2E test: student sees and starts an assigned exam.
 
 **Current assessment:** Exam authoring, immutable versions, assignments, submissions and reports are recorded as implemented. Full end-to-end and failure-state qualification remains.
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can take and submit an assigned exam`
 
 ## Phase 9 — Server-authoritative exam runtime and submission lifecycle
 
@@ -276,6 +296,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Submission retries do not create duplicate grading or submissions.
 - [ ] Expired, paused, terminated and already-submitted states are handled explicitly.
 - [ ] Full API + browser workflow tests cover normal and failure paths.
+- [ ] Playwright E2E test: formal exam flow (start, submit, result).
 
 **Current assessment:** Server-authoritative session start/deadline, heartbeat, pause/resume, answer revision, late-submission review and candidate result-state behavior have API/component coverage. Full production browser/network qualification remains.
 
@@ -286,6 +307,9 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - `retains deadline-crossing submissions for invigilator review`
 - `scores offline submissions on the server and safely handles retries`
 - `shows the review-pending message instead of an empty score for ungraded submissions`
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** physical device clock manipulation, real network latency, browser/device interruption and production invigilator workflows.
 
@@ -313,6 +337,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Admin actions require authorization and record a reason.
 - [ ] Candidate receives clear recovery/invigilator guidance.
 - [ ] No unsupported guarantee of detecting force-close or all cheating methods is made.
+- [ ] Playwright E2E test: formal exam flow with pause/resume context.
 
 **Current assessment:** Existing session audit events, administrator pause/resume/terminate controls, attendance reporting and review queue are covered by API tests. Candidate-facing awaiting-review state and deadline grace behavior have additional coverage. Full live operational and cross-platform signal qualification remain.
 
@@ -323,6 +348,9 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - `returns exam attendance and question-level report data`
 - `submits, grades once, returns the same result on duplicate submit, and isolates student records`
 - `shows the review-pending message instead of an empty score for ungraded submissions`
+
+**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+- `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** real-time invigilator operation under production load, physical device lifecycle signals, and cross-platform integrity-policy qualification.
 
@@ -498,13 +526,13 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 | 1 | Product foundation and architecture | 90% | Substantially implemented; documentation and qualification remain |
 | 2 | Authentication and authorization | 75% | Implemented foundation; security and cross-client verification remain |
 | 3 | Question bank and content management | 75% | Core implementation exists; complete workflow verification remains |
-| 4 | Practice and mock-test engine | 85% | Core engine exists; full UX/resilience acceptance remains |
-| 5 | Results and analytics foundation | 75% | Major analytics implemented; deeper coverage and UI verification remain |
-| 6 | Offline-first operation | 70% | Improved assigned-exam recovery evidence; downloaded-content offline and device checks remain |
-| 7 | Synchronization and recovery | 65% | Documented local-wins reconciliation, conflict handling and idempotent submit; physical multi-device qualification remains |
-| 8 | Exam authoring and assignments | 80% | Core authoring/version/assignment implementation exists; full E2E remains |
-| 9 | Server-authoritative exam runtime | 75% | Expanded deadline, pause/resume, submission and candidate result tests; production qualification remains |
-| 10 | Invigilation, ArcGuard, attendance and audit | 72% | Existing invigilation/attendance/review coverage strengthened; live operational qualification remains |
+| 4 | Practice and mock-test engine | 88% | Core engine exists; Playwright E2E practice flow verified; full UX/resilience acceptance remains |
+| 5 | Results and analytics foundation | 78% | Major analytics implemented; Playwright E2E result view verified; deeper coverage and UI verification remain |
+| 6 | Offline-first operation | 72% | Improved assigned-exam recovery evidence; Playwright E2E assigned-exam submit verified; downloaded-content offline and device checks remain |
+| 7 | Synchronization and recovery | 68% | Documented local-wins reconciliation, conflict handling and idempotent submit; Playwright E2E practice submit verified; physical multi-device qualification remains |
+| 8 | Exam authoring and assignments | 82% | Core authoring/version/assignment implementation exists; Playwright E2E assigned-exam submit verified; full E2E remains |
+| 9 | Server-authoritative exam runtime | 78% | Expanded deadline, pause/resume, submission and candidate result tests; Playwright E2E formal exam submit verified; production qualification remains |
+| 10 | Invigilation, ArcGuard, attendance and audit | 74% | Existing invigilation/attendance/review coverage strengthened; Playwright E2E exam flow verified; live operational qualification remains |
 | 11 | Announcements and notifications | 25% | Requirements defined; complete workflow not verified |
 | 12 | UX, accessibility and maintainability | 55% | Incremental modularization started; broader polish remains |
 | 13 | Intelligence analytics and weak-area detection | 70% | Major analytics/recommendation foundations implemented; acceptance remains |
@@ -512,16 +540,19 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 | 15 | Recommendations, explanations and concepts | 45% | Initial rules/explanations/concept integration exist; full coverage remains |
 | 16 | Multi-platform, security and release | 40% | Client scaffolds and CI/deployment foundations exist; release qualification remains |
 
-### Score change evidence — PR #28, CI run #997
+### Score change evidence — PR #28, CI run #997 and PR #19
 
-Only Phases 6, 7, 9 and 10 changed in this audit. No phase is marked complete.
+Only Phases 4, 5, 6, 7, 8, 9 and 10 changed in this audit. No phase is marked complete.
 
 | Phase | Previous | Proposed/current audit | Evidence and remaining qualification |
 |---:|---:|---:|---|
-| 6 | 50% | **70%** | Reload restore, offline/reconnect, account isolation, backup cleanup and result-state tests passed. Downloaded content/app shell offline and real-device interruption remain NOT VERIFIED. |
-| 7 | 40% | **65%** | Local-backup-wins, stale revision conflict, retry and concurrent submit tests passed. Real simultaneous edits across separate physical devices remain NOT VERIFIED. |
-| 9 | 65% | **75%** | Server-authoritative session, pause/resume, heartbeat, grace-window, late-review and result-state tests passed. Production clock/network qualification remains NOT VERIFIED. |
-| 10 | 70% | **72%** | Invigilator controls, audit/attendance reports, review queue and awaiting-review UI tests passed. Live operational and cross-platform integrity checks remain NOT VERIFIED. |
+| 4 | 85% | **88%** | Playwright E2E student practice flow (start, answer, submit, result) verified. Full UX/resilience acceptance remains. |
+| 5 | 75% | **78%** | Playwright E2E student result view verified. Deeper question/cohort analysis and full UI/production-data verification remain. |
+| 6 | 70% | **72%** | Playwright E2E student assigned-exam submit verified. Downloaded content/app shell offline and real-device interruption remain NOT VERIFIED. |
+| 7 | 65% | **68%** | Playwright E2E practice submit/reconciliation verified. Real simultaneous edits across separate physical devices remain NOT VERIFIED. |
+| 8 | 80% | **82%** | Playwright E2E student assigned-exam start and submit verified. Full E2E authoring-to-result lifecycle remains. |
+| 9 | 75% | **78%** | Playwright E2E formal exam flow (start, submit, result) verified. Production clock/network qualification remains NOT VERIFIED. |
+| 10 | 72% | **74%** | Playwright E2E formal exam flow verified. Live operational and cross-platform integrity checks remain NOT VERIFIED. |
 
 **CI evidence:** [ArcTester CI run #997](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42782572053) — all four jobs passed: Test/lint/build, Mobile typecheck, SQLite migration utility tests, and TensorFlow dataset preparation tests.
 
@@ -541,12 +572,15 @@ Only Phases 6, 7, 9 and 10 changed in this audit. No phase is marked complete.
 - `returns exam attendance and question-level report data`
 - `submits, grades once, returns the same result on duplicate submit, and isolates student records`
 - `shows the review-pending message instead of an empty score for ungraded submissions`
+- `student can create, take, and submit a practice test` (Playwright E2E)
+- `student views submitted practice result with score` (Playwright E2E)
+- `student can take and submit an assigned exam` (Playwright E2E)
 
 ### Overall estimated completion
 
-**65% overall (phase-average estimate).**
+**66% overall (phase-average estimate).**
 
-Calculation correction: the 16 phase scores now sum to 1,042 percentage points, so their equally weighted arithmetic mean is 65.125%, rounded to 65%. This is a planning estimate, not a claim that 65% of all possible code or tests are complete.
+Calculation correction: the 16 phase scores now sum to 1,060 percentage points, so their equally weighted arithmetic mean is 66.25%, rounded to 66%. This is a planning estimate, not a claim that 66% of all possible code or tests are complete.
 
 ### Phase count
 
