@@ -28,7 +28,7 @@ export interface IntegrityEvent {
 export interface UseExamIntegrityOptions {
   assignmentId: string;
   integrityLevel: "OFF" | "BASIC" | "STRICT";
-  api?: (path: string, init?: RequestInit) => Promise<any>;
+  api?: (path: string, init?: RequestInit) => Promise<Response>;
   onFlagged?: () => void;
 }
 
@@ -208,7 +208,8 @@ export function useExamIntegrity({
     if (integrityLevel === "OFF") return;
     const timer = setInterval(() => {
       if (!document.hasFocus()) push("WINDOW_BLUR");
-      if ((screen as any).isExtended) push("DISPLAY_EXTENDED");
+      const screenAny = screen as unknown as { isExtended?: boolean };
+      if (screenAny.isExtended) push("DISPLAY_EXTENDED");
     }, 1000);
     return () => clearInterval(timer);
   }, [integrityLevel, push]);
@@ -218,10 +219,16 @@ export function useExamIntegrity({
     const el = document.documentElement;
     if (el.requestFullscreen) {
       await el.requestFullscreen();
-    } else if ((el as any).webkitRequestFullscreen) {
-      await (el as any).webkitRequestFullscreen();
-    } else if ((el as any).msRequestFullscreen) {
-      await (el as any).msRequestFullscreen();
+    } else {
+      const elAny = el as unknown as {
+        webkitRequestFullscreen?: () => Promise<void>;
+        msRequestFullscreen?: () => Promise<void>;
+      };
+      if (elAny.webkitRequestFullscreen) {
+        await elAny.webkitRequestFullscreen();
+      } else if (elAny.msRequestFullscreen) {
+        await elAny.msRequestFullscreen();
+      }
     }
   }, [integrityLevel]);
 
