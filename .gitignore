@@ -27,3 +27,8 @@ Thumbs.db
 
 # vitest
 test-results/
+
+# Expo/React Native generated
+mobile/.expo/
+mobile/android/
+mobile/app.json.bak

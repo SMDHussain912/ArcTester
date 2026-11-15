@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import Skeleton from "./components/Skeleton";
 
 const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
 
@@ -80,7 +81,12 @@ export default function StudentProgress() {
         <button className="ghost" disabled={loading} onClick={() => void refresh()}>{loading ? "Refreshing…" : "Refresh progress"}</button>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
-      {loading && !overview ? <div className="panel empty-state">Loading your progress…</div> : null}
+      {loading && !overview ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <Skeleton variant="table-row" />
+          <Skeleton variant="table-row" />
+        </div>
+      ) : null}
       {overview ? (
         <>
           <div className="stats-row">

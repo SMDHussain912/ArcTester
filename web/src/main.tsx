@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AppErrorBoundary } from "./ErrorBoundary";
+import { OnlineStatusProvider } from "./OnlineStatusContext";
 import "./styles.css";
 
 // Register service worker for offline shell support
@@ -16,32 +17,6 @@ if ("serviceWorker" in navigator) {
         console.warn("Service worker registration failed:", error);
       });
   });
-}
-
-// Online/offline status context
-export const OnlineStatusContext = React.createContext<boolean>(true);
-
-function OnlineStatusProvider({ children }: { children: React.ReactNode }) {
-  const [isOnline, setIsOnline] = React.useState(typeof navigator !== "undefined" && navigator.onLine);
-
-  React.useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  return (
-    <OnlineStatusContext.Provider value={isOnline}>
-      {children}
-    </OnlineStatusContext.Provider>
-  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
