@@ -277,3 +277,42 @@
 .student-dashboard-home[hidden]{display:none}
 
 .integrity-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(13,19,32,.82);backdrop-filter:blur(4px)}.integrity-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:30px;max-width:420px;width:90%;box-shadow:var(--shadow);color:var(--ink)}.integrity-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.integrity-status{font-size:11px;font-weight:900;letter-spacing:1px;padding:5px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent)}.integrity-status.flagged{background:rgba(194,65,59,.15);color:var(--danger)}.integrity-violations{font-size:13px;font-weight:800;color:var(--muted)}.integrity-card h2{font-size:20px;margin:0 0 10px}.integrity-message{font-size:14px;color:var(--muted);margin:0 0 12px;line-height:1.6}.integrity-honest-notice{font-size:11px;color:var(--muted);margin:14px 0 20px;line-height:1.6;border-top:1px solid var(--border);padding-top:12px}.integrity-button{width:100%;padding:12px;border-radius:10px;border:0;background:var(--accent);color:white;font-weight:800;font-size:14px}.integrity-button:disabled{opacity:.6;cursor:wait}.exam-watermark{font-family:inherit}
+
+/* Motion design tokens (PR1). Durations: fast 140 ms, medium 220 ms, slow 360 ms.
+   Animate only transform and opacity; never block navigation or input. */
+:root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-io:cubic-bezier(.65,0,.35,1);--t-fast:140ms;--t-med:220ms;--t-slow:360ms}
+@keyframes ar-shimmer{to{background-position:-200% 0}}
+@keyframes ar-page-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ar-pop-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes ar-orbit{to{transform:rotate(360deg)}}
+.skeleton{display:block;background:linear-gradient(90deg,var(--border) 25%,color-mix(in srgb,var(--border) 45%,var(--surface)) 50%,var(--border) 75%);background-size:200% 100%;animation:ar-shimmer 1.2s linear infinite;border-radius:10px;color:transparent!important}
+.skeleton-card{height:120px}
+.skeleton-table-row{height:48px}
+.skeleton-stat-tile{height:80px}
+.page-enter{animation:ar-page-in var(--t-med) var(--ease-out) both}
+.dialog-enter{animation:ar-pop-in var(--t-med) var(--ease-out) both}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after, :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after{animation:none!important;transition:none!important}
+
+/* Toast */
+.toast-container{position:fixed;inset:20px auto auto 50%;transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--ink);box-shadow:var(--shadow);font-size:13px;animation:ar-pop-in var(--t-med) var(--ease-out) both;pointer-events:auto}
+
+/* Question palette active state */
+.question-palette-item{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer}
+.question-palette-item.answered{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.question-palette-item:disabled{opacity:.55;cursor:not-allowed}
+
+/* Student action card hover already handled; keep exam screens animation-free */
+@media(prefers-reduced-motion: reduce){.student-dashboard-action{transition:none}.student-dashboard-action:hover{transform:none}}
+
+/* Student-side CSS fixes: panel-header, stat-card/label/value/caption were used but
+   undefined, leaving analytics stats and panel headers unstyled. */
+.panel-header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 12px}
+.panel-header h2{font-size:17px;font-weight:800;color:var(--ink);margin:0}
+.panel-header .eyebrow{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--accent);text-transform:uppercase;margin:0 0 2px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat-label{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin:0 0 4px}
+.stat-value{font-size:24px;font-weight:800;color:var(--ink);margin:0 0 2px;letter-spacing:-.5px}
+.stat-caption{font-size:11px;color:var(--muted);margin:0;line-height:1.5}

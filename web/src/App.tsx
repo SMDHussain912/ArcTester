@@ -31,10 +31,11 @@ import StudentLearning from "./StudentLearning";
 import StudentMaterials from "./StudentMaterials";
 import { useAssignedExamSession } from "./useAssignedExamSession";
 import AssignedExamSession from "./AssignedExamSession";
-import { OnlineStatusContext } from "./main";
+import AppSplash from "./components/AppSplash";
+import { OnlineStatusContext } from "./OnlineStatusContext";
 import type { AssignedExam, AssignedExamResult } from "./types/assignedExams";
 
-const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
@@ -66,6 +67,7 @@ function OnlineStatusBanner() {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [sessionRestoring, setSessionRestoring] = useState(true);
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -87,7 +89,7 @@ export default function App() {
   const [practiceClock, setPracticeClock] = useState(0);
   const [practiceServerOffset, setPracticeServerOffset] = useState(0);
   const practiceAutoSubmitRef = useRef(false);
-  const submitPracticeTestRef = useRef<() => Promise<void>>(async () => {});
+  const submitPracticeTestRef = useRef<() => Promise<void>>(async () => { });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -124,8 +126,12 @@ export default function App() {
     request<{ user: User }>("/auth/me")
       .then(({ user: current }) => {
         setUser(current);
+        setSessionRestoring(false);
       })
-      .catch(() => setUser(null));
+      .catch(() => {
+        setUser(null);
+        setSessionRestoring(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -446,7 +452,7 @@ export default function App() {
 
   useEffect(() => {
     if (!test || result || practiceRemainingSeconds === null ||
-        practiceRemainingSeconds > 0 || practiceAutoSubmitRef.current || busy) return;
+      practiceRemainingSeconds > 0 || practiceAutoSubmitRef.current || busy) return;
     practiceAutoSubmitRef.current = true;
     void submitPracticeTestRef.current();
   }, [test, result, practiceRemainingSeconds, busy]);
@@ -482,6 +488,8 @@ export default function App() {
     setActivePage("dashboard");
     setBusy(false);
   }
+
+  if (sessionRestoring) return <AppSplash visible />;
 
   if (!user) {
     return (
@@ -549,7 +557,7 @@ export default function App() {
           </div>
         );
       })() : null}
-      <main className="main-content">
+      <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
         {exam.package ? (
           <AssignedExamSession
@@ -604,11 +612,11 @@ export default function App() {
             onAcknowledge={(id) => void acknowledgeAnnouncement(id)}
           />
         ) : activePage === "analytics" ? (
-          <StudentAnalytics setActivePage={setActivePage} />
+          <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "learning" ? (
-          <StudentLearning setActivePage={setActivePage} />
+          <StudentLearning setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "materials" ? (
-          <StudentMaterials setActivePage={setActivePage} />
+          <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
           <>
             <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} pendingExamCount={assignedExams.filter((item) => !item.submission).length} unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length} unreadNotificationCount={unreadNotificationCount} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
@@ -679,13 +687,13 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-      {activePage !== "notifications" && !exam.package && !test && !result && studentNotifications.find((item) => !item.readAt) && (
-        <StudentNotificationBanner
-          notification={studentNotifications.find((item) => !item.readAt)!}
-          onRead={(id) => void markNotificationRead(id)}
-          onOpen={(notification) => void openStudentNotification(notification.id)}
-        />
-      )}
+        {activePage !== "notifications" && !exam.package && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+          <StudentNotificationBanner
+            notification={studentNotifications.find((item) => !item.readAt)!}
+            onRead={(id) => void markNotificationRead(id)}
+            onOpen={(notification) => void openStudentNotification(notification.id)}
+          />
+        )}
       </main>
       {activeAnnouncements[0] && (
         <StudentAnnouncementDialog

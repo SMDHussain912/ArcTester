@@ -10,10 +10,10 @@ export default function StudentMaterials({ setActivePage }: StudentMaterialsProp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState<OfflineLearningPackage | null>(null);
-  const cancelledRef = useRef(false);
+  const cancelledRef = useRef<number>(0);
 
   const downloadPackage = useCallback(async () => {
-    cancelledRef.current = true;
+    cancelledRef.current = Date.now();
     const generation = ++cancelledRef.current;
     setLoading(true);
     setError(null);

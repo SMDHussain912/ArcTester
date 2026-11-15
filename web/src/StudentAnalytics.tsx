@@ -3,9 +3,12 @@ import { request } from "./apiClient";
 import type {
   PerformanceOverview,
   StudentScorePrediction,
+  StudyRecommendation,
   StudyRecommendationsReport,
+  TopicRow,
   WeakTopicsReport,
 } from "./lib/api";
+import Skeleton from "./components/Skeleton";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
@@ -18,10 +21,10 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
   const [prediction, setPrediction] = useState<StudentScorePrediction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const cancelledRef = useRef(false);
+  const cancelledRef = useRef<number>(0);
 
   const loadAnalytics = useCallback(async () => {
-    cancelledRef.current = true;
+    cancelledRef.current = Date.now();
     const generation = ++cancelledRef.current;
     setLoading(true);
     setError(null);
@@ -50,7 +53,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
   useEffect(() => {
     loadAnalytics();
     return () => {
-      cancelledRef.current = true;
+      cancelledRef.current = Date.now();
     };
   }, [loadAnalytics]);
 
@@ -65,7 +68,13 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
       </section>
 
       {error ? <p className="error" role="alert">{error}</p> : null}
-      {loading ? <p className="mute" role="status">Loading your analytics…</p> : null}
+      {loading ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <Skeleton variant="stat-tile" className="skeleton-stat" />
+          <Skeleton variant="stat-tile" className="skeleton-stat" />
+          <Skeleton variant="stat-tile" className="skeleton-stat" />
+        </div>
+      ) : null}
 
       {!loading && overview && (
         <>
@@ -93,7 +102,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
             <div className="panel-header">
               <h2 id="score-prediction-title">Next practice score estimate</h2>
             </div>
-            {prediction === null ? <p className="mute">Analyzing your completed practice history…</p> : null}
+            {prediction === null ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
             {prediction && prediction.status === "ready" && (
               <div>
                 <div className="big">{prediction.predictedScorePercent}%</div>
@@ -130,7 +139,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
               <div className="stat-card">
                 <div className="stat-label">Score percentage</div>
                 <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
-                <div className="stat-caption">{overview.formalExams.score.toFixed(2)} / {overview.formalExams.maximumScore.toFixed(2)} marks</div>
+                <div className="stat-caption">{overview.formalExams.score?.toFixed(2) ?? "—"} / {overview.formalExams.maximumScore?.toFixed(2) ?? "—"} marks</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Needs review</div>
@@ -151,16 +160,16 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           {recommendations && (
             <>
               <p className="mute">
-                Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round(recommendations.weakAccuracyThreshold * 100)}%.
+                Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%.
               </p>
               <div className="performance-explanation">
                 <strong>{recommendations.performanceExplanation.headline}</strong>
                 <ul>
-                  {recommendations.performanceExplanation.details.map((detail, index) => <li key={index}>{detail}</li>)}
+                  {recommendations.performanceExplanation.details.map((detail: string, index: number) => <li key={index}>{detail}</li>)}
                 </ul>
               </div>
               <div className="stack">
-                {recommendations.recommendations.map((item) => (
+                {recommendations.recommendations.map((item: StudyRecommendation) => (
                   <article key={item.id} className="panel">
                     <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
                       <strong>{item.title}</strong>
@@ -184,7 +193,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                 in {weakTopics.weakest.subject} — {weakTopics.weakest.accuracy === null ? "not enough answered questions" : Math.round(weakTopics.weakest.accuracy * 100) + "% accuracy"} across {weakTopics.weakest.seen} answered questions.
               </p>
             ) : null}
-            {(weakTopics.subjects ?? []).map((item) => (
+            {(weakTopics.subjects ?? []).map((item: TopicRow) => (
               <div key={item.subject}>
                 <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
                   <strong>{item.subject}</strong>

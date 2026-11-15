@@ -57,7 +57,7 @@ export function sessionRouter(db: PrismaClient): Router {
       const userAgent = req.headers["user-agent"] ?? undefined;
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
-        include: { examVersion: { select: { durationMinutes: true, publishedAt: true } }, submission: true, session: true },
+        include: { examVersion: { select: { durationMinutes: true, publishedAt: true, requireSecureClient: true, sebKeys: true } }, submission: true, session: true },
       });
       if (!assignment) return next(notFound("Exam assignment not found."));
       if (!assignment.examVersion.publishedAt) return next(forbidden("This exam is not published."));
@@ -75,6 +75,33 @@ export function sessionRouter(db: PrismaClient): Router {
         const fresh = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() < DEVICE_FRESH_MS;
         if (fresh) {
           return next(conflict("DEVICE_CONFLICT: another device holds this exam session."));
+        }
+      }
+      // SEB hard control: when requireSecureClient is set, verify request-hash headers
+      if (assignment.examVersion.requireSecureClient && assignment.examVersion.sebKeys.length > 0) {
+        const proto = req.headers["x-forwarded-proto"] ?? (req.secure ? "https" : "http");
+        const host = req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "";
+        const url = `${proto}://${host}${req.url}`;
+        const requestHash = req.headers["x-safexambrowser-requesthash"] as string | undefined;
+        const configKeyHash = req.headers["x-safexambrowser-configkeyhash"] as string | undefined;
+        if (!requestHash || !configKeyHash) {
+          return next(forbidden("SEB request-hash headers are required."));
+        }
+        try {
+          Buffer.from(configKeyHash, "hex");
+        } catch {
+          return next(forbidden("SEB config-key hash is not valid hex."));
+        }
+        let valid = false;
+        for (const key of assignment.examVersion.sebKeys) {
+          const expected = createHash("sha256").update(url + key).digest("hex");
+          if (configKeyHash.length === expected.length && timingSafeEqual(Buffer.from(configKeyHash, "hex"), Buffer.from(expected, "hex"))) {
+            valid = true;
+            break;
+          }
+        }
+        if (!valid) {
+          return next(forbidden("SEB request-hash verification failed."));
         }
       }
       if (assignment.session?.startedAt && now.getTime() >= assignment.session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + assignment.session.pausedDurationMs + 60000) {
@@ -260,7 +287,7 @@ export function sessionRouter(db: PrismaClient): Router {
       const input = z.object({ event: z.enum(["HEARTBEAT", "FOCUS_LOST", "FOCUS_RESTORED", "CONNECTION_RESTORED"]).default("HEARTBEAT") }).parse(req.body ?? {});
       const assignment = await db.examAssignment.findFirst({
         where: { id: req.params.id, studentId: req.user!.id },
-        include: { session: true, examVersion: { select: { durationMinutes: true } }, submission: { select: { id: true } } },
+        include: { session: true, examVersion: { select: { durationMinutes: true, requireSecureClient: true, sebKeys: true } }, submission: { select: { id: true } } },
       });
       if (!assignment) return next(notFound("Exam assignment not found."));
       if (!assignment.session || assignment.session.status !== "ACTIVE") return next(conflict("There is no active exam session."));
@@ -293,6 +320,33 @@ export function sessionRouter(db: PrismaClient): Router {
         const fresh = assignment.session.lastHeartbeatAt && now.getTime() - assignment.session.lastHeartbeatAt.getTime() < DEVICE_FRESH_MS;
         if (fresh) {
           return next(conflict("DEVICE_CONFLICT: another device holds this exam session."));
+        }
+      }
+      // SEB hard control: when requireSecureClient is set, verify request-hash headers
+      if (assignment.examVersion.requireSecureClient && assignment.examVersion.sebKeys.length > 0) {
+        const proto = req.headers["x-forwarded-proto"] ?? (req.secure ? "https" : "http");
+        const host = req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "";
+        const url = `${proto}://${host}${req.url}`;
+        const requestHash = req.headers["x-safexambrowser-requesthash"] as string | undefined;
+        const configKeyHash = req.headers["x-safexambrowser-configkeyhash"] as string | undefined;
+        if (!requestHash || !configKeyHash) {
+          return next(forbidden("SEB request-hash headers are required."));
+        }
+        try {
+          Buffer.from(configKeyHash, "hex");
+        } catch {
+          return next(forbidden("SEB config-key hash is not valid hex."));
+        }
+        let valid = false;
+        for (const key of assignment.examVersion.sebKeys) {
+          const expected = createHash("sha256").update(url + key).digest("hex");
+          if (configKeyHash.length === expected.length && timingSafeEqual(Buffer.from(configKeyHash, "hex"), Buffer.from(expected, "hex"))) {
+            valid = true;
+            break;
+          }
+        }
+        if (!valid) {
+          return next(forbidden("SEB request-hash verification failed."));
         }
       }
       const session = await db.$transaction(async (tx) => {
@@ -349,27 +403,33 @@ export function sessionRouter(db: PrismaClient): Router {
       if (examVersion.integrityLevel === "OFF") {
         return res.json({ ok: true, violationCount: assignment.session!.violationCount, max: examVersion.maxViolations, warn: false, flagged: assignment.session!.integrityFlagged });
       }
-      // SEB soft control: when requireSecureClient is set and sebKeys exist,
-      // verify the SEB request-hash headers. This is documented as a soft
-      // control; browsers cannot prove cheating.
+      // SEB hard control: when requireSecureClient is set and sebKeys exist,
+      // verify the SEB request-hash headers. Reject (403) if headers are missing
+      // or invalid. Validate hex length before timingSafeEqual to avoid throws.
       if (examVersion.requireSecureClient && examVersion.sebKeys.length > 0) {
         const requestHash = req.headers["x-safexambrowser-requesthash"] as string | undefined;
-        const configKeyHash = req.headers["configkeyhash"] as string | undefined;
-        if (requestHash && configKeyHash) {
-          const proto = req.headers["x-forwarded-proto"] ?? (req.secure ? "https" : "http");
-          const host = req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "";
-          const url = `${proto}://${host}${req.url}`;
-          let valid = false;
-          for (const key of examVersion.sebKeys) {
-            const expected = createHash("sha256").update(url + key).digest("hex");
-            if (timingSafeEqual(Buffer.from(configKeyHash, "hex"), Buffer.from(expected, "hex"))) {
-              valid = true;
-              break;
-            }
+        const configKeyHash = req.headers["x-safexambrowser-configkeyhash"] as string | undefined;
+        if (!requestHash || !configKeyHash) {
+          return next(forbidden("SEB request-hash headers are required."));
+        }
+        try {
+          Buffer.from(configKeyHash, "hex");
+        } catch {
+          return next(forbidden("SEB config-key hash is not valid hex."));
+        }
+        const proto = req.headers["x-forwarded-proto"] ?? (req.secure ? "https" : "http");
+        const host = req.headers["x-forwarded-host"] ?? req.headers["host"] ?? "";
+        const url = `${proto}://${host}${req.url}`;
+        let valid = false;
+        for (const key of examVersion.sebKeys) {
+          const expected = createHash("sha256").update(url + key).digest("hex");
+          if (configKeyHash.length === expected.length && timingSafeEqual(Buffer.from(configKeyHash, "hex"), Buffer.from(expected, "hex"))) {
+            valid = true;
+            break;
           }
-          if (!valid) {
-            return next(forbidden("SEB request-hash verification failed."));
-          }
+        }
+        if (!valid) {
+          return next(forbidden("SEB request-hash verification failed."));
         }
       }
       const session = assignment.session!;

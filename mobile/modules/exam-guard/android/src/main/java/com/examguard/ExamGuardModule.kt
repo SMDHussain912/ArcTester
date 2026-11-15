@@ -47,16 +47,17 @@ class ExamGuardModule(context: Context, uiManager: UIManager, settings: UISettin
     Events("onViolation")
 
     Function("start") { usePinning: Boolean ->
-      context.currentActivity?.runOnUiThread {
+      val activity = context.currentActivity ?: return
+      activity.runOnUiThread {
         running = true
-        val decor = it.window.decorView
+        val decor = activity.window.decorView
         decor.filterTouchesWhenObscured = true
         focusListener = View.OnFocusChangeListener { _, hasFocus ->
           if (!hasFocus) emit("WINDOW_FOCUS_LOST")
         }
         decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
         if (usePinning) {
-          it.startLockTask()
+          activity.startLockTask()
           pinned = true
         }
         h.post(poll)

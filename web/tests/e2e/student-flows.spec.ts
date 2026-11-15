@@ -10,7 +10,7 @@ async function apiRequest(page: Page, path: string, method = "GET", body?: Recor
   const res = await page.request.fetch(`${API_BASE}${path}`, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    data: body ? JSON.stringify(body) : undefined,
   });
   return {
     status: res.status(),
@@ -24,7 +24,7 @@ async function loginApi(page: Page, email: string, password: string): Promise<st
   const res = await page.request.fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    data: JSON.stringify({ email, password }),
   });
   const setCookie = res.headers()["set-cookie"] || res.headers()["Set-Cookie"] || "";
   return Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;

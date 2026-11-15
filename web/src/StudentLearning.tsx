@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
 import type { LearningConcept } from "./lib/api";
+import Skeleton from "./components/Skeleton";
 
 export interface StudentLearningProps {
   setActivePage: (page: string) => void;
@@ -11,10 +12,10 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cancelledRef = useRef(false);
+  const cancelledRef = useRef<number>(0);
 
   const loadConcepts = useCallback(async (search = "") => {
-    cancelledRef.current = true;
+    cancelledRef.current = Date.now();
     const generation = ++cancelledRef.current;
     setLoading(true);
     setError(null);
@@ -38,7 +39,7 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
   useEffect(() => {
     loadConcepts();
     return () => {
-      cancelledRef.current = true;
+      cancelledRef.current = Date.now();
     };
   }, [loadConcepts]);
 
@@ -74,7 +75,13 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
         {error ? <p className="error" role="alert">{error}</p> : null}
       </section>
 
-      {loading ? <p className="mute" role="status">Loading concepts…</p> : null}
+      {loading ? (
+        <div className="stack" style={{ gap: 10 }}>
+          <Skeleton variant="table-row" />
+          <Skeleton variant="table-row" />
+          <Skeleton variant="table-row" />
+        </div>
+      ) : null}
       {!loading && concepts.length === 0 && !error ? (
         <section className="panel"><p className="muted">No concepts matched this search.</p></section>
       ) : null}
@@ -89,11 +96,11 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
             </div>
             <p>{concept.definition}</p>
             <h3>Examples</h3>
-            <ul>{concept.examples.map((example) => <li key={example}>{example}</li>)}</ul>
+            <ul>{concept.examples.map((example: string) => <li key={example}>{example}</li>)}</ul>
             <h3>Related concepts</h3>
             <p className="muted">{concept.relatedConcepts.join(" · ")}</p>
             <h3>Common mistakes</h3>
-            <ul>{concept.commonMistakes.map((mistake) => <li key={mistake}>{mistake}</li>)}</ul>
+            <ul>{concept.commonMistakes.map((mistake: string) => <li key={mistake}>{mistake}</li>)}</ul>
           </article>
         ))}
       </div>

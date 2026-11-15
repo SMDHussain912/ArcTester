@@ -22,7 +22,7 @@ import { OfflineExams } from "./src/OfflineExams";
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
   const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : true;
-  if (isDev) return (url || "http://localhost:4000").replace(/\/+$/, "");
+  if (isDev) return (url || "https://arctester.onrender.com").replace(/\/+$/, "");
   if (!url) throw new Error("EXPO_PUBLIC_API_URL is required for release builds. Set it to an https URL.");
   if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
   return url.replace(/\/+$/, "");

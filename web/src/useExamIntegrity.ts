@@ -95,11 +95,12 @@ export function useExamIntegrity({
         method: "POST",
         body: JSON.stringify({ events: batch }),
       });
-      setViolationCount(result.violationCount ?? violationCount + batch.length);
-      setMaxViolations(result.max ?? maxViolations);
-      setWarn(result.warn ?? false);
-      setFlagged(result.flagged ?? false);
-      if (result.flagged && onFlagged) onFlagged();
+      const json = await result.json();
+      setViolationCount(json.violationCount ?? violationCount + batch.length);
+      setMaxViolations(json.max ?? maxViolations);
+      setWarn(json.warn ?? false);
+      setFlagged(json.flagged ?? false);
+      if (json.flagged && onFlagged) onFlagged();
     } catch {
       // Re-queue failed events so they are retried on the next flush.
       queueRef.current.unshift(...batch);
