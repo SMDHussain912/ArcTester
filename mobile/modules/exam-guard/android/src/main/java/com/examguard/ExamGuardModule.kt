@@ -8,37 +8,91 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewTreeObserver
-import expo.modules.core.interfaces.ExpoMethod
-import expo.modules.core.interfaces.services.UIManager
-import expo.modules.core.interfaces.services.UISettingsService
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-class ExamGuardModule(context: Context, uiManager: UIManager, settings: UISettingsService) : Module(context, uiManager, settings) {
-  private val h = Handler(Looper.getMainLooper())
+/**
+ * Native Android signals used by ArcTester's assigned-exam integrity monitor.
+ *
+ * This is a local Expo module and deliberately uses the current Expo Modules
+ * API (Module()), rather than the removed legacy UIManager constructor.
+ */
+class ExamGuardModule : Module() {
+  private val handler = Handler(Looper.getMainLooper())
   private var running = false
   private var pinned = false
-  private var lastMulti = false
+  private var lastMultiWindow = false
+  private var decorView: View? = null
   private var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
 
-  private fun emit(type: String) {
-    sendEvent("onViolation", mapOf("type" to type, "at" to System.currentTimeMillis()))
+  private val activity: Activity?
+    get() = appContext.currentActivity
+
+  private fun emit(type: String, detail: String = "") {
+    sendEvent(
+      "onViolation",
+      mapOf(
+        "type" to type,
+        "at" to System.currentTimeMillis(),
+        "detail" to detail
+      )
+    )
+  }
+
+  private fun removeFocusListener() {
+    val view = decorView
+    val listener = focusListener
+    if (view != null && listener != null) {
+      val observer = view.viewTreeObserver
+      if (observer.isAlive) {
+        observer.removeOnWindowFocusChangeListener(listener)
+      }
+    }
+    focusListener = null
+    decorView = null
+  }
+
+  private fun stopInternal() {
+    running = false
+    handler.removeCallbacks(poll)
+    removeFocusListener()
+    if (pinned) {
+      try {
+        activity?.stopLockTask()
+      } catch (_: Exception) {
+        // The Activity may already have been destroyed by the OS.
+      }
+      pinned = false
+    }
+    lastMultiWindow = false
   }
 
   private val poll = object : Runnable {
     override fun run() {
       if (!running) return
-      val activity = context.currentActivity ?: return
-      val multi = activity.isInMultiWindowMode || activity.isInPictureInPictureMode
-      if (multi && !lastMulti) emit("MULTI_WINDOW")
-      lastMulti = multi
-      val dm = activity.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-      if (dm.displays.size > 1) emit("EXTERNAL_DISPLAY")
-      if (pinned) {
-        val am = activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        if (am.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) emit("UNPINNED")
+      val current = activity
+      if (current != null && !current.isFinishing && !current.isDestroyed) {
+        val multiWindow = current.isInMultiWindowMode || current.isInPictureInPictureMode
+        if (multiWindow && !lastMultiWindow) {
+          emit("MULTI_WINDOW", "App entered multi-window or picture-in-picture mode")
+        }
+        lastMultiWindow = multiWindow
+
+        val displayManager = current.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        if ((displayManager?.displays?.size ?: 1) > 1) {
+          emit("EXTERNAL_DISPLAY", "An external display is connected")
+        }
+
+        if (pinned) {
+          val manager = current.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+          if (manager?.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
+            emit("UNPINNED", "Android screen pinning is no longer active")
+            pinned = false
+          }
+        }
       }
-      h.postDelayed(this, 1000)
+      // Keep polling while an exam is active, even during Activity recreation.
+      if (running) handler.postDelayed(this, 1000)
     }
   }
 
@@ -47,36 +101,47 @@ class ExamGuardModule(context: Context, uiManager: UIManager, settings: UISettin
     Events("onViolation")
 
     Function("start") { usePinning: Boolean ->
-      val activity = context.currentActivity ?: return
-      activity.runOnUiThread {
-        running = true
-        val decor = activity.window.decorView
-        decor.filterTouchesWhenObscured = true
+      val current = activity ?: return@Function false
+      stopInternal()
+      running = true
+
+      val view = current.window.decorView
+      view.filterTouchesWhenObscured = true
+      decorView = view
+      val observer = view.viewTreeObserver
+      if (observer.isAlive) {
         focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-          if (!hasFocus) emit("WINDOW_FOCUS_LOST")
+          if (!hasFocus && running) {
+            emit("WINDOW_FOCUS_LOST", "Exam window lost native window focus")
+          }
         }
-        decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
-        if (usePinning) {
-          activity.startLockTask()
-          pinned = true
-        }
-        h.post(poll)
+        observer.addOnWindowFocusChangeListener(focusListener)
       }
+
+      if (usePinning) {
+        try {
+          current.startLockTask()
+          pinned = true
+        } catch (error: Exception) {
+          emit("PINNING_UNAVAILABLE", error.message ?: "Android screen pinning could not start")
+        }
+      }
+
+      handler.post(poll)
+      true
     }
 
     Function("stop") {
-      running = false
-      focusListener?.let {
-        context.currentActivity?.window?.decorView?.viewTreeObserver?.removeOnWindowFocusChangeListener(it)
-      }
-      if (pinned) {
-        context.currentActivity?.stopLockTask()
-        pinned = false
-      }
+      stopInternal()
+      true
     }
 
     OnAppBackground {
-      if (running) emit("APP_BACKGROUND")
+      if (running) emit("APP_BACKGROUND", "Android application entered background")
+    }
+
+    OnDestroy {
+      stopInternal()
     }
   }
 }
