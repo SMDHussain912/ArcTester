@@ -26,7 +26,8 @@ export type IntegrityType =
   | "SCREEN_CAPTURE_ATTEMPT"
   | "UNPINNED"
   | "APP_REOPENED"
-  | "DEVICE_CHANGED";
+  | "DEVICE_CHANGED"
+  | "CLOSE_ATTEMPT";
 
 export interface IntegrityEvent {
   type: IntegrityType;
@@ -227,6 +228,7 @@ export function useExamIntegrity({
         "DISPLAY_EXTENDED",
         "WINDOW_FOCUS_LOST",
         "APP_BACKGROUND",
+        "CLOSE_ATTEMPT",
       ];
       if (event.type && allowedTypes.includes(event.type as IntegrityType)) {
         push(event.type as IntegrityType, event.detail ?? "Desktop operating-system event");
