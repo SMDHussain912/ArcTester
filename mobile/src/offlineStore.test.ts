@@ -208,6 +208,38 @@ describe("offlineStore", () => {
     expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
   });
 
+  it("rejects duplicate question positions", async () => {
+    configureOfflineStore("user-duplicate-position");
+    const invalidPackage = {
+      ...packagePayload,
+      questions: [
+        packagePayload.questions[0],
+        { ...packagePayload.questions[1], position: packagePayload.questions[0].position },
+      ],
+    };
+    const digest = nodeCrypto.createHash("sha256").update(JSON.stringify(invalidPackage)).digest("hex");
+    await expect(saveExamPackage(invalidPackage, digest)).rejects.toThrow("contains an invalid question");
+    expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
+  });
+
+  it("rejects an availability window where the deadline precedes availability", async () => {
+    configureOfflineStore("user-invalid-window");
+    const invalidPackage = {
+      ...packagePayload,
+      availableFrom: "2026-11-20T10:00:00.000Z",
+      dueAt: "2026-11-19T10:00:00.000Z",
+    };
+    const digest = nodeCrypto.createHash("sha256").update(JSON.stringify(invalidPackage)).digest("hex");
+    await expect(saveExamPackage(invalidPackage, digest)).rejects.toThrow("invalid availability window");
+    expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
+  });
+
+  it("rejects malformed integrity hashes before hashing the package", async () => {
+    configureOfflineStore("user-malformed-hash");
+    await expect(saveExamPackage(packagePayload, "not-a-sha256")).rejects.toThrow("integrity hash is invalid");
+    expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
+  });
+
   it("rejects questions with an invalid option count", async () => {
     configureOfflineStore("user-invalid-option-count");
     const invalidPackage = {
