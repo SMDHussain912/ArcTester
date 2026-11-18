@@ -125,11 +125,13 @@ function createWindow() {
 
   // Keep the privileged renderer on the packaged app origin. External links
   // must use target=_blank so they pass through the explicit HTTPS handler.
-  const trustedOrigin = devUrl ? new URL(devUrl).origin : "arctester://app";
+  const trustedUrl = new URL(devUrl || "arctester://app/");
+  const trustedOrigin = `${trustedUrl.protocol}//${trustedUrl.host}`;
   window.webContents.on("will-navigate", (event, targetUrl) => {
     let targetOrigin = "";
     try {
-      targetOrigin = new URL(targetUrl).origin;
+      const parsedTarget = new URL(targetUrl);
+      targetOrigin = `${parsedTarget.protocol}//${parsedTarget.host}`;
     } catch {
       event.preventDefault();
       return;
