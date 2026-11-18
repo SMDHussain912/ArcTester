@@ -57,6 +57,12 @@ describe("study material publishing API", () => {
     expect(download.headers.get("content-type")).toBe("application/pdf");
     expect(Buffer.from(await download.arrayBuffer()).equals(pdf)).toBe(true);
 
+    const preview = await call("/study-materials/" + created.material.id + "/preview", "GET", undefined, studentCookie);
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("content-type")).toBe("application/pdf");
+    expect(preview.headers.get("content-disposition")).toContain("inline");
+    expect(Buffer.from(await preview.arrayBuffer()).equals(pdf)).toBe(true);
+
     const deleted = await call("/admin/study-materials/" + created.material.id, "DELETE");
     expect(deleted.status).toBe(200);
     expect((await call("/study-materials", "GET", undefined, studentCookie)).status).toBe(200);
