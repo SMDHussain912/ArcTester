@@ -325,3 +325,5 @@
 .admin-panel label{min-width:0}
 .admin-panel textarea{width:100%;max-width:100%;min-height:90px;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;line-height:1.5}
 @media(max-width:640px){.admin-panel .admin-two-col{grid-template-columns:1fr}.training-progress{height:11px}.model-result-json{max-height:260px}}
+
+.dataset-attestation{display:flex!important;align-items:flex-start;gap:10px;line-height:1.5}.dataset-attestation input{width:auto;flex:0 0 auto;margin-top:2px}
