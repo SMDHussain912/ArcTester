@@ -40,6 +40,7 @@ type AdminModelLabProps = {
   selectedDatasetId: string;
   modelPrefix: string;
   busy: boolean;
+  loading?: boolean;
   onDatasetChange: (id: string) => void;
   onModelPrefixChange: (prefix: string) => void;
   onQueueTraining: () => void;
@@ -49,7 +50,7 @@ type AdminModelLabProps = {
 };
 
 export default function AdminModelLab({
-  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, onDatasetChange,
+  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onRefresh, onRegisterDataset,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
@@ -158,12 +159,12 @@ export default function AdminModelLab({
         <label>Training model prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
         <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
-        {datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
+        {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Candidate models ({models.length})</h2></div></div>
-        {models.length === 0 ? <p className="muted">No model candidates have been registered yet.</p> : <div className="model-registry-list">
+        {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model registry"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : models.length === 0 ? <p className="muted">No model candidates have been registered yet.</p> : <div className="model-registry-list">
           {models.map((model) => <article className="model-registry-row" key={model.modelId + "-" + model.version}>
             <div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · Dataset: {model.dataset}</p></div>
             <div className="row wrap"><span className={"status " + (model.isActive ? "status-used" : "status-pending")}>{model.isActive ? "ACTIVE" : "CANDIDATE"}</span>{model.productionEligible === true ? <span className="status status-used">PRODUCTION ELIGIBLE</span> : model.productionEligible === false ? <span className="status status-expired">NOT ELIGIBLE</span> : null}</div>
@@ -174,7 +175,7 @@ export default function AdminModelLab({
 
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 3 · OBSERVE</p><h2>Training jobs and evaluation</h2></div></div>
-        {jobs.length === 0 ? <p className="muted">No training jobs yet.</p> : jobs.map((job) => (
+        {loading ? <div className="model-lab-loading" role="status" aria-label="Loading training jobs"><div className="skeleton skeleton-card" /><div className="skeleton skeleton-card" /></div> : jobs.length === 0 ? <p className="muted">No training jobs yet.</p> : jobs.map((job) => (
           <article key={job.id} className="question-review-row">
             <div className="panel-header"><strong>{job.modelId}</strong><span className={job.status === "SUCCEEDED" ? "status status-used" : job.status === "FAILED" ? "status status-expired" : "status status-pending"}>{job.status}</span></div>
             <p className="muted">Job {job.id} · Dataset {job.datasetId}</p>
