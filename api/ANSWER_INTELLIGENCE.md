@@ -41,10 +41,10 @@ Use a model actually pulled into the local Ollama instance. For llama.cpp server
 
 - Students can request explanations only for questions in their own completed practice attempt.
 - The authoritative answer comes from the immutable attempt answer-key snapshot.
-- The prompt receives question text, choices, the selected choice and the approved explanation; it does not receive a student's name, email or database ID.
+- The prompt receives question text, choices, the selected choice and the question-bank explanation; it does not receive a student's name, email or database ID.
 - AI output must be valid structured JSON and must preserve the exact four choices and answer-key index. Invalid output falls through to the next provider.
 - AI-generated explanations are labelled `ai-generated-unverified`; the system does not claim to have independently verified their reasoning.
-- Approved question-bank explanations are preferred over generic offline text when no provider is available.
+- Existing question-bank explanations are preferred over generic offline text when no provider is available.
 - Provider keys remain server-side environment variables. They are never returned by the status endpoint.
 
 ## Admin status endpoint
