@@ -215,6 +215,32 @@ describe("offlineStore", () => {
     expect(remaining).toBeLessThanOrEqual(60 * 60);
   });
 
+  it("persists the greatest observed timer checkpoint when the device clock moves backwards", async () => {
+    configureOfflineStore("user-clock");
+    await saveExamPackage(packagePayload, expectedSha256);
+    const started = await startOfflineAttempt("assignment-1");
+    const baseline = Date.parse(started.startedAt) - 0;
+    const clock = vi.spyOn(Date, "now");
+    try {
+      // The monotonic baseline is local wall time; server offset only affects
+      // the displayed start timestamp, so use the actual persisted baseline.
+      const attemptRows = tables.get("offline_attempts");
+      const attempt = attemptRows?.get("assignment-1");
+      const localBaseline = Number(attempt?.started_at_monotonic_ms);
+      clock.mockReturnValue(localBaseline + 8_000);
+      const afterEightSeconds = await getRemainingSeconds("assignment-1");
+      expect(afterEightSeconds).toBe(60 * 60 - 8);
+      const checkpoint = String(attempt?.updated_at);
+      clock.mockReturnValue(localBaseline + 2_000);
+      const afterClockRollback = await getRemainingSeconds("assignment-1");
+      expect(afterClockRollback).toBe(afterEightSeconds);
+      expect(String(attempt?.updated_at)).toBe(checkpoint);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(Number.isFinite(baseline)).toBe(true);
+  });
+
   it("queues and marks a submission as synced", async () => {
     configureOfflineStore("user-4");
     await saveExamPackage(packagePayload, expectedSha256);
