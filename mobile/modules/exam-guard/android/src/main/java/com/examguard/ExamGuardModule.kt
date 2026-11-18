@@ -102,37 +102,39 @@ class ExamGuardModule : Module() {
 
     Function("start") { usePinning: Boolean ->
       val current = activity ?: return@Function false
-      stopInternal()
-      running = true
+      current.runOnUiThread {
+        stopInternal()
+        running = true
 
-      val view = current.window.decorView
-      view.filterTouchesWhenObscured = true
-      decorView = view
-      val observer = view.viewTreeObserver
-      if (observer.isAlive) {
-        focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
-          if (!hasFocus && running) {
-            emit("WINDOW_FOCUS_LOST", "Exam window lost native window focus")
+        val view = current.window.decorView
+        view.filterTouchesWhenObscured = true
+        decorView = view
+        val observer = view.viewTreeObserver
+        if (observer.isAlive) {
+          focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+            if (!hasFocus && running) {
+              emit("WINDOW_FOCUS_LOST", "Exam window lost native window focus")
+            }
+          }
+          observer.addOnWindowFocusChangeListener(focusListener)
+        }
+
+        if (usePinning) {
+          try {
+            current.startLockTask()
+            pinned = true
+          } catch (error: Exception) {
+            emit("UNPINNED", error.message ?: "Android screen pinning could not start")
           }
         }
-        observer.addOnWindowFocusChangeListener(focusListener)
-      }
 
-      if (usePinning) {
-        try {
-          current.startLockTask()
-          pinned = true
-        } catch (error: Exception) {
-          emit("UNPINNED", error.message ?: "Android screen pinning could not start")
-        }
+        handler.post(poll)
       }
-
-      handler.post(poll)
       true
     }
 
     Function("stop") {
-      stopInternal()
+      handler.post { stopInternal() }
       true
     }
 
@@ -141,7 +143,7 @@ class ExamGuardModule : Module() {
     }
 
     OnDestroy {
-      stopInternal()
+      handler.post { stopInternal() }
     }
   }
 }
