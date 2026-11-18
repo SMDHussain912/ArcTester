@@ -347,9 +347,7 @@ export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
-    console.log("DEBUG getPendingSubmissions: row.assignmentId=", row.assignmentId, "row.submittedAt=", row.submittedAt, "row.answersJson=", row.answersJson?.slice(0, 20));
     const examPackage = await getCachedExamPackage(row.assignmentId);
-    console.log("DEBUG getPendingSubmissions: examPackage=", examPackage ? "found" : "null");
     if (!examPackage || !row.submittedAt) continue;
     const savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
     pending.push({
