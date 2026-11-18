@@ -50,7 +50,7 @@ export async function syncPendingSubmissions(
         failed += 1;
 
         // Authentication and connectivity failures make subsequent uploads unlikely to work.
-        if (response.status === 401 || response.status === 403 || response.status >= 500) {
+        if ([401, 403, 408, 425, 429].includes(response.status) || response.status >= 500) {
           break;
         }
         continue;
