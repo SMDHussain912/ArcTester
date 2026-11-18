@@ -32,5 +32,8 @@ ReactDOM.createRoot(rootElement).render(
   </React.StrictMode>,
 );
 
-// Keep the static HTML loader visible until React has committed the first frame.
-requestAnimationFrame(() => document.getElementById("boot-screen")?.remove());
+// Keep the static loader visible for at least five seconds, and until React has painted.
+// The app-level session splash continues if authentication restoration takes longer.
+window.setTimeout(() => {
+  requestAnimationFrame(() => document.getElementById("boot-screen")?.remove());
+}, 5000);
