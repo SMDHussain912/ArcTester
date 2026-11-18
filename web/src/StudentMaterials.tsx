@@ -95,7 +95,7 @@ export default function StudentMaterials({ setActivePage }: StudentMaterialsProp
           {filtered.map((item) => <article className="student-material-card" key={item.id}>
             <div className="student-material-icon" aria-hidden="true">{item.mimeType === "application/pdf" ? "PDF" : "DOC"}</div>
             <div className="student-material-copy"><strong>{item.title}</strong><p className="muted">{item.subject}{item.topic ? " · " + item.topic : ""} · {sizeLabel(item.sizeBytes)}</p><p>{item.description}</p><small className="muted">{item.fileName}</small></div>
-            <button className="button button-primary" disabled={downloadingId === item.id} onClick={() => void downloadMaterial(item)}>{downloadingId === item.id ? "Downloading…" : "Download"}</button>
+            <div className="row wrap">{item.mimeType === "application/pdf" && <a className="button button-secondary" href={`${API}/study-materials/${encodeURIComponent(item.id)}/preview`} target="_blank" rel="noreferrer">Preview PDF</a>}<button className="button button-primary" disabled={downloadingId === item.id} onClick={() => void downloadMaterial(item)}>{downloadingId === item.id ? "Downloading…" : "Download"}</button></div>
           </article>)}
         </div>
       </section>
