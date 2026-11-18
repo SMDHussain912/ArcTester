@@ -242,6 +242,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         package: OfflineExamPackage;
         sha256: string;
       }>(`/exams/assignments/${encodeURIComponent(assignmentId)}/package`);
+      if (response.package.assignmentId !== assignmentId) {
+        throw new Error("The server returned an exam package for a different assignment.");
+      }
       await saveExamPackage(response.package, response.sha256);
       await refreshLocalState();
     } catch (cause) {
