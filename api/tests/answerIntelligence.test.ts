@@ -51,7 +51,7 @@ describe("Answer Intelligence API", () => {
       ok: true,
       explanation: {
         answer: "Stack",
-        provider: "approved-question-bank",
+        provider: "question-bank",
         explanationStatus: "approved",
         answerKeyVerified: true,
         explanationVerified: false,
