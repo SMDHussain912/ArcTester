@@ -33,4 +33,15 @@ describe("AdminModelLab", () => {
     expect(onQueueTraining).toHaveBeenCalledTimes(1);
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
+  it("registers a JSON dataset with provenance and feature schema", () => {
+    const onRegisterDataset = vi.fn();
+    render(<AdminModelLab datasets={[]} jobs={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "ECET score history" } });
+    fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Authorized anonymized historical assessment records." } });
+    fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({ features: { completed_attempts: 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 }, target: 0.7, groupId: (index % 5).toString(16).padStart(64, "0") }))) } });
+    fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
+    expect(onRegisterDataset).toHaveBeenCalledTimes(1);
+    expect(onRegisterDataset.mock.calls[0][0]).toMatchObject({ name: "ECET score history", task: "regression", targetColumn: "next_score", sourceAttested: true, datasetKind: "synthetic" });
+  });
+
 });
