@@ -158,26 +158,32 @@ export function useAssignedExamSession({
     if (!activeAssignmentPackage) return;
     setSessionBusy(true);
     try {
-      // Persist the latest in-memory answers immediately. A debounced autosave
-      // may still be waiting for its 450ms timer when the candidate leaves.
-      const packageToSave = activeAssignmentPackage;
-      const answersToSave = assignmentAnswers;
-      const save = saveQueueRef.current.catch(() => undefined).then(async () => {
-        const saved = await request<{ revision: number }>(`/exams/assignments/${encodeURIComponent(packageToSave.assignmentId)}/answers`, {
-          method: "PUT",
-          body: JSON.stringify({
-            revision: answersRevisionRef.current,
-            answers: packageToSave.questions.map((question) => ({
-              examQuestionId: question.id,
-              selectedIndex: answersToSave[question.id] ?? null,
-            })),
-          }),
+      if (paused) {
+        // Invigilator-paused sessions reject answer writes. Preserve the local
+        // recovery copy and leave without attempting a server mutation.
+        await saveQueueRef.current.catch(() => undefined);
+      } else {
+        // Persist the latest in-memory answers immediately. A debounced autosave
+        // may still be waiting for its 450ms timer when the candidate leaves.
+        const packageToSave = activeAssignmentPackage;
+        const answersToSave = assignmentAnswers;
+        const save = saveQueueRef.current.catch(() => undefined).then(async () => {
+          const saved = await request<{ revision: number }>(`/exams/assignments/${encodeURIComponent(packageToSave.assignmentId)}/answers`, {
+            method: "PUT",
+            body: JSON.stringify({
+              revision: answersRevisionRef.current,
+              answers: packageToSave.questions.map((question) => ({
+                examQuestionId: question.id,
+                selectedIndex: answersToSave[question.id] ?? null,
+              })),
+            }),
+          });
+          answersRevisionRef.current = saved.revision;
+          setSaveStatus("saved");
         });
-        answersRevisionRef.current = saved.revision;
-        setSaveStatus("saved");
-      });
-      saveQueueRef.current = save.then(() => undefined);
-      await save;
+        saveQueueRef.current = save.then(() => undefined);
+        await save;
+      }
       // Keep the local answer backup so the same candidate can resume this assignment.
       setActiveAssignmentPackage(null);
       assignmentStartedAtRef.current = null;
