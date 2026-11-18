@@ -175,20 +175,37 @@ export function useStudentCommunications({
 
   async function markNotificationRead(id: string) {
     const requestIdentity = identity;
+    const current = notifications.find((item) => item.id === id);
+    if (!current || current.readAt) return;
+
+    // Invalidate a polling response that may have captured this notification
+    // before the read mutation, then update the UI without waiting on the API.
+    notificationRequestSequence.current += 1;
+    const optimisticReadAt = new Date().toISOString();
+    setNotifications((items) => items.map((item) => item.id === id
+      ? { ...item, readAt: optimisticReadAt }
+      : item));
+    setUnreadNotificationCount((count) => Math.max(0, count - 1));
+
     try {
       const result = await request<{ readAt: string; alreadyRead?: boolean }>(
         `/notifications/${encodeURIComponent(id)}/read`,
         { method: "POST", body: JSON.stringify({}) },
       );
       if (identityRef.current === requestIdentity) {
-        const current = notifications.find((item) => item.id === id);
-        if (current && !current.readAt && result.alreadyRead !== true) {
-          setUnreadNotificationCount((count) => Math.max(0, count - 1));
-        }
-        setNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+        setNotifications((items) => items.map((item) => item.id === id
+          ? { ...item, readAt: result.readAt }
+          : item));
       }
     } catch (cause) {
-      if (identityRef.current === requestIdentity) setError((cause as Error).message);
+      if (identityRef.current === requestIdentity) {
+        setError((cause as Error).message);
+        // Reconcile with the server instead of blindly reverting: another
+        // device may have marked the notification read in the meantime.
+        void refreshNotifications().catch((refreshCause) => {
+          if (identityRef.current === requestIdentity) setError((refreshCause as Error).message);
+        });
+      }
     }
   }
 
