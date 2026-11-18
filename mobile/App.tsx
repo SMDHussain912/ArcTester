@@ -348,9 +348,15 @@ export default function App() {
           : items.filter((item) => !item.readAt).length,
       );
     } catch (cause) {
-      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
+      if (
+        sessionIdentityRef.current === requestIdentity &&
+        notificationRequestSequence.current === requestSequence
+      ) setError((cause as Error).message);
     } finally {
-      if (sessionIdentityRef.current === requestIdentity) setRefreshingNotifications(false);
+      if (
+        sessionIdentityRef.current === requestIdentity &&
+        notificationRequestSequence.current === requestSequence
+      ) setRefreshingNotifications(false);
     }
   }
 
