@@ -53,6 +53,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const mountedRef = useRef(false);
+  const lifecycleGeneration = useRef(0);
   const assignmentsRequestSequence = useRef(0);
 
   const [assignments, setAssignments] = useState<AssignedExam[]>([]);
@@ -92,12 +93,13 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   }, []);
 
   const refreshLocalState = useCallback(async () => {
+    const generation = lifecycleGeneration.current;
     configureOfflineStore(userId);
     const [packages, pending] = await Promise.all([
       listCachedExamPackages(),
       getPendingSubmissions(),
     ]);
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || generation !== lifecycleGeneration.current) return;
     setCachedIds(packages.map((item) => item.assignmentId));
     setCachedPackages(packages);
     setPendingCount(pending.length);
@@ -115,11 +117,13 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     if (syncLock.current) return;
     syncLock.current = true;
     if (!mountedRef.current) return;
+    const generation = lifecycleGeneration.current;
     setSyncing(true);
     setError("");
     try {
       configureOfflineStore(userId);
       const pending = await getPendingSubmissions();
+      if (!mountedRef.current || generation !== lifecycleGeneration.current) return;
       if (pending.length > 0) {
         setSyncMessage("Uploading saved exam submissions…");
         await syncPendingSubmissions(apiUrl, token);
@@ -127,20 +131,21 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       setSyncMessage("Loading assigned exams…");
       await refreshAssignments();
       await refreshLocalState();
-      if (mountedRef.current) setSyncMessage("Connected · exam list updated");
+      if (mountedRef.current && generation === lifecycleGeneration.current) setSyncMessage("Connected · exam list updated");
     } catch (cause) {
-      if (mountedRef.current) {
+      if (mountedRef.current && generation === lifecycleGeneration.current) {
         setError(cause instanceof Error ? cause.message : "Could not synchronize offline data.");
       }
     } finally {
       syncLock.current = false;
-      if (mountedRef.current) setSyncing(false);
+      if (mountedRef.current && generation === lifecycleGeneration.current) setSyncing(false);
     }
   }, [apiUrl, refreshAssignments, refreshLocalState, token, userId]);
 
   useEffect(() => {
     let mounted = true;
     mountedRef.current = true;
+    lifecycleGeneration.current += 1;
     assignmentsRequestSequence.current += 1;
 
     const load = async () => {
@@ -191,6 +196,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     return () => {
       mounted = false;
       mountedRef.current = false;
+      lifecycleGeneration.current += 1;
       assignmentsRequestSequence.current += 1;
       unsubscribe();
       appStateSubscription.remove();
