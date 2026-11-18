@@ -729,3 +729,8 @@ textarea{resize:vertical;line-height:1.55}
 .intelligence-provider-grid>article strong{font-size:11px}
 .intelligence-provider-grid>article small{display:block;color:var(--muted);font-size:10px}
 @media(max-width:680px){.answer-intelligence-heading{flex-direction:column}.answer-option-analysis,.intelligence-provider-grid{grid-template-columns:1fr}.intelligence-provider-grid>article{align-items:flex-start;flex-direction:column}.answer-intelligence-panel{padding:13px}}
+
+.answer-learning-decision{display:grid;gap:5px;padding:13px;border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:10px;background:var(--surface)}
+.answer-learning-decision>strong{font-size:13px}
+.answer-learning-decision>p:not(.eyebrow){margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.answer-learning-decision>small{color:var(--accent);font-size:10px;font-weight:750}
