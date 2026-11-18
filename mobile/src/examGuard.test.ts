@@ -2,6 +2,10 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 const secureStore = vi.hoisted(() => ({ values: {} as Record<string, string> }));
 
+vi.mock("expo-modules-core", () => ({
+  requireNativeModule: () => { throw new Error("ExamGuard native module is unavailable in unit tests"); },
+}));
+
 vi.mock("expo-screen-capture", () => ({
   preventScreenCaptureAsync: vi.fn(),
   allowScreenCaptureAsync: vi.fn(),
