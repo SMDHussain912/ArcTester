@@ -786,7 +786,7 @@ describe("live Vite application", () => {
       epochs: 80,
       batchSize: 32,
     });
-    expect(await screen.findByRole("heading", { name: "TensorFlow.js training jobs" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Training jobs and evaluation" })).toBeInTheDocument();
     expect(screen.getByText(/QUEUED/)).toBeInTheDocument();
   });
 
