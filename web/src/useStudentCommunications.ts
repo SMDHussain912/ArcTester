@@ -46,6 +46,9 @@ export function useStudentCommunications({
   const [activeAnnouncements, setActiveAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<StudentNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  // Page changes can trigger overlapping unread-only and full-inbox requests.
+  // Only the newest request may publish results to the inbox.
+  const notificationRequestSequence = useRef(0);
 
   // Requests can outlive the authenticated account that started them. Keep an
   // identity token in a ref so late responses cannot populate another account's UI.
@@ -62,8 +65,9 @@ export function useStudentCommunications({
 
   const refreshNotifications = useCallback(async () => {
     const requestIdentity = identity;
+    const requestSequence = ++notificationRequestSequence.current;
     if (userRole !== "STUDENT") {
-      if (identityRef.current === requestIdentity) {
+      if (identityRef.current === requestIdentity && notificationRequestSequence.current === requestSequence) {
         setNotifications([]);
         setUnreadNotificationCount(0);
       }
@@ -71,7 +75,7 @@ export function useStudentCommunications({
     }
     const path = activePage === "notifications" ? "/notifications" : "/notifications?unread=true";
     const response = await request<{ notifications: StudentNotification[]; unreadCount?: number }>(path);
-    if (identityRef.current !== requestIdentity) return;
+    if (identityRef.current !== requestIdentity || notificationRequestSequence.current !== requestSequence) return;
     const items = Array.isArray(response.notifications) ? response.notifications : [];
     setNotifications(items);
     setUnreadNotificationCount(
@@ -82,6 +86,8 @@ export function useStudentCommunications({
   }, [activePage, identity, request, userRole]);
 
   useEffect(() => {
+    // Invalidate any in-flight notification response from the previous account.
+    notificationRequestSequence.current += 1;
     setAnnouncements([]);
     setActiveAnnouncements([]);
     setNotifications([]);
