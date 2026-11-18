@@ -36,6 +36,10 @@ if (fs.existsSync(mainFile)) {
   const main = fs.readFileSync(mainFile, "utf8");
   check(main.includes('webContents.on("before-input-event"'), "exam shortcut handling must subscribe to webContents");
   check(main.includes('ipcMain.handle("exam-mode:set"'), "main process must expose the guarded exam-mode IPC handler");
+  check(main.includes('protocol.registerSchemesAsPrivileged('), "desktop must register its secure custom origin before app readiness");
+  check(main.includes('protocol.handle("arctester", serveApp)'), "desktop must serve the packaged SPA from the arctester://app origin");
+  check(main.includes('window.loadURL("arctester://app/")'), "desktop must load the secure packaged-app origin");
+  check(main.includes('url.host !== "app"'), "custom protocol handler must restrict requests to the app host");
   check(!/\bi\.shift\b|\bi\.key\b/.test(main), "exam shortcut handler must not reference the undefined i variable");
 }
 
