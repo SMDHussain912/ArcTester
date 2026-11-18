@@ -234,7 +234,7 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
     startedAtMonotonicMs,
     JSON.stringify({}),
     "ACTIVE",
-    startedAt,
+    new Date(startedAtMonotonicMs).toISOString(),
   );
   return { attemptUuid, startedAt, examPackage };
 }
