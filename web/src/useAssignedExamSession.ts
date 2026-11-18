@@ -29,6 +29,7 @@ export interface UseAssignedExamSessionResult {
   startAssignedExam: (assignmentId: string) => Promise<void>;
   selectAssignedAnswer: (questionId: string, selectedIndex: number) => void;
   submitAssignedExam: (force?: boolean) => Promise<void>;
+  leaveAssignedExam: () => Promise<void>;
   reviewAssignedExam: (assignmentId: string) => Promise<void>;
   refreshAssignedExams: () => Promise<void>;
 }
@@ -149,6 +150,27 @@ export function useAssignedExamSession({
       setActivePage("assigned-exams");
     } catch (cause) { setSessionError((cause as Error).message); }
     finally { setSessionBusy(false); }
+  }
+
+  async function leaveAssignedExam(): Promise<void> {
+    if (!activeAssignmentPackage) return;
+    setSessionBusy(true);
+    try {
+      // Flush queued autosaves before unmounting the exam screen. Keep the
+      // local answer backup so the same candidate can resume this assignment.
+      await saveQueueRef.current;
+      setActiveAssignmentPackage(null);
+      assignmentStartedAtRef.current = null;
+      assignmentDeadlineRef.current = null;
+      assignmentServerOffsetRef.current = 0;
+      setPaused(false);
+      setSaveStatus("idle");
+      setActivePage("assigned-exams");
+    } catch (cause) {
+      setSessionError(`Could not finish saving answers before leaving: ${(cause as Error).message}`);
+    } finally {
+      setSessionBusy(false);
+    }
   }
 
   async function reviewAssignedExam(assignmentId: string): Promise<void> {
@@ -297,6 +319,7 @@ export function useAssignedExamSession({
     startAssignedExam,
     selectAssignedAnswer,
     submitAssignedExam,
+    leaveAssignedExam,
     reviewAssignedExam,
     refreshAssignedExams,
   };
