@@ -38,3 +38,9 @@ export function resumeServerClock(
     deadlineMs: serverTimeMs + Math.max(0, remainingSeconds) * 1000,
   };
 }
+
+/** Prefer the server's per-session duration deadline over the assignment cutoff. */
+export function resolveAssignedExamDeadline(sessionDeadline: string | null, assignmentDueAt: string | null): number {
+  const value = sessionDeadline ?? assignmentDueAt;
+  return value ? Date.parse(value) : Number.POSITIVE_INFINITY;
+}
