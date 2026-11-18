@@ -179,7 +179,7 @@ describe("auth", () => {
 
   it("allows protected test routes with a valid session", async () => {
     await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
-      email: "alice@example.com",
+      email: "bob@example.com",
       password: "secret1234",
     });
     const res = await postJsonWithCookie(`${server.baseUrl}/tests`, {
