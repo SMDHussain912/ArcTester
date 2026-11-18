@@ -10,7 +10,6 @@ export function configureOfflineStore(userId: string): void {
   if (configuredUserId !== userId) {
     configuredUserId = userId;
     dbPromise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
-    initialized = false;
   }
 }
 
@@ -65,15 +64,16 @@ type AttemptRow = {
   updatedAt: string;
 };
 
-let initialized = false;
+const databaseInitializations = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
 
 async function database() {
   if (!dbPromise) {
     throw new Error("Offline storage has not been configured for this account.");
   }
   const db = await dbPromise;
-  if (!initialized) {
-    await db.execAsync(`
+  let initialization = databaseInitializations.get(db);
+  if (!initialization) {
+    initialization = db.execAsync(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS exam_packages (
@@ -96,8 +96,9 @@ async function database() {
         updated_at TEXT NOT NULL
       );
     `);
-    initialized = true;
+    databaseInitializations.set(db, initialization);
   }
+  await initialization;
   return db;
 }
 
