@@ -43,7 +43,7 @@ Use a model actually pulled into the local Ollama instance. For llama.cpp server
 - The authoritative answer comes from the immutable attempt answer-key snapshot.
 - The prompt receives question text, choices, the selected choice and the question-bank explanation; it does not receive a student's name, email or database ID.
 - AI output must be valid structured JSON and must preserve the exact four choices and answer-key index. Invalid output falls through to the next provider.
-- AI-generated explanations are labelled `ai-generated-unverified`; the system does not claim to have independently verified their reasoning.
+- AI-generated explanations are labelled `ai-generated-unverified`; the system does not claim to have independently verified their reasoning. Results are cached in a bounded in-memory cache for up to six hours, keyed by question snapshot and configured provider/model identity.
 - Existing question-bank explanations are preferred over generic offline text when no provider is available.
 - Provider keys remain server-side environment variables. They are never returned by the status endpoint.
 
@@ -57,6 +57,6 @@ Use a model actually pulled into the local Ollama instance. For llama.cpp server
 
 ## Current boundaries
 
-The existing Decision Engine remains evidence-based and rule-driven, with the score predictor used where eligible. Answer explanations do not directly alter marks, student access, exam settings or model activation. Each explanation also returns a small evidence-based next-study action (learn concept, review mistakes, or spaced practice). This is a transparent per-answer policy, not a trained decision model; the existing analytics recommendation engine continues to use accumulated attempt statistics.
+The existing Decision Engine remains evidence-based and rule-driven, with the score predictor used where eligible. Answer explanations do not directly alter marks, student access, exam settings or model activation. Each explanation also calls the shared Decision Engine policy `buildImmediateAnswerDecision` in `intelligence/ruleBasedRecommendations.ts` to return a next-study action (learn concept, review mistakes, or spaced practice). This immediate action is intentionally separate from the existing evidence-aggregated weak-topic recommendations: one answer cannot establish a persistent weak topic. The analytics recommendation engine continues to use accumulated attempt statistics.
 
 The current fallback template is intentionally conservative: it can explain the recorded key but does not pretend to derive a full subject-specific proof when no question-bank explanation or AI provider is available.
