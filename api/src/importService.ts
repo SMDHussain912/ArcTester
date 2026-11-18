@@ -100,6 +100,11 @@ async function insertValidatedQuestions(
       ? await tx.question.createMany({ data: rows, skipDuplicates: true })
       : { count: 0 };
     return { added: result.count, duplicates: inputs.length - result.count };
+  }, {
+    // Imports may contain up to 2,000 rows. Keep the entire import atomic,
+    // but do not use Prisma's five-second interactive-transaction default.
+    maxWait: 10_000,
+    timeout: 30_000,
   });
 }
 
