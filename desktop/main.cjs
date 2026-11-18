@@ -1,8 +1,90 @@
-const { app, BrowserWindow, screen, powerMonitor, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, screen, powerMonitor, shell, ipcMain, protocol } = require("electron");
+const fs = require("fs/promises");
 const path = require("path");
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "arctester",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  }
+]);
 
 let examMode = false;
 let examWindow = null;
+
+function getWebRoot() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "web-dist")
+    : path.join(__dirname, "../web/dist");
+}
+
+function contentType(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  return ({
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf"
+  })[extension] || "application/octet-stream";
+}
+
+async function serveApp(request) {
+  const url = new URL(request.url);
+  if (url.host !== "app") return new Response("Not found", { status: 404 });
+
+  let pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    return new Response("Bad request", { status: 400 });
+  }
+
+  const root = getWebRoot();
+  let filePath = path.resolve(root, `. ${pathname}`.trim());
+  if (filePath !== root && !filePath.startsWith(root + path.sep)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  try {
+    const stat = await fs.stat(filePath);
+    if (stat.isDirectory()) filePath = path.join(filePath, "index.html");
+    const body = await fs.readFile(filePath);
+    return new Response(body, {
+      headers: {
+        "Content-Type": contentType(filePath),
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable"
+      }
+    });
+  } catch {
+    // Client-side routes resolve to the SPA entry; missing asset files stay 404.
+    if (path.extname(pathname)) return new Response("Not found", { status: 404 });
+    try {
+      const entry = path.join(root, "index.html");
+      return new Response(await fs.readFile(entry), {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" }
+      });
+    } catch {
+      return new Response("ArcTester web build is missing. Run npm run build:web.", { status: 503 });
+    }
+  }
+}
 
 function sendIntegrityViolation(type, detail) {
   if (!examMode || !examWindow || examWindow.isDestroyed()) return;
@@ -33,10 +115,7 @@ function createWindow() {
   if (devUrl) {
     window.loadURL(devUrl);
   } else {
-    const entry = app.isPackaged
-      ? path.join(process.resourcesPath, "web-dist", "index.html")
-      : path.join(__dirname, "../web/dist/index.html");
-    window.loadFile(entry);
+    window.loadURL("arctester://app/");
   }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -44,7 +123,6 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  // Electron emits before-input-event on webContents, not on app.
   window.webContents.on("before-input-event", (event, input) => {
     if (!examMode) return;
     const key = String(input.key || "").toUpperCase();
@@ -94,7 +172,6 @@ function exitExamMode(window) {
   }
 }
 
-// Only the active application window may toggle its own exam-mode state.
 ipcMain.handle("exam-mode:set", (event, enabled) => {
   if (!examWindow || event.sender !== examWindow.webContents || typeof enabled !== "boolean") {
     return { ok: false };
@@ -104,6 +181,7 @@ ipcMain.handle("exam-mode:set", (event, enabled) => {
 });
 
 app.whenReady().then(() => {
+  protocol.handle("arctester", serveApp);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -118,7 +196,6 @@ app.on("second-instance", () => {
   if (examWindow && !examWindow.isDestroyed()) examWindow.focus();
 });
 
-// Do not allow the application to quit while a formal exam is active.
 app.on("before-quit", (event) => {
   if (examMode) event.preventDefault();
 });
