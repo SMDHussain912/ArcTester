@@ -19,7 +19,10 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("ArcTester root element is missing.");
+
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <OnlineStatusProvider>
       <AppErrorBoundary>
@@ -28,3 +31,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </OnlineStatusProvider>
   </React.StrictMode>,
 );
+
+// Keep the static HTML loader visible until React has committed the first frame.
+requestAnimationFrame(() => document.getElementById("boot-screen")?.remove());
