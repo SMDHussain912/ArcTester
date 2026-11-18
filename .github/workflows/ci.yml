@@ -181,8 +181,16 @@ jobs:
         run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
 
       - name: Start API server
-        run: npm run dev --workspace=api &
-        sleep: 5
+        run: |
+          npm run dev --workspace=api &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:4000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy within 60 seconds" >&2
+          exit 1
 
       - name: Run Playwright E2E tests
         run: npx playwright test --project=chromium
