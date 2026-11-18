@@ -15,6 +15,7 @@ import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
 import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { studyMaterialRouter } from "./studyMaterialRoutes.js";
+import { answerIntelligenceRouter } from "./answerIntelligenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -145,6 +146,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(modelTrainingJobsRouter(database));
   app.use(announcementRouter(database));
   app.use(studyMaterialRouter(database));
+  app.use(answerIntelligenceRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
