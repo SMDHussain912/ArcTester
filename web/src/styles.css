@@ -452,3 +452,11 @@ textarea{resize:vertical;line-height:1.55}
 .assigned-result-review{display:grid;gap:10px;padding-top:12px;border-top:1px solid var(--border)}
 .assigned-result-review h3{margin:0}
 @media(max-width:560px){.announcement-popup{padding:18px}.admin-exam-meta{flex-direction:column}.assigned-exam-card{padding:15px}}
+
+
+.student-materials-page{gap:18px}
+.student-materials-page>.panel{padding:18px}
+.student-materials-page .panel-header{align-items:center}
+.student-materials-page .student-material-list{margin-top:14px}
+.exp{margin-top:14px;padding:13px 15px;border:1px solid color-mix(in srgb,var(--success) 30%,var(--border));border-radius:11px;background:color-mix(in srgb,var(--success) 8%,var(--surface));color:var(--success);font-size:12px}
+.exp p{margin:5px 0 0}
