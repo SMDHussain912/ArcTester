@@ -79,7 +79,7 @@ describe("auth", () => {
   });
 
   afterAll(async () => {
-    await server.close();
+    if (server) await server.close();
   });
 
   it("registers a new user with an invitation", async () => {
