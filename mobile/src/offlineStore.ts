@@ -103,18 +103,56 @@ async function database() {
 }
 
 function parsePackage(raw: string): OfflineExamPackage {
-  const value = JSON.parse(raw) as OfflineExamPackage;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error("The downloaded exam package is invalid JSON.");
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The downloaded exam package is invalid.");
+  }
+  const candidate = value as Partial<OfflineExamPackage>;
+  const validDateOrNull = (date: unknown) =>
+    date === null || (typeof date === "string" && Number.isFinite(Date.parse(date)));
   if (
-    !value.assignmentId ||
-    !value.serverTime ||
-    !Number.isInteger(value.durationMinutes) ||
-    value.durationMinutes < 1 ||
-    !Array.isArray(value.questions) ||
-    value.questions.length === 0
+    typeof candidate.assignmentId !== "string" || !candidate.assignmentId.trim() ||
+    typeof candidate.examId !== "string" || !candidate.examId.trim() ||
+    typeof candidate.title !== "string" || !candidate.title.trim() ||
+    typeof candidate.description !== "string" ||
+    typeof candidate.instructions !== "string" ||
+    !Number.isInteger(candidate.version) || (candidate.version ?? 0) < 1 ||
+    typeof candidate.serverTime !== "string" || !Number.isFinite(Date.parse(candidate.serverTime)) ||
+    !Number.isInteger(candidate.durationMinutes) || (candidate.durationMinutes ?? 0) < 1 ||
+    !validDateOrNull(candidate.availableFrom) ||
+    !validDateOrNull(candidate.dueAt) ||
+    !Array.isArray(candidate.questions) || candidate.questions.length === 0 ||
+    candidate.questions.length > 500
   ) {
     throw new Error("The downloaded exam package is invalid.");
   }
-  return value;
+
+  const ids = new Set<string>();
+  for (const question of candidate.questions) {
+    if (
+      !question || typeof question !== "object" ||
+      typeof question.id !== "string" || !question.id.trim() || ids.has(question.id) ||
+      !Number.isInteger(question.position) || question.position < 0 ||
+      typeof question.subject !== "string" || !question.subject.trim() ||
+      !(question.topic === null || typeof question.topic === "string") ||
+      typeof question.text !== "string" || !question.text.trim() ||
+      !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 4 ||
+      question.options.some((option) => typeof option !== "string" || !option.trim()) ||
+      !Number.isFinite(question.marks) || question.marks <= 0 ||
+      !Number.isFinite(question.negativeMarks) || question.negativeMarks < 0
+    ) {
+      throw new Error("The downloaded exam package contains an invalid question.");
+    }
+    ids.add(question.id);
+  }
+
+  return candidate as OfflineExamPackage;
 }
 
 export async function saveExamPackage(
@@ -129,6 +167,7 @@ export async function saveExamPackage(
   if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
     throw new Error("Exam package integrity check failed. Download it again.");
   }
+  parsePackage(serialized);
 
   const downloadedAt = new Date();
   const serverTime = new Date(examPackage.serverTime);
