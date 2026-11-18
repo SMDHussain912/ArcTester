@@ -26,7 +26,7 @@ describe("hybrid answer intelligence", () => {
     const status = getAnswerIntelligenceProviderStatus();
     expect(status.external.configured).toBe(false);
     expect(status.local.configured).toBe(false);
-    expect(status.fallback).toEqual(["external-ai", "local-ai", "approved-explanation", "deterministic-template"]);
+    expect(status.fallback).toEqual(["external-ai", "local-ai", "question-bank-explanation", "deterministic-template"]);
     expect(JSON.stringify(status)).not.toContain("API_KEY");
   });
 
@@ -53,7 +53,7 @@ describe("hybrid answer intelligence", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "");
     vi.stubEnv("ARCTESTER_LOCAL_AI_MODEL", "");
     const result = await generateAnswerExplanation({ ...question, approvedExplanation: "A stack removes the most recently added item first." });
-    expect(result.explanationStatus).toBe("approved");
+    expect(result.explanationStatus).toBe("question-bank");
     expect(result.provider).toBe("question-bank");
     expect(result.summary).toContain("most recently added");
   });
