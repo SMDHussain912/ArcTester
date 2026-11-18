@@ -122,3 +122,16 @@ describe("buildRuleBasedRecommendations", () => {
     expect(result.recommendations).toEqual([]);
   });
 });
+
+
+describe("buildImmediateAnswerDecision", () => {
+  it("routes unanswered, incorrect and correct answers to distinct next actions", async () => {
+    const { buildImmediateAnswerDecision } = await import("./ruleBasedRecommendations.js");
+    expect(buildImmediateAnswerDecision({ subject: "Maths", topic: "Matrices", selectedIndex: null, correctIndex: 1 }))
+      .toMatchObject({ action: "learn-concept", recommendedMode: "practice", questionCount: 5 });
+    expect(buildImmediateAnswerDecision({ subject: "Maths", topic: "Matrices", selectedIndex: 0, correctIndex: 1 }))
+      .toMatchObject({ action: "review-topic", recommendedMode: "mistakes", questionCount: 5 });
+    expect(buildImmediateAnswerDecision({ subject: "Maths", topic: "Matrices", selectedIndex: 1, correctIndex: 1 }))
+      .toMatchObject({ action: "spaced-practice", recommendedMode: "practice", questionCount: 3 });
+  });
+});
