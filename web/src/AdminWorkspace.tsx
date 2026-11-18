@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import AdminSubjects, { type AdminCatalogSubject } from "./AdminSubjects";
 import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
-import AdminModelLab, { type ModelLabDataset, type ModelLabJob } from "./AdminModelLab";
+import AdminModelLab, { type ModelDatasetRegistration, type ModelLabDataset, type ModelLabJob } from "./AdminModelLab";
 import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamStudent, type AdminExamPreview } from "./AdminExamManagement";
@@ -92,9 +92,11 @@ export default function AdminWorkspace(p:Props){
   });
  }
  useEffect(()=>{if(tab==="model-lab")void loadModelLab().catch(e=>setError(e.message));if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab!=="model-lab")return;const timer=window.setInterval(()=>{void loadModelLab().catch(e=>setError(e.message));},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab==="attendance")void loadAttendance(1).catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="live-monitor")return;let active=true;const refresh=()=>{if(active)void loadLiveSessions().catch(e=>setError(e.message));};refresh();const timer=window.setInterval(refresh,15000);return()=>{active=false;window.clearInterval(timer);};},[tab]);
  async function queueTensorflowTraining(){if(!selectedDatasetId)throw new Error("Register a dataset before queueing training.");await run(async()=>{const r=await api<{job:ModelLabJob}>(`/admin/model-datasets/${encodeURIComponent(selectedDatasetId)}/tensorflow-jobs`,{method:"POST",body:JSON.stringify({modelId:`${trainingModelPrefix}-tensorflow`,seed:42,epochs:80,batchSize:32})});setNotice(`TensorFlow.js job ${r.job.id} queued.`);await loadModelLab();});}
+ async function registerModelDataset(payload:ModelDatasetRegistration){await run(async()=>{const response=await api<{dataset:ModelLabDataset}>("/admin/model-datasets",{method:"POST",body:JSON.stringify(payload)});setNotice("Dataset registered: "+response.dataset.name+" ("+response.dataset.rowCount+" rows). Training has not started yet.");await loadModelLab();});}
  async function releaseReviewItem(id:string){await run(async()=>{await api(`/admin/submissions/${encodeURIComponent(id)}/release`,{method:"POST",body:JSON.stringify({})});await loadReviewQueue();setNotice("Submission approved and released.");});}
  useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty]);
  async function run(action:()=>Promise<void>){setBusy(true);setError("");setNotice("");try{await action();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
@@ -153,7 +155,7 @@ export default function AdminWorkspace(p:Props){
     onRefresh={() => void loadReviewQueue()}
     onRelease={(id) => void releaseReviewItem(id)}
    />}
-   {tab==="model-lab"&&<AdminModelLab datasets={modelDatasets} jobs={trainingJobs} selectedDatasetId={selectedDatasetId} modelPrefix={trainingModelPrefix} busy={busy} onDatasetChange={setSelectedDatasetId} onModelPrefixChange={setTrainingModelPrefix} onQueueTraining={() => void queueTensorflowTraining()} onRefresh={() => void loadModelLab()} />}
+   {tab==="model-lab"&&<AdminModelLab datasets={modelDatasets} jobs={trainingJobs} selectedDatasetId={selectedDatasetId} modelPrefix={trainingModelPrefix} busy={busy} onDatasetChange={setSelectedDatasetId} onModelPrefixChange={setTrainingModelPrefix} onQueueTraining={() => void queueTensorflowTraining()} onRefresh={() => void loadModelLab()} onRegisterDataset={(payload) => void registerModelDataset(payload)} />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
