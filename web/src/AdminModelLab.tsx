@@ -51,6 +51,7 @@ export default function AdminModelLab({
   const [task, setTask] = useState<"regression" | "binary-classification">("regression");
   const [datasetKind, setDatasetKind] = useState<"synthetic" | "real-anonymized">("synthetic");
   const [sourceDescription, setSourceDescription] = useState("");
+  const [sourceAttested, setSourceAttested] = useState(false);
   const [featureSchemaText, setFeatureSchemaText] = useState(JSON.stringify(DEFAULT_FEATURE_SCHEMA, null, 2));
   const [samplesText, setSamplesText] = useState("");
   const [uploadName, setUploadName] = useState("");
@@ -80,6 +81,7 @@ export default function AdminModelLab({
       const samples = JSON.parse(samplesText) as ModelDatasetRegistration["samples"];
       if (!datasetName.trim()) throw new Error("Enter a dataset name.");
       if (!sourceDescription.trim() || sourceDescription.trim().length < 10) throw new Error("Provide at least 10 characters describing the dataset source.");
+      if (!sourceAttested) throw new Error("Confirm that you are authorized to use this dataset and that it contains no direct personal identifiers.");
       if (!Array.isArray(featureSchema) || featureSchema.length === 0) throw new Error("Feature schema must be a non-empty JSON array.");
       if (!Array.isArray(samples) || samples.length < 10) throw new Error("Samples must be a JSON array containing at least 10 rows. TensorFlow training requires at least 30.");
       if (!onRegisterDataset) throw new Error("Dataset registration is not connected to the API.");
@@ -115,6 +117,7 @@ export default function AdminModelLab({
           <label>Dataset provenance<select value={datasetKind} onChange={(event) => setDatasetKind(event.target.value as typeof datasetKind)}><option value="synthetic">Synthetic / experiment only</option><option value="real-anonymized">Real anonymized learner data</option></select></label>
         </div>
         <label>Source description<textarea value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Describe where the data came from, how it was collected and why its use is authorized." /></label>
+        <label className="dataset-attestation"><input type="checkbox" checked={sourceAttested} onChange={(event) => setSourceAttested(event.target.checked)} /> I confirm I am authorized to use this data and have removed direct personal identifiers.</label>
         <label>Feature schema JSON<textarea rows={7} spellCheck={false} value={featureSchemaText} onChange={(event) => setFeatureSchemaText(event.target.value)} /></label>
         <label>Training samples JSON<input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label>
         {uploadName && <p className="muted">Selected file: {uploadName}</p>}
