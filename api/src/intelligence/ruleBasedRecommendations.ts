@@ -235,3 +235,51 @@ export function buildRuleBasedRecommendations(input: {
 
   return { recommendations, recentlyPracticedWeakCount: recentSubjects.length };
 }
+
+
+export interface ImmediateAnswerDecision {
+  action: "learn-concept" | "review-topic" | "spaced-practice";
+  title: string;
+  reason: string;
+  recommendedMode: "practice" | "mistakes";
+  questionCount: number;
+}
+
+/**
+ * Applies the Decision Engine's immediate post-answer policy.
+ * This is deliberately separate from evidence-aggregated weak-topic recommendations:
+ * one answer can guide the next action, but cannot establish a persistent weak topic.
+ */
+export function buildImmediateAnswerDecision(input: {
+  subject: string;
+  topic: string | null;
+  selectedIndex: number | null;
+  correctIndex: number;
+}): ImmediateAnswerDecision {
+  const area = input.topic?.trim() || input.subject;
+  if (input.selectedIndex === null) {
+    return {
+      action: "learn-concept",
+      title: `Learn the key concept in ${area}`,
+      reason: "This question was left unanswered. Review the concept before attempting a short practice set.",
+      recommendedMode: "practice",
+      questionCount: 5,
+    };
+  }
+  if (input.selectedIndex !== input.correctIndex) {
+    return {
+      action: "review-topic",
+      title: `Review ${area}`,
+      reason: "This answer was incorrect. Revisit the explanation, then retry related questions to check understanding.",
+      recommendedMode: "mistakes",
+      questionCount: 5,
+    };
+  }
+  return {
+    action: "spaced-practice",
+    title: `Reinforce ${area}`,
+    reason: "This answer was correct. A short follow-up set can help check that the concept is retained.",
+    recommendedMode: "practice",
+    questionCount: 3,
+  };
+}
