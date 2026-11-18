@@ -14,6 +14,7 @@ import { modelRegistryRouter } from "./modelRoutes.js";
 import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
 import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 import { announcementRouter } from "./announcementRoutes.js";
+import { studyMaterialRouter } from "./studyMaterialRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -117,7 +118,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // 1 MB JSON body limit by default. The large-payload import routes apply their
   // own 50 MB parsers below; every other route uses the 1 MB global parser.
   app.use((req, res, next) => {
-    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import" ||
+        req.path.startsWith("/admin/model-datasets") || req.path.startsWith("/admin/study-materials")) {
       return next();
     }
     express.json({ limit: "1mb" })(req, res, next);
@@ -141,6 +143,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(modelRegistryRouter(database));
   app.use(modelTrainingJobsRouter(database));
   app.use(announcementRouter(database));
+  app.use(studyMaterialRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
