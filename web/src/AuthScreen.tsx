@@ -19,7 +19,14 @@ export default function AuthScreen({ email, password, invitationToken, register,
         <button className="primary full" disabled={busy}>{busy ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
       </form>
       <button className="text-button" onClick={() => onRegisterChange(!register)}>{register ? "Already have an account? Sign in" : "Have an invitation? Create account"}</button>
-      {error && <p className="error">{error}</p>}
+      {error && <p className={error.startsWith("Account created") ? "success auth-feedback" : "error auth-feedback"} role="status">{error}</p>}
+      {busy && <div className="auth-connecting" role="status" aria-live="polite">
+        <div className="auth-orbit"><span /><i /><b /></div>
+        <strong>{register ? "Creating your ArcTester account" : "Connecting securely"}</strong>
+        <p>{register ? "Setting up your learning space…" : "Verifying your credentials and preparing your workspace…"}</p>
+        <div className="auth-connecting-track"><span /></div>
+        <small>Please keep this page open</small>
+      </div>}
     </section></main>
   );
 }
