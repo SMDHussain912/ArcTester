@@ -77,7 +77,7 @@ function promptFor(question: ExplanationQuestion): string {
       question: question.text, options: question.options,
       authoritativeCorrectOption: question.options[question.correctIndex],
       studentSelectedOption: question.selectedIndex === null ? null : question.options[question.selectedIndex],
-      existingApprovedExplanation: question.approvedExplanation || null,
+      existingQuestionBankExplanation: question.approvedExplanation || null,
     }),
   ].join("\n\n");
 }
@@ -154,8 +154,8 @@ function deterministicExplanation(question: ExplanationQuestion): GeneratedExpla
       option,
       isCorrect: index === question.correctIndex,
       explanation: index === question.correctIndex
-        ? "This is the answer recorded in the approved question-bank key."
-        : "Compare this option with the exact requirement in the question. The approved question bank does not provide a more specific distractor rationale.",
+        ? "This is the answer recorded in the question-bank answer key."
+        : "Compare this option with the exact requirement in the question. The stored question-bank content does not provide a more specific distractor rationale.",
     })),
     takeaway: "Revisit the related concept and verify the key idea before attempting a similar question.",
     misconception: question.selectedIndex !== null && question.selectedIndex !== question.correctIndex
@@ -173,7 +173,7 @@ export function getAnswerIntelligenceProviderStatus() {
   return {
     external: { provider: externalProvider, configured: externalConfigured },
     local: { provider: "openai-compatible-local", configured: localConfigured, baseUrl: process.env.ARCTESTER_LOCAL_AI_BASE_URL || "http://127.0.0.1:11434/v1" },
-    fallback: ["external-ai", "local-ai", "approved-explanation", "deterministic-template"],
+    fallback: ["external-ai", "local-ai", "question-bank-explanation", "deterministic-template"],
   };
 }
 
@@ -231,10 +231,10 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
   }
 
   const fallback = deterministicExplanation(question);
-  const approved = Boolean(question.approvedExplanation.trim());
+  const hasQuestionBankExplanation = Boolean(question.approvedExplanation.trim());
   const value: AnswerExplanation = {
-    answer, ...fallback, provider: approved ? "question-bank" : "deterministic-template",
-    explanationStatus: approved ? "question-bank" : "template",
+    answer, ...fallback, provider: hasQuestionBankExplanation ? "question-bank" : "deterministic-template",
+    explanationStatus: hasQuestionBankExplanation ? "question-bank" : "template",
     answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
   };
   rememberExplanation(key, value);
