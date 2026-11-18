@@ -8,7 +8,7 @@ export type AnswerExplanation = {
  takeaway: string;
  misconception: string;
  provider: string;
- explanationStatus: "approved" | "ai-generated-unverified" | "template";
+ explanationStatus: "question-bank" | "ai-generated-unverified" | "template";
  answerKeyVerified: boolean;
  explanationVerified: boolean;
  learningDecision: { action: "learn-concept" | "review-topic" | "spaced-practice"; title: string; reason: string; recommendedMode: "practice" | "mistakes"; questionCount: number };
@@ -37,7 +37,7 @@ export default function StudentPracticeResults({ result, onBack, onExplain }: Pr
   <div className="answer-intelligence-actions"><button type="button" className="button button-secondary" disabled={loading!==null} onClick={()=>void explain(question.questionId)}>{loading===question.questionId?"Building explanation…":detail?"Regenerate explanation":"Explain this answer with AI"}</button><span className="muted">Uses approved content first, then configured AI fallbacks.</span></div>
   {errors[question.questionId] && <p className="error" role="alert">{errors[question.questionId]}</p>}
   {detail && <section className="answer-intelligence-panel" aria-live="polite">
-   <div className="answer-intelligence-heading"><div><p className="eyebrow">ARCTESTER ANSWER INTELLIGENCE</p><h4>{detail.summary}</h4></div><span className={"status "+(detail.explanationStatus==="approved"?"status-used":"status-pending")}>{detail.explanationStatus==="approved"?"APPROVED":detail.explanationStatus==="template"?"OFFLINE GUIDE":"AI DRAFT"}</span></div>
+   <div className="answer-intelligence-heading"><div><p className="eyebrow">ARCTESTER ANSWER INTELLIGENCE</p><h4>{detail.summary}</h4></div><span className={"status "+(detail.explanationStatus==="question-bank"?"status-used":"status-pending")}>{detail.explanationStatus==="question-bank"?"APPROVED":detail.explanationStatus==="template"?"OFFLINE GUIDE":"AI DRAFT"}</span></div>
    <h5>Step-by-step reasoning</h5><ol>{detail.reasoning.map((step,i)=><li key={i}>{step}</li>)}</ol>
    <h5>Option analysis</h5><div className="answer-option-analysis">{detail.optionAnalysis.map((option,i)=><div key={i} className={option.isCorrect?"answer-option-correct":"answer-option-other"}><strong>{String.fromCharCode(65+i)}. {option.option}</strong><p>{option.explanation}</p></div>)}</div>
    {detail.misconception && <p className="answer-misconception"><strong>Possible misconception:</strong> {detail.misconception}</p>}
