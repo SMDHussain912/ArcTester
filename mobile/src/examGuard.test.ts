@@ -116,6 +116,22 @@ describe("examGuard", () => {
     expect(secureStore.values["arctester-pending-integrity-events"]).toBeUndefined();
   });
 
+  it("never sends one assignment's pending integrity events with another assignment", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    pushViolation("TAB_HIDDEN", "First assignment");
+    const unavailableApi = vi.fn(async () => { throw new Error("offline"); });
+    await flushGuardEvents({ api: unavailableApi, assignmentId: "assign-1" });
+    await stopExamGuard();
+
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-2" });
+    await flushGuardEvents({ api: fakeApi, assignmentId: "assign-2" });
+
+    expect(capturedApiCalls).toHaveLength(0);
+    const persisted = JSON.parse(secureStore.values["arctester-pending-integrity-events"]);
+    expect(persisted["assign-1"]).toHaveLength(1);
+    expect(persisted["assign-2"]).toBeUndefined();
+  });
+
   it("does not attribute a previous exam restart to a different assignment", async () => {
     await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
     await reportAppReopened({ api: fakeApi, assignmentId: "assign-2" });
