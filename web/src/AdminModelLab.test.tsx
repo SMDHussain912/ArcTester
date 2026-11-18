@@ -11,7 +11,8 @@ describe("AdminModelLab", () => {
     expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "CSE readiness · 120 rows · regression" })).toBeTruthy();
     expect(screen.getByText("ecet-readiness-tensorflow")).toBeTruthy();
-    expect(screen.getByText("RUNNING")).toBeTruthy();\n    expect(screen.getByText("45% complete")).toBeTruthy();
+    expect(screen.getByText("RUNNING")).toBeTruthy();
+    expect(screen.getByText("45% complete")).toBeTruthy();
   });
 
   it("shows the empty job state and disables queueing without a dataset", () => {
@@ -25,7 +26,7 @@ describe("AdminModelLab", () => {
     const { rerender } = render(<AdminModelLab datasets={datasets} jobs={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
     fireEvent.change(screen.getByLabelText("Training model prefix"), { target: { value: "new-prefix" } });
     fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
-    rerender(<AdminModelLab datasets={datasets} jobs={[]} selectedDatasetId="dataset-1" modelPrefix="new-prefix" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onRefresh={onRefresh} />);
+    rerender(<AdminModelLab datasets={datasets} jobs={[]} selectedDatasetId="dataset-1" modelPrefix="new-prefix" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
     fireEvent.click(screen.getByRole("button", { name: "Queue TensorFlow.js" }));
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(onModelPrefixChange).toHaveBeenCalledWith("new-prefix");
