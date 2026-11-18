@@ -16,7 +16,7 @@ export type StudyMaterial = {
 type Props = {
   materials: StudyMaterial[];
   busy: boolean;
-  onUpload: (payload: { title: string; description: string; subject: string; topic: string; fileName: string; mimeType: string; contentBase64: string }) => void;
+  onUpload: (payload: { title: string; description: string; subject: string; topic: string; fileName: string; mimeType: string; contentBase64: string }) => Promise<boolean> | void;
   onStatusChange: (id: string, status: StudyMaterial["status"]) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
@@ -48,7 +48,8 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onStatu
     for (let offset = 0; offset < bytes.length; offset += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
     }
-    onUpload({ title: title.trim(), description: description.trim(), subject: subject.trim(), topic: topic.trim(), fileName: file.name, mimeType: file.type, contentBase64: btoa(binary) });
+    const uploaded = await onUpload({ title: title.trim(), description: description.trim(), subject: subject.trim(), topic: topic.trim(), fileName: file.name, mimeType: file.type, contentBase64: btoa(binary) });
+    if (uploaded === false) return;
     setTitle(""); setDescription(""); setTopic(""); setFile(null);
     const input = document.getElementById("study-material-file") as HTMLInputElement | null;
     if (input) input.value = "";
