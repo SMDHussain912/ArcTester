@@ -61,9 +61,12 @@ export function useAssignedExamSession({
   const attemptKeyFor = (assignmentId: string) => `arctester-assigned-attempt-${assignmentId}`;
 
   const remainingSeconds = useCallback((): number => {
-    const deadline = activeAssignmentPackage?.dueAt
-      ? new Date(activeAssignmentPackage.dueAt).getTime()
-      : (assignmentDeadlineRef.current ? new Date(assignmentDeadlineRef.current).getTime() : Number.POSITIVE_INFINITY);
+    // The exam duration deadline is returned by the server session. The
+    // assignment dueAt is only the outer submission cutoff and may be hours
+    // later, so it must never drive the in-exam countdown.
+    const deadline = assignmentDeadlineRef.current
+      ? new Date(assignmentDeadlineRef.current).getTime()
+      : (activeAssignmentPackage?.dueAt ? new Date(activeAssignmentPackage.dueAt).getTime() : Number.POSITIVE_INFINITY);
     if (!Number.isFinite(deadline)) return 0;
     return Math.max(0, Math.ceil((deadline - (assignmentClock + assignmentServerOffsetRef.current)) / 1000));
   }, [activeAssignmentPackage?.dueAt, assignmentClock]);
