@@ -66,7 +66,7 @@ npm run test --workspace=desktop
 npm run pack --workspace=desktop
 ```
 
-For Windows distribution use the existing `dist:win` script on a Windows build host. The Electron main process serves the packaged web bundle from the privileged `arctester://app` origin so the API can allow a specific desktop origin without opening production CORS to the opaque `null` origin. The preload exposes only a narrow exam-mode toggle and integrity-event subscription; renderer code does not receive Node.js or unrestricted IPC access.
+For Windows distribution use `npm run build:desktop:win` on a Windows build host. For Linux, use `npm run build:desktop:linux` to produce AppImage and Debian packages. Both root commands build the web assets first, preserving the relative Vite asset base required by the packaged Electron app. The Electron main process serves the packaged web bundle from the privileged `arctester://app` origin so the API can allow a specific desktop origin without opening production CORS to the opaque `null` origin. The preload exposes only a narrow exam-mode toggle and integrity-event subscription; renderer code does not receive Node.js or unrestricted IPC access.
 
 ## Release verification
 
