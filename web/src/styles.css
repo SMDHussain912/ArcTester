@@ -460,3 +460,7 @@ textarea{resize:vertical;line-height:1.55}
 .student-materials-page .student-material-list{margin-top:14px}
 .exp{margin-top:14px;padding:13px 15px;border:1px solid color-mix(in srgb,var(--success) 30%,var(--border));border-radius:11px;background:color-mix(in srgb,var(--success) 8%,var(--surface));color:var(--success);font-size:12px}
 .exp p{margin:5px 0 0}
+
+
+.model-lab-loading{display:grid;gap:9px;padding:8px 0}
+.model-lab-loading .skeleton{width:100%;border-radius:11px}
