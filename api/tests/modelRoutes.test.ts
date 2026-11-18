@@ -17,7 +17,7 @@ describe("admin model registry API", () => {
   });
 
   afterAll(async () => {
-    await server.close();
+    if (server) await server.close();
   });
 
   const trainedModel = () => fitLogisticRegression([
