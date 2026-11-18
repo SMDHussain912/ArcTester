@@ -292,7 +292,7 @@ export async function saveOfflineAnswer(
 export async function getRemainingSeconds(assignmentId: string): Promise<number | null> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError, updated_at AS updatedAt FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) return null;
