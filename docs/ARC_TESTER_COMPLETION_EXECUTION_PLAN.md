@@ -522,3 +522,11 @@ Update this table as work proceeds. Link every row to the implementation PR and 
 | G — Security/release | IN PROGRESS | [#114](https://github.com/smdgamekingindo-TN/ArcTester/pull/114), [#116](https://github.com/smdgamekingindo-TN/ArcTester/pull/116), [#117](https://github.com/smdgamekingindo-TN/ArcTester/pull/117), [#125](https://github.com/smdgamekingindo-TN/ArcTester/pull/125) | [Ownership CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42971389338) · [Invitation/device ownership CI](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42980427585) · [Android build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974338953) · [Windows build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/42974783052) | Staging security checks, backup/restore drill, installed-device tests and production release validation |
 
 **Next action:** Complete Workstream A's route-to-test and ownership maps, then investigate the highest-severity remaining formal-exam lifecycle gap in Workstream C. Continue independent code work while device/staging/real-data gates remain explicitly unverified.
+
+
+### 0.5 Concurrent exam-start device ownership — 2026-11-18
+
+- Closed a race in the unique-session creation fallback: simultaneous first-start requests now re-check device ownership before returning the winning session.
+- A fresh device holder causes the competing start to receive the same `409 DEVICE_CONFLICT` response as the ordinary reconnect path. A stale holder can be replaced through an atomic update, with a `DEVICE_CHANGED` audit event and violation weight.
+- Added API regression coverage for two different device IDs racing to start one assignment.
+- Verification remains pending: tests were authored but not executed; no GitHub Actions were run.
