@@ -52,7 +52,7 @@ type AdminModelLabProps = {
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, error = "", onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onRefresh, onRegisterDataset,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
