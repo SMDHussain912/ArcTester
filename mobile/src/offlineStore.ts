@@ -327,19 +327,31 @@ export async function queueOfflineSubmission(
   if (!attempt) throw new Error("There is no saved attempt for this assignment.");
   if (attempt.status === "SYNCED") throw new Error("This attempt has already been synchronized.");
 
+  const examPackage = await getCachedExamPackage(assignmentId);
+  if (!examPackage) throw new Error("The cached exam package is missing.");
+  const savedAnswers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
+  const expectedIds = new Set(examPackage.questions.map((question) => question.id));
+  const hasUnknownAnswers = Object.keys(savedAnswers).some((id) => !expectedIds.has(id));
+  const hasInvalidAnswers = examPackage.questions.some((question) => {
+    const selectedIndex = savedAnswers[question.id];
+    return selectedIndex !== undefined &&
+      selectedIndex !== null &&
+      (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
+  });
+  if (hasUnknownAnswers || hasInvalidAnswers) {
+    throw new Error("The saved answers contain invalid question or option data. Reopen the exam and review your answers before submitting.");
+  }
+
   const submittedAt = attempt.submittedAt ?? new Date().toISOString();
   if (attempt.status === "ACTIVE") {
     await db.runAsync(
-      "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ?",
+      "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
       submittedAt,
       new Date().toISOString(),
       assignmentId,
     );
   }
 
-  const examPackage = await getCachedExamPackage(assignmentId);
-  if (!examPackage) throw new Error("The cached exam package is missing.");
-  const savedAnswers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
   return {
     assignmentId,
     attemptUuid: attempt.attemptUuid,
