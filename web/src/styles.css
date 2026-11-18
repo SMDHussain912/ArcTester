@@ -701,3 +701,6 @@ textarea{resize:vertical;line-height:1.55}
 .decision-engine-note{margin:0;padding-top:12px;border-top:1px solid var(--border);color:var(--muted);font-size:10px;line-height:1.65}
 @media(max-width:900px){.model-catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.model-intelligence-heading{align-items:flex-start;flex-direction:column}.model-count-badge{grid-template-columns:auto auto;align-items:center;justify-items:start;gap:8px}.model-catalog-grid{grid-template-columns:1fr}.decision-engine-flow{grid-template-columns:1fr}.decision-engine-flow>i{justify-self:center;transform:rotate(90deg)}.decision-engine-panel{padding:15px}}
+
+.model-count-badge small{grid-column:1/-1;padding-top:6px;border-top:1px solid var(--border);color:var(--muted);font-size:9px;text-align:center}
+.decision-engine-status{max-width:132px;text-align:center;line-height:1.4}
