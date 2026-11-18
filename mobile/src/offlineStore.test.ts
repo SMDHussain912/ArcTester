@@ -257,6 +257,33 @@ describe("offlineStore", () => {
     expect(attempt!.status).toBe("ACTIVE");
   });
 
+  it("does not silently skip a pending submission when its cached package is missing", async () => {
+    configureOfflineStore("user-missing-package");
+    await saveExamPackage(packagePayload, expectedSha256);
+    await startOfflineAttempt("assignment-1");
+    await queueOfflineSubmission("assignment-1");
+    tables.get("exam_packages")?.delete("assignment-1");
+
+    await expect(getPendingSubmissions()).rejects.toThrow(
+      "saved exam package for pending assignment assignment-1 is missing"
+    );
+    expect(tables.get("offline_attempts")?.get("assignment-1")?.status).toBe("PENDING");
+  });
+
+  it("does not upload a pending submission with corrupted saved answers", async () => {
+    configureOfflineStore("user-corrupt-pending");
+    await saveExamPackage(packagePayload, expectedSha256);
+    await startOfflineAttempt("assignment-1");
+    await queueOfflineSubmission("assignment-1");
+    const attempt = tables.get("offline_attempts")?.get("assignment-1");
+    attempt!.answers_json = "{invalid-json";
+
+    await expect(getPendingSubmissions()).rejects.toThrow(
+      "saved answers for pending assignment assignment-1 are corrupted"
+    );
+    expect(attempt!.status).toBe("PENDING");
+  });
+
   it("queues and marks a submission as synced", async () => {
     configureOfflineStore("user-4");
     await saveExamPackage(packagePayload, expectedSha256);
