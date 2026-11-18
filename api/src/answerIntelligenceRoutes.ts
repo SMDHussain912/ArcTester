@@ -36,7 +36,7 @@ export function answerIntelligenceRouter(db: PrismaClient): Router {
       const explanation = await generateAnswerExplanation({
         subject: snapshot.subjectSnapshot,
         topic: snapshot.topicSnapshot,
-        difficulty: "practice",
+        difficulty: "unknown",
         text: snapshot.textSnapshot,
         options,
         correctIndex: snapshot.correctIndexSnapshot,
