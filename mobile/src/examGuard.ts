@@ -40,16 +40,18 @@ export function pushViolation(type: string, detail?: string): void {
   eventQueue.push({ type, at: new Date().toISOString(), detail: detail ?? "" });
 }
 
-async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<void> {
+async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<boolean> {
   const batch = eventQueue.splice(0, eventQueue.length);
-  if (batch.length === 0) return;
+  if (batch.length === 0) return true;
   try {
     await api(`/exams/assignments/${encodeURIComponent(assignmentId)}/session/integrity`, {
       method: "POST",
       body: JSON.stringify({ events: batch }),
     });
+    return true;
   } catch {
     eventQueue.unshift(...batch);
+    return false;
   }
 }
 
@@ -132,7 +134,8 @@ export async function reportAppReopened({
   if (flag !== "1") return;
   if (savedAssignmentId && savedAssignmentId !== assignmentId) return;
   pushViolation("APP_REOPENED", "App was reopened after process death during an active exam.");
-  await flushEvents(api, assignmentId);
+  const delivered = await flushEvents(api, assignmentId);
+  if (!delivered) return;
   await Promise.all([
     SecureStore.deleteItemAsync(EXAM_IN_PROGRESS_KEY),
     SecureStore.deleteItemAsync(ACTIVE_ASSIGNMENT_KEY),
