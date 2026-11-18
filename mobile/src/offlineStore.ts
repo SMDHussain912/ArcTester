@@ -298,9 +298,21 @@ export async function getRemainingSeconds(assignmentId: string): Promise<number 
   if (!attempt) return null;
   const examPackage = await getCachedExamPackage(assignmentId);
   if (!examPackage) return null;
-  // Measure elapsed time from the monotonic baseline captured when the attempt
-  // started. This never goes backward even if the device clock is corrected.
-  const elapsed = monotonicNow() - attempt.startedAtMonotonicMs;
+  // Persist the greatest observed local timestamp so a process restart cannot
+  // reset the in-memory clock clamp. If the device clock is moved backwards
+  // while the app is closed, the timer pauses at the last checkpoint until the
+  // clock catches up; it never grants extra exam time.
+  const lastObservedAt = Date.parse(attempt.updatedAt);
+  const now = monotonicNow();
+  const observedNow = Number.isFinite(lastObservedAt) ? Math.max(now, lastObservedAt) : now;
+  if (!Number.isFinite(lastObservedAt) || observedNow > lastObservedAt) {
+    await db.runAsync(
+      "UPDATE offline_attempts SET updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+      new Date(observedNow).toISOString(),
+      assignmentId,
+    );
+  }
+  const elapsed = Math.max(0, observedNow - attempt.startedAtMonotonicMs);
   return Math.max(0, examPackage.durationMinutes * 60 - Math.floor(elapsed / 1000));
 }
 
