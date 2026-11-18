@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Skeleton from "./components/Skeleton";
 
-const API = (import.meta.env.VITE_API_URL || "http://localhost:4000").replace(/\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 
 type TopicPerformance = {
   subject: string;
