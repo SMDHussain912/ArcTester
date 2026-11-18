@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { buildImmediateAnswerDecision } from "./ruleBasedRecommendations.js";
 
 export type ExplanationQuestion = {
   subject: string;
@@ -123,22 +124,12 @@ async function anthropic(prompt: string): Promise<string> {
 }
 
 function learningDecisionFor(question: ExplanationQuestion): AnswerExplanation["learningDecision"] {
-  const area = question.topic || question.subject;
-  if (question.selectedIndex === null) return {
-    action: "learn-concept", title: `Learn the key concept in ${area}`,
-    reason: "This question was left unanswered. Review the concept before attempting a short practice set.",
-    recommendedMode: "practice", questionCount: 5,
-  };
-  if (question.selectedIndex !== question.correctIndex) return {
-    action: "review-topic", title: `Review ${area}`,
-    reason: "This answer was incorrect. Revisit the explanation, then retry related questions to check understanding.",
-    recommendedMode: "mistakes", questionCount: 5,
-  };
-  return {
-    action: "spaced-practice", title: `Reinforce ${area}`,
-    reason: "This answer was correct. A short follow-up set can help check that the concept is retained.",
-    recommendedMode: "practice", questionCount: 3,
-  };
+  return buildImmediateAnswerDecision({
+    subject: question.subject,
+    topic: question.topic,
+    selectedIndex: question.selectedIndex,
+    correctIndex: question.correctIndex,
+  });
 }
 
 function deterministicExplanation(question: ExplanationQuestion): GeneratedExplanation {
