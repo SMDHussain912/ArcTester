@@ -29,7 +29,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
     setLoading(true);
     setError(null);
     try {
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         request<PerformanceOverview>("/analytics/overview").then((value) => {
           if (generation === cancelledRef.current) setOverview(value);
         }),
@@ -43,6 +43,10 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           if (generation === cancelledRef.current) setPrediction(value);
         }),
       ]);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected" && generation === cancelledRef.current) {
+        setError(failed.reason instanceof Error ? failed.reason.message : "Some analytics could not be loaded. Refresh to try again.");
+      }
     } catch (cause) {
       if (generation === cancelledRef.current) setError(cause instanceof Error ? cause.message : "Could not load your analytics.");
     } finally {
