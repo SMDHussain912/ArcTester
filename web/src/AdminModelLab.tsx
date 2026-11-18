@@ -169,7 +169,7 @@ export default function AdminModelLab({
           <div className="decision-engine-guardrails"><span>✓ Minimum evidence thresholds</span><span>✓ Confidence and baseline checks</span><span>✓ Explainable reasons</span><span>✓ Human-controlled model activation</span></div>
           <p className="decision-engine-note">Decision-making is currently handled by the live evidence-based recommendation policy and score predictor—not by a separately trained decision model. Candidate ML models remain inactive until validated. They never autonomously change exam settings, grades or student access.</p>
           <div className="answer-intelligence-admin">
-            <div><p className="eyebrow">ANSWER INTELLIGENCE · HYBRID ROUTING</p><h3>Explanation providers</h3><p>External AI → local model → approved explanation → deterministic offline guide.</p></div>
+            <div><p className="eyebrow">ANSWER INTELLIGENCE · HYBRID ROUTING</p><h3>Explanation providers</h3><p>External AI → local model → question-bank explanation → deterministic offline guide.</p></div>
             <div className="intelligence-provider-grid">
               <article><strong>External provider</strong><span className={intelligenceStatus?.external.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.external.configured?intelligenceStatus.external.provider+" configured":"Not configured"}</span></article>
               <article><strong>Local model</strong><span className={intelligenceStatus?.local.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.local.configured?intelligenceStatus.local.provider+" configured":"Not configured"}</span></article>
