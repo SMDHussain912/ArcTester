@@ -22,6 +22,7 @@ export type AnswerExplanation = {
   explanationStatus: "approved" | "ai-generated-unverified" | "template";
   answerKeyVerified: true;
   explanationVerified: false;
+  learningDecision: { action: "learn-concept" | "review-topic" | "spaced-practice"; title: string; reason: string; recommendedMode: "practice" | "mistakes"; questionCount: number };
 };
 
 const GeneratedExplanationSchema = z.object({
@@ -104,6 +105,25 @@ async function anthropic(prompt: string): Promise<string> {
   return content;
 }
 
+function learningDecisionFor(question: ExplanationQuestion): AnswerExplanation["learningDecision"] {
+  const area = question.topic || question.subject;
+  if (question.selectedIndex === null) return {
+    action: "learn-concept", title: `Learn the key concept in ${area}`,
+    reason: "This question was left unanswered. Review the concept before attempting a short practice set.",
+    recommendedMode: "practice", questionCount: 5,
+  };
+  if (question.selectedIndex !== question.correctIndex) return {
+    action: "review-topic", title: `Review ${area}`,
+    reason: "This answer was incorrect. Revisit the explanation, then retry related questions to check understanding.",
+    recommendedMode: "mistakes", questionCount: 5,
+  };
+  return {
+    action: "spaced-practice", title: `Reinforce ${area}`,
+    reason: "This answer was correct. A short follow-up set can help check that the concept is retained.",
+    recommendedMode: "practice", questionCount: 3,
+  };
+}
+
 function deterministicExplanation(question: ExplanationQuestion): GeneratedExplanation {
   const answer = question.options[question.correctIndex];
   return {
@@ -180,7 +200,7 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
       return {
         answer, ...generated, provider: provider.name,
         explanationStatus: "ai-generated-unverified",
-        answerKeyVerified: true, explanationVerified: false,
+        answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
       };
     } catch (error) {
       console.warn("ArcTester explanation provider failed; trying fallback.", provider.name, error);
