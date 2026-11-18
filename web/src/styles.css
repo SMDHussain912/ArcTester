@@ -608,3 +608,48 @@ textarea{resize:vertical;line-height:1.55}
 @keyframes auth-progress{0%{transform:translateX(-110%)}100%{transform:translateX(390%)}}
 @keyframes auth-fade-in{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.auth-orbit,.auth-orbit span,.auth-connecting-track span{animation:none!important}}
+
+
+/* Model Lab: clear service failures, responsive controls and readable training states. */
+.admin-model-lab{gap:18px}
+.admin-model-lab .admin-page-title{align-items:center;padding:4px 2px 10px}
+.admin-model-lab .admin-page-title h1{font-size:clamp(28px,3vw,36px);letter-spacing:-1px}
+.admin-model-lab .admin-panel{padding:clamp(18px,2.2vw,26px);display:grid;gap:14px}
+.admin-model-lab .admin-panel>p{margin:0;max-width:1000px;font-size:13px;line-height:1.7}
+.admin-model-lab .admin-panel-head{margin:0 0 3px}
+.admin-model-lab .admin-panel-head h2{font-size:19px}
+.admin-model-lab .admin-panel label:not(.dataset-attestation):not(.dataset-upload-row){display:grid;gap:8px;font-size:12px;font-weight:750;color:var(--text)}
+.admin-model-lab .admin-panel input:not([type=checkbox]),.admin-model-lab .admin-panel select,.admin-model-lab .admin-panel textarea{min-height:43px;font-size:13px}
+.admin-model-lab .admin-panel textarea{line-height:1.55;resize:vertical}
+.admin-model-lab .admin-two-col{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.admin-model-lab .dataset-attestation{display:flex;align-items:flex-start;gap:11px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--bg);font-size:12px;line-height:1.6}
+.admin-model-lab .dataset-attestation input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0;accent-color:var(--accent)}
+.admin-model-lab .dataset-upload-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;border:1px dashed var(--border);border-radius:12px;background:var(--bg)}
+.admin-model-lab .dataset-upload-row>div{display:grid;gap:5px}
+.admin-model-lab .dataset-upload-row small{color:var(--muted);font-size:11px}
+.admin-model-lab .dataset-upload-row input{max-width:55%;font-size:11px}
+.model-lab-error{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid color-mix(in srgb,var(--danger) 40%,var(--border));border-radius:14px;background:color-mix(in srgb,var(--danger) 7%,var(--surface))}
+.model-lab-error-icon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:11px;background:color-mix(in srgb,var(--danger) 14%,var(--surface));color:var(--danger);font-weight:900;font-size:20px}
+.model-lab-error>div{flex:1;min-width:0}
+.model-lab-error strong{font-size:13px}
+.model-lab-error p{margin:4px 0;color:var(--text);font-size:12px;overflow-wrap:anywhere}
+.model-lab-error small{color:var(--muted);font-size:11px;line-height:1.5}
+.model-lab-loading{display:grid;gap:10px}
+.model-lab-loading .skeleton{min-height:56px;border-radius:10px}
+.admin-model-lab .training-progress{height:10px;overflow:hidden;border-radius:999px;background:var(--bg);border:1px solid var(--border)}
+.admin-model-lab .training-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--success));transition:width .3s ease}
+.admin-model-lab .model-registry-row,.admin-model-lab .question-review-row{padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);min-width:0}
+.admin-model-lab .model-registry-list{display:grid;gap:10px}
+.admin-model-lab .model-registry-row{display:flex;justify-content:space-between;align-items:center;gap:14px}
+.admin-model-lab .model-registry-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.admin-model-lab .training-evaluation{display:grid;gap:12px;padding:15px;margin-top:12px;border:1px solid var(--border);border-radius:11px;background:var(--surface)}
+.admin-model-lab .training-evaluation-status{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.admin-model-lab .training-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.admin-model-lab .training-metric-grid>div{display:grid;gap:5px;padding:12px;border-radius:9px;background:var(--bg);min-width:0}
+.admin-model-lab .training-metric-grid small{font-size:10px;color:var(--muted)}
+.admin-model-lab .training-metric-grid strong{font-size:19px;overflow-wrap:anywhere}
+.admin-model-lab details summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:750}
+.admin-model-lab .model-result-json{max-width:100%;overflow:auto;padding:12px;border-radius:9px;background:var(--bg);font-size:10px;line-height:1.55}
+@media(max-width:800px){.model-lab-error{align-items:flex-start;flex-wrap:wrap}.model-lab-error>div{flex-basis:calc(100% - 55px)}.model-lab-error>button{margin-left:50px}.admin-model-lab .training-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.admin-model-lab .admin-two-col{grid-template-columns:1fr}.admin-model-lab .dataset-upload-row{align-items:stretch;flex-direction:column}.admin-model-lab .dataset-upload-row input{max-width:100%;width:100%}.admin-model-lab .model-registry-row{align-items:flex-start;flex-direction:column}.admin-model-lab .training-evaluation-status{align-items:flex-start;flex-direction:column}.admin-model-lab .training-metric-grid{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){.admin-model-lab .training-progress>span{transition:none}}
