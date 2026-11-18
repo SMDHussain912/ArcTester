@@ -145,7 +145,7 @@ export default function AdminModelLab({
       <section className="model-intelligence-overview">
         <div className="model-intelligence-heading">
           <div><p className="eyebrow">ARCTESTER INTELLIGENCE STACK</p><h2>Model ecosystem</h2><p>Train specialist models, compare evidence, then use the decision layer to choose safe study actions.</p></div>
-          <div className="model-count-badge"><strong>{models.length}</strong><span>registered candidates</span></div>
+          <div className="model-count-badge"><strong>6</strong><span>available algorithms</span><small>{models.length} trained candidates registered</small></div>
         </div>
         <div className="model-catalog-grid">
           <article className="model-catalog-card"><span className="model-catalog-icon">01</span><div><strong>Multiple linear regression</strong><p>Predicts continuous scores and readiness trends.</p><small>REGRESSION · IMPLEMENTED</small></div></article>
@@ -156,16 +156,16 @@ export default function AdminModelLab({
           <article className="model-catalog-card model-catalog-card-accent"><span className="model-catalog-icon">06</span><div><strong>TensorFlow.js neural regressor</strong><p>Trainable neural network for numeric score prediction.</p><small>NEURAL NETWORK · IMPLEMENTED</small></div></article>
         </div>
         <div className="decision-engine-panel">
-          <div className="decision-engine-top"><div><p className="eyebrow">HYBRID DECISION LAYER</p><h3>ArcTester Decision Engine</h3><p>Turns verified learner evidence into explainable next-step recommendations.</p></div><span className="decision-engine-status">GUARDED</span></div>
+          <div className="decision-engine-top"><div><p className="eyebrow">HYBRID DECISION LAYER</p><h3>ArcTester Decision Engine</h3><p>Turns verified learner evidence into explainable next-step recommendations.</p></div><span className="decision-engine-status">ACTIVE · RULE-BASED</span></div>
           <div className="decision-engine-flow">
             <div><strong>01 · Evidence</strong><span>Attempts, answers, topic accuracy and recency</span></div>
             <i>→</i>
-            <div><strong>02 · Intelligence</strong><span>Score prediction + validated candidate signals</span></div>
+            <div><strong>02 · Intelligence</strong><span>Validated score prediction + evidence rules</span></div>
             <i>→</i>
             <div><strong>03 · Decision</strong><span>Prioritised practice, revision or review actions</span></div>
           </div>
           <div className="decision-engine-guardrails"><span>✓ Minimum evidence thresholds</span><span>✓ Confidence and baseline checks</span><span>✓ Explainable reasons</span><span>✓ Human-controlled model activation</span></div>
-          <p className="decision-engine-note">The current recommendation policy is deterministic and evidence-based. Registered ML models are candidates until validated; they do not autonomously change exam settings, grades or student access.</p>
+          <p className="decision-engine-note">Decision-making is currently handled by the live evidence-based recommendation policy and score predictor—not by a separately trained decision model. Candidate ML models remain inactive until validated. They never autonomously change exam settings, grades or student access.</p>
         </div>
       </section>
 
