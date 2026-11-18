@@ -17,6 +17,7 @@ describe("administrator workspace navigation", () => {
       if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
       if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
       if (path === "/admin/model-datasets") return Promise.resolve(response({ datasets: [] }));
+      if (path === "/admin/study-materials") return Promise.resolve(response({ materials: [] }));
       if (path === "/admin/model-training-jobs") return Promise.resolve(response({ jobs: [] }));
       if (path === "/admin/submissions/review-required") return Promise.resolve(response({ submissions: [] }));
       if (path === "/admin/exams/live-sessions") return Promise.resolve(response({ sessions: [], total: 0, serverTime: "2026-11-10T10:00:00.000Z" }));
@@ -39,6 +40,7 @@ describe("administrator workspace navigation", () => {
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Model lab", "Model lab"],
+      ["Study materials", "Study materials"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
