@@ -83,7 +83,8 @@ export default function AdminModelLab({
       if (!sourceDescription.trim() || sourceDescription.trim().length < 10) throw new Error("Provide at least 10 characters describing the dataset source.");
       if (!sourceAttested) throw new Error("Confirm that you are authorized to use this dataset and that it contains no direct personal identifiers.");
       if (!Array.isArray(featureSchema) || featureSchema.length === 0) throw new Error("Feature schema must be a non-empty JSON array.");
-      if (!Array.isArray(samples) || samples.length < 10) throw new Error("Samples must be a JSON array containing at least 10 rows. TensorFlow training requires at least 30.");
+      if (!Array.isArray(samples) || samples.length < 30 || samples.length > 5000) throw new Error("Samples must be a JSON array containing 30 to 5,000 rows for TensorFlow training.");
+      if (samples.some((sample) => typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId))) throw new Error("Every row needs a 64-character lowercase hexadecimal groupId. Use a keyed HMAC pseudonym for real learners; never use a name, email or student ID.");
       if (!onRegisterDataset) throw new Error("Dataset registration is not connected to the API.");
       onRegisterDataset({
         name: datasetName.trim(),
