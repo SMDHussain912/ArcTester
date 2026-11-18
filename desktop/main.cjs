@@ -1,8 +1,17 @@
-const { app, BrowserWindow, screen, powerMonitor, shell } = require("electron");
+const { app, BrowserWindow, screen, powerMonitor, shell, ipcMain } = require("electron");
 const path = require("path");
 
 let examMode = false;
 let examWindow = null;
+
+function sendIntegrityViolation(type, detail) {
+  if (!examMode || !examWindow || examWindow.isDestroyed()) return;
+  examWindow.webContents.send("integrity-violation", {
+    type,
+    at: new Date().toISOString(),
+    detail
+  });
+}
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -35,31 +44,64 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  // Electron emits before-input-event on webContents, not on app.
+  window.webContents.on("before-input-event", (event, input) => {
+    if (!examMode) return;
+    const key = String(input.key || "").toUpperCase();
+    const devToolsShortcut = (input.control || input.meta) && input.shift && key === "I";
+    const refreshShortcut = key === "F5" || ((input.control || input.meta) && key === "R");
+    const fullscreenShortcut = key === "F11";
+    const closeShortcut = input.alt && key === "F4";
+    if (key === "F12" || devToolsShortcut || refreshShortcut || fullscreenShortcut || closeShortcut) {
+      event.preventDefault();
+    }
+  });
+
+  window.on("closed", () => {
+    if (examWindow === window) examWindow = null;
+  });
+
   examWindow = window;
   return window;
 }
 
 function enterExamMode(window) {
+  if (!window || window.isDestroyed()) return false;
   examMode = true;
   try {
     window.setKiosk(true);
     window.setAlwaysOnTop(true, "screen-saver");
     window.setContentProtection(true);
-  } catch (e) {
-    console.warn("Secure mode features not fully supported:", e.message);
+    return true;
+  } catch (error) {
+    examMode = false;
+    console.warn("Secure mode features not fully supported:", error.message);
+    return false;
   }
 }
 
 function exitExamMode(window) {
   examMode = false;
+  if (!window || window.isDestroyed()) return false;
   try {
     window.setKiosk(false);
     window.setAlwaysOnTop(false);
     window.setContentProtection(false);
-  } catch (e) {
-    console.warn("Secure mode exit failed:", e.message);
+    return true;
+  } catch (error) {
+    console.warn("Secure mode exit failed:", error.message);
+    return false;
   }
 }
+
+// Only the active application window may toggle its own exam-mode state.
+ipcMain.handle("exam-mode:set", (event, enabled) => {
+  if (!examWindow || event.sender !== examWindow.webContents || typeof enabled !== "boolean") {
+    return { ok: false };
+  }
+  const ok = enabled ? enterExamMode(examWindow) : exitExamMode(examWindow);
+  return { ok, enabled: examMode };
+});
 
 app.whenReady().then(() => {
   createWindow();
@@ -73,64 +115,28 @@ app.on("window-all-closed", () => {
 });
 
 app.on("second-instance", () => {
-  // If app is already running, just bring existing window to front
-  if (examWindow) {
-    examWindow.focus();
-  }
+  if (examWindow && !examWindow.isDestroyed()) examWindow.focus();
 });
 
-// Window close prevention during exam mode
+// Do not allow the application to quit while a formal exam is active.
 app.on("before-quit", (event) => {
-  if (examMode) {
-    event.preventDefault();
-  }
+  if (examMode) event.preventDefault();
 });
 
-// Monitor window focus loss during exam mode
-app.on("browser-window-blur", (event, window) => {
+app.on("browser-window-blur", (_event, window) => {
   if (examMode && examWindow === window) {
-    // Report focus loss via IPC to the web app
-    window.webContents.send("integrity-violation", {
-      type: "WINDOW_BLUR",
-      at: new Date().toISOString(),
-      detail: "Window lost focus"
-    });
+    sendIntegrityViolation("WINDOW_BLUR", "Window lost focus");
   }
 });
 
-// Detect external display
 screen.on("display-added", () => {
-  if (examMode && examWindow) {
-    examWindow.webContents.send("integrity-violation", {
-      type: "DISPLAY_EXTENDED",
-      at: new Date().toISOString(),
-      detail: "External display detected"
-    });
-  }
+  sendIntegrityViolation("DISPLAY_EXTENDED", "An external display was connected");
 });
 
-// Detect lock screen
 powerMonitor.on("lock-screen", () => {
-  if (examMode && examWindow) {
-    examWindow.webContents.send("integrity-violation", {
-      type: "WINDOW_FOCUS_LOST",
-      at: new Date().toISOString(),
-      detail: "Screen locked"
-    });
-  }
+  sendIntegrityViolation("WINDOW_FOCUS_LOST", "The operating system locked the screen");
 });
 
-// Block keyboard shortcuts during exam mode
-app.on("before-input-event", (event, input) => {
-  if (examMode && examWindow) {
-    const key = input.key;
-    if (
-      key === "F12" ||
-      (input.control && i.shift && i.key.toUpperCase() === "I") ||
-      key === "F5" ||
-      key === "F11"
-    ) {
-      event.preventDefault();
-    }
-  }
+powerMonitor.on("suspend", () => {
+  sendIntegrityViolation("APP_BACKGROUND", "The operating system suspended the device");
 });
