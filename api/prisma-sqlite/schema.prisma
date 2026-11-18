@@ -448,3 +448,23 @@ model ModelDriftBucket {
   @@unique([modelId, version, featureName, bucket, periodStart])
   @@index([modelId, version, periodStart])
 }
+
+
+model StudyMaterial {
+  id             String   @id @default(cuid())
+  uploadedById   Int?
+  title          String
+  description    String   @default("")
+  subject        String
+  topic          String   @default("")
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  contentBase64  String
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, subject, title])
+  @@index([uploadedById, createdAt])
+}
