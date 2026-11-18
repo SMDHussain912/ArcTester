@@ -303,23 +303,34 @@ export default function App() {
   async function authenticate() {
     setBusy(true);
     setError("");
+    // Keep the connection/creation animation visible for a deliberate 5 seconds
+    // while the real API request runs in parallel. Never fake a successful response.
+    const animationMinimum = new Promise<void>((resolve) => window.setTimeout(resolve, 5000));
     try {
       if (register) {
-        await request("/auth/register", {
-          method: "POST",
-          body: JSON.stringify({ email, password, invitationToken: invitationToken.trim() }),
-        });
+        await Promise.all([
+          request("/auth/register", {
+            method: "POST",
+            body: JSON.stringify({ email, password, invitationToken: invitationToken.trim() }),
+          }),
+          animationMinimum,
+        ]);
         setRegister(false);
         setInvitationToken("");
+        setError("Account created. You can now sign in.");
       } else {
-        const session = await request<{ user: User }>("/auth/login", {
-          method: "POST",
-          body: JSON.stringify({ email, password }),
-        });
+        const [session] = await Promise.all([
+          request<{ user: User }>("/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ email, password }),
+          }),
+          animationMinimum,
+        ]);
         setUser(session.user);
       }
       setPassword("");
     } catch (cause) {
+      await animationMinimum;
       setError((cause as Error).message);
     } finally {
       setBusy(false);
