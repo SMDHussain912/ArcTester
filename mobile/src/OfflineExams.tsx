@@ -14,6 +14,7 @@ import {
   type OfflineExamPackage,
 } from "./offlineStore";
 import { syncPendingSubmissions } from "./offlineSync";
+import { flushGuardEvents, pushViolation, reportAppReopened, startExamGuard, stopExamGuard } from "./examGuard";
 import StudentAssignmentResult from "./StudentAssignmentResult";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -73,6 +74,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const autoSubmitStarted = useRef(false);
   const syncLock = useRef(false);
   const answerSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const activePackageRef = useRef<OfflineExamPackage | null>(activePackage);
+  activePackageRef.current = activePackage;
 
   useEffect(() => {
     let mounted = true;
@@ -163,6 +166,12 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         void load();
+        return;
+      }
+      const currentExam = activePackageRef.current;
+      if (currentExam && (state === "background" || state === "inactive")) {
+        pushViolation("APP_BACKGROUND", "The app moved to the background during an assigned exam.");
+        void flushGuardEvents({ api: apiRef.current, assignmentId: currentExam.assignmentId });
       }
     });
 
@@ -216,6 +225,10 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       configureOfflineStore(userId);
       const started = await startOfflineAttempt(assignmentId);
       const restored = await restoreActiveAttempt(assignmentId);
+      // Report a process restart only for the same assignment, then arm the
+      // native screen-capture and interruption guard for this active attempt.
+      await reportAppReopened({ api: apiRef.current, assignmentId });
+      await startExamGuard({ api: apiRef.current, assignmentId, usePinning: true });
       setActivePackage(started.examPackage);
       setCurrentQuestionIndex(0);
       setActiveAttemptUuid(started.attemptUuid);
@@ -235,7 +248,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     try {
       // Finish every queued SQLite answer write before freezing the submission snapshot.
       await answerSaveQueue.current;
+      await flushGuardEvents({ api: apiRef.current, assignmentId: activePackage.assignmentId });
       await queueOfflineSubmission(activePackage.assignmentId);
+      await stopExamGuard();
       setActivePackage(null);
       setCurrentQuestionIndex(0);
       setActiveAttemptUuid("");
@@ -253,6 +268,21 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       setBusyId(null);
     }
   }, [activeAttemptUuid, activePackage, refreshLocalState, syncOutbox]);
+
+  const pauseExam = async () => {
+    if (!activePackage || busyId !== null) return;
+    try {
+      await answerSaveQueue.current;
+      await flushGuardEvents({ api: apiRef.current, assignmentId: activePackage.assignmentId });
+      await stopExamGuard();
+      setActivePackage(null);
+      setCurrentQuestionIndex(0);
+      setActiveAttemptUuid("");
+      setSyncMessage("Exam saved on this device. You can resume it from assigned exams.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not safely pause this exam.");
+    }
+  };
 
   const confirmSubmitExam = () => {
     if (!activePackage || busyId !== null) return;
@@ -426,7 +456,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         )}
         <TouchableOpacity
           disabled={busyId !== null}
-          onPress={() => setActivePackage(null)}
+          onPress={() => void pauseExam()}
           style={styles.secondaryButton}
         >
           <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
