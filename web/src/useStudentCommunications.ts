@@ -210,6 +210,8 @@ export function useStudentCommunications({
   }
 
   const clear = useCallback(() => {
+    // A pending poll must not repopulate the inbox after sign-out clears it.
+    notificationRequestSequence.current += 1;
     setAnnouncements([]);
     setActiveAnnouncements([]);
     setNotifications([]);
