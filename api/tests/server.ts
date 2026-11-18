@@ -1,9 +1,13 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Isolated API + PostgreSQL schema per test FILE: applies the real migration
@@ -46,7 +50,6 @@ async function dropSchema(baseUrl: string, schema: string): Promise<void> {
 export async function startTestServer(
   buildApp: (db: PrismaClient) => Express
 ): Promise<TestServer> {
-  const { execFileSync } = await import("node:child_process");
   const { dirname } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const apiDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -57,14 +60,16 @@ export async function startTestServer(
   await createSchema(baseUrl, schema);
 
   try {
-    execFileSync(
+    await execFileAsync(
       "npx",
       ["prisma", "migrate", "deploy", "--schema", join(apiDir, "prisma/schema.prisma")],
-      { cwd: apiDir, stdio: "pipe", env: { ...process.env, DATABASE_URL: url } }
+      { cwd: apiDir, env: { ...process.env, DATABASE_URL: url }, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 }
     );
   } catch (error) {
     await dropSchema(baseUrl, schema);
-    throw error;
+    const details = error instanceof Error ? error.message : String(error);
+    const stderr = typeof error === "object" && error !== null && "stderr" in error ? String(error.stderr) : "";
+    throw new Error(`Failed to provision isolated test schema "${schema}": ${details}${stderr ? `\\n${stderr}` : ""}`);
   }
   const db = new PrismaClient({ datasources: { db: { url } } });
 
