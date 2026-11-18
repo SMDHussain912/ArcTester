@@ -76,7 +76,7 @@ export default function AdminModelLab({
   }
 
   function downloadSampleTemplate() {
-    const rows = Array.from({ length: 30 }, (_, index) => ({
+    const rows = Array.from({ length: 100 }, (_, index) => ({
       features: {
         completed_attempts: 3 + index,
         previous_accuracy: 0.45 + (index % 10) / 20,
