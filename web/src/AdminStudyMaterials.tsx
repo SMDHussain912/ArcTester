@@ -72,7 +72,7 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onStatu
         <label>Description<textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What students will learn from this material." /></label>
         {file && <p className="muted">Selected: {file.name} · {sizeLabel(file.size)}</p>}
         {error && <p className="error" role="alert">{error}</p>}
-        <div className="editor-actions"><button className="primary" disabled={busy || !file} onClick={() => void submit()}>Upload as draft</button></div>
+        <div className="editor-actions"><button className="primary" aria-busy={busy} disabled={busy || !file} onClick={() => void submit()}>{busy ? "Uploading material…" : "Upload as draft"}</button></div>
         <p className="muted">Files are private until published. Upload only materials you have permission to distribute. Files are stored in the application database; keep database backups enabled.</p>
       </section>
       <section className="admin-panel">
