@@ -242,6 +242,21 @@ describe("offlineStore", () => {
     expect(Number.isFinite(baseline)).toBe(true);
   });
 
+  it("rejects corrupted option indexes before locking an offline submission", async () => {
+    configureOfflineStore("user-invalid-answer");
+    await saveExamPackage(packagePayload, expectedSha256);
+    await startOfflineAttempt("assignment-1");
+
+    const attempt = tables.get("offline_attempts")?.get("assignment-1");
+    expect(attempt).toBeDefined();
+    attempt!.answers_json = JSON.stringify({ q1: 99, q2: null });
+
+    await expect(queueOfflineSubmission("assignment-1")).rejects.toThrow(
+      "saved answers contain invalid question or option data"
+    );
+    expect(attempt!.status).toBe("ACTIVE");
+  });
+
   it("queues and marks a submission as synced", async () => {
     configureOfflineStore("user-4");
     await saveExamPackage(packagePayload, expectedSha256);
