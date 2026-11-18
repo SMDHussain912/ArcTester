@@ -119,8 +119,22 @@ function createWindow() {
   }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) shell.openExternal(url);
+    if (url.startsWith("https://")) void shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  // Keep the privileged renderer on the packaged app origin. External links
+  // must use target=_blank so they pass through the explicit HTTPS handler.
+  const trustedOrigin = devUrl ? new URL(devUrl).origin : "arctester://app";
+  window.webContents.on("will-navigate", (event, targetUrl) => {
+    let targetOrigin = "";
+    try {
+      targetOrigin = new URL(targetUrl).origin;
+    } catch {
+      event.preventDefault();
+      return;
+    }
+    if (targetOrigin !== trustedOrigin) event.preventDefault();
   });
 
   window.webContents.on("before-input-event", (event, input) => {
