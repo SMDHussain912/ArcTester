@@ -75,7 +75,7 @@ root lockfile are available.
 
 - Root Directory: repository root (`.`).
 - Install Command: `npm ci`.
-- Build Command: `npm run build:web`.
+- Build Command: `VITE_BASE_PATH=/ npm run build:web` (the committed `vercel.json` already supplies this).
 - Output Directory: `web/dist`.
 - Environment Variable: `VITE_API_URL=https://YOUR-API.onrender.com`.
 
@@ -117,6 +117,8 @@ another option, but is not configured by this repository yet.
 After deploying, verify login, page refresh, logout, and a protected API request
 in at least one desktop browser and one mobile browser. CI does not prove the
 provider-side environment variables or real-browser cookie behavior.
+
+See [`docs/PLATFORM_RELEASE_DEPLOYMENT.md`](docs/PLATFORM_RELEASE_DEPLOYMENT.md) for the maintained Vercel, Render, Expo and Electron release configuration.
 
 ## Move existing SQLite data to PostgreSQL
 

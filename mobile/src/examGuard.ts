@@ -1,4 +1,8 @@
 import * as ExpoScreenCapture from "expo-screen-capture";
+import * as SecureStore from "expo-secure-store";
+
+const EXAM_IN_PROGRESS_KEY = "arctester-exam-in-progress";
+const ACTIVE_ASSIGNMENT_KEY = "arctester-active-assignment";
 
 const WEIGHTS: Record<string, number> = {
   FULLSCREEN_EXIT: 1,
@@ -25,10 +29,6 @@ let eventQueue: Array<{ type: string; at: string; detail?: string }> = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let subscription: { remove: () => void } | null = null;
 
-/**
- * Queue an integrity event for later flush to the server.
- * Debounced per type at 2s.
- */
 const lastRef: Record<string, number> = {};
 export const lastRefForTest = lastRef;
 export const eventQueueForTest = eventQueue;
@@ -40,16 +40,18 @@ export function pushViolation(type: string, detail?: string): void {
   eventQueue.push({ type, at: new Date().toISOString(), detail: detail ?? "" });
 }
 
-async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<void> {
+async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<boolean> {
   const batch = eventQueue.splice(0, eventQueue.length);
-  if (batch.length === 0) return;
+  if (batch.length === 0) return true;
   try {
     await api(`/exams/assignments/${encodeURIComponent(assignmentId)}/session/integrity`, {
       method: "POST",
       body: JSON.stringify({ events: batch }),
     });
+    return true;
   } catch {
     eventQueue.unshift(...batch);
+    return false;
   }
 }
 
@@ -58,11 +60,6 @@ function scheduleFlush(api: (path: string, init?: RequestInit) => Promise<any>, 
   flushTimer = setTimeout(() => void flushEvents(api, assignmentId), 5000);
 }
 
-/**
- * Start the Android exam guard: prevent screenshots, start native violation
- * monitoring, and persist "examInProgress" so APP_REOPENED can be reported on
- * launch. Call when the student begins an assigned exam.
- */
 export async function startExamGuard({
   api,
   assignmentId,
@@ -75,7 +72,7 @@ export async function startExamGuard({
   try {
     await ExpoScreenCapture.preventScreenCaptureAsync();
   } catch {
-    // expo-screen-capture unavailable in Expo Go; continue without blocking.
+    // Expo Go and unsupported platforms may not provide native screen protection.
   }
   examInProgress = true;
   try {
@@ -83,7 +80,7 @@ export async function startExamGuard({
     guard = NativeModules.ExamGuard;
     await guard.start(usePinning);
   } catch {
-    guard = null; // Native module not available (Expo Go / not a dev build)
+    guard = null;
   }
   if (guard) {
     subscription = guard.addListener("onViolation", (event: any) => {
@@ -91,19 +88,11 @@ export async function startExamGuard({
       scheduleFlush(api, assignmentId);
     });
   }
-  // Persist so we can report APP_REOPENED if the app is killed and reopened.
-  try {
-    const { AsyncStorage } = require("react-native");
-    AsyncStorage.setItem("arctester-exam-in-progress", "1");
-    AsyncStorage.setItem("arctester-active-assignment", assignmentId);
-  } catch {}
+  // SecureStore is part of the installed Expo stack; AsyncStorage is not.
+  await SecureStore.setItemAsync(EXAM_IN_PROGRESS_KEY, "1");
+  await SecureStore.setItemAsync(ACTIVE_ASSIGNMENT_KEY, assignmentId);
 }
 
-/**
- * Stop the Android exam guard: allow screenshots, stop native monitoring, and
- * always clear the in-progress flag even on error. Call on submit, unmount,
- * and app launch.
- */
 export async function stopExamGuard(): Promise<void> {
   examInProgress = false;
   if (flushTimer) {
@@ -115,24 +104,22 @@ export async function stopExamGuard(): Promise<void> {
     subscription = null;
   }
   try {
-    const { NativeModules } = require("react-native");
     if (guard) await guard.stop();
-  } catch {}
+  } catch {
+    // Continue cleanup even if the native module has already been torn down.
+  }
   guard = null;
   try {
     await ExpoScreenCapture.allowScreenCaptureAsync();
-  } catch {}
-  try {
-    const { AsyncStorage } = require("react-native");
-    await AsyncStorage.removeItem("arctester-exam-in-progress");
-    await AsyncStorage.removeItem("arctester-active-assignment");
-  } catch {}
+  } catch {
+    // Screen capture may not have been blocked on this runtime.
+  }
+  await Promise.all([
+    SecureStore.deleteItemAsync(EXAM_IN_PROGRESS_KEY),
+    SecureStore.deleteItemAsync(ACTIVE_ASSIGNMENT_KEY),
+  ]);
 }
 
-/**
- * Report APP_REOPENed if a previous exam was interrupted by process death.
- * Call on app launch before starting any new exam.
- */
 export async function reportAppReopened({
   api,
   assignmentId,
@@ -140,19 +127,21 @@ export async function reportAppReopened({
   api: (path: string, init?: RequestInit) => Promise<any>;
   assignmentId: string;
 }): Promise<void> {
-  try {
-    const { AsyncStorage } = require("react-native");
-    const flag = await AsyncStorage.getItem("arctester-exam-in-progress");
-    if (flag === "1") {
-      pushViolation("APP_REOPENED", "App was reopened after process death during an active exam.");
-      await flushEvents(api, assignmentId);
-      await AsyncStorage.removeItem("arctester-exam-in-progress");
-      await AsyncStorage.removeItem("arctester-active-assignment");
-    }
-  } catch {}
+  const [flag, savedAssignmentId] = await Promise.all([
+    SecureStore.getItemAsync(EXAM_IN_PROGRESS_KEY),
+    SecureStore.getItemAsync(ACTIVE_ASSIGNMENT_KEY),
+  ]);
+  if (flag !== "1") return;
+  if (savedAssignmentId && savedAssignmentId !== assignmentId) return;
+  pushViolation("APP_REOPENED", "App was reopened after process death during an active exam.");
+  const delivered = await flushEvents(api, assignmentId);
+  if (!delivered) return;
+  await Promise.all([
+    SecureStore.deleteItemAsync(EXAM_IN_PROGRESS_KEY),
+    SecureStore.deleteItemAsync(ACTIVE_ASSIGNMENT_KEY),
+  ]);
 }
 
-/** Flush any queued integrity events immediately. */
 export async function flushGuardEvents({
   api,
   assignmentId,
@@ -163,7 +152,6 @@ export async function flushGuardEvents({
   await flushEvents(api, assignmentId);
 }
 
-/** Whether an exam is currently in progress on this device. */
 export function isExamInProgress(): boolean {
   return examInProgress;
 }

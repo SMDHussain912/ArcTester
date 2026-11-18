@@ -1,18 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
+const secureStore = vi.hoisted(() => ({ values: {} as Record<string, string> }));
+
 vi.mock("expo-screen-capture", () => ({
   preventScreenCaptureAsync: vi.fn(),
   allowScreenCaptureAsync: vi.fn(),
 }));
 
-const mockAsyncStorage: Record<string, string> = {};
-const mockGetItem = vi.fn(async (key: string) => mockAsyncStorage[key] ?? null);
-const mockSetItem = vi.fn(async (key: string, value: string) => {
-  mockAsyncStorage[key] = value;
-});
-const mockRemoveItem = vi.fn(async (key: string) => {
-  delete mockAsyncStorage[key];
-});
+vi.mock("expo-secure-store", () => ({
+  getItemAsync: vi.fn(async (key: string) => secureStore.values[key] ?? null),
+  setItemAsync: vi.fn(async (key: string, value: string) => {
+    secureStore.values[key] = value;
+  }),
+  deleteItemAsync: vi.fn(async (key: string) => {
+    delete secureStore.values[key];
+  }),
+}));
 
 vi.mock("react-native", () => ({
   NativeModules: {},
@@ -45,9 +48,9 @@ const fakeApi = vi.fn(async (path: string, init?: any) => {
 beforeEach(() => {
   vi.clearAllMocks();
   capturedApiCalls = [];
-  Object.keys(mockAsyncStorage).forEach((key) => delete mockAsyncStorage[key]);
+  Object.keys(secureStore.values).forEach((key) => delete secureStore.values[key]);
   eventQueueForTest.length = 0;
-  Object.keys(lastRefForTest).forEach((k) => delete lastRefForTest[k]);
+  Object.keys(lastRefForTest).forEach((key) => delete lastRefForTest[key]);
 });
 
 afterEach(() => {
@@ -56,35 +59,63 @@ afterEach(() => {
 
 describe("examGuard", () => {
   it("flushes queued violations to the server", async () => {
-    const { pushViolation, flushGuardEvents } = await import("./examGuard");
     pushViolation("TAB_HIDDEN");
     pushViolation("WINDOW_BLUR");
     await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
-    expect(capturedApiCalls.length).toBe(1);
+    expect(capturedApiCalls).toHaveLength(1);
     expect(capturedApiCalls[0].path).toBe("/exams/assignments/assign-1/session/integrity");
-    expect(capturedApiCalls[0].body.events.length).toBe(2);
-    expect(capturedApiCalls[0].body.events[0].type).toBe("TAB_HIDDEN");
-    expect(capturedApiCalls[0].body.events[1].type).toBe("WINDOW_BLUR");
+    expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual(["TAB_HIDDEN", "WINDOW_BLUR"]);
   });
 
   it("does not report APP_REOPENED if no exam was in progress", async () => {
-    const { reportAppReopened } = await import("./examGuard");
     await reportAppReopened({ api: fakeApi, assignmentId: "assign-1" });
-    expect(capturedApiCalls.length).toBe(0);
+    expect(capturedApiCalls).toHaveLength(0);
+  });
+
+  it("persists an active assignment and reports a process restart for that same exam", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    expect(secureStore.values["arctester-exam-in-progress"]).toBe("1");
+    expect(secureStore.values["arctester-active-assignment"]).toBe("assign-1");
+
+    await reportAppReopened({ api: fakeApi, assignmentId: "assign-1" });
+    expect(capturedApiCalls).toHaveLength(1);
+    expect(capturedApiCalls[0].body.events[0].type).toBe("APP_REOPENED");
+    expect(secureStore.values["arctester-exam-in-progress"]).toBeUndefined();
+  });
+
+  it("keeps the interruption marker when the server cannot accept the restart event", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    const unavailableApi = vi.fn(async () => { throw new Error("network unavailable"); });
+    await reportAppReopened({ api: unavailableApi, assignmentId: "assign-1" });
+    expect(secureStore.values["arctester-exam-in-progress"]).toBe("1");
+    expect(secureStore.values["arctester-active-assignment"]).toBe("assign-1");
+    expect(eventQueueForTest.some((event) => event.type === "APP_REOPENED")).toBe(true);
+  });
+
+  it("does not attribute a previous exam restart to a different assignment", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    await reportAppReopened({ api: fakeApi, assignmentId: "assign-2" });
+    expect(capturedApiCalls).toHaveLength(0);
+    expect(secureStore.values["arctester-active-assignment"]).toBe("assign-1");
+  });
+
+  it("clears secure interruption markers when the exam guard stops", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    await stopExamGuard();
+    expect(secureStore.values["arctester-exam-in-progress"]).toBeUndefined();
+    expect(secureStore.values["arctester-active-assignment"]).toBeUndefined();
+    expect(isExamInProgress()).toBe(false);
   });
 
   it("debounces same-type violations", async () => {
-    const { pushViolation, flushGuardEvents } = await import("./examGuard");
     pushViolation("COPY_ATTEMPT");
-    pushViolation("COPY_ATTEMPT"); // debounced
-    pushViolation("PASTE_ATTEMPT"); // not debounced
+    pushViolation("COPY_ATTEMPT");
+    pushViolation("PASTE_ATTEMPT");
     await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
-    const types = capturedApiCalls[0].body.events.map((e: any) => e.type);
-    expect(types).toEqual(["COPY_ATTEMPT", "PASTE_ATTEMPT"]);
+    expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual(["COPY_ATTEMPT", "PASTE_ATTEMPT"]);
   });
 
-  it("isExamInProgress returns false initially", async () => {
-    const { isExamInProgress } = await import("./examGuard");
+  it("isExamInProgress returns false after cleanup", () => {
     expect(isExamInProgress()).toBe(false);
   });
 });
