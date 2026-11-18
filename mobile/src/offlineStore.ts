@@ -133,12 +133,17 @@ function parsePackage(raw: string): OfflineExamPackage {
     throw new Error("The downloaded exam package is invalid.");
   }
 
+  if (candidate.availableFrom && candidate.dueAt && Date.parse(candidate.availableFrom) > Date.parse(candidate.dueAt)) {
+    throw new Error("The downloaded exam package has an invalid availability window.");
+  }
+
   const ids = new Set<string>();
+  const positions = new Set<number>();
   for (const question of candidate.questions) {
     if (
       !question || typeof question !== "object" ||
       typeof question.id !== "string" || !question.id.trim() || ids.has(question.id) ||
-      !Number.isInteger(question.position) || question.position < 0 ||
+      !Number.isInteger(question.position) || question.position < 0 || positions.has(question.position) ||
       typeof question.subject !== "string" || !question.subject.trim() ||
       !(question.topic === null || typeof question.topic === "string") ||
       typeof question.text !== "string" || !question.text.trim() ||
@@ -150,6 +155,7 @@ function parsePackage(raw: string): OfflineExamPackage {
       throw new Error("The downloaded exam package contains an invalid question.");
     }
     ids.add(question.id);
+    positions.add(question.position);
   }
 
   return candidate as OfflineExamPackage;
@@ -159,6 +165,9 @@ export async function saveExamPackage(
   examPackage: OfflineExamPackage,
   expectedSha256: string,
 ): Promise<void> {
+  if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(expectedSha256)) {
+    throw new Error("Exam package integrity hash is invalid. Download it again.");
+  }
   const serialized = JSON.stringify(examPackage);
   const actualSha256 = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
