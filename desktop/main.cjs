@@ -151,6 +151,14 @@ function createWindow() {
     }
   });
 
+  window.on("close", (event) => {
+    if (!examMode) return;
+    event.preventDefault();
+    sendIntegrityViolation("CLOSE_ATTEMPT", "The desktop exam window close action was blocked");
+    window.show();
+    window.focus();
+  });
+
   window.on("closed", () => {
     if (examWindow === window) examWindow = null;
   });
