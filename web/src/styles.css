@@ -356,3 +356,9 @@
 .training-metric-grid small{color:var(--muted);font-size:10px}
 .training-metric-grid strong{margin-top:4px;font-size:18px;overflow-wrap:anywhere}
 @media(max-width:640px){.training-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.training-evaluation-status{align-items:flex-start;flex-direction:column}}
+
+.model-registry-list{display:grid;gap:10px}
+.model-registry-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--bg)}
+.model-registry-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.model-registry-row .row{justify-content:flex-end}
+@media(max-width:640px){.model-registry-row{align-items:flex-start;flex-direction:column}.model-registry-row .row{justify-content:flex-start}}
