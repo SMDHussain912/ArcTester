@@ -123,7 +123,7 @@ class ExamGuardModule : Module() {
           current.startLockTask()
           pinned = true
         } catch (error: Exception) {
-          emit("PINNING_UNAVAILABLE", error.message ?: "Android screen pinning could not start")
+          emit("UNPINNED", error.message ?: "Android screen pinning could not start")
         }
       }
 
