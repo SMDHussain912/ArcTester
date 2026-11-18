@@ -124,6 +124,7 @@ export default function App() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const sessionIdentity = token && user ? `${user.id}:${token}` : null;
   const sessionIdentityRef = useRef<string | null>(sessionIdentity);
+  const notificationRequestSequence = useRef(0);
   sessionIdentityRef.current = sessionIdentity;
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
@@ -257,6 +258,7 @@ export default function App() {
   useEffect(() => {
     if (!token || !user) return;
     const requestIdentity = `${user.id}:${token}`;
+    const initialNotificationRequest = ++notificationRequestSequence.current;
     let cancelled = false;
     const isCurrentSession = () => !cancelled && sessionIdentityRef.current === requestIdentity;
     const registerDevice = async () => {
@@ -289,7 +291,7 @@ export default function App() {
       .catch(() => undefined);
     api<{ notifications: Notification[]; unreadCount?: number }>("/notifications")
       .then((result) => {
-        if (!isCurrentSession()) return;
+        if (!isCurrentSession() || notificationRequestSequence.current !== initialNotificationRequest) return;
         const items = Array.isArray(result.notifications) ? result.notifications : [];
         setNotifications(items);
         setUnreadNotificationCount(
@@ -333,10 +335,11 @@ export default function App() {
 
   async function refreshNotifications() {
     const requestIdentity = sessionIdentityRef.current;
+    const requestSequence = ++notificationRequestSequence.current;
     setRefreshingNotifications(true);
     try {
       const result = await api<{ notifications: Notification[]; unreadCount?: number }>("/notifications");
-      if (sessionIdentityRef.current !== requestIdentity) return;
+      if (sessionIdentityRef.current !== requestIdentity || notificationRequestSequence.current !== requestSequence) return;
       const items = Array.isArray(result.notifications) ? result.notifications : [];
       setNotifications(items);
       setUnreadNotificationCount(
@@ -370,19 +373,31 @@ export default function App() {
 
   async function markNotificationRead(id: string) {
     const requestIdentity = sessionIdentityRef.current;
+    const current = notifications.find((item) => item.id === id);
+    if (!current || current.readAt) return;
+
+    // Prevent a poll started before this action from restoring the unread row.
+    notificationRequestSequence.current += 1;
+    const optimisticReadAt = new Date().toISOString();
+    setNotifications((items) => items.map((item) => item.id === id
+      ? { ...item, readAt: optimisticReadAt }
+      : item));
+    setUnreadNotificationCount((count) => Math.max(0, count - 1));
+
     try {
       const result = await api<{ readAt: string; alreadyRead?: boolean }>(
         `/notifications/${encodeURIComponent(id)}/read`,
         { method: "POST", body: JSON.stringify({}) },
       );
       if (sessionIdentityRef.current !== requestIdentity) return;
-      const current = notifications.find((item) => item.id === id);
-      if (current && !current.readAt && result.alreadyRead !== true) {
-        setUnreadNotificationCount((count) => Math.max(0, count - 1));
-      }
-      setNotifications((items) => items.map((item) => item.id === id ? { ...item, readAt: result.readAt } : item));
+      setNotifications((items) => items.map((item) => item.id === id
+        ? { ...item, readAt: result.readAt }
+        : item));
     } catch (cause) {
-      if (sessionIdentityRef.current === requestIdentity) setError((cause as Error).message);
+      if (sessionIdentityRef.current === requestIdentity) {
+        setError((cause as Error).message);
+        void refreshNotifications();
+      }
     }
   }
 
