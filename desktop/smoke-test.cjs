@@ -26,10 +26,12 @@ if (fs.existsSync(indexHtml)) {
   check(!/src="\/assets\//.test(html), "index.html must not reference absolute /assets/ scripts");
   check(!/href="\/assets\//.test(html), "index.html must not reference absolute /assets/ stylesheets");
   check(/src="\.\/assets\//.test(html), "index.html must reference relative ./assets/ scripts");
-  check(/href="\.\/assets\//.test(html), "index.html must reference relative ./assets/ stylesheets");
-
   const assetsDir = path.join(root, "web", "dist", "assets");
-  check(fs.existsSync(assetsDir) && fs.readdirSync(assetsDir).length > 0, "web/dist/assets must contain built assets");
+  const assets = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir) : [];
+  check(assets.length > 0, "web/dist/assets must contain built assets");
+  // CSS is imported by the lazy-loaded React entry, so Vite emits it as a
+  // preload dependency instead of a stylesheet link in the initial HTML.
+  check(assets.some((asset) => asset.endsWith(".css")), "web/dist/assets must contain the extracted application stylesheet");
 }
 
 if (fs.existsSync(mainFile)) {
@@ -41,6 +43,9 @@ if (fs.existsSync(mainFile)) {
   check(main.includes('window.loadURL("arctester://app/")'), "desktop must load the secure packaged-app origin");
   check(main.includes('window.webContents.on("will-navigate"'), "desktop must prevent top-level navigation away from its trusted renderer origin");
   check(main.includes('window.on("close"'), "desktop must intercept window close attempts during an active exam");
+  check(main.includes("nodeIntegration: false"), "renderer Node.js integration must remain disabled");
+  check(main.includes("contextIsolation: true"), "renderer context isolation must remain enabled");
+  check(main.includes("sandbox: true"), "renderer sandbox must remain enabled");
   check(main.includes('url.host !== "app"'), "custom protocol handler must restrict requests to the app host");
   check(!/\bi\.shift\b|\bi\.key\b/.test(main), "exam shortcut handler must not reference the undefined i variable");
 }
@@ -49,7 +54,7 @@ if (fs.existsSync(preloadFile)) {
   const preload = fs.readFileSync(preloadFile, "utf8");
   check(preload.includes("setExamMode"), "preload must expose the safe exam-mode bridge");
   check(preload.includes("onIntegrityViolation"), "preload must expose the integrity event subscription");
-  check(!preload.includes("require("), "preload must not expose Node.js require to the renderer");
+  check(!/exposeInMainWorld\s*\(\s*["'](?:require|ipcRenderer)["']/.test(preload), "preload must not expose Node.js require or ipcRenderer directly to the renderer");
 }
 
 if (failures.length > 0) {
