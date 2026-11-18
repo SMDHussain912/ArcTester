@@ -84,7 +84,7 @@ export default function AdminModelLab({
         overall_average_accuracy: 0.48 + (index % 9) / 20,
         previous_question_count: 20,
       },
-      target: Math.min(1, 0.5 + (index % 10) / 20),
+      target: task === "binary-classification" ? index % 2 : Math.min(1, 0.5 + (index % 10) / 20),
       groupId: (index + 1).toString(16).padStart(64, "0"),
     }));
     const blob = new Blob([JSON.stringify({ samples: rows }, null, 2)], { type: "application/json" });
@@ -140,7 +140,7 @@ export default function AdminModelLab({
         <label>Source description<textarea value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Describe where the data came from, how it was collected and why its use is authorized." /></label>
         <label className="dataset-attestation"><input type="checkbox" checked={sourceAttested} onChange={(event) => setSourceAttested(event.target.checked)} /> I confirm I am authorized to use this data and have removed direct personal identifiers.</label>
         <label>Feature schema JSON<textarea rows={7} spellCheck={false} value={featureSchemaText} onChange={(event) => setFeatureSchemaText(event.target.value)} /></label>
-        <label>Training samples JSON<input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label><button type="button" className="button button-secondary" onClick={downloadSampleTemplate}>Download sample JSON template</button>
+        <label>Training samples JSON<input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label><button type="button" className="button button-secondary" onClick={downloadSampleTemplate}>Download sample JSON template (synthetic)</button>
         {uploadName && <p className="muted">Selected file: {uploadName}</p>}
         <label>Samples preview / JSON<textarea rows={10} spellCheck={false} value={samplesText} onChange={(event) => setSamplesText(event.target.value)} placeholder='[{"features":{"completed_attempts":12,"previous_accuracy":0.65,"recent_average_accuracy":0.7,"overall_average_accuracy":0.66,"previous_question_count":20},"target":0.72,"groupId":"64-character-keyed-hmac"}]' /></label>
         {formError && <p className="error" role="alert">{formError}</p>}
