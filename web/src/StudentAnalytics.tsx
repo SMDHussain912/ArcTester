@@ -64,7 +64,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
   const accuracyPercent = (value: number | null) => (value === null ? "—" : Math.round(value * 100) + "%");
 
   return (
-    <div className="stack">
+    <div className="stack student-analytics">
       <section className="page-intro">
         <p className="eyebrow">Your learning progress</p>
         <h1>Study analytics</h1>
