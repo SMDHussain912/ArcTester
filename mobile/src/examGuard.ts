@@ -38,14 +38,16 @@ export const eventQueueForTest = eventQueue;
 
 type IntegrityEvent = { type: string; at: string; detail?: string };
 
-async function readPersistedQueues(): Promise<Record<string, IntegrityEvent[]>> {
+let persistenceQueue: Promise<void> = Promise.resolve();
+
+async function readPersistedQueues(legacyAssignmentId = activeAssignmentId): Promise<Record<string, IntegrityEvent[]>> {
   const raw = await SecureStore.getItemAsync(PENDING_EVENTS_KEY);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
       // Migrate the first version of the queue, which was not assignment-scoped.
-      return activeAssignmentId ? { [activeAssignmentId]: parsed as IntegrityEvent[] } : {};
+      return legacyAssignmentId ? { [legacyAssignmentId]: parsed as IntegrityEvent[] } : {};
     }
     if (!parsed || typeof parsed !== "object") return {};
     return parsed as Record<string, IntegrityEvent[]>;
@@ -56,19 +58,28 @@ async function readPersistedQueues(): Promise<Record<string, IntegrityEvent[]>> 
 }
 
 async function persistEventQueue(): Promise<void> {
-  if (!activeAssignmentId) return;
-  const queues = await readPersistedQueues();
-  if (eventQueue.length === 0) delete queues[activeAssignmentId];
-  else queues[activeAssignmentId] = [...eventQueue];
-  if (Object.keys(queues).length === 0) {
-    await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
-  } else {
-    await SecureStore.setItemAsync(PENDING_EVENTS_KEY, JSON.stringify(queues));
-  }
+  const assignmentId = activeAssignmentId;
+  if (!assignmentId) return;
+  const snapshot = [...eventQueue];
+
+  // SecureStore has no transaction primitive. Serialize read/modify/write so
+  // concurrent native events cannot overwrite a newer queue with an older one.
+  persistenceQueue = persistenceQueue.catch(() => undefined).then(async () => {
+    const queues = await readPersistedQueues(assignmentId);
+    if (snapshot.length === 0) delete queues[assignmentId];
+    else queues[assignmentId] = snapshot;
+    if (Object.keys(queues).length === 0) {
+      await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
+    } else {
+      await SecureStore.setItemAsync(PENDING_EVENTS_KEY, JSON.stringify(queues));
+    }
+  });
+  await persistenceQueue;
 }
 
 async function restorePersistedEvents(assignmentId: string): Promise<void> {
-  const queues = await readPersistedQueues();
+  await persistenceQueue.catch(() => undefined);
+  const queues = await readPersistedQueues(assignmentId);
   const saved = queues[assignmentId] ?? [];
   const known = new Set(eventQueue.map((event) => `${event.type}:${event.at}`));
   for (const event of saved) {
@@ -88,7 +99,9 @@ export function pushViolation(type: string, detail?: string): void {
 }
 
 async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<boolean> {
+  if (activeAssignmentId && activeAssignmentId !== assignmentId) return false;
   await restorePersistedEvents(assignmentId);
+  if (activeAssignmentId && activeAssignmentId !== assignmentId) return false;
   const batch = eventQueue.splice(0, eventQueue.length);
   if (batch.length === 0) return true;
   try {
@@ -123,6 +136,18 @@ export async function startExamGuard({
     await ExpoScreenCapture.preventScreenCaptureAsync();
   } catch {
     // Expo Go and unsupported platforms may not provide native screen protection.
+  }
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (subscription) {
+    subscription.remove();
+    subscription = null;
+  }
+  if (guard) {
+    try { await guard.stop(); } catch { /* Native activity may already be gone. */ }
+    guard = null;
   }
   activeAssignmentId = assignmentId;
   eventQueue.length = 0;
