@@ -83,6 +83,15 @@ describe("examGuard", () => {
     expect(secureStore.values["arctester-exam-in-progress"]).toBeUndefined();
   });
 
+  it("keeps the interruption marker when the server cannot accept the restart event", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    const unavailableApi = vi.fn(async () => { throw new Error("network unavailable"); });
+    await reportAppReopened({ api: unavailableApi, assignmentId: "assign-1" });
+    expect(secureStore.values["arctester-exam-in-progress"]).toBe("1");
+    expect(secureStore.values["arctester-active-assignment"]).toBe("assign-1");
+    expect(eventQueueForTest.some((event) => event.type === "APP_REOPENED")).toBe(true);
+  });
+
   it("does not attribute a previous exam restart to a different assignment", async () => {
     await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
     await reportAppReopened({ api: fakeApi, assignmentId: "assign-2" });
