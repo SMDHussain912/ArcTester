@@ -52,7 +52,7 @@ describe("Answer Intelligence API", () => {
       explanation: {
         answer: "Stack",
         provider: "question-bank",
-        explanationStatus: "approved",
+        explanationStatus: "question-bank",
         answerKeyVerified: true,
         explanationVerified: false,
         learningDecision: { action: "review-topic", recommendedMode: "mistakes", questionCount: 5 },
