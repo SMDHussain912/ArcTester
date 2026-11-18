@@ -1,5 +1,6 @@
 import * as ExpoScreenCapture from "expo-screen-capture";
 import * as SecureStore from "expo-secure-store";
+import { requireNativeModule } from "expo-modules-core";
 
 const EXAM_IN_PROGRESS_KEY = "arctester-exam-in-progress";
 const ACTIVE_ASSIGNMENT_KEY = "arctester-active-assignment";
@@ -107,8 +108,7 @@ export async function startExamGuard({
   }
   examInProgress = true;
   try {
-    const { NativeModules } = require("react-native");
-    guard = NativeModules.ExamGuard;
+    guard = requireNativeModule("ExamGuard");
     await guard.start(usePinning);
   } catch {
     guard = null;
