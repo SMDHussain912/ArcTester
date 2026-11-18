@@ -172,6 +172,38 @@ export function sessionRouter(db: PrismaClient): Router {
             if (!concurrentSession || concurrentSession.status !== "ACTIVE" || !concurrentSession.startedAt) {
               throw conflict("The exam session changed while starting. Refresh and try again.");
             }
+            // The unique-assignment race can bypass the normal device check
+            // above because both requests initially observed no session. Apply
+            // the same single-device ownership rule before returning the winner.
+            if (deviceId && concurrentSession.deviceId && concurrentSession.deviceId !== deviceId) {
+              const holderIsFresh = concurrentSession.lastHeartbeatAt
+                && now.getTime() - concurrentSession.lastHeartbeatAt.getTime() < DEVICE_FRESH_MS;
+              if (holderIsFresh) {
+                throw conflict("DEVICE_CONFLICT: another device holds this exam session.");
+              }
+            }
+            if (deviceId && concurrentSession.deviceId !== deviceId) {
+              return db.$transaction(async (tx) => {
+                const changed = await tx.examSession.updateMany({
+                  where: { id: concurrentSession.id, status: "ACTIVE", deviceId: concurrentSession.deviceId },
+                  data: {
+                    deviceId, clientKind, ipAddress, userAgent,
+                    lastHeartbeatAt: now, lastActivityAt: now,
+                    ...(concurrentSession.deviceId ? { violationCount: { increment: INTEGRITY_WEIGHTS.DEVICE_CHANGED } } : {}),
+                  },
+                });
+                if (changed.count !== 1) {
+                  throw conflict("The exam session changed while starting. Refresh and try again.");
+                }
+                const updated = await tx.examSession.findUniqueOrThrow({ where: { id: concurrentSession.id } });
+                if (concurrentSession.deviceId) {
+                  await tx.examSessionEvent.create({
+                    data: { sessionId: updated.id, actorId: req.user!.id, type: "DEVICE_CHANGED", detail: "Session ownership transferred after the previous device became inactive." },
+                  });
+                }
+                return updated;
+              });
+            }
             return concurrentSession;
           });
       const deadline = session.startedAt ? new Date(session.startedAt.getTime() + assignment.examVersion.durationMinutes * 60000 + session.pausedDurationMs) : null;
