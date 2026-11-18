@@ -13,11 +13,12 @@ export interface AssignedExamSessionProps {
   error: string | null;
   selectAssignedAnswer: (questionId: string, selectedIndex: number) => void;
   submitAssignedExam: (force?: boolean) => Promise<void>;
+  leaveAssignedExam: () => Promise<void>;
   studentName?: string | null;
   studentId?: string | null;
 }
 
-export default function AssignedExamSession({ package: activePackage, answers, saveStatus, paused, remainingSeconds, busy, error, selectAssignedAnswer, submitAssignedExam, studentName, studentId }: AssignedExamSessionProps) {
+export default function AssignedExamSession({ package: activePackage, answers, saveStatus, paused, remainingSeconds, busy, error, selectAssignedAnswer, submitAssignedExam, studentName, studentId, leaveAssignedExam }: AssignedExamSessionProps) {
   if (!activePackage) return null;
 
   const integrityLevel = (activePackage.integrityLevel === "OFF" || activePackage.integrityLevel === "BASIC" || activePackage.integrityLevel === "STRICT")
@@ -49,7 +50,7 @@ export default function AssignedExamSession({ package: activePackage, answers, s
           <h1>{activePackage.title}</h1>
           <p className="muted">{activePackage.questions.length} questions · {activePackage.durationMinutes} minutes · <strong className={paused || remainingSeconds < 300 ? "timer-warning" : "exam-countdown"}>{clock} remaining</strong></p>
         </div>
-        <button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Leave this exam? Your answers are saved on this device and synced to the server while online. You can reopen the exam and continue while time remains.")) { /* handled by parent */ } }}>Leave exam</button>
+        <button className="ghost" disabled={busy} onClick={() => { if (window.confirm("Leave the exam screen? Your saved answers will be kept, but the exam timer will continue. You can reopen it while the deadline has not passed.")) void leaveAssignedExam(); }}>Leave exam</button>
       </div>
       {paused && <p className="notice session-paused" role="status">Session paused or awaiting invigilator action. The server-controlled timer is held.</p>}
       {activePackage.instructions && <div className="panel exam-instructions"><strong>Instructions</strong><p>{activePackage.instructions}</p></div>}
