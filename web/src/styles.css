@@ -316,3 +316,12 @@
 .stat-label{font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin:0 0 4px}
 .stat-value{font-size:24px;font-weight:800;color:var(--ink);margin:0 0 2px;letter-spacing:-.5px}
 .stat-caption{font-size:11px;color:var(--muted);margin:0;line-height:1.5}
+
+
+/* Model lab dataset ingestion and training observability. */
+.training-progress{height:9px;overflow:hidden;border-radius:999px;background:var(--bg);border:1px solid var(--border)}
+.training-progress span{display:block;height:100%;border-radius:inherit;background:var(--accent);transition:width .2s ease}
+.model-result-json{max-height:360px;overflow:auto;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:11px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+.admin-panel label{min-width:0}
+.admin-panel textarea{width:100%;max-width:100%;min-height:90px;padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;line-height:1.5}
+@media(max-width:640px){.admin-panel .admin-two-col{grid-template-columns:1fr}.training-progress{height:11px}.model-result-json{max-height:260px}}
