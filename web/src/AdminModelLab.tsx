@@ -127,7 +127,7 @@ export default function AdminModelLab({
   }
 
   return (
-    <>
+    <div className="admin-model-lab stack">
       <div className="admin-page-title">
         <div><p className="eyebrow">MODEL OPERATIONS</p><h1>Model lab</h1><p>Register datasets, train candidate models and inspect their evaluation evidence before activation.</p></div>
         <button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button>
@@ -155,9 +155,9 @@ export default function AdminModelLab({
 
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · TRAIN</p><h2>Train a candidate model</h2></div></div>
-        <label>Training model ID prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
+        <label>Training model prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
-        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js training</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
+        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
         {datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
@@ -201,6 +201,6 @@ export default function AdminModelLab({
         ))}
         <p className="muted">A completed job is not automatically a production model. Review holdout metrics, baseline comparison, sample counts, learner-group split and eligibility before activating a candidate in the model registry.</p>
       </section>
-    </>
+    </div>
   );
 }
