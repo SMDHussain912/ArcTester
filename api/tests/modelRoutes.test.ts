@@ -4,7 +4,7 @@ import { fitLogisticRegression } from "../src/intelligence/logisticRegression.js
 import { startTestServer, signUp, type TestServer } from "./server.js";
 
 describe("admin model registry API", () => {
-  let server: TestServer;
+  let server = undefined as unknown as TestServer;
   let adminCookie: string;
   let studentCookie: string;
 
