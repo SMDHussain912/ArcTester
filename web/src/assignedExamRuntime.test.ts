@@ -4,6 +4,7 @@ import {
   holdServerClock,
   remainingServerSeconds,
   resumeServerClock,
+  resolveAssignedExamDeadline,
 } from "./assignedExamRuntime";
 
 describe("server-authoritative assigned exam clock", () => {
@@ -32,6 +33,14 @@ describe("server-authoritative assigned exam clock", () => {
     const afterWallClockChange = remainingServerSeconds(anchor, 65_000);
     expect(afterWallClockChange).toBe(beforeClockChange);
     expect(afterWallClockChange).toBe(3535);
+  });
+
+  it("uses the per-session duration deadline instead of the later assignment cutoff", () => {
+    expect(resolveAssignedExamDeadline("2026-11-10T11:00:00.000Z", "2026-11-10T18:00:00.000Z")).toBe(Date.parse("2026-11-10T11:00:00.000Z"));
+  });
+
+  it("falls back to the assignment cutoff only when no session deadline exists", () => {
+    expect(resolveAssignedExamDeadline(null, "2026-11-10T18:00:00.000Z")).toBe(Date.parse("2026-11-10T18:00:00.000Z"));
   });
 
   it("resumes from the server-issued deadline after a pause", () => {
