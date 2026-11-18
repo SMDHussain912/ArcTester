@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export type ModelLabDataset = { id: string; name: string; task: string; rowCount: number; targetColumn?: string; datasetKind?: string };
+export type ModelLabDataset = { id: string; name: string; task: string; rowCount: number; targetColumn?: string; datasetKind?: string; featureSchema?: { name: string; type: string }[] };
 export type ModelLabJob = {
   id: string;
   datasetId: string;
@@ -152,7 +152,7 @@ export default function AdminModelLab({
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · TRAIN</p><h2>Train a candidate model</h2></div></div>
         <label>Training model ID prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
-        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy} onClick={onQueueTraining}>Queue TensorFlow.js training</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification.</p>
+        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js training</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
         {datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
@@ -165,7 +165,22 @@ export default function AdminModelLab({
             <div className="training-progress" role="progressbar" aria-label={job.modelId + " training progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, job.progress))}><span style={{ width: Math.max(0, Math.min(100, job.progress)) + "%" }} /></div>
             <p>{job.progress}% complete</p>
             {job.errorMessage && <p className="error" role="alert">{job.errorMessage}</p>}
-            {job.result !== undefined && job.result !== null && <details><summary>Evaluation report and training details</summary><pre className="model-result-json">{JSON.stringify(job.result, null, 2)}</pre></details>}
+            {job.result !== undefined && job.result !== null && (() => {
+              const result = job.result as { productionEligible?: boolean; split?: { trainRows?: number; testRows?: number; trainGroups?: number; testGroups?: number }; candidate?: { mae?: number; rmse?: number; rSquared?: number | null }; baseline?: { mae?: number; rmse?: number; rSquared?: number | null }; reason?: string };
+              const metric = (value: number | undefined) => typeof value === "number" && Number.isFinite(value) ? value.toFixed(4) : "—";
+              return <div className="training-evaluation">
+                <div className="training-evaluation-status"><strong>{result.productionEligible ? "Candidate passed baseline gate" : "Not eligible for production"}</strong><span className={result.productionEligible ? "status status-used" : "status status-expired"}>{result.productionEligible ? "ELIGIBLE" : "NOT ELIGIBLE"}</span></div>
+                {result.split && <p className="muted">Training: {result.split.trainRows ?? "—"} rows · Holdout: {result.split.testRows ?? "—"} rows · Learner groups: {result.split.trainGroups ?? "—"} train / {result.split.testGroups ?? "—"} holdout</p>}
+                {result.candidate && result.baseline && <div className="training-metric-grid">
+                  <div><small>Candidate MAE</small><strong>{metric(result.candidate.mae)}</strong></div>
+                  <div><small>Baseline MAE</small><strong>{metric(result.baseline.mae)}</strong></div>
+                  <div><small>Candidate RMSE</small><strong>{metric(result.candidate.rmse)}</strong></div>
+                  <div><small>Baseline RMSE</small><strong>{metric(result.baseline.rmse)}</strong></div>
+                </div>}
+                {result.reason && <p className="muted">{result.reason}</p>}
+                <details><summary>Raw training report</summary><pre className="model-result-json">{JSON.stringify(job.result, null, 2)}</pre></details>
+              </div>;
+            })()}
           </article>
         ))}
         <p className="muted">A completed job is not automatically a production model. Review holdout metrics, baseline comparison, sample counts, learner-group split and eligibility before activating a candidate in the model registry.</p>
