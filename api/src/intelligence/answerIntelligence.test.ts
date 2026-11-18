@@ -46,7 +46,7 @@ describe("hybrid answer intelligence", () => {
     expect(result.misconception).toContain("differs");
   });
 
-  it("uses the approved explanation when no AI provider is configured", async () => {
+  it("uses the question-bank explanation when no AI provider is configured", async () => {
     vi.stubEnv("ARCTESTER_AI_API_KEY", "");
     vi.stubEnv("ARCTESTER_AI_BASE_URL", "");
     vi.stubEnv("ARCTESTER_AI_MODEL", "");
@@ -54,7 +54,7 @@ describe("hybrid answer intelligence", () => {
     vi.stubEnv("ARCTESTER_LOCAL_AI_MODEL", "");
     const result = await generateAnswerExplanation({ ...question, approvedExplanation: "A stack removes the most recently added item first." });
     expect(result.explanationStatus).toBe("approved");
-    expect(result.provider).toBe("approved-question-bank");
+    expect(result.provider).toBe("question-bank");
     expect(result.summary).toContain("most recently added");
   });
 });
