@@ -431,3 +431,24 @@ textarea{resize:vertical;line-height:1.55}
 @media(max-width:900px){.practice-builder-grid{grid-template-columns:1fr}.practice-builder-footer{align-items:stretch;flex-direction:column}.practice-builder-footer .primary{width:100%}}
 @media(max-width:640px){.stat-grid{grid-template-columns:1fr}.practice-subject-grid,.practice-topic-list,.practice-config-grid{grid-template-columns:1fr}.practice-builder{padding:14px}.practice-builder-title{flex-direction:column}.page-intro h1{font-size:28px}.panel-header{align-items:flex-start;flex-direction:column}.editor-actions{justify-content:stretch}.editor-actions>*{width:100%}}
 @media(prefers-reduced-motion:reduce){.app-splash-mark,.app-splash-track i{animation:none}}
+
+
+/* Announcement overlay and assigned-exam cards. */
+.announcement-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(10,18,32,.58);backdrop-filter:blur(5px)}
+.announcement-popup{width:min(100%,560px);padding:24px;display:grid;gap:13px;max-height:min(80vh,720px);overflow:auto;animation:ar-pop-in var(--t-med) var(--ease-out) both}
+.announcement-popup-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.announcement-popup h2{margin:0;font-size:22px;letter-spacing:-.5px}
+.announcement-popup-message{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.announcement-popup-expiry,.announcement-popup-footnote{margin:0;font-size:11px}
+.announcement-popup>.primary{justify-self:start}
+.assigned-exams-page{display:grid;gap:14px;min-width:0}
+.assigned-exam-card{padding:20px;display:grid;gap:13px;min-width:0}
+.admin-exam-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;min-width:0}
+.admin-exam-meta>div{min-width:0;overflow-wrap:anywhere}
+.admin-exam-meta strong{font-size:15px}
+.admin-exam-meta p{margin:5px 0 0;font-size:12px}
+.assigned-exam-dates{display:flex;gap:8px 18px;flex-wrap:wrap;padding:11px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.assigned-exam-dates small{font-size:11px;color:var(--muted)}
+.assigned-result-review{display:grid;gap:10px;padding-top:12px;border-top:1px solid var(--border)}
+.assigned-result-review h3{margin:0}
+@media(max-width:560px){.announcement-popup{padding:18px}.admin-exam-meta{flex-direction:column}.assigned-exam-card{padding:15px}}
