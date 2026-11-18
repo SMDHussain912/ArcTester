@@ -371,11 +371,25 @@ export async function queueOfflineSubmission(assignmentId: string): Promise<Pend
 
   const answers = JSON.parse(attempt.answers_json) as OfflineAnswer[];
   const expectedIds = new Set(cached.package.questions.map((question) => question.id));
-  if (
-    answers.length !== expectedIds.size ||
-    answers.some((answer) => !expectedIds.has(answer.examQuestionId))
-  ) {
-    throw new Error("Save an answer entry for every exam question before submitting.");
+  const answeredIds = new Set<string>();
+  const answersAreValid = answers.every((answer) => {
+    if (
+      !answer ||
+      typeof answer.examQuestionId !== "string" ||
+      !expectedIds.has(answer.examQuestionId) ||
+      answeredIds.has(answer.examQuestionId) ||
+      (answer.selectedIndex !== null &&
+        (!Number.isInteger(answer.selectedIndex) ||
+          answer.selectedIndex < 0 ||
+          answer.selectedIndex >= (cached.package.questions.find(
+            (question) => question.id === answer.examQuestionId
+          )?.options.length ?? 0)))
+    ) return false;
+    answeredIds.add(answer.examQuestionId);
+    return true;
+  });
+  if (!answersAreValid || answeredIds.size !== expectedIds.size) {
+    throw new Error("The saved answers are incomplete or invalid. Reopen the exam and review every question before submitting.");
   }
 
   const submittedAt = attempt.submitted_at ?? new Date().toISOString();
