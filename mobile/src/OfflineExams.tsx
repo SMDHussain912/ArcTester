@@ -52,6 +52,8 @@ type Props = {
 export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
+  const mountedRef = useRef(false);
+  const assignmentsRequestSequence = useRef(0);
 
   const [assignments, setAssignments] = useState<AssignedExam[]>([]);
   const [cachedIds, setCachedIds] = useState<string[]>([]);
@@ -95,19 +97,24 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       listCachedExamPackages(),
       getPendingSubmissions(),
     ]);
+    if (!mountedRef.current) return;
     setCachedIds(packages.map((item) => item.assignmentId));
     setCachedPackages(packages);
     setPendingCount(pending.length);
   }, [userId]);
 
   const refreshAssignments = useCallback(async () => {
+    const requestId = ++assignmentsRequestSequence.current;
     const result = await apiRef.current<{ assignments: AssignedExam[] }>("/exams/assigned");
-    setAssignments(result.assignments);
-  }, []);
+    if (mountedRef.current && requestId === assignmentsRequestSequence.current) {
+      setAssignments(result.assignments);
+    }
+  }, [token, userId]);
 
   const syncOutbox = useCallback(async () => {
     if (syncLock.current) return;
     syncLock.current = true;
+    if (!mountedRef.current) return;
     setSyncing(true);
     setError("");
     try {
@@ -120,35 +127,41 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       setSyncMessage("Loading assigned exams…");
       await refreshAssignments();
       await refreshLocalState();
-      setSyncMessage("Connected · exam list updated");
+      if (mountedRef.current) setSyncMessage("Connected · exam list updated");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not synchronize offline data.");
+      if (mountedRef.current) {
+        setError(cause instanceof Error ? cause.message : "Could not synchronize offline data.");
+      }
     } finally {
       syncLock.current = false;
-      setSyncing(false);
+      if (mountedRef.current) setSyncing(false);
     }
   }, [apiUrl, refreshAssignments, refreshLocalState, token, userId]);
 
   useEffect(() => {
     let mounted = true;
+    mountedRef.current = true;
+    assignmentsRequestSequence.current += 1;
 
     const load = async () => {
       try {
         await refreshLocalState();
+        if (!mounted) return;
         try {
           await refreshAssignments();
         } catch (cause) {
-          if (mounted) {
+          if (mounted && mountedRef.current) {
             setError(cause instanceof Error ? cause.message : "Could not load assigned exams.");
           }
         }
+        if (!mounted) return;
         const state = await NetInfo.fetch();
         if (mounted && state.isConnected && state.isInternetReachable !== false) {
           setOnline(true);
           await syncOutbox();
         }
       } catch (cause) {
-        if (mounted) {
+        if (mounted && mountedRef.current) {
           setError(cause instanceof Error ? cause.message : "Could not load assigned exams.");
         }
       }
@@ -177,6 +190,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
 
     return () => {
       mounted = false;
+      mountedRef.current = false;
+      assignmentsRequestSequence.current += 1;
       unsubscribe();
       appStateSubscription.remove();
     };
@@ -356,7 +371,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
         </Text>
         <Text style={styles.muted}>
-          Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.keys(answers).length} answered
+          Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.values(answers).filter((value) => value !== null && value !== undefined).length} answered
         </Text>
         <View style={styles.progressTrack}>
           <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
