@@ -56,7 +56,7 @@ async function serveApp(request) {
   }
 
   const root = getWebRoot();
-  let filePath = path.resolve(root, `. ${pathname}`.trim());
+  let filePath = path.resolve(root, `.${pathname}`);
   if (filePath !== root && !filePath.startsWith(root + path.sep)) {
     return new Response("Forbidden", { status: 403 });
   }
