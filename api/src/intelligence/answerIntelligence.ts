@@ -45,6 +45,7 @@ const explanationCache = new Map<string, { expiresAt: number; value: AnswerExpla
 function explanationCacheKey(question: ExplanationQuestion): string {
   return createHash("sha256").update(JSON.stringify({
     subject: question.subject, topic: question.topic, text: question.text,
+    provider: process.env.ARCTESTER_AI_PROVIDER || "", externalModel: process.env.ARCTESTER_AI_MODEL || process.env.ARCTESTER_ANTHROPIC_MODEL || "", localModel: process.env.ARCTESTER_LOCAL_AI_MODEL || "",
     options: question.options, correctIndex: question.correctIndex,
     selectedIndex: question.selectedIndex, approvedExplanation: question.approvedExplanation,
   })).digest("hex");
@@ -156,7 +157,7 @@ function deterministicExplanation(question: ExplanationQuestion): GeneratedExpla
 }
 
 export function getAnswerIntelligenceProviderStatus() {
-  const externalProvider = process.env.ARCTESTER_AI_PROVIDER || (process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai-compatible");
+  const externalProvider = (process.env.ARCTESTER_AI_PROVIDER || (process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai-compatible")).toLowerCase();
   const externalConfigured = externalProvider === "anthropic"
     ? Boolean(process.env.ANTHROPIC_API_KEY)
     : Boolean(process.env.ARCTESTER_AI_API_KEY && process.env.ARCTESTER_AI_MODEL && process.env.ARCTESTER_AI_BASE_URL);
