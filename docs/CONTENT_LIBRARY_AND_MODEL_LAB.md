@@ -9,9 +9,9 @@ Administrator workflow:
 3. Upload a PDF, TXT or Markdown file (maximum 8 MB).
 4. The upload is saved as a private **DRAFT**.
 5. Review the title and metadata, then select **Publish**.
-6. Students find published files under **Student → Study materials** and can download them.
+6. Students find published files under **Student → Study materials**. Published PDFs can be previewed in a new browser tab or downloaded; TXT and Markdown files remain download-only.
 
-Only authenticated administrators can upload, publish, archive or delete files. Students can list and download published materials only. Supported MIME types are application/pdf, text/plain, and text/markdown. Files are stored in the application database as base64 content; database persistence and backups are therefore required. The API verifies PDF signatures and sets X-Content-Type-Options: nosniff on downloads.
+Only authenticated administrators can upload, publish, archive or delete files. Students can list and download published materials only. Supported MIME types are application/pdf, text/plain, and text/markdown. Files are stored in the application database as base64 content; database persistence and backups are therefore required. The API verifies PDF signatures, checks stored byte length before serving, and sets X-Content-Type-Options: nosniff plus private no-store caching on file responses. Failed uploads keep the admin form populated so the file and metadata can be retried.
 
 API:
 - GET /admin/study-materials — administrator inventory.
@@ -20,6 +20,7 @@ API:
 - DELETE /admin/study-materials/:id — permanently delete a file.
 - GET /study-materials — student-visible published metadata.
 - GET /study-materials/:id/download — download a published file.
+- GET /study-materials/:id/preview — inline preview for published PDFs only.
 
 ## Training dataset upload
 
