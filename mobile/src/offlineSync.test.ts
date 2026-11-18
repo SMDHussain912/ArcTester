@@ -89,6 +89,23 @@ describe("offlineSync", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("stops the queue when the server rate-limits submissions", async () => {
+    mockedGetPending.mockResolvedValue([attempt, { ...attempt, assignmentId: "assignment-2" }]);
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: "Too many requests" }),
+      } as Response);
+
+    const result = await syncPendingSubmissions("https://api.example.com", "token-abc");
+
+    expect(result.uploaded).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockedKeepPending).toHaveBeenCalledWith("assignment-1", expect.stringContaining("Too many requests"));
+  });
+
   it("handles network failure gracefully", async () => {
     mockedGetPending.mockResolvedValue([attempt]);
     (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Network down"));
