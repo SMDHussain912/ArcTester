@@ -20,7 +20,7 @@ export type AnswerExplanation = {
   takeaway: string;
   misconception: string;
   provider: string;
-  explanationStatus: "approved" | "ai-generated-unverified" | "template";
+  explanationStatus: "question-bank" | "ai-generated-unverified" | "template";
   answerKeyVerified: true;
   explanationVerified: false;
   learningDecision: { action: "learn-concept" | "review-topic" | "spaced-practice"; title: string; reason: string; recommendedMode: "practice" | "mistakes"; questionCount: number };
@@ -233,8 +233,8 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
   const fallback = deterministicExplanation(question);
   const approved = Boolean(question.approvedExplanation.trim());
   const value: AnswerExplanation = {
-    answer, ...fallback, provider: approved ? "approved-question-bank" : "deterministic-template",
-    explanationStatus: approved ? "approved" : "template",
+    answer, ...fallback, provider: approved ? "question-bank" : "deterministic-template",
+    explanationStatus: approved ? "question-bank" : "template",
     answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
   };
   rememberExplanation(key, value);
