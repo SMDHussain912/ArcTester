@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 const secureStore = vi.hoisted(() => ({ values: {} as Record<string, string> }));
 
-vi.mock("expo-modules-core", () => ({
+vi.mock("expo", () => ({
   requireNativeModule: () => { throw new Error("ExamGuard native module is unavailable in unit tests"); },
 }));
 
@@ -153,6 +153,30 @@ describe("examGuard", () => {
     pushViolation("PASTE_ATTEMPT");
     await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
     expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual(["COPY_ATTEMPT", "PASTE_ATTEMPT"]);
+  });
+
+
+  it("does not flush a delayed event batch into a different active assignment", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    pushViolation("TAB_HIDDEN", "Belongs to first assignment");
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-2" });
+
+    await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
+    expect(capturedApiCalls).toHaveLength(0);
+    expect(eventQueueForTest).toHaveLength(0);
+  });
+
+  it("serializes persisted event updates so a later event is not overwritten", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    pushViolation("TAB_HIDDEN");
+    pushViolation("WINDOW_BLUR");
+    await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
+
+    expect(capturedApiCalls).toHaveLength(1);
+    expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual([
+      "TAB_HIDDEN",
+      "WINDOW_BLUR",
+    ]);
   });
 
   it("isExamInProgress returns false after cleanup", () => {
