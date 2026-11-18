@@ -5,31 +5,50 @@ const path = require("node:path");
 
 const root = path.join(__dirname, "..");
 const indexHtml = path.join(root, "web", "dist", "index.html");
+const mainFile = path.join(__dirname, "main.cjs");
+const preloadFile = path.join(__dirname, "preload.cjs");
 
-let failures = [];
+const failures = [];
 
 function check(condition, message) {
   if (!condition) failures.push(message);
 }
 
 check(fs.existsSync(indexHtml), "web/dist/index.html must exist (build the web app first)");
+check(fs.existsSync(mainFile), "desktop/main.cjs must exist");
+check(fs.existsSync(preloadFile), "desktop/preload.cjs must exist");
 
-const html = fs.readFileSync(indexHtml, "utf8");
+if (fs.existsSync(indexHtml)) {
+  const html = fs.readFileSync(indexHtml, "utf8");
 
-// Packaged Electron loads the file via the file:// protocol, so asset URLs must
-// be relative to index.html. Absolute /assets/... URLs would resolve against the
-// filesystem root and 404, leaving a blank window.
-check(!/src="\/assets\//.test(html), "index.html must not reference absolute /assets/ scripts");
-check(!/href="\/assets\//.test(html), "index.html must not reference absolute /assets/ stylesheets");
-check(/src="\.\/assets\//.test(html), "index.html must reference relative ./assets/ scripts");
-check(/href="\.\/assets\//.test(html), "index.html must reference relative ./assets/ stylesheets");
+  // Electron loads this bundle via file://; absolute /assets URLs resolve at
+  // the filesystem root and produce a blank window.
+  check(!/src="\/assets\//.test(html), "index.html must not reference absolute /assets/ scripts");
+  check(!/href="\/assets\//.test(html), "index.html must not reference absolute /assets/ stylesheets");
+  check(/src="\.\/assets\//.test(html), "index.html must reference relative ./assets/ scripts");
+  check(/href="\.\/assets\//.test(html), "index.html must reference relative ./assets/ stylesheets");
 
-const assetsDir = path.join(root, "web", "dist", "assets");
-check(fs.existsSync(assetsDir) && fs.readdirSync(assetsDir).length > 0, "web/dist/assets must contain built assets");
+  const assetsDir = path.join(root, "web", "dist", "assets");
+  check(fs.existsSync(assetsDir) && fs.readdirSync(assetsDir).length > 0, "web/dist/assets must contain built assets");
+}
+
+if (fs.existsSync(mainFile)) {
+  const main = fs.readFileSync(mainFile, "utf8");
+  check(main.includes('webContents.on("before-input-event"'), "exam shortcut handling must subscribe to webContents");
+  check(main.includes('ipcMain.handle("exam-mode:set"'), "main process must expose the guarded exam-mode IPC handler");
+  check(!/\bi\.shift\b|\bi\.key\b/.test(main), "exam shortcut handler must not reference the undefined i variable");
+}
+
+if (fs.existsSync(preloadFile)) {
+  const preload = fs.readFileSync(preloadFile, "utf8");
+  check(preload.includes("setExamMode"), "preload must expose the safe exam-mode bridge");
+  check(preload.includes("onIntegrityViolation"), "preload must expose the integrity event subscription");
+  check(!preload.includes("require("), "preload must not expose Node.js require to the renderer");
+}
 
 if (failures.length > 0) {
   console.error("Desktop smoke test failed:");
   for (const failure of failures) console.error(" -", failure);
   process.exit(1);
 }
-console.log("Desktop smoke test passed: packaged index loads under file://");
+console.log("Desktop smoke test passed: packaged assets and Electron exam bridge are configured.");
