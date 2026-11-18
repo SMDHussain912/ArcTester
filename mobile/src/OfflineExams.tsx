@@ -114,9 +114,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   }, [token, userId]);
 
   const syncOutbox = useCallback(async () => {
-    if (syncLock.current) return;
+    if (!mountedRef.current || syncLock.current) return;
     syncLock.current = true;
-    if (!mountedRef.current) return;
     const generation = lifecycleGeneration.current;
     setSyncing(true);
     setError("");
