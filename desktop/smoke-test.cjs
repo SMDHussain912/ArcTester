@@ -39,6 +39,7 @@ if (fs.existsSync(mainFile)) {
   check(main.includes('protocol.registerSchemesAsPrivileged('), "desktop must register its secure custom origin before app readiness");
   check(main.includes('protocol.handle("arctester", serveApp)'), "desktop must serve the packaged SPA from the arctester://app origin");
   check(main.includes('window.loadURL("arctester://app/")'), "desktop must load the secure packaged-app origin");
+  check(main.includes('window.webContents.on("will-navigate"'), "desktop must prevent top-level navigation away from its trusted renderer origin");
   check(main.includes('url.host !== "app"'), "custom protocol handler must restrict requests to the app host");
   check(!/\bi\.shift\b|\bi\.key\b/.test(main), "exam shortcut handler must not reference the undefined i variable");
 }
