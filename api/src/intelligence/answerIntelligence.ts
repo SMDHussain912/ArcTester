@@ -212,6 +212,6 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
   return {
     answer, ...fallback, provider: approved ? "approved-question-bank" : "deterministic-template",
     explanationStatus: approved ? "approved" : "template",
-    answerKeyVerified: true, explanationVerified: false,
+    answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
   };
 }
