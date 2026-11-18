@@ -142,6 +142,33 @@ export default function AdminModelLab({
         <button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button>
       </div>
 
+      <section className="model-intelligence-overview">
+        <div className="model-intelligence-heading">
+          <div><p className="eyebrow">ARCTESTER INTELLIGENCE STACK</p><h2>Model ecosystem</h2><p>Train specialist models, compare evidence, then use the decision layer to choose safe study actions.</p></div>
+          <div className="model-count-badge"><strong>{models.length}</strong><span>registered candidates</span></div>
+        </div>
+        <div className="model-catalog-grid">
+          <article className="model-catalog-card"><span className="model-catalog-icon">01</span><div><strong>Multiple linear regression</strong><p>Predicts continuous scores and readiness trends.</p><small>REGRESSION · IMPLEMENTED</small></div></article>
+          <article className="model-catalog-card"><span className="model-catalog-icon">02</span><div><strong>Logistic regression</strong><p>Estimates binary outcome probabilities.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
+          <article className="model-catalog-card"><span className="model-catalog-icon">03</span><div><strong>K-nearest neighbours</strong><p>Compares learners or samples with similar feature patterns.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
+          <article className="model-catalog-card"><span className="model-catalog-icon">04</span><div><strong>Decision tree</strong><p>Produces interpretable rule paths for binary predictions.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
+          <article className="model-catalog-card"><span className="model-catalog-icon">05</span><div><strong>Gaussian Naive Bayes</strong><p>Probabilistic baseline for numeric classification features.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
+          <article className="model-catalog-card model-catalog-card-accent"><span className="model-catalog-icon">06</span><div><strong>TensorFlow.js neural regressor</strong><p>Trainable neural network for numeric score prediction.</p><small>NEURAL NETWORK · IMPLEMENTED</small></div></article>
+        </div>
+        <div className="decision-engine-panel">
+          <div className="decision-engine-top"><div><p className="eyebrow">HYBRID DECISION LAYER</p><h3>ArcTester Decision Engine</h3><p>Turns verified learner evidence into explainable next-step recommendations.</p></div><span className="decision-engine-status">GUARDED</span></div>
+          <div className="decision-engine-flow">
+            <div><strong>01 · Evidence</strong><span>Attempts, answers, topic accuracy and recency</span></div>
+            <i>→</i>
+            <div><strong>02 · Intelligence</strong><span>Score prediction + validated candidate signals</span></div>
+            <i>→</i>
+            <div><strong>03 · Decision</strong><span>Prioritised practice, revision or review actions</span></div>
+          </div>
+          <div className="decision-engine-guardrails"><span>✓ Minimum evidence thresholds</span><span>✓ Confidence and baseline checks</span><span>✓ Explainable reasons</span><span>✓ Human-controlled model activation</span></div>
+          <p className="decision-engine-note">The current recommendation policy is deterministic and evidence-based. Registered ML models are candidates until validated; they do not autonomously change exam settings, grades or student access.</p>
+        </div>
+      </section>
+
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · DATA</p><h2>Register training dataset</h2></div></div>
         <p className="muted">Upload a JSON sample array prepared using the dataset guide. Files are checked before parsing; registration stores the declared features, targets, provenance and dataset fingerprint. It does not start training.</p>
