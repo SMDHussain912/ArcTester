@@ -102,20 +102,25 @@ async function flushEvents(api: (path: string, init?: RequestInit) => Promise<an
   if (activeAssignmentId && activeAssignmentId !== assignmentId) return false;
   await restorePersistedEvents(assignmentId);
   if (activeAssignmentId && activeAssignmentId !== assignmentId) return false;
-  const batch = eventQueue.splice(0, eventQueue.length);
-  if (batch.length === 0) return true;
-  try {
-    await api(`/exams/assignments/${encodeURIComponent(assignmentId)}/session/integrity`, {
-      method: "POST",
-      body: JSON.stringify({ events: batch }),
-    });
-    await persistEventQueue();
-    return true;
-  } catch {
-    eventQueue.unshift(...batch);
-    await persistEventQueue().catch(() => undefined);
-    return false;
+
+  // The API validates at most 20 events per request. Drain larger offline
+  // queues in bounded batches and retain the failed batch plus remaining work.
+  while (eventQueue.length > 0) {
+    if (activeAssignmentId && activeAssignmentId !== assignmentId) return false;
+    const batch = eventQueue.splice(0, 20);
+    try {
+      await api(`/exams/assignments/${encodeURIComponent(assignmentId)}/session/integrity`, {
+        method: "POST",
+        body: JSON.stringify({ events: batch }),
+      });
+      await persistEventQueue();
+    } catch {
+      eventQueue.unshift(...batch);
+      await persistEventQueue().catch(() => undefined);
+      return false;
+    }
   }
+  return true;
 }
 
 function scheduleFlush(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): void {
