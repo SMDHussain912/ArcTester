@@ -205,10 +205,24 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   useEffect(() => {
     if (!activePackage) return;
     let cancelled = false;
+    let inFlight = false;
 
     const tick = async () => {
-      const seconds = await getRemainingSeconds(activePackage.assignmentId);
-      if (!cancelled) setRemainingSeconds(seconds);
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const seconds = await getRemainingSeconds(activePackage.assignmentId);
+        if (!cancelled && seconds !== null) setRemainingSeconds(seconds);
+        if (!cancelled && seconds === null) {
+          setError("The active exam timer could not be restored. Your saved attempt has not been submitted.");
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "Could not update the exam timer.");
+        }
+      } finally {
+        inFlight = false;
+      }
     };
 
     void tick();
