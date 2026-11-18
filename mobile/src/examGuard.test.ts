@@ -92,6 +92,26 @@ describe("examGuard", () => {
     expect(eventQueueForTest.some((event) => event.type === "APP_REOPENED")).toBe(true);
   });
 
+  it("restores queued integrity events after a process restart", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    pushViolation("TAB_HIDDEN", "App was backgrounded");
+    const unavailableApi = vi.fn(async () => { throw new Error("offline"); });
+    await flushGuardEvents({ api: unavailableApi, assignmentId: "assign-1" });
+    expect(eventQueueForTest).toHaveLength(1);
+
+    // Simulate a fresh JS process while SecureStore remains intact.
+    eventQueueForTest.length = 0;
+    Object.keys(lastRefForTest).forEach((key) => delete lastRefForTest[key]);
+    await reportAppReopened({ api: fakeApi, assignmentId: "assign-1" });
+
+    expect(capturedApiCalls).toHaveLength(1);
+    expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual([
+      "TAB_HIDDEN",
+      "APP_REOPENED",
+    ]);
+    expect(secureStore.values["arctester-pending-integrity-events"]).toBeUndefined();
+  });
+
   it("does not attribute a previous exam restart to a different assignment", async () => {
     await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
     await reportAppReopened({ api: fakeApi, assignmentId: "assign-2" });
