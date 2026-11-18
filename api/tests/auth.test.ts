@@ -194,7 +194,7 @@ describe("auth", () => {
     const res = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
     expect(res.status).toBe(200);
     expect((res.json as { ok: boolean; user: { email: string } }).user.email).toBe(
-      "alice@example.com"
+      "bob@example.com"
     );
   });
 
