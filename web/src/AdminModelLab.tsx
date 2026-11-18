@@ -67,7 +67,14 @@ export default function AdminModelLab({
   async function readDatasetFile(file: File) {
     setFormError("");
     setUploadName(file.name);
+    setSamplesText("");
     try {
+      if (!file.name.toLowerCase().endsWith(".json") || (file.type && file.type !== "application/json")) {
+        throw new Error("Choose a JSON dataset file.");
+      }
+      if (file.size < 1 || file.size > 8 * 1024 * 1024) {
+        throw new Error("Dataset files must be between 1 byte and 8 MB.");
+      }
       const parsed: unknown = JSON.parse(await file.text());
       const samples = Array.isArray(parsed)
         ? parsed
@@ -136,7 +143,7 @@ export default function AdminModelLab({
 
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · DATA</p><h2>Register training dataset</h2></div></div>
-        <p className="muted">Upload a JSON sample array prepared using the dataset guide. Registration stores the declared features, targets, provenance and dataset fingerprint. It does not start training.</p>
+        <p className="muted">Upload a JSON sample array prepared using the dataset guide. Files are checked before parsing; registration stores the declared features, targets, provenance and dataset fingerprint. It does not start training.</p>
         <div className="admin-two-col">
           <label>Dataset name<input value={datasetName} onChange={(event) => setDatasetName(event.target.value)} placeholder="ECET learner score history" /></label>
           <label>Target column<input value={targetColumn} onChange={(event) => setTargetColumn(event.target.value)} /></label>
@@ -146,7 +153,7 @@ export default function AdminModelLab({
         <label>Source description<textarea value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Describe where the data came from, how it was collected and why its use is authorized." /></label>
         <label className="dataset-attestation"><input type="checkbox" checked={sourceAttested} onChange={(event) => setSourceAttested(event.target.checked)} /> I confirm I am authorized to use this data and have removed direct personal identifiers.</label>
         <label>Feature schema JSON<textarea rows={7} spellCheck={false} value={featureSchemaText} onChange={(event) => setFeatureSchemaText(event.target.value)} /></label>
-        <label>Training samples JSON<input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label><button type="button" className="button button-secondary" onClick={downloadSampleTemplate}>Download sample JSON template (synthetic)</button>
+        <label className="dataset-upload-row"><div><strong>Training samples JSON</strong><small>Choose a .json file · 30–5,000 sample rows · maximum 8 MB</small></div><input aria-label="Training samples JSON file" type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label><button type="button" className="button button-secondary" onClick={downloadSampleTemplate}>Download sample JSON template (synthetic)</button>
         {uploadName && <p className="muted">Selected file: {uploadName}</p>}
         <label>Samples preview / JSON<textarea rows={10} spellCheck={false} value={samplesText} onChange={(event) => setSamplesText(event.target.value)} placeholder='[{"features":{"completed_attempts":12,"previous_accuracy":0.65,"recent_average_accuracy":0.7,"overall_average_accuracy":0.66,"previous_question_count":20},"target":0.72,"groupId":"64-character-keyed-hmac"}]' /></label>
         {formError && <p className="error" role="alert">{formError}</p>}
