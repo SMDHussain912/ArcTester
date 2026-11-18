@@ -3,6 +3,7 @@ import { type ApiRequestError } from "./apiClient";
 import { mergeAssignedExamAnswers } from "../lib/answerRecovery";
 import { classifyAssignmentHeartbeatFailure } from "./assignedExamHeartbeat";
 import { safeStorage } from "./safeStorage";
+import { resolveAssignedExamDeadline } from "./assignedExamRuntime";
 import type { AssignedExam, AssignedExamPackage, AssignedExamResult } from "./types/assignedExams";
 
 type QuestionSummary = { id: string; subject: string; topic: string | null; text: string; options: string[]; marks: number; negativeMarks: number; optionOrder: number[] };
@@ -64,9 +65,7 @@ export function useAssignedExamSession({
     // The exam duration deadline is returned by the server session. The
     // assignment dueAt is only the outer submission cutoff and may be hours
     // later, so it must never drive the in-exam countdown.
-    const deadline = assignmentDeadlineRef.current
-      ? new Date(assignmentDeadlineRef.current).getTime()
-      : (activeAssignmentPackage?.dueAt ? new Date(activeAssignmentPackage.dueAt).getTime() : Number.POSITIVE_INFINITY);
+    const deadline = resolveAssignedExamDeadline(assignmentDeadlineRef.current, activeAssignmentPackage?.dueAt ?? null);
     if (!Number.isFinite(deadline)) return 0;
     return Math.max(0, Math.ceil((deadline - (assignmentClock + assignmentServerOffsetRef.current)) / 1000));
   }, [activeAssignmentPackage?.dueAt, assignmentClock]);
