@@ -589,3 +589,22 @@ textarea{resize:vertical;line-height:1.55}
 .app-error-actions button{min-height:42px;padding:10px 16px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
 .app-error-actions button.secondary{border-color:var(--border);background:var(--surface);color:var(--text)}
 @media(max-width:680px){.student-progress>.panel,.student-progress .grid>.panel,.student-analytics .panel,.student-learning>.panel,.student-learning article.panel,.student-materials-page>.panel{padding:16px}.student-load-error{align-items:stretch;flex-direction:column}.student-load-error button{width:100%}.subject-admin-grid{grid-template-columns:1fr}.difficulty-mix{grid-template-columns:1fr}.difficulty-mix>b{grid-column:auto}.builder-question-list>label{grid-template-columns:20px minmax(0,1fr)}.builder-question-list>label em{grid-column:2}}
+
+
+/* Authentication connection and account-creation animation */
+.auth-card{position:relative;overflow:hidden}
+.auth-feedback{padding:11px 13px;border-radius:10px;background:var(--accent-soft);font-size:13px}
+.auth-connecting{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:30px;text-align:center;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(12px);animation:auth-fade-in .22s ease both}
+.auth-connecting strong{font-size:18px;letter-spacing:-.3px}
+.auth-connecting p{max-width:290px;margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.auth-connecting small{color:var(--muted);font-size:11px}
+.auth-orbit{position:relative;width:76px;height:76px;border:2px solid var(--border);border-top-color:var(--accent);border-right-color:var(--accent);border-radius:50%;animation:auth-spin 1.15s linear infinite}
+.auth-orbit span{position:absolute;inset:12px;border:2px dashed color-mix(in srgb,var(--accent) 55%,var(--border));border-radius:50%;animation:auth-spin 2.2s linear infinite reverse}
+.auth-orbit i,.auth-orbit b{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 15px color-mix(in srgb,var(--accent) 60%,transparent)}
+.auth-orbit i{top:5px;left:12px}.auth-orbit b{right:5px;bottom:13px;background:var(--success)}
+.auth-connecting-track{width:min(240px,80%);height:5px;border-radius:999px;overflow:hidden;background:var(--bg)}
+.auth-connecting-track span{display:block;width:36%;height:100%;border-radius:inherit;background:var(--accent);animation:auth-progress 1.15s ease-in-out infinite}
+@keyframes auth-spin{to{transform:rotate(360deg)}}
+@keyframes auth-progress{0%{transform:translateX(-110%)}100%{transform:translateX(390%)}}
+@keyframes auth-fade-in{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.auth-orbit,.auth-orbit span,.auth-connecting-track span{animation:none!important}}
