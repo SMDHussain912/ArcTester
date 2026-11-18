@@ -189,6 +189,44 @@ describe("offlineStore", () => {
     expect(loaded!.questions.length).toBe(2);
   });
 
+  it("rejects duplicate question identifiers in an otherwise valid package", async () => {
+    configureOfflineStore("user-duplicate-question");
+    const invalidPackage = {
+      ...packagePayload,
+      questions: [
+        packagePayload.questions[0],
+        { ...packagePayload.questions[1], id: packagePayload.questions[0].id },
+      ],
+    };
+    const digest = nodeCrypto.createHash("sha256")
+      .update(JSON.stringify(invalidPackage))
+      .digest("hex");
+
+    await expect(saveExamPackage(invalidPackage, digest)).rejects.toThrow(
+      "contains an invalid question"
+    );
+    expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
+  });
+
+  it("rejects questions with an invalid option count", async () => {
+    configureOfflineStore("user-invalid-option-count");
+    const invalidPackage = {
+      ...packagePayload,
+      questions: [
+        { ...packagePayload.questions[0], options: ["A"] },
+        packagePayload.questions[1],
+      ],
+    };
+    const digest = nodeCrypto.createHash("sha256")
+      .update(JSON.stringify(invalidPackage))
+      .digest("hex");
+
+    await expect(saveExamPackage(invalidPackage, digest)).rejects.toThrow(
+      "contains an invalid question"
+    );
+    expect(tables.get("exam_packages")?.size ?? 0).toBe(0);
+  });
+
   it("rejects a package with a mismatched sha256", async () => {
     configureOfflineStore("user-2");
     await expect(saveExamPackage(packagePayload, "wrong-sha256")).rejects.toThrow("integrity check failed");
