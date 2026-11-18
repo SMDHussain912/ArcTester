@@ -72,6 +72,7 @@ function makeFakeSqlite() {
           payload_json: "payloadJson",
           server_offset_ms: "serverOffsetMs",
           downloaded_at: "downloadedAt",
+          updated_at: "updatedAt",
         };
         for (const [orig, alias] of Object.entries(aliasMap)) {
           if (orig in row && !(alias in row)) row[alias] = row[orig];
