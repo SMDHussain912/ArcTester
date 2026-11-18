@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 export type ExplanationQuestion = {
@@ -38,6 +39,22 @@ const GeneratedExplanationSchema = z.object({
 }).strict();
 
 type GeneratedExplanation = z.infer<typeof GeneratedExplanationSchema>;
+
+const explanationCache = new Map<string, { expiresAt: number; value: AnswerExplanation }>();
+function explanationCacheKey(question: ExplanationQuestion): string {
+  return createHash("sha256").update(JSON.stringify({
+    subject: question.subject, topic: question.topic, text: question.text,
+    options: question.options, correctIndex: question.correctIndex,
+    selectedIndex: question.selectedIndex, approvedExplanation: question.approvedExplanation,
+  })).digest("hex");
+}
+function rememberExplanation(key: string, value: AnswerExplanation): void {
+  if (explanationCache.size >= 500) {
+    const oldest = explanationCache.keys().next().value;
+    if (oldest) explanationCache.delete(oldest);
+  }
+  explanationCache.set(key, { value, expiresAt: Date.now() + 6 * 60 * 60 * 1000 });
+}
 
 function parseJsonContent(content: string): GeneratedExplanation {
   const cleaned = content.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
@@ -161,6 +178,10 @@ export function getAnswerIntelligenceProviderStatus() {
 }
 
 export async function generateAnswerExplanation(question: ExplanationQuestion): Promise<AnswerExplanation> {
+  const key = explanationCacheKey(question);
+  const cached = explanationCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) explanationCache.delete(key);
   const answer = question.options[question.correctIndex];
   const prompt = promptFor(question);
   const status = getAnswerIntelligenceProviderStatus();
@@ -197,11 +218,13 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
       if (generated.optionAnalysis.some((item, index) =>
         item.option !== question.options[index] || item.isCorrect !== (index === question.correctIndex)
       )) throw new Error("AI explanation did not preserve the answer key and option order.");
-      return {
+      const value: AnswerExplanation = {
         answer, ...generated, provider: provider.name,
         explanationStatus: "ai-generated-unverified",
         answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
       };
+      rememberExplanation(key, value);
+      return value;
     } catch (error) {
       console.warn("ArcTester explanation provider failed; trying fallback.", provider.name, error);
     }
@@ -209,9 +232,11 @@ export async function generateAnswerExplanation(question: ExplanationQuestion): 
 
   const fallback = deterministicExplanation(question);
   const approved = Boolean(question.approvedExplanation.trim());
-  return {
+  const value: AnswerExplanation = {
     answer, ...fallback, provider: approved ? "approved-question-bank" : "deterministic-template",
     explanationStatus: approved ? "approved" : "template",
     answerKeyVerified: true, explanationVerified: false, learningDecision: learningDecisionFor(question),
   };
+  rememberExplanation(key, value);
+  return value;
 }
