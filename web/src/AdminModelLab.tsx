@@ -22,6 +22,9 @@ export type ModelDatasetRegistration = {
   datasetKind: "synthetic" | "real-anonymized";
 };
 
+// TensorFlow.js browser training requires a WebAssembly-capable runtime.
+const tensorflowSupported = typeof WebAssembly !== "undefined" && typeof WebAssembly.instantiate === "function";
+
 const DEFAULT_FEATURE_SCHEMA = [
   { name: "completed_attempts", type: "numeric" },
   { name: "previous_accuracy", type: "numeric" },
