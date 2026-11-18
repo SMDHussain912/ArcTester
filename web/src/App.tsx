@@ -570,6 +570,7 @@ export default function App() {
             error={exam.error}
             selectAssignedAnswer={exam.selectAssignedAnswer}
             submitAssignedExam={exam.submitAssignedExam}
+            leaveAssignedExam={exam.leaveAssignedExam}
             studentName={user?.email ?? null}
             studentId={String(user?.id ?? null)}
           />
