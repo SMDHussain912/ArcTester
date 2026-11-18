@@ -373,8 +373,40 @@ export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
     const examPackage = await getCachedExamPackage(row.assignmentId);
-    if (!examPackage || !row.submittedAt) continue;
-    const savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
+    if (!examPackage) {
+      throw new Error(
+        `The saved exam package for pending assignment ${row.assignmentId} is missing. Its submission remains on this device and needs recovery.`,
+      );
+    }
+    if (!row.submittedAt) {
+      throw new Error(
+        `The pending submission for assignment ${row.assignmentId} has no submission timestamp. It remains on this device and needs recovery.`,
+      );
+    }
+
+    let savedAnswers: Record<string, number | null>;
+    try {
+      savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
+    } catch {
+      throw new Error(
+        `The saved answers for pending assignment ${row.assignmentId} are corrupted. The submission was not uploaded.`,
+      );
+    }
+
+    const questionIds = new Set(examPackage.questions.map((question) => question.id));
+    const hasUnknownQuestion = Object.keys(savedAnswers).some((id) => !questionIds.has(id));
+    const hasInvalidOption = examPackage.questions.some((question) => {
+      const selectedIndex = savedAnswers[question.id];
+      return selectedIndex !== undefined &&
+        selectedIndex !== null &&
+        (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
+    });
+    if (hasUnknownQuestion || hasInvalidOption) {
+      throw new Error(
+        `The saved answers for pending assignment ${row.assignmentId} failed integrity validation. The submission was not uploaded.`,
+      );
+    }
+
     pending.push({
       assignmentId: row.assignmentId,
       attemptUuid: row.attemptUuid,
