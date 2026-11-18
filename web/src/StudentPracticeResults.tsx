@@ -11,6 +11,7 @@ export type AnswerExplanation = {
  explanationStatus: "approved" | "ai-generated-unverified" | "template";
  answerKeyVerified: boolean;
  explanationVerified: boolean;
+ learningDecision: { action: "learn-concept" | "review-topic" | "spaced-practice"; title: string; reason: string; recommendedMode: "practice" | "mistakes"; questionCount: number };
 };
 export type PracticeResult = { attemptId: number; score: number; incorrect: number; unanswered: number; total: number; breakdown: { subject: string; correct: number; incorrect: number; unanswered: number; total: number }[]; questions: { questionId: number; text: string; options: string[]; selectedIndex: number | null; correctIndex: number; isCorrect: boolean; explanation: string }[] };
 type Props = { result: PracticeResult; onBack: () => void; onExplain: (questionId: number) => Promise<AnswerExplanation> };
