@@ -8,7 +8,8 @@
     "start": "electron .",
     "pack": "electron-builder --dir",
     "dist:win": "electron-builder --win nsis",
-    "test": "node smoke-test.cjs"
+    "test": "node smoke-test.cjs",
+    "dist:linux": "electron-builder --linux AppImage deb"
   },
   "devDependencies": {
     "electron": "^38.2.0",
@@ -43,6 +44,13 @@
           "**/*"
         ]
       }
-    ]
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education"
+    }
   }
-}
+}\n
