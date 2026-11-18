@@ -41,6 +41,7 @@ export default function StudentPracticeResults({ result, onBack, onExplain }: Pr
    <h5>Option analysis</h5><div className="answer-option-analysis">{detail.optionAnalysis.map((option,i)=><div key={i} className={option.isCorrect?"answer-option-correct":"answer-option-other"}><strong>{String.fromCharCode(65+i)}. {option.option}</strong><p>{option.explanation}</p></div>)}</div>
    {detail.misconception && <p className="answer-misconception"><strong>Possible misconception:</strong> {detail.misconception}</p>}
    <p className="answer-takeaway"><strong>Remember:</strong> {detail.takeaway}</p>
+   <div className="answer-learning-decision"><p className="eyebrow">NEXT STEP · DECISION ENGINE</p><strong>{detail.learningDecision.title}</strong><p>{detail.learningDecision.reason}</p><small>Suggested {detail.learningDecision.questionCount}-question {detail.learningDecision.recommendedMode} set · Based on this answer only</small></div>
    <small className="muted">Answer key: {detail.answerKeyVerified?"from saved question snapshot":"not verified"} · Explanation: {detail.explanationVerified?"reviewed":"not independently verified"} · Source: {detail.provider}</small>
   </section>}
   </article>;
