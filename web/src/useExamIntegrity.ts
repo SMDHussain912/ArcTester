@@ -176,20 +176,22 @@ export function useExamIntegrity({
   // Copy / paste / context menu suppression + tracking.
   useEffect(() => {
     if (integrityLevel === "OFF") return;
-    for (const [ev, type] of [
+    const handlers: Array<{ event: string; listener: EventListener }> = [];
+    for (const [event, type] of [
       ["copy", "COPY_ATTEMPT"],
       ["paste", "PASTE_ATTEMPT"],
       ["contextmenu", "CONTEXT_MENU"],
     ] as const) {
-      const handler = (e: Event) => {
-        e.preventDefault();
+      const listener: EventListener = (eventObject) => {
+        eventObject.preventDefault();
         push(type);
       };
-      document.addEventListener(ev, handler as EventListener);
+      document.addEventListener(event, listener);
+      handlers.push({ event, listener });
     }
     return () => {
-      for (const [ev] of [["copy"], ["paste"], ["contextmenu"]] as const) {
-        document.removeEventListener(ev, document[`on${ev}`] as EventListener);
+      for (const { event, listener } of handlers) {
+        document.removeEventListener(event, listener);
       }
     };
   }, [integrityLevel, push]);
