@@ -19,7 +19,7 @@ class ExamGuardModule(context: Context, uiManager: UIManager, settings: UISettin
   private var running = false
   private var pinned = false
   private var lastMulti = false
-  private var focusListener: View.OnFocusChangeListener? = null
+  private var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
 
   private fun emit(type: String) {
     sendEvent("onViolation", mapOf("type" to type, "at" to System.currentTimeMillis()))
@@ -52,7 +52,7 @@ class ExamGuardModule(context: Context, uiManager: UIManager, settings: UISettin
         running = true
         val decor = activity.window.decorView
         decor.filterTouchesWhenObscured = true
-        focusListener = View.OnFocusChangeListener { _, hasFocus ->
+        focusListener = ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
           if (!hasFocus) emit("WINDOW_FOCUS_LOST")
         }
         decor.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
