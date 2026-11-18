@@ -52,7 +52,7 @@ describe("question administration route contracts", () => {
   });
 
   afterAll(async () => {
-    await server.close();
+    if (server) await server.close();
   });
 
   it("lists, filters and paginates the question bank with admin-only access", async () => {
