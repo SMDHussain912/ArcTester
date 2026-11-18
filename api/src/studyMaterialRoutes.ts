@@ -64,6 +64,27 @@ export function studyMaterialRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/study-materials/:id/preview", requireAuth, async (req, res, next) => {
+    try {
+      const id = z.string().min(1).max(64).parse(req.params.id);
+      const material = await db.studyMaterial.findFirst({
+        where: { id, status: "PUBLISHED", mimeType: "application/pdf" },
+      });
+      if (!material) return next(notFound("Published PDF study material was not found."));
+      const bytes = Buffer.from(material.contentBase64, "base64");
+      if (bytes.byteLength !== material.sizeBytes) return next(badRequest("Stored study material failed its integrity check."));
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Length", String(bytes.byteLength));
+      res.setHeader("Content-Disposition", `inline; filename="${safeFileName(material.fileName)}"`);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(bytes);
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      next(error);
+    }
+  });
+
   router.get("/admin/study-materials", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const materials = await db.studyMaterial.findMany({
