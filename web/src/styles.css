@@ -327,3 +327,23 @@
 @media(max-width:640px){.admin-panel .admin-two-col{grid-template-columns:1fr}.training-progress{height:11px}.model-result-json{max-height:260px}}
 
 .dataset-attestation{display:flex!important;align-items:flex-start;gap:10px;line-height:1.5}.dataset-attestation input{width:auto;flex:0 0 auto;margin-top:2px}
+
+/* Study-material library and responsive admin content management. */
+.study-material-admin-list,.student-material-list{display:grid;gap:12px}
+.study-material-admin-card,.student-material-card{min-width:0;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.study-material-admin-main{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px}
+.study-material-admin-main>div,.student-material-copy{min-width:0;overflow-wrap:anywhere}
+.student-material-card{display:flex;align-items:center;gap:14px}
+.student-material-icon{width:48px;height:48px;flex:0 0 48px;display:grid;place-items:center;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:12px}
+.student-material-copy{flex:1}
+.student-material-copy p{margin:5px 0}
+.student-material-card .button{flex:0 0 auto}
+.admin-study-materials .admin-panel{min-width:0}
+.admin-study-materials input[type=file]{max-width:100%}
+@media(max-width:680px){
+ .student-material-card{align-items:flex-start;flex-wrap:wrap}
+ .student-material-copy{flex:1 1 calc(100% - 64px)}
+ .student-material-card .button{margin-left:62px}
+ .study-material-admin-main{flex-direction:column}
+ .admin-study-materials .admin-two-col{grid-template-columns:minmax(0,1fr)}
+}
