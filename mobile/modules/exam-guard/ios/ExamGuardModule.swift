@@ -25,7 +25,7 @@ public final class ExamGuardModule: Module {
       )
 
       if UIScreen.main.isCaptured {
-        self.emit("SCREEN_CAPTURE_ACTIVE", "Screen recording or mirroring is already active")
+        self.emit("SCREEN_CAPTURE_ATTEMPT", "Screen recording or mirroring is already active")
       }
       return true
     }
@@ -43,7 +43,7 @@ public final class ExamGuardModule: Module {
 
     OnAppEntersForeground {
       if self.isRunning && UIScreen.main.isCaptured {
-        self.emit("SCREEN_CAPTURE_ACTIVE", "Screen recording or mirroring is active")
+        self.emit("SCREEN_CAPTURE_ATTEMPT", "Screen recording or mirroring is active")
       }
     }
 
@@ -67,11 +67,11 @@ public final class ExamGuardModule: Module {
 
   @objc private func screenCaptureChanged() {
     guard isRunning, UIScreen.main.isCaptured else { return }
-    emit("SCREEN_CAPTURE_ACTIVE", "Screen recording or mirroring started")
+    emit("SCREEN_CAPTURE_ATTEMPT", "Screen recording or mirroring started")
   }
 
   @objc private func screenshotTaken() {
     guard isRunning else { return }
-    emit("SCREENSHOT_TAKEN", "A screenshot was captured during the exam")
+    emit("SCREEN_CAPTURE_ATTEMPT", "A screenshot was captured during the exam")
   }
 }
