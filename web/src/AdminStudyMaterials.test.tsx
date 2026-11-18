@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 
@@ -33,4 +33,17 @@ describe("AdminStudyMaterials", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Only PDF, plain text and Markdown files are supported.");
     expect(onUpload).not.toHaveBeenCalled();
   });
+  it("keeps the selected file and metadata when the upload request fails", async () => {
+    const onUpload = vi.fn().mockResolvedValue(false);
+    render(<AdminStudyMaterials materials={[]} busy={false} onUpload={onUpload} onStatusChange={vi.fn()} onDelete={vi.fn()} onRefresh={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Material title"), { target: { value: "Unit 1 Notes" } });
+    const file = new File(["%PDF-1.4"], "unit-1.pdf", { type: "application/pdf" });
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode("%PDF-1.4").buffer });
+    fireEvent.change(screen.getByLabelText(/File/), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload as draft" }));
+    await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText("Material title")).toHaveValue("Unit 1 Notes");
+    expect((screen.getByLabelText(/File/) as HTMLInputElement).files).toHaveLength(1);
+  });
+
 });
