@@ -17,13 +17,15 @@ async function request(
   path: string,
   method = "GET",
   body?: unknown,
-  cookie?: string
+  cookie?: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<{ status: number; json: Record<string, unknown> }> {
   const response = await fetch(`${server.baseUrl}${path}`, {
     method,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
       ...(cookie ? { cookie } : {}),
+      ...extraHeaders,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -513,6 +515,20 @@ describe("versioned exam management", () => {
       expect(await server.db.examSessionEvent.count({
         where: { sessionId: firstSession.id, type: "SESSION_STARTED" },
       })).toBe(1);
+    });
+
+    it("rejects a second device when concurrent first-start requests race", async () => {
+      const assignment = fixture.assignments.find((item) => item.studentId === fixture.studentIds[3])!;
+      const cookie = fixture.cookies[3];
+      const [first, second] = await Promise.all([
+        request(`/exams/assignments/${assignment.id}/session/start`, "POST", {}, cookie, { "x-arctester-device": "device-race-a" }),
+        request(`/exams/assignments/${assignment.id}/session/start`, "POST", {}, cookie, { "x-arctester-device": "device-race-b" }),
+      ]);
+
+      expect([first.status, second.status].sort()).toEqual([200, 409]);
+      const session = await server.db.examSession.findUniqueOrThrow({ where: { assignmentId: assignment.id } });
+      expect(["device-race-a", "device-race-b"]).toContain(session.deviceId);
+      expect(await server.db.examSession.count({ where: { assignmentId: assignment.id } })).toBe(1);
     });
 
     it("keeps answer keys private and creates a server-authoritative session with heartbeat and autosave", async () => {
