@@ -10,7 +10,9 @@ export default defineConfig({
     // Model training and database-backed integration tests need more than the
     // five-second unit-test default on constrained development machines.
     testTimeout: 20_000,
-    // Avoid overwhelming PostgreSQL with many simultaneous schema migrations.
+    // Keep the worker range valid and avoid overwhelming PostgreSQL with
+    // simultaneous schema migrations on machines with few CPU cores.
+    minWorkers: 1,
     maxWorkers: 2,
   },
 });
