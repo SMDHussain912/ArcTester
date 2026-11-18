@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 export type ModelLabDataset = { id: string; name: string; task: string; rowCount: number; targetColumn?: string; datasetKind?: string; featureSchema?: { name: string; type: string }[] };
+export type ModelLabModel = { modelId: string; version: number; algorithm: string; task: string; dataset: string; isActive: boolean; productionEligible?: boolean | null; createdAt?: string };
 export type ModelLabJob = {
   id: string;
   datasetId: string;
@@ -32,6 +33,7 @@ const DEFAULT_FEATURE_SCHEMA = [
 type AdminModelLabProps = {
   datasets: ModelLabDataset[];
   jobs: ModelLabJob[];
+  models: ModelLabModel[];
   selectedDatasetId: string;
   modelPrefix: string;
   busy: boolean;
@@ -44,7 +46,7 @@ type AdminModelLabProps = {
 };
 
 export default function AdminModelLab({
-  datasets, jobs, selectedDatasetId, modelPrefix, busy, onDatasetChange,
+  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onRefresh, onRegisterDataset,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
@@ -154,6 +156,17 @@ export default function AdminModelLab({
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
         <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js training</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
         {datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
+      </section>
+
+      <section className="admin-panel">
+        <div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Candidate models ({models.length})</h2></div></div>
+        {models.length === 0 ? <p className="muted">No model candidates have been registered yet.</p> : <div className="model-registry-list">
+          {models.map((model) => <article className="model-registry-row" key={model.modelId + "-" + model.version}>
+            <div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · Dataset: {model.dataset}</p></div>
+            <div className="row wrap"><span className={"status " + (model.isActive ? "status-used" : "status-pending")}>{model.isActive ? "ACTIVE" : "CANDIDATE"}</span>{model.productionEligible === true ? <span className="status status-used">PRODUCTION ELIGIBLE</span> : model.productionEligible === false ? <span className="status status-expired">NOT ELIGIBLE</span> : null}</div>
+          </article>)}
+        </div>}
+        <p className="muted">Candidates stay inactive until separately evaluated and approved. Synthetic-data models are never production eligible.</p>
       </section>
 
       <section className="admin-panel">
