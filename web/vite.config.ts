@@ -3,7 +3,9 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "./",
+  // Electron needs relative asset URLs for file://. Vercel needs root-relative
+  // URLs so client-side routes can load hashed assets from /assets/.
+  base: process.env.VITE_BASE_PATH || "./",
   server: { host: "0.0.0.0", port: 3000 },
   preview: { host: "0.0.0.0", port: 3000 },
 });
