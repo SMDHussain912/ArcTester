@@ -491,6 +491,20 @@ The four standard CI jobs passed on the exact merged heads for these PRs. The An
 **Still unverified:** Android physical-device sign-in/backend connectivity, offline/background/restart recovery and notification behavior; iOS build and device qualification; Windows installer runtime smoke tests; staging deployment, production migration and backup/restore; representative real-data qualification for Intelligence.
 
 
+
+### 0.4 Direct-main continuation notes — 2026-11-18
+
+The following work was committed directly to `main` after the PR evidence listed above. These are implementation changes only; no new Actions runs or local verification are claimed.
+
+- Added administrator study-material upload/publish/archive/delete workflow and student published-material library, with PostgreSQL and SQLite schema migrations.
+- Added dataset upload/registration controls, provenance/privacy attestation, training job reporting and candidate registry visibility in Model Lab.
+- Fixed the student analytics styling and surfaced partial analytics API failures instead of silently accepting rejected requests.
+- Added published-PDF inline preview, upload retry-state preservation and API tests for study-material visibility/download/preview.
+- Wired the assigned-exam **Leave exam** action to flush the current answer snapshot, retain the local recovery copy and return to the assignment list. The server-controlled exam timer continues while the candidate is away.
+- Corrected the in-exam countdown to prefer the server-issued session duration deadline over the assignment availability cutoff, with focused unit/component tests added.
+
+**Verification still required by the repository owner:** pull the latest `main`, install dependencies, run the API/web/mobile test and typecheck/build commands available in the workspace, apply migrations to disposable databases, and perform browser/device smoke tests. These changes are not marked verified or release-ready until that work is complete.
+
 ---
 
 ## 12. Execution status log
