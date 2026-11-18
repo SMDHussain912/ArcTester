@@ -108,20 +108,20 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                 <div className="big">{prediction.predictedScorePercent}%</div>
                 <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
                 <p className="muted">Prediction range: <strong>{prediction.predictionInterval.lowerPercent}%–{prediction.predictionInterval.upperPercent}%</strong> (walk-forward RMSE {prediction.predictionInterval.estimatedErrorPercent} points).</p>
-                <p className="mute">{prediction.completedAttempts} completed attempts · {prediction.trainingSamples} samples · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}.</p>
+                <p className="muted">{prediction.completedAttempts} completed attempts · {prediction.trainingSamples} samples · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}.</p>
               </div>
             )}
             {prediction && prediction.status === "insufficient_data" && (
               <div>
                 <p className="muted">{prediction.message}</p>
                 <p><strong>{prediction.completedAttempts} / {prediction.requiredCompletedAttempts}</strong> completed practice attempts</p>
-                <p className="mute">{prediction.availableSamples} of {prediction.requiredSamples} required prediction samples available.</p>
+                <p className="muted">{prediction.availableSamples} of {prediction.requiredSamples} required prediction samples available.</p>
               </div>
             )}
             {prediction && prediction.status === "baseline_not_beaten" && (
               <div>
                 <p className="muted">{prediction.message}</p>
-                <p className="mute">{prediction.completedAttempts} attempts analyzed · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
+                <p className="muted">{prediction.completedAttempts} attempts analyzed · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
               </div>
             )}
           </section>
@@ -159,7 +159,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           </div>
           {recommendations && (
             <>
-              <p className="mute">
+              <p className="muted">
                 Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%.
               </p>
               <div className="performance-explanation">
@@ -176,7 +176,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                       <span className="pill">{item.priority} priority</span>
                     </div>
                     <p className="muted">{item.reason}</p>
-                    <p className="mute">
+                    <p className="muted">
                       Suggested session: {item.questionCount} {item.mode === "mistakes" ? "mistake review" : item.mode === "mock" ? "mock test" : "practice"} questions
                       {item.subject ? ` in ${item.subject}` : ""}{item.topic ? ` · ${item.topic}` : ""}.
                     </p>
@@ -199,7 +199,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                   <strong>{item.subject}</strong>
                   <span className="pill">{item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "%"} · {item.seen} answered</span>
                 </div>
-                <p className="mute">{item.wrong} incorrect answers</p>
+                <p className="muted">{item.wrong} incorrect answers</p>
               </div>
             ))}
           </div>
