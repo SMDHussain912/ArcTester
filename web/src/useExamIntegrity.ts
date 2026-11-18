@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
 
+declare global {
+  interface Window {
+    arctesterDesktop?: {
+      setExamMode?: (enabled: boolean) => Promise<{ ok: boolean; enabled: boolean }>;
+      onIntegrityViolation?: (callback: (event: { type?: string; detail?: string }) => void) => () => void;
+    };
+  }
+}
+
 export type IntegrityType =
   | "FULLSCREEN_EXIT"
   | "WINDOW_BLUR"
@@ -202,6 +211,29 @@ export function useExamIntegrity({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
+  }, [integrityLevel, push]);
+
+  // Electron provides additional native integrity signals and a kiosk-mode
+  // toggle. The browser implementation remains the fallback on non-desktop clients.
+  useEffect(() => {
+    if (integrityLevel === "OFF" || !window.arctesterDesktop) return;
+    const desktop = window.arctesterDesktop;
+    void desktop.setExamMode?.(true);
+    const unsubscribe = desktop.onIntegrityViolation?.((event) => {
+      const allowedTypes: IntegrityType[] = [
+        "WINDOW_BLUR",
+        "DISPLAY_EXTENDED",
+        "WINDOW_FOCUS_LOST",
+        "APP_BACKGROUND",
+      ];
+      if (event.type && allowedTypes.includes(event.type as IntegrityType)) {
+        push(event.type as IntegrityType, event.detail ?? "Desktop operating-system event");
+      }
+    });
+    return () => {
+      unsubscribe?.();
+      void desktop.setExamMode?.(false);
+    };
   }, [integrityLevel, push]);
 
   // Periodic display / focus checks every second.
