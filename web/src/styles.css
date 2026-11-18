@@ -511,3 +511,81 @@ textarea{resize:vertical;line-height:1.55}
 .student-notice-preview .assigned-exam-card>p{margin:0;font-size:11px;overflow-wrap:anywhere}
 .skeleton-stat{display:block;min-height:76px;width:100%;border-radius:12px}
 @media(max-width:640px){.student-notice-preview>.section-head{flex-direction:column}.student-notice-preview>.section-head>.ghost{width:100%}}
+
+
+/* Consistent breathing room inside analytics, concept notes and study panels. */
+.student-progress>.panel,.student-progress .grid>.panel,.student-analytics .panel,
+.student-learning>.panel,.student-learning article.panel,.student-materials-page>.panel{
+  padding:22px;
+}
+.student-progress .section-head,.student-analytics .panel-header{margin-bottom:16px}
+.student-progress .grid.two{gap:16px}
+.student-progress .coverage-row{padding:15px 0}
+.student-learning{gap:18px}
+.student-learning>.stack{gap:14px}
+.student-learning article.panel{display:grid;gap:10px;line-height:1.65}
+.student-learning article.panel .panel-header{margin:0 0 4px}
+.student-learning article.panel h3{margin:7px 0 0}
+.student-learning article.panel p{margin:0}
+.student-learning article.panel ul{margin:0;padding-left:22px}
+.student-learning>.panel:first-child{display:grid;gap:16px}
+.student-learning>.panel:first-child .panel-header{margin:0}
+.student-learning form.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.student-learning form.row input{flex:1 1 260px;min-width:180px}
+.student-learning form.row button{flex:0 0 auto}
+.student-materials-page>.panel{display:grid;gap:14px}
+.student-load-error{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--border));border-radius:12px;background:color-mix(in srgb,var(--danger) 7%,var(--surface));color:var(--text)}
+.student-load-error p{margin:5px 0 0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.student-load-error button{flex:0 0 auto}
+
+/* Admin paper-builder checkboxes, subject selectors and coverage bars. */
+.builder-switches{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.builder-switches label{display:flex!important;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer}
+.builder-switches input[type=checkbox],.builder-question-list input[type=checkbox]{width:19px;height:19px;accent-color:var(--accent)}
+.builder-question-list{display:grid;gap:8px}
+.builder-question-list>label{display:grid!important;grid-template-columns:20px minmax(0,1fr) auto;align-items:start;gap:11px;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface);cursor:pointer;transition:border-color .14s ease,background .14s ease}
+.builder-question-list>label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.builder-question-list>label>span{display:grid;gap:5px;min-width:0}
+.builder-question-list>label small{color:var(--muted);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.builder-question-list>label em{font-size:10px;font-style:normal;font-weight:800;color:var(--muted);text-transform:uppercase}
+.quota-list{display:grid;gap:8px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.quota-list>b,.difficulty-mix>b{font-size:12px}
+.quota-list>label{display:grid!important;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:12px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
+.quota-list>label span{display:grid;gap:3px}
+.quota-list>label small{color:var(--muted);font-size:10px}
+.difficulty-mix{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.difficulty-mix>b{grid-column:1/-1}
+.difficulty-mix label{display:grid;gap:6px;text-transform:capitalize}
+.segmented{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.segmented button{min-height:42px;border:0;border-radius:9px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.segmented button.chosen{background:var(--surface);color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.14)}
+.subject-admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.subject-admin-grid>.admin-panel{min-width:0;padding:18px}
+.subject-admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.subject-admin-head>div{min-width:0}
+.subject-admin-head h2,.subject-admin-head h4{margin:0 0 7px}
+.subject-admin-head span,.subject-admin-head small{color:var(--muted);font-size:10px}
+.subject-admin-grid progress{display:block;width:100%;height:10px;margin-top:12px;overflow:hidden;border:0;border-radius:999px;background:var(--bg);accent-color:var(--accent)}
+.subject-admin-grid progress::-webkit-progress-bar{border-radius:999px;background:var(--bg)}
+.subject-admin-grid progress::-webkit-progress-value{border-radius:999px;background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%,#5cc8b0))}
+.subject-admin-grid progress::-moz-progress-bar{border-radius:999px;background:var(--accent)}
+.topic-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.topic-row:last-child{border-bottom:0}
+.topic-row span{color:var(--muted);white-space:nowrap}
+.admin-alert{display:flex;align-items:flex-start;gap:10px;padding:13px 15px;border:1px solid var(--border);border-radius:11px;background:var(--surface);line-height:1.55;overflow-wrap:anywhere}
+.admin-alert.error{border-color:color-mix(in srgb,var(--danger) 40%,var(--border));background:color-mix(in srgb,var(--danger) 7%,var(--surface))}
+.admin-alert.success{border-color:color-mix(in srgb,var(--success) 40%,var(--border));background:color-mix(in srgb,var(--success) 7%,var(--surface))}
+
+/* App-level rendering failure: clear recovery actions instead of a blank white page. */
+.app-error{min-height:100vh;box-sizing:border-box;display:grid;align-content:center;justify-items:start;gap:14px;padding:clamp(24px,6vw,72px);background:var(--bg);color:var(--text)}
+.app-error-mark{display:grid;place-items:center;width:54px;height:54px;border-radius:16px;background:var(--accent);color:#fff;font-size:28px;font-weight:900}
+.app-error .eyebrow{margin:0;color:var(--accent);font-size:10px;font-weight:900;letter-spacing:1.5px}
+.app-error h1{max-width:650px;margin:0;font-size:clamp(26px,4vw,42px);letter-spacing:-1px}
+.app-error>p:not(.eyebrow){max-width:620px;color:var(--muted);line-height:1.7}
+.app-error details{width:min(100%,700px);padding:12px 14px;border:1px solid var(--border);border-radius:11px;background:var(--surface)}
+.app-error summary{cursor:pointer;font-size:12px;font-weight:800}
+.app-error pre{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:11px}
+.app-error-actions{display:flex;gap:10px;flex-wrap:wrap}
+.app-error-actions button{min-height:42px;padding:10px 16px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.app-error-actions button.secondary{border-color:var(--border);background:var(--surface);color:var(--text)}
+@media(max-width:680px){.student-progress>.panel,.student-progress .grid>.panel,.student-analytics .panel,.student-learning>.panel,.student-learning article.panel,.student-materials-page>.panel{padding:16px}.student-load-error{align-items:stretch;flex-direction:column}.student-load-error button{width:100%}.subject-admin-grid{grid-template-columns:1fr}.difficulty-mix{grid-template-columns:1fr}.difficulty-mix>b{grid-column:auto}.builder-question-list>label{grid-template-columns:20px minmax(0,1fr)}.builder-question-list>label em{grid-column:2}}
