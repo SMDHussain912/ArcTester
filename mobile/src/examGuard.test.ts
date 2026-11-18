@@ -57,7 +57,10 @@ beforeEach(() => {
   Object.keys(lastRefForTest).forEach((key) => delete lastRefForTest[key]);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Stop native timers/listeners and clear module-level assignment state so
+  // each test starts like a fresh app process.
+  await stopExamGuard();
   vi.clearAllMocks();
 });
 
