@@ -54,7 +54,7 @@ EXPO_PUBLIC_API_URL=https://YOUR-RENDER-SERVICE.onrender.com npx expo export --p
 
 For a native Android build, use the existing EAS/Gradle release configuration and ensure the same variable is available at build time. Native clients authenticate with `POST /auth/token` and send `Authorization: Bearer <token>`; they do not depend on browser cookies or CORS.
 
-The Android exam-guard interruption marker is stored with Expo SecureStore. Native integrity features require an installed development/release build; Expo Go does not include the custom ExamGuard native module.
+The exam-guard interruption marker and pending integrity queue are stored with Expo SecureStore. Native integrity features require an installed development/release build; Expo Go does not include the custom ExamGuard native module. Android monitors native window focus, multi-window mode, external displays, app backgrounding, and screen-pinning state. iOS reports app backgrounding, screenshot notifications, and active screen recording/mirroring; iOS does not provide Android-style task pinning or equivalent kiosk enforcement.
 
 ## Electron desktop
 
