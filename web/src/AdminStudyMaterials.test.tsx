@@ -11,7 +11,7 @@ const material: StudyMaterial = {
 
 describe("AdminStudyMaterials", () => {
   it("shows uploaded files and allows publishing or deleting", () => {
-    const onStatusChange = vi.fn(), onDelete = vi.fn();
+    const onStatusChange = vi.fn(), onDelete = vi.fn();\n    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<AdminStudyMaterials materials={[material]} busy={false} onUpload={vi.fn()} onStatusChange={onStatusChange} onDelete={onDelete} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Study materials" })).toBeInTheDocument();
     expect(screen.getByText("Data Structures")).toBeInTheDocument();
