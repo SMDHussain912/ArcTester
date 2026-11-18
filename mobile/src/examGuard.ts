@@ -1,6 +1,6 @@
 import * as ExpoScreenCapture from "expo-screen-capture";
 import * as SecureStore from "expo-secure-store";
-import { requireNativeModule } from "expo-modules-core";
+import { requireNativeModule } from "expo";
 
 const EXAM_IN_PROGRESS_KEY = "arctester-exam-in-progress";
 const ACTIVE_ASSIGNMENT_KEY = "arctester-active-assignment";
