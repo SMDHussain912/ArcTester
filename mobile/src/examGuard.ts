@@ -27,6 +27,7 @@ const WEIGHTS: Record<string, number> = {
 
 let guard: any = null;
 let examInProgress = false;
+let activeAssignmentId: string | null = null;
 let eventQueue: Array<{ type: string; at: string; detail?: string }> = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let subscription: { remove: () => void } | null = null;
@@ -35,29 +36,46 @@ const lastRef: Record<string, number> = {};
 export const lastRefForTest = lastRef;
 export const eventQueueForTest = eventQueue;
 
-async function persistEventQueue(): Promise<void> {
-  if (eventQueue.length === 0) {
-    await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
-    return;
-  }
-  await SecureStore.setItemAsync(PENDING_EVENTS_KEY, JSON.stringify(eventQueue));
-}
+type IntegrityEvent = { type: string; at: string; detail?: string };
 
-async function restorePersistedEvents(): Promise<void> {
+async function readPersistedQueues(): Promise<Record<string, IntegrityEvent[]>> {
   const raw = await SecureStore.getItemAsync(PENDING_EVENTS_KEY);
-  if (!raw) return;
+  if (!raw) return {};
   try {
-    const saved = JSON.parse(raw) as Array<{ type: string; at: string; detail?: string }>;
-    if (!Array.isArray(saved)) return;
-    const known = new Set(eventQueue.map((event) => `${event.type}:${event.at}`));
-    for (const event of saved) {
-      if (event && typeof event.type === "string" && typeof event.at === "string") {
-        const key = `${event.type}:${event.at}`;
-        if (!known.has(key)) eventQueue.push(event);
-      }
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      // Migrate the first version of the queue, which was not assignment-scoped.
+      return activeAssignmentId ? { [activeAssignmentId]: parsed as IntegrityEvent[] } : {};
     }
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, IntegrityEvent[]>;
   } catch {
     await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
+    return {};
+  }
+}
+
+async function persistEventQueue(): Promise<void> {
+  if (!activeAssignmentId) return;
+  const queues = await readPersistedQueues();
+  if (eventQueue.length === 0) delete queues[activeAssignmentId];
+  else queues[activeAssignmentId] = [...eventQueue];
+  if (Object.keys(queues).length === 0) {
+    await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
+  } else {
+    await SecureStore.setItemAsync(PENDING_EVENTS_KEY, JSON.stringify(queues));
+  }
+}
+
+async function restorePersistedEvents(assignmentId: string): Promise<void> {
+  const queues = await readPersistedQueues();
+  const saved = queues[assignmentId] ?? [];
+  const known = new Set(eventQueue.map((event) => `${event.type}:${event.at}`));
+  for (const event of saved) {
+    if (event && typeof event.type === "string" && typeof event.at === "string") {
+      const key = `${event.type}:${event.at}`;
+      if (!known.has(key)) eventQueue.push(event);
+    }
   }
 }
 
@@ -70,7 +88,7 @@ export function pushViolation(type: string, detail?: string): void {
 }
 
 async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<boolean> {
-  await restorePersistedEvents();
+  await restorePersistedEvents(assignmentId);
   const batch = eventQueue.splice(0, eventQueue.length);
   if (batch.length === 0) return true;
   try {
@@ -106,6 +124,9 @@ export async function startExamGuard({
   } catch {
     // Expo Go and unsupported platforms may not provide native screen protection.
   }
+  activeAssignmentId = assignmentId;
+  eventQueue.length = 0;
+  await restorePersistedEvents(assignmentId);
   examInProgress = true;
   try {
     guard = requireNativeModule("ExamGuard");
@@ -145,6 +166,9 @@ export async function stopExamGuard(): Promise<void> {
   } catch {
     // Screen capture may not have been blocked on this runtime.
   }
+  await persistEventQueue();
+  eventQueue.length = 0;
+  activeAssignmentId = null;
   await Promise.all([
     SecureStore.deleteItemAsync(EXAM_IN_PROGRESS_KEY),
     SecureStore.deleteItemAsync(ACTIVE_ASSIGNMENT_KEY),
@@ -158,16 +182,19 @@ export async function reportAppReopened({
   api: (path: string, init?: RequestInit) => Promise<any>;
   assignmentId: string;
 }): Promise<void> {
-  await restorePersistedEvents();
   const [flag, savedAssignmentId] = await Promise.all([
     SecureStore.getItemAsync(EXAM_IN_PROGRESS_KEY),
     SecureStore.getItemAsync(ACTIVE_ASSIGNMENT_KEY),
   ]);
   if (flag !== "1") return;
   if (savedAssignmentId && savedAssignmentId !== assignmentId) return;
+  activeAssignmentId = assignmentId;
+  await restorePersistedEvents(assignmentId);
   pushViolation("APP_REOPENED", "App was reopened after process death during an active exam.");
   const delivered = await flushEvents(api, assignmentId);
   if (!delivered) return;
+  eventQueue.length = 0;
+  activeAssignmentId = null;
   await Promise.all([
     SecureStore.deleteItemAsync(EXAM_IN_PROGRESS_KEY),
     SecureStore.deleteItemAsync(ACTIVE_ASSIGNMENT_KEY),
