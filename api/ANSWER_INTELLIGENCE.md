@@ -57,4 +57,6 @@ Use a model actually pulled into the local Ollama instance. For llama.cpp server
 
 ## Current boundaries
 
-The existing Decision Engine remains evidence-based and rule-driven, with the score predictor used where eligible. Answer explanations do not directly alter marks, student access, exam settings or model activation. Each explanation also returns a small evidence-based next-study action (learn concept, review mistakes, or spaced practice). This is a transparent per-answer policy, not a trained decision model; the existing analytics recommendation engine continues to use accumulated attempt statistics.\n\nThe current fallback template is intentionally conservative: it can explain the recorded key but does not pretend to derive a full subject-specific proof when no approved content or AI provider is available.
+The existing Decision Engine remains evidence-based and rule-driven, with the score predictor used where eligible. Answer explanations do not directly alter marks, student access, exam settings or model activation. Each explanation also returns a small evidence-based next-study action (learn concept, review mistakes, or spaced practice). This is a transparent per-answer policy, not a trained decision model; the existing analytics recommendation engine continues to use accumulated attempt statistics.
+
+The current fallback template is intentionally conservative: it can explain the recorded key but does not pretend to derive a full subject-specific proof when no question-bank explanation or AI provider is available.
