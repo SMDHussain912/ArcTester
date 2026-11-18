@@ -91,7 +91,7 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
             <div className="panel-header">
               <div>
                 <h2>{concept.title}</h2>
-                <p className="mute">{concept.subject} · {concept.topic}</p>
+                <p className="muted">{concept.subject} · {concept.topic}</p>
               </div>
             </div>
             <p>{concept.definition}</p>
