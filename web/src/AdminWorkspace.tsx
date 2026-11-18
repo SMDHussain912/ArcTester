@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import AdminSubjects, { type AdminCatalogSubject } from "./AdminSubjects";
 import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
-import AdminModelLab, { type ModelDatasetRegistration, type ModelLabDataset, type ModelLabJob } from "./AdminModelLab";
+import AdminModelLab, { type ModelDatasetRegistration, type ModelLabDataset, type ModelLabJob, type ModelLabModel } from "./AdminModelLab";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
@@ -38,6 +38,7 @@ export default function AdminWorkspace(p:Props){
  const [studyMaterials,setStudyMaterials]=useState<StudyMaterial[]>([]);
  const [modelDatasets,setModelDatasets]=useState<ModelLabDataset[]>([]);
  const [trainingJobs,setTrainingJobs]=useState<ModelLabJob[]>([]);
+ const [registeredModels,setRegisteredModels]=useState<ModelLabModel[]>([]);
  const [reviewItems,setReviewItems]=useState<ReviewQueueItem[]>([]);
  const [liveSessions,setLiveSessions]=useState<LiveSession[]>([]);
  const [selectedLiveSessionId,setSelectedLiveSessionId]=useState<string|null>(null);
@@ -85,7 +86,7 @@ export default function AdminWorkspace(p:Props){
  async function uploadStudyMaterial(payload:{title:string;description:string;subject:string;topic:string;fileName:string;mimeType:string;contentBase64:string}){await run(async()=>{await api("/admin/study-materials",{method:"POST",body:JSON.stringify(payload)});setNotice("Study material uploaded as a draft. Publish it when ready.");await loadStudyMaterials();});}
  async function changeStudyMaterialStatus(id:string,status:StudyMaterial["status"]){await run(async()=>{await api(`/admin/study-materials/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadStudyMaterials();setNotice("Study material status updated.");});}
  async function deleteStudyMaterial(id:string){await run(async()=>{await api(`/admin/study-materials/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudyMaterials();setNotice("Study material deleted.");});}
- async function loadModelLab(){const [d,j]=await Promise.all([api<{datasets:ModelLabDataset[]}>("/admin/model-datasets"),api<{jobs:ModelLabJob[]}>("/admin/model-training-jobs")]);setModelDatasets(d.datasets??[]);setTrainingJobs(j.jobs??[]);if(!selectedDatasetId&&d.datasets?.[0])setSelectedDatasetId(d.datasets[0].id);}
+ async function loadModelLab(){const [d,j,m]=await Promise.all([api<{datasets:ModelLabDataset[]}>("/admin/model-datasets"),api<{jobs:ModelLabJob[]}>("/admin/model-training-jobs"),api<{models:ModelLabModel[]}>("/admin/models")]);setModelDatasets(d.datasets??[]);setTrainingJobs(j.jobs??[]);setRegisteredModels(m.models??[]);if(!selectedDatasetId&&d.datasets?.[0])setSelectedDatasetId(d.datasets[0].id);}
  async function loadReviewQueue(){const r=await api<{submissions:ReviewQueueItem[]}>("/admin/submissions/review-required");setReviewItems(r.submissions??[]);}
  async function loadLiveSessions(){setLiveSessionsLoading(true);try{const r=await api<{sessions:LiveSession[];total:number;serverTime:string}>("/admin/exams/live-sessions?page=1&limit=50&eventLimit=100");setLiveSessions(Array.isArray(r.sessions)?r.sessions:[]);setLiveSessionsTotal(Number.isFinite(r.total)?r.total:0);setLiveSessionsUpdatedAt(r.serverTime||new Date().toISOString());}finally{setLiveSessionsLoading(false);}}
  async function loadAttendance(nextPage=attendancePage){setAttendanceLoading(true);try{const r=await api<{attendance:AttendanceRow[];total:number;serverTime:string}>(`/admin/exams/attendance?page=${nextPage}&limit=25`);setAttendanceRows(Array.isArray(r.attendance)?r.attendance:[]);setAttendanceTotal(Number.isFinite(r.total)?r.total:0);setAttendancePage(nextPage);setAttendanceUpdatedAt(r.serverTime||new Date().toISOString());}finally{setAttendanceLoading(false);}}
@@ -163,7 +164,7 @@ export default function AdminWorkspace(p:Props){
     onRelease={(id) => void releaseReviewItem(id)}
    />}
    {tab==="study-materials"&&<AdminStudyMaterials materials={studyMaterials} busy={busy} onUpload={(payload) => void uploadStudyMaterial(payload)} onStatusChange={(id,status) => void changeStudyMaterialStatus(id,status)} onDelete={(id) => void deleteStudyMaterial(id)} onRefresh={() => void loadStudyMaterials()} />}
-   {tab==="model-lab"&&<AdminModelLab datasets={modelDatasets} jobs={trainingJobs} selectedDatasetId={selectedDatasetId} modelPrefix={trainingModelPrefix} busy={busy} onDatasetChange={setSelectedDatasetId} onModelPrefixChange={setTrainingModelPrefix} onQueueTraining={() => void queueTensorflowTraining()} onTrainClassical={() => void trainClassicalCandidates()} onRefresh={() => void loadModelLab()} onRegisterDataset={(payload) => void registerModelDataset(payload)} />}
+   {tab==="model-lab"&&<AdminModelLab datasets={modelDatasets} jobs={trainingJobs} models={registeredModels} selectedDatasetId={selectedDatasetId} modelPrefix={trainingModelPrefix} busy={busy} onDatasetChange={setSelectedDatasetId} onModelPrefixChange={setTrainingModelPrefix} onQueueTraining={() => void queueTensorflowTraining()} onTrainClassical={() => void trainClassicalCandidates()} onRefresh={() => void loadModelLab()} onRegisterDataset={(payload) => void registerModelDataset(payload)} />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
