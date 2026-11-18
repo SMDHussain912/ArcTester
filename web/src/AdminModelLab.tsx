@@ -11,6 +11,7 @@ export type ModelLabJob = {
   errorMessage: string;
   result?: unknown;
 };
+export type IntelligenceProviderStatus = { external: { provider: string; configured: boolean }; local: { provider: string; configured: boolean; baseUrl: string }; fallback: string[] };
 export type ModelDatasetRegistration = {
   name: string;
   task: "regression" | "binary-classification";
@@ -42,6 +43,7 @@ type AdminModelLabProps = {
   busy: boolean;
   loading?: boolean;
   error?: string;
+  intelligenceStatus?: IntelligenceProviderStatus | null;
   onDatasetChange: (id: string) => void;
   onModelPrefixChange: (prefix: string) => void;
   onQueueTraining: () => void;
@@ -51,7 +53,7 @@ type AdminModelLabProps = {
 };
 
 export default function AdminModelLab({
-  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, error = "", onDatasetChange,
+  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, error = "", intelligenceStatus = null, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
@@ -166,6 +168,15 @@ export default function AdminModelLab({
           </div>
           <div className="decision-engine-guardrails"><span>✓ Minimum evidence thresholds</span><span>✓ Confidence and baseline checks</span><span>✓ Explainable reasons</span><span>✓ Human-controlled model activation</span></div>
           <p className="decision-engine-note">Decision-making is currently handled by the live evidence-based recommendation policy and score predictor—not by a separately trained decision model. Candidate ML models remain inactive until validated. They never autonomously change exam settings, grades or student access.</p>
+          <div className="answer-intelligence-admin">
+            <div><p className="eyebrow">ANSWER INTELLIGENCE · HYBRID ROUTING</p><h3>Explanation providers</h3><p>External AI → local model → approved explanation → deterministic offline guide.</p></div>
+            <div className="intelligence-provider-grid">
+              <article><strong>External provider</strong><span className={intelligenceStatus?.external.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.external.configured?intelligenceStatus.external.provider+" configured":"Not configured"}</span></article>
+              <article><strong>Local model</strong><span className={intelligenceStatus?.local.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.local.configured?intelligenceStatus.local.provider+" configured":"Not configured"}</span></article>
+              <article><strong>Offline fallback</strong><span className="status status-used">Always available</span></article>
+            </div>
+            <small className="muted">Provider credentials are configured as API environment variables and are never exposed in this dashboard. AI explanations are labelled unverified until reviewed.</small>
+          </div>
         </div>
       </section>
 
