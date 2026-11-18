@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 
 const EXAM_IN_PROGRESS_KEY = "arctester-exam-in-progress";
 const ACTIVE_ASSIGNMENT_KEY = "arctester-active-assignment";
+const PENDING_EVENTS_KEY = "arctester-pending-integrity-events";
 
 const WEIGHTS: Record<string, number> = {
   FULLSCREEN_EXIT: 1,
@@ -33,14 +34,42 @@ const lastRef: Record<string, number> = {};
 export const lastRefForTest = lastRef;
 export const eventQueueForTest = eventQueue;
 
+async function persistEventQueue(): Promise<void> {
+  if (eventQueue.length === 0) {
+    await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
+    return;
+  }
+  await SecureStore.setItemAsync(PENDING_EVENTS_KEY, JSON.stringify(eventQueue));
+}
+
+async function restorePersistedEvents(): Promise<void> {
+  const raw = await SecureStore.getItemAsync(PENDING_EVENTS_KEY);
+  if (!raw) return;
+  try {
+    const saved = JSON.parse(raw) as Array<{ type: string; at: string; detail?: string }>;
+    if (!Array.isArray(saved)) return;
+    const known = new Set(eventQueue.map((event) => `${event.type}:${event.at}`));
+    for (const event of saved) {
+      if (event && typeof event.type === "string" && typeof event.at === "string") {
+        const key = `${event.type}:${event.at}`;
+        if (!known.has(key)) eventQueue.push(event);
+      }
+    }
+  } catch {
+    await SecureStore.deleteItemAsync(PENDING_EVENTS_KEY);
+  }
+}
+
 export function pushViolation(type: string, detail?: string): void {
   const now = Date.now();
   if (now - (lastRef[type] ?? 0) < 2000) return;
   lastRef[type] = now;
   eventQueue.push({ type, at: new Date().toISOString(), detail: detail ?? "" });
+  void persistEventQueue().catch(() => undefined);
 }
 
 async function flushEvents(api: (path: string, init?: RequestInit) => Promise<any>, assignmentId: string): Promise<boolean> {
+  await restorePersistedEvents();
   const batch = eventQueue.splice(0, eventQueue.length);
   if (batch.length === 0) return true;
   try {
@@ -48,9 +77,11 @@ async function flushEvents(api: (path: string, init?: RequestInit) => Promise<an
       method: "POST",
       body: JSON.stringify({ events: batch }),
     });
+    await persistEventQueue();
     return true;
   } catch {
     eventQueue.unshift(...batch);
+    await persistEventQueue().catch(() => undefined);
     return false;
   }
 }
@@ -127,6 +158,7 @@ export async function reportAppReopened({
   api: (path: string, init?: RequestInit) => Promise<any>;
   assignmentId: string;
 }): Promise<void> {
+  await restorePersistedEvents();
   const [flag, savedAssignmentId] = await Promise.all([
     SecureStore.getItemAsync(EXAM_IN_PROGRESS_KEY),
     SecureStore.getItemAsync(ACTIVE_ASSIGNMENT_KEY),
