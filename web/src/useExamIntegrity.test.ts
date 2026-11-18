@@ -23,4 +23,29 @@ describe("useExamIntegrity event listener lifecycle", () => {
     document.dispatchEvent(laterCopy);
     expect(laterCopy.defaultPrevented).toBe(false);
   });
+
+  it("records native desktop close attempts as integrity events", () => {
+    let onViolation: ((event: { type?: string; detail?: string }) => void) | undefined;
+    const previousBridge = window.arctesterDesktop;
+    window.arctesterDesktop = {
+      setExamMode: vi.fn(async () => ({ ok: true, enabled: true })),
+      onIntegrityViolation: (callback) => {
+        onViolation = callback;
+        return () => { onViolation = undefined; };
+      },
+    };
+
+    const { result, unmount } = renderHook(() =>
+      useExamIntegrity({ assignmentId: "assignment-1", integrityLevel: "STRICT" }),
+    );
+
+    act(() => onViolation?.({ type: "CLOSE_ATTEMPT", detail: "Window close was blocked" }));
+    expect(result.current.events).toMatchObject([
+      { type: "CLOSE_ATTEMPT", detail: "Window close was blocked" },
+    ]);
+
+    unmount();
+    window.arctesterDesktop = previousBridge;
+  });
+
 });
