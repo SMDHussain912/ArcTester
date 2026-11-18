@@ -515,3 +515,23 @@ model IntegrityFlag {
   @@index([assignmentId])
   @@index([studentIdA, studentIdB])
 }
+
+
+model StudyMaterial {
+  id             String   @id @default(cuid())
+  uploadedById   Int?
+  title          String
+  description    String   @default("")
+  subject        String
+  topic          String   @default("")
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  contentBase64  String
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, subject, title])
+  @@index([uploadedById, createdAt])
+}
