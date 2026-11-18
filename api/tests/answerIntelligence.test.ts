@@ -28,6 +28,11 @@ afterAll(async () => {
 });
 
 describe("Answer Intelligence API", () => {
+  it("keeps provider configuration status administrator-only", async () => {
+    const response = await api.get("/admin/intelligence/status");
+    expect(response.status).toBe(403);
+  });
+
   it("only generates explanations for a question in the owner's completed attempt", async () => {
     const created = await api.post("/tests", { mode: "practice", subject: "Computer Science", count: 1 });
     expect(created.status).toBe(201);
@@ -50,6 +55,7 @@ describe("Answer Intelligence API", () => {
         explanationStatus: "approved",
         answerKeyVerified: true,
         explanationVerified: false,
+        learningDecision: { action: "review-topic", recommendedMode: "mistakes", questionCount: 5 },
       },
     });
   });
