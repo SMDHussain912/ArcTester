@@ -88,9 +88,9 @@ export default function StudentMaterials({ setActivePage }: StudentMaterialsProp
       <section className="panel">
         <div className="panel-header"><div><h2>Published library</h2><p className="muted">Only administrator-published files appear here.</p></div><button className="button button-secondary" onClick={() => void loadMaterials()} disabled={loading}>Refresh</button></div>
         <input aria-label="Search study materials" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, subject or topic" />
-        {error && <p className="error" role="alert">{error}</p>}
+        {error && <div className="student-load-error" role="alert"><div><strong>Study materials could not be loaded.</strong><p>{error}</p></div><button className="button button-secondary" onClick={() => void loadMaterials()} disabled={loading}>{loading ? "Retrying…" : "Try again"}</button></div>}
         {loading && <p className="muted">Loading study materials…</p>}
-        {!loading && filtered.length === 0 && <div className="empty-state"><h3>{materials.length ? "No matching materials" : "No materials published yet"}</h3><p className="muted">{materials.length ? "Try another search term." : "Your administrator has not published any study files yet."}</p></div>}
+        {!loading && !error && filtered.length === 0 && <div className="empty-state"><h3>{materials.length ? "No matching materials" : "No materials published yet"}</h3><p className="muted">{materials.length ? "Try another search term." : "Your administrator has not published any study files yet."}</p></div>}
         <div className="student-material-list">
           {filtered.map((item) => <article className="student-material-card" key={item.id}>
             <div className="student-material-icon" aria-hidden="true">{item.mimeType === "application/pdf" ? "PDF" : "DOC"}</div>
