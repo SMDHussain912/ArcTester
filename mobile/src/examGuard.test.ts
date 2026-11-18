@@ -159,6 +159,21 @@ describe("examGuard", () => {
   });
 
 
+
+  it("splits large offline integrity queues into API-sized batches", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    for (let index = 0; index < 25; index += 1) {
+      pushViolation(`TEST_EVENT_${index}`);
+    }
+
+    await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
+
+    expect(capturedApiCalls).toHaveLength(2);
+    expect(capturedApiCalls[0].body.events).toHaveLength(20);
+    expect(capturedApiCalls[1].body.events).toHaveLength(5);
+    expect(eventQueueForTest).toHaveLength(0);
+  });
+
   it("does not flush a delayed event batch into a different active assignment", async () => {
     await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
     pushViolation("TAB_HIDDEN", "Belongs to first assignment");
