@@ -136,7 +136,7 @@ class ExamGuardModule : Module() {
       true
     }
 
-    OnAppBackground {
+    OnActivityEntersBackground {
       if (running) emit("APP_BACKGROUND", "Android application entered background")
     }
 
