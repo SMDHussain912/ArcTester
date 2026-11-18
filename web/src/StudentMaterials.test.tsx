@@ -35,7 +35,7 @@ describe("StudentMaterials", () => {
     const preview = screen.getByRole("link", { name: "Preview PDF" });
     expect(preview).toHaveAttribute("href", "http://localhost:4000/study-materials/pdf-1/preview");
     expect(preview).toHaveAttribute("target", "_blank");
-    expect(screen.queryByRole("link", { name: "Preview PDF", hidden: true })?.getAttribute("href")).not.toContain("text-1");
+    expect(screen.getAllByRole("link", { name: "Preview PDF" })).toHaveLength(1);
     await waitFor(() => expect(screen.getByText("Physics notes")).toBeInTheDocument());
     expect(screen.getAllByRole("button", { name: "Download" })).toHaveLength(2);
   });
