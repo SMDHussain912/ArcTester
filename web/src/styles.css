@@ -653,3 +653,18 @@ textarea{resize:vertical;line-height:1.55}
 @media(max-width:800px){.model-lab-error{align-items:flex-start;flex-wrap:wrap}.model-lab-error>div{flex-basis:calc(100% - 55px)}.model-lab-error>button{margin-left:50px}.admin-model-lab .training-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.admin-model-lab .admin-two-col{grid-template-columns:1fr}.admin-model-lab .dataset-upload-row{align-items:stretch;flex-direction:column}.admin-model-lab .dataset-upload-row input{max-width:100%;width:100%}.admin-model-lab .model-registry-row{align-items:flex-start;flex-direction:column}.admin-model-lab .training-evaluation-status{align-items:flex-start;flex-direction:column}.admin-model-lab .training-metric-grid{grid-template-columns:1fr 1fr}}
 @media(prefers-reduced-motion:reduce){.admin-model-lab .training-progress>span{transition:none}}
+
+/* Runtime crash diagnostics */
+.app-error{min-height:100vh;display:grid;place-items:center;padding:28px;background:var(--bg);color:var(--text)}
+.app-error-content{width:min(100%,760px)}
+.app-error-eyebrow{font-size:10px;font-weight:850;letter-spacing:1.7px;color:var(--danger)}
+.app-error h1{margin:10px 0;font-size:clamp(30px,5vw,42px)}
+.app-error-content>p:not(.app-error-eyebrow){color:var(--muted);line-height:1.65}
+.app-error-diagnostic{display:grid;gap:10px;margin:24px 0;padding:18px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--border));border-radius:14px;background:var(--surface)}
+.app-error-diagnostic strong{font-size:12px}
+.app-error-diagnostic code,.app-error-diagnostic pre{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--danger);font:12px/1.6 ui-monospace,SFMono-Regular,monospace}
+.app-error-diagnostic details{border-top:1px solid var(--border);padding-top:10px}
+.app-error-diagnostic summary{cursor:pointer;color:var(--accent);font-size:12px;font-weight:750}
+.app-error-actions{display:flex;flex-wrap:wrap;gap:10px}
+.app-error-actions button{border:0;border-radius:10px;padding:11px 16px;background:var(--accent);color:white;font-weight:750}
+.app-error-actions .app-error-copy{background:var(--surface);color:var(--text);border:1px solid var(--border)}
