@@ -1,105 +1,68 @@
-/* global self, caches, URL, fetch, Response, console */
-const CACHE_NAME = "arctester-shell-v1";
-const SHELL_URLs = [
-  "/",
-  "/index.html",
-  "./assets/index-BXAiU6kN.js",
-  "./assets/index-qUxFqUR5.css",
-  "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
-];
+/* ArcTester service worker: network-first app shell, cache-first versioned assets. */
+const CACHE_NAME = "arctester-shell-v2";
+const SHELL_URLS = ["/", "/index.html", "/manifest.json", "/icon-192.png", "/icon-512.png"];
 
-// Install: cache the shell
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(SHELL_URLs).catch((err) => {
-        console.warn("Service worker: failed to cache shell", err);
-      });
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(SHELL_URLS))
+      .catch((error) => console.warn("Service worker: shell cache skipped", error))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate: clean up old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      );
-    })
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("arctester-shell-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch: serve from cache for shell, network for exam content
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // Only handle same-origin requests
-  if (url.origin !== self.location.origin) {
-    return;
-  }
-
-  // Shell assets: cache-first
-  if (
-    url.pathname === "/" ||
-    url.pathname === "/index.html" ||
-    url.pathname === "/manifest.json" ||
-    url.pathname.startsWith("/assets/") ||
-    url.pathname.startsWith("/icon-")
-  ) {
+  // Always ask the server for the latest HTML. Fall back to the cached shell
+  // only when offline, so deployments cannot get stuck on an old index.html.
+  if (request.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) {
-          return cached;
+      fetch(request).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", copy));
         }
-        return fetch(event.request).then((response) => {
-          if (!response || response.status !== 200) {
-            return response;
-          }
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, response.clone());
-            return response;
-          });
-        });
-      })
+        return response;
+      }).catch(async () => (await caches.match("/index.html")) || (await caches.match("/")) || Response.error())
     );
     return;
   }
 
-  // Exam routes (/exams/...): network-first, no offline fallback
-  if (url.pathname.startsWith("/exams/")) {
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icon-") || url.pathname === "/manifest.json") {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(
-          JSON.stringify({
-            error: "Offline",
-            message: "Exams require an internet connection. Exams cannot be taken offline.",
-          }),
-          {
-            status: 503,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      })
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      }))
     );
     return;
   }
 
-  // All other requests: network-first
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
-  );
+  if (url.pathname.startsWith("/exams/")) {
+    event.respondWith(fetch(request).catch(() => new Response(
+      JSON.stringify({ error: "Offline", message: "Exams require an internet connection. Exams cannot be taken offline." }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    )));
+    return;
+  }
+
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });
 
-// Listen for messages from the client
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
