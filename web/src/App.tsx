@@ -3,7 +3,7 @@ import { safeStorage } from "./safeStorage";
 import { clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
-import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
+import StudentPracticeResults, { type AnswerExplanation, type PracticeResult } from "./StudentPracticeResults";
 import { buildPracticeConfig } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
@@ -596,7 +596,7 @@ export default function App() {
             onSubmit={() => void submitTest()}
           />
         ) : activePage === "practice" && result ? (
-          <StudentPracticeResults result={result} onBack={() => setResult(null)} />
+          <StudentPracticeResults result={result} onBack={() => setResult(null)} onExplain={(questionId) => request<{ explanation: AnswerExplanation }>(`/tests/${result.attemptId}/questions/${questionId}/explanation`, { method: "POST" }).then((response) => response.explanation)} />
         ) : activePage === "assigned-exams" ? (
           <section className="assigned-exams-page">
             <div className="page-heading"><div><p className="eyebrow">EXAM CENTRE</p><h1>Assigned exams</h1><p className="muted">Exams assigned to your account by the administrator.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshAssignedExams()}>Refresh</button></div>
