@@ -90,7 +90,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       if (!bytes.byteLength || bytes.byteLength > MAX_FILE_BYTES) {
         return next(badRequest("Study materials must be between 1 byte and 8 MB."));
       }
-      const created = await db.studyMaterial.create({
+      if (input.mimeType === "application/pdf" && bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {\n        return next(badRequest("The selected file does not contain a valid PDF signature."));\n      }\n      const created = await db.studyMaterial.create({
         data: {
           uploadedById: req.user!.id,
           title: input.title,
