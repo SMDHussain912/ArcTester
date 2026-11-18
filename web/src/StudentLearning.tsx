@@ -49,7 +49,7 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
   };
 
   return (
-    <div className="stack">
+    <div className="stack student-learning">
       <section className="panel">
         <div className="panel-header">
           <div>
