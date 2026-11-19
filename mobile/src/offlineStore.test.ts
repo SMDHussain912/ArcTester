@@ -273,7 +273,7 @@ describe("offlineStore", () => {
 
   it("rejects a package with a mismatched sha256", async () => {
     configureOfflineStore("user-2");
-    await expect(saveExamPackage(packagePayload, "wrong-sha256")).rejects.toThrow("integrity check failed");
+    await expect(saveExamPackage(packagePayload, "0".repeat(64))).rejects.toThrow("integrity check failed");
   });
 
   it("uses exclusive SQLite transactions when caching packages and starting attempts", async () => {
