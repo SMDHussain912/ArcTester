@@ -15,6 +15,13 @@ describe("AdminModelLab", () => {
     expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
   });
 
+  it("keeps redundant classical candidates visible as legacy without offering activation", () => {
+    render(<AdminModelLab datasets={[]} jobs={[]} models={[{ modelId: "old-tree", version: 1, algorithm: "decision-tree", task: "regression", dataset: "legacy data", isActive: false }]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByText("LEGACY · RETAINED")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Activate" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete version" })).toBeTruthy();
+  });
+
   it("renders datasets, training controls and job progress", () => {
     render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
