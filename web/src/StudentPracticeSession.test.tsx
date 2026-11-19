@@ -26,7 +26,7 @@ describe("StudentPracticeSession", () => {
   fireEvent.click(screen.getByRole("button", { name: "Next question in navigator" }));
   expect(second).toHaveAttribute("aria-current", "step");
   expect(screen.getByText("Viewing question 2 of 2")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Next question" })).toBeDisabled();
+  expect(screen.getAllByRole("button", { name: "Next question" })[1]).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Previous question in navigator" }));
   expect(first).toHaveAttribute("aria-current", "step");
   fireEvent.click(second);
@@ -43,6 +43,6 @@ describe("StudentPracticeSession", () => {
 
  it("disables submission while busy and omits countdown for untimed practice", () => {
   render(<StudentPracticeSession test={{ ...test, deadline: null }} answers={{}} remainingSeconds={null} busy onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
-  expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.queryByText(/remaining/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.getByRole("button", { name: "Leave session" })).toBeDisabled(); expect(screen.queryByText(/remaining/)).toBeNull();
  });
 });
