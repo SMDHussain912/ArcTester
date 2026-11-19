@@ -82,6 +82,46 @@ describe("admin model registry API", () => {
     expect((await request("/admin/models", "GET", undefined, studentCookie)).status).toBe(403);
   });
 
+  it("reports adaptive learning outcomes without exposing learner identifiers or question content", async () => {
+    const attempt = await server.db.attempt.create({
+      data: { userId: (await signUp(server.baseUrl, "adaptive-analytics-student@example.com")).userId, mode: "practice" },
+    });
+    await server.db.adaptiveDecisionLog.createMany({
+      data: [
+        {
+          attemptId: attempt.id, learnerGroupId: "a".repeat(64), selectedQuestionId: 910001,
+          eligibleQuestionIdsJson: "[910001,910002]", selectionProbability: 1,
+          stateFeaturesJson: "[12,0.7,1,0,3]", policyVersion: 2,
+          policyMode: "deterministic-top-k", reasonCode: "WEAK_TOPIC",
+          selectionScore: 2.25, outcomeStatus: "correct", reward: 1,
+        },
+        {
+          attemptId: attempt.id, learnerGroupId: "a".repeat(64), selectedQuestionId: 910002,
+          eligibleQuestionIdsJson: "[910001,910002]", selectionProbability: 1,
+          stateFeaturesJson: "[12,0.7,1,0,3]", policyVersion: 2,
+          policyMode: "deterministic-top-k", reasonCode: "NOVELTY",
+          selectionScore: 1.5, outcomeStatus: "pending", reward: null,
+        },
+      ],
+    });
+
+    const report = await request("/admin/adaptive-learning/analytics?days=30");
+    expect(report.status).toBe(200);
+    expect(report.body.summary).toMatchObject({
+      selected: 2, observed: 1, pending: 1, averageReward: 1,
+      averageSelectionScore: 1.875, outcomeCoverage: 0.5,
+    });
+    expect(report.body.byReason).toEqual(expect.arrayContaining([
+      { reasonCode: "WEAK_TOPIC", count: 1 }, { reasonCode: "NOVELTY", count: 1 },
+    ]));
+    expect(report.body.privacy).toEqual({
+      learnerIdentifiersIncluded: false, questionTextIncluded: false,
+    });
+    expect(JSON.stringify(report.body)).not.toContain("aaaaaaaa");
+    expect((await request("/admin/adaptive-learning/analytics?days=999")).status).toBe(400);
+    expect((await request("/admin/adaptive-learning/analytics", "GET", undefined, studentCookie)).status).toBe(403);
+  });
+
   it("registers a validated first version as active and subsequent versions as inactive", async () => {
     const first = await request("/admin/models", "POST", modelInput());
     expect(first.status).toBe(201);
