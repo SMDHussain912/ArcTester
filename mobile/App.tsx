@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -117,7 +118,8 @@ export default function App() {
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [showExams, setShowExams] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "learn" | "profile">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "learn" | "profile" | "settings">("home");
+  const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
@@ -141,6 +143,21 @@ export default function App() {
   const startupPulse = useRef(new Animated.Value(0.85)).current;
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => { SecureStore.getItemAsync("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); }, []);
+
+  async function toggleDarkMode(value: boolean) {
+    setDarkMode(value);
+    try { await SecureStore.setItemAsync("arctester-dark-mode", String(value)); }
+    catch { setError("Theme could not be saved on this device."); }
+  }
+
+  async function refreshQuestionBank() {
+    setBusy(true); setError("");
+    try { const fresh = await api<Bank>("/bank"); setBank(fresh); }
+    catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -756,9 +773,9 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, darkMode && { backgroundColor: "#0b1220" }]}>
       <StatusBar style={startupVisible ? "light" : "auto"} />
-      <ScrollView style={styles.dashboardScroll} contentContainerStyle={styles.container}>
+      <ScrollView style={[styles.dashboardScroll, darkMode && { backgroundColor: "#0b1220" }]} contentContainerStyle={styles.container}>
         <View style={styles.brandRow}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>A</Text>
@@ -981,9 +998,32 @@ export default function App() {
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
+         ) : activeTab === "practice" ? (
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Choose a subject or start a mixed 10-question session.</Text>
+            {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
+            {bank?.subjects.filter((item) => item.count > 0).map((item) => (
+              <TouchableOpacity key={item.subject} onPress={() => startPractice(item.subject)} style={[styles.subject, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
+                <View><Text style={[styles.subjectName, darkMode && { color: "#f1f5f9" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.count} questions available</Text></View><Text style={styles.arrow}>›</Text>
+              </TouchableOpacity>
+            ))}
+            {!bank && <Text style={styles.muted}>Loading question bank…</Text>}
+            {bank && bank.total === 0 && <View style={styles.announcementCard}><Text style={styles.announcementTitle}>No practice questions found</Text><Text style={styles.muted}>The server question bank currently reports zero questions. Refresh the bank or ask an administrator to publish/import questions.</Text><TouchableOpacity onPress={() => void refreshQuestionBank()} disabled={busy} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity></View>}
+            {bank && bank.total > 0 && <TouchableOpacity disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onPress={() => startPractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Loading…" : "Start mixed practice · 10 questions"}</Text></TouchableOpacity>}
+          </Animated.View>
         ) : activeTab === "learn" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <StudentLearningHub api={api} userId={String(user.id)} />
+          </Animated.View>
+         ) : activeTab === "settings" ? (
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
+            <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={styles.secondaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
         ) : activeTab === "profile" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
@@ -1131,6 +1171,7 @@ export default function App() {
             <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
             <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
           </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "practice" }} accessibilityLabel="Practice tab" style={styles.navItem} onPress={() => setActiveTab("practice")}><MaterialCommunityIcons name="pencil-box-multiple" size={23} color={activeTab === "practice" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "practice" && styles.navLabelActive]}>Practice</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="Assigned exams tab" style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
             <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
             <Text style={styles.navLabel}>Exams</Text>
@@ -1139,6 +1180,7 @@ export default function App() {
             <MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} />
             <Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text>
           </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
             <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
             <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Profile</Text>
