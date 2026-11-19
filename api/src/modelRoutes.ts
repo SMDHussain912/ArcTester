@@ -888,9 +888,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (baselineModelId === modelId && input.baselineVersion === version) {
         return next(badRequest("Candidate and baseline versions must differ."));
       }
-      if ((modelId === "performance-gradient-boosting" || modelId === "performance-random-forest") &&
-          baselineModelId !== "performance-multiple-linear-regression") {
+      const performanceCandidate = modelId === "performance-gradient-boosting" || modelId === "performance-random-forest";
+      if (performanceCandidate && baselineModelId !== "performance-multiple-linear-regression") {
         return next(badRequest("Performance Gradient Boosting and Random Forest candidates must be evaluated against the registered linear-regression baseline."));
+      }
+      if (!performanceCandidate && baselineModelId !== modelId) {
+        return next(badRequest("Cross-model baseline evaluation is reserved for the approved performance models."));
       }
       const [candidateRow, baselineRow, dataset] = await Promise.all([
         db.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } }),
@@ -975,7 +978,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           return next(conflict("Performance evaluation requires an attested real-anonymized holdout with 200+ timestamped snapshots across 50+ independent learner groups, separate from eligible training data."));
         }
       }
-      const report = evaluateRegistryCandidate(candidate, baseline, samples, dataset.name);
+      const report = evaluateRegistryCandidate(candidate, baseline, samples, dataset.name, { allowCrossModelBaseline: performanceCandidate });
       const reportWithBaseline = { ...report, baselineModelId };
       await db.$transaction(async (tx) => {
         await tx.modelEvaluation.create({
