@@ -42,7 +42,11 @@ describe("admin model registry API", () => {
     target: index >= 6 ? 1 : 0,
   }));
 
-  async function registerEvaluationDataset(name = "held-out-demo-v1", datasetKind: "synthetic" | "real-anonymized" = "synthetic") {
+  async function registerEvaluationDataset(
+    name = "held-out-demo-v1",
+    datasetKind: "synthetic" | "real-anonymized" = "synthetic",
+    groupOffset = 0,
+  ) {
     const created = await request("/admin/model-datasets", "POST", {
       name,
       task: "binary-classification",
@@ -52,7 +56,7 @@ describe("admin model registry API", () => {
         ? evaluationSamples.map((sample, index) => ({
           ...sample,
           // Six deterministic pseudonymous learner groups, each represented in both classes.
-          groupId: (index % 6).toString(16).padStart(64, "0"),
+          groupId: (index % 6 + groupOffset).toString(16).padStart(64, "0"),
         }))
         : evaluationSamples,
       sourceDescription: datasetKind === "real-anonymized"
@@ -667,6 +671,16 @@ describe("admin model registry API", () => {
   });
 
   it("evaluates candidates against a baseline before activation and records the report", async () => {
+    const candidateTrainingId = await registerEvaluationDataset("candidate-training-demo-v1", "real-anonymized", 100);
+    const baselineTrainingId = await registerEvaluationDataset("baseline-training-demo-v1", "real-anonymized", 200);
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId: "exam-readiness-demo", version: 2 } },
+      data: { trainingDatasetId: candidateTrainingId },
+    });
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId: "exam-readiness-demo", version: 1 } },
+      data: { trainingDatasetId: baselineTrainingId },
+    });
     const datasetId = await registerEvaluationDataset("held-out-demo-v1", "real-anonymized");
     const evaluation = await request("/admin/models/exam-readiness-demo/2/evaluate", "POST", {
       baselineVersion: 1,
@@ -714,6 +728,16 @@ describe("admin model registry API", () => {
     expect(first.status).toBe(201);
     const second = await request("/admin/models", "POST", { ...modelInput("rollback-v2"), modelId });
     expect(second.status).toBe(201);
+    const previousTrainingId = await registerEvaluationDataset("rollback-previous-training", "real-anonymized", 200);
+    const candidateTrainingId = await registerEvaluationDataset("rollback-candidate-training", "real-anonymized", 100);
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId, version: 1 } },
+      data: { trainingDatasetId: previousTrainingId },
+    });
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId, version: 2 } },
+      data: { trainingDatasetId: candidateTrainingId },
+    });
     const datasetId = await registerEvaluationDataset("rollback-candidate-real", "real-anonymized");
     const evaluated = await request(`/admin/models/${modelId}/2/evaluate`, "POST", { baselineVersion: 1, datasetId });
     expect(evaluated.status).toBe(200);
@@ -727,6 +751,26 @@ describe("admin model registry API", () => {
     expect(active.map((model) => model.version)).toEqual([2]);
   });
 
+  it("blocks production promotion when a candidate has no registered training provenance", async () => {
+    const modelId = "missing-training-provenance";
+    const first = await request("/admin/models", "POST", { ...modelInput("provenance-baseline"), modelId });
+    expect(first.status).toBe(201);
+    const second = await request("/admin/models", "POST", { ...modelInput("provenance-candidate"), modelId });
+    expect(second.status).toBe(201);
+    const datasetId = await registerEvaluationDataset("provenance-real-holdout", "real-anonymized");
+    const evaluation = await request(`/admin/models/${modelId}/2/evaluate`, "POST", {
+      baselineVersion: 1,
+      datasetId,
+    });
+    expect(evaluation.status).toBe(200);
+    expect(evaluation.body.report).toMatchObject({ status: "PASSED" });
+    const activation = await request(`/admin/models/${modelId}/2/activate`, "POST", {
+      reason: "Verify that an unproven candidate cannot enter production.",
+    });
+    expect(activation.status).toBe(409);
+    expect(String(activation.body.error ?? activation.body.message)).toContain("registered, attested real-anonymized dataset");
+  });
+
   it("blocks production activation when a passing evaluation used synthetic data", async () => {
     const modelId = "synthetic-evaluation-gate";
     const first = await request("/admin/models", "POST", { ...modelInput("synthetic-baseline"), modelId });
@@ -734,6 +778,11 @@ describe("admin model registry API", () => {
     const second = await request("/admin/models", "POST", { ...modelInput("synthetic-candidate"), modelId });
     expect(second.status).toBe(201);
 
+    const trainingDatasetId = await registerEvaluationDataset("synthetic-gate-training", "real-anonymized", 100);
+    await server.db.registeredModel.update({
+      where: { modelId_version: { modelId, version: 2 } },
+      data: { trainingDatasetId },
+    });
     const datasetId = await registerEvaluationDataset("synthetic-promotion-fixture", "synthetic");
     const evaluation = await request(`/admin/models/${modelId}/2/evaluate`, "POST", {
       baselineVersion: 1,
