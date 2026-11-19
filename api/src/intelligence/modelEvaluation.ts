@@ -15,6 +15,8 @@ export interface ModelEvaluationMetrics {
   precision?: number;
   recall?: number;
   f1?: number;
+  macroF1?: number;
+  falseReadyRate?: number;
   mae?: number;
   rmse?: number;
   rSquared?: number | null;
@@ -45,6 +47,37 @@ function metrics(artifact: RegistryArtifact, samples: ModelEvaluationSample[]): 
       mae: absoluteError / samples.length,
       rmse: Math.sqrt(squaredError / samples.length),
       rSquared: totalSquared > 0 ? 1 - squaredError / totalSquared : null,
+    };
+  }
+
+  if (artifact.task === "multiclass-classification") {
+    const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
+    const predicted = samples.map((sample, index) => {
+      const prediction = predictWithRegistryArtifact(artifact, sample.features);
+      return prediction.readiness?.category ?? (typeof prediction.prediction === "string" ? prediction.prediction : null);
+    });
+    const actual = samples.map((sample) => labels[sample.target]);
+    let totalCorrect = 0;
+    const classF1 = labels.map((label) => {
+      let tp = 0, fp = 0, fn = 0;
+      samples.forEach((_sample, index) => {
+        if (actual[index] === label && predicted[index] === label) tp += 1;
+        else if (actual[index] !== label && predicted[index] === label) fp += 1;
+        else if (actual[index] === label && predicted[index] !== label) fn += 1;
+      });
+      return tp + fp + fn === 0 ? 0 : (2 * tp) / (2 * tp + fp + fn);
+    });
+    samples.forEach((_sample, index) => { if (actual[index] === predicted[index]) totalCorrect += 1; });
+    const notReadyRows = samples.filter((sample) => sample.target === 0);
+    const falseReady = notReadyRows.filter((sample) => {
+      const index = samples.indexOf(sample);
+      return predicted[index] === "READY";
+    }).length;
+    return {
+      rows: samples.length,
+      accuracy: totalCorrect / samples.length,
+      macroF1: classF1.reduce((sum, value) => sum + value, 0) / labels.length,
+      falseReadyRate: notReadyRows.length ? falseReady / notReadyRows.length : 1,
     };
   }
 
@@ -91,12 +124,24 @@ export function evaluateRegistryCandidate(
     if (samples.some((sample) => sample.target !== 0 && sample.target !== 1)) throw new Error("Classification targets must be binary");
     if (new Set(samples.map((sample) => sample.target)).size !== 2) throw new Error("Classification evaluation data must contain both classes");
   }
+  if (candidate.task === "multiclass-classification") {
+    if (samples.some((sample) => !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2)) {
+      throw new Error("Readiness evaluation targets must be encoded as 0, 1 or 2");
+    }
+    if ([0, 1, 2].some((label) => samples.filter((sample) => sample.target === label).length < 10)) {
+      throw new Error("Readiness evaluation requires at least 10 examples of every class");
+    }
+  }
 
   const candidateMetrics = metrics(candidate, samples);
   const baselineMetrics = metrics(baseline, samples);
   const passed = candidate.task === "regression"
     ? candidateMetrics.mae! <= baselineMetrics.mae! && candidateMetrics.rmse! <= baselineMetrics.rmse!
-    : candidateMetrics.f1! >= baselineMetrics.f1! && candidateMetrics.accuracy! >= baselineMetrics.accuracy!;
+    : candidate.task === "multiclass-classification"
+      ? candidateMetrics.macroF1! >= baselineMetrics.macroF1! &&
+        candidateMetrics.accuracy! >= baselineMetrics.accuracy! &&
+        candidateMetrics.falseReadyRate! <= baselineMetrics.falseReadyRate!
+      : candidateMetrics.f1! >= baselineMetrics.f1! && candidateMetrics.accuracy! >= baselineMetrics.accuracy!;
   const canonical = JSON.stringify(samples);
   return {
     status: passed ? "PASSED" : "REJECTED",
@@ -109,7 +154,9 @@ export function evaluateRegistryCandidate(
     baselineMetrics,
     acceptanceRule: candidate.task === "regression"
       ? "candidate MAE and RMSE must both be no worse than baseline"
-      : "candidate F1 and accuracy must both be no worse than baseline",
+      : candidate.task === "multiclass-classification"
+        ? "candidate macro-F1 and accuracy must be no worse than baseline and false-READY rate must not increase"
+        : "candidate F1 and accuracy must both be no worse than baseline",
     evaluatedAt: new Date().toISOString(),
   };
 }
