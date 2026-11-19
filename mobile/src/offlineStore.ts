@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
+import { Platform } from "react-native";
 import { monotonicNow } from "./clock";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -65,6 +66,40 @@ type AttemptRow = {
 };
 
 const databaseInitializations = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
+
+const transactionQueues = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
+
+async function withOfflineTransaction<T>(
+  db: SQLite.SQLiteDatabase,
+  task: (transaction: SQLite.SQLiteDatabase) => Promise<T>,
+): Promise<T> {
+  const previous = transactionQueues.get(db) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  transactionQueues.set(db, previous.then(() => current));
+  await previous;
+
+  try {
+    let result!: T;
+    if (Platform.OS === "web") {
+      // Expo SQLite does not support exclusive transactions on web.
+      // Serialize this store's transactions and use the web-supported API.
+      await db.withTransactionAsync(async () => {
+        result = await task(db);
+      });
+    } else {
+      await withOfflineTransaction(db, async (transaction) => {
+        result = await task(transaction);
+      });
+    }
+    return result;
+  } finally {
+    release();
+  }
+}
+
 
 async function database() {
   if (!dbPromise) {
