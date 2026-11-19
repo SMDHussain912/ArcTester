@@ -913,3 +913,15 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .admin-model-lab .model-training-options{margin:14px 0 18px}
 .admin-model-lab .model-registry-toolbar{margin-top:12px}
 @media(max-width:760px){.admin-model-lab .model-dataset-editor .row{align-items:stretch;flex-direction:column}.admin-model-lab .model-dataset-editor .row button{width:100%}}
+
+/* Model history and governance panel */
+.admin-model-lab .model-history-panel{margin-top:18px}
+.admin-model-lab .model-history-panel h3{margin:22px 0 10px;font-size:15px}
+.admin-model-lab .model-history-list{display:grid;gap:10px}
+.admin-model-lab .model-history-entry{min-width:0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.admin-model-lab .model-history-entry .row{justify-content:space-between;align-items:center;gap:10px}
+.admin-model-lab .model-history-entry p{margin:8px 0}
+.admin-model-lab .model-history-entry small{overflow-wrap:anywhere;color:var(--muted)}
+.admin-model-lab .model-history-entry details{margin-top:10px}
+.admin-model-lab .model-history-entry summary{cursor:pointer;font-weight:650}
+@media(max-width:760px){.admin-model-lab .model-history-entry .row{align-items:flex-start;flex-direction:column}}
