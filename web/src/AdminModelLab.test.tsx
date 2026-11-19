@@ -6,12 +6,13 @@ const datasets: ModelLabDataset[] = [{ id: "dataset-1", name: "CSE readiness", t
 const jobs: ModelLabJob[] = [{ id: "job-1", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "RUNNING", progress: 45, errorMessage: "" }];
 
 describe("AdminModelLab", () => {
-  it("shows the six approved model capabilities as planned, not active", () => {
+  it("shows implementation progress for the six approved model capabilities", () => {
     render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     for (const name of ["Gradient Boosting", "Random Forest", "Readiness Classifier", "Adaptive Learning", "Question Embeddings", "Exam Anomaly Detection"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
-    expect(screen.getByText("6 planned · 0 newly implemented")).toBeTruthy();
+    expect(screen.getByText("2 trainable · 4 core engines in progress")).toBeTruthy();
+    expect(screen.getByText("TRAINABLE · CANDIDATE ONLY")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
   });
 
@@ -28,10 +29,9 @@ describe("AdminModelLab", () => {
     expect(screen.getByText(/TensorFlow.js requires a regression dataset with numeric-only features/i)).toBeTruthy();
   });
 
-  it("labels the reduced classical training path as a single baseline", () => {
+  it("labels regression training as the performance model suite", () => {
     render(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Train logistic baseline" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Train classical candidates" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Train performance models" })).toBeTruthy();
   });
 
   it("renders datasets, training controls and job progress", () => {
