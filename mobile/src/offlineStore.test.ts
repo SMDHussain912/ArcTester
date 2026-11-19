@@ -143,6 +143,7 @@ import {
   configureOfflineStore,
   saveExamPackage,
   getCachedExamPackage,
+  listActiveAttemptIds,
   startOfflineAttempt,
   restoreActiveAttempt,
   saveOfflineAnswer,
@@ -286,6 +287,18 @@ describe("offlineStore", () => {
       fakeSqliteRef.withExclusiveTransactionAsync.mock.calls.length +
       fakeSqliteRef.withTransactionAsync.mock.calls.length
     ).toBe(2);
+  });
+
+  it("lists unfinished attempts for automatic recovery and removes them after submission", async () => {
+    configureOfflineStore("user-recovery-list");
+    await saveExamPackage(packagePayload, expectedSha256);
+
+    expect(await listActiveAttemptIds()).toEqual([]);
+    await startOfflineAttempt("assignment-1");
+    expect(await listActiveAttemptIds()).toEqual(["assignment-1"]);
+
+    await queueOfflineSubmission("assignment-1");
+    expect(await listActiveAttemptIds()).toEqual([]);
   });
 
   it("starts an attempt, saves answers, and tracks remaining seconds", async () => {
