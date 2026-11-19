@@ -153,7 +153,7 @@ export default function App() {
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
+  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
 
   async function toggleDarkMode(value: boolean) {
     setDarkMode(value);
@@ -849,7 +849,7 @@ export default function App() {
         ) : showExams ? (
           <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : result ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice result</Text>
             <Text style={styles.statValue}>{result.score} / {result.total}</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
@@ -882,7 +882,7 @@ export default function App() {
             </TouchableOpacity>
           </Animated.View>
         ) : test ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={styles.examHeader}>
               <View>
                 <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice session</Text>
@@ -893,12 +893,12 @@ export default function App() {
                 <Text style={[styles.timerText, secondsLeft === 0 && styles.timerExpiredText]}>{formatTime(secondsLeft)}</Text>
               </View>
             </View>
-            <View style={styles.progressTrack}>
+            <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
-            <Text style={styles.examHint}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
+            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
             <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
-              <Text style={styles.navigatorTitle}>JUMP TO QUESTION</Text>
+              <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
               <View style={styles.navigatorGrid}>
                 {test.questions.map((question, index) => {
                   const answered = answers[question.id] !== undefined;
@@ -912,6 +912,7 @@ export default function App() {
                       onPress={() => updatePracticeQuestionIndex(index)}
                       style={[
                         styles.navigatorItem,
+                        darkMode && { backgroundColor: "#1e293b", borderColor: "#475569" },
                         answered && styles.navigatorAnswered,
                         current && styles.navigatorCurrent,
                       ]}
@@ -926,7 +927,7 @@ export default function App() {
                 })}
               </View>
               <View style={styles.navigatorLegend}>
-                <Text style={styles.navigatorLegendText}>● Answered</Text>
+                <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>● Answered</Text>
                 <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
               </View>
             </View>
