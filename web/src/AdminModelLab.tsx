@@ -99,6 +99,25 @@ function validateDatasetRows(
   }
 }
 
+function getDatasetPreviewSummary(raw: string): { rows: number; features: number } | { error: string } {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const samples = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object" && "samples" in parsed
+        ? (parsed as { samples: unknown }).samples
+        : null;
+    if (!Array.isArray(samples)) return { error: "JSON must contain a sample array." };
+    const first = samples[0] as { features?: unknown } | undefined;
+    const features = first?.features && typeof first.features === "object" && !Array.isArray(first.features)
+      ? Object.keys(first.features).length
+      : 0;
+    return { rows: samples.length, features };
+  } catch {
+    return { error: "The sample JSON has a syntax error. Fix it before registration." };
+  }
+}
+
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
@@ -156,6 +175,8 @@ export default function AdminModelLab({
     anchor.href = url; anchor.download = "arctester-training-dataset-template.json"; anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+
+  const samplePreview = samplesText.trim() ? getDatasetPreviewSummary(samplesText) : null;
 
   function submitDataset() {
     setFormError("");
@@ -241,6 +262,9 @@ export default function AdminModelLab({
         <label>Feature schema JSON<textarea rows={7} spellCheck={false} value={featureSchemaText} onChange={(event) => setFeatureSchemaText(event.target.value)} /></label>
         <label className="dataset-upload-row"><div><strong>Training samples JSON</strong><small>Choose a .json file · 30–5,000 sample rows · maximum 8 MB</small></div><input aria-label="Training samples JSON file" type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readDatasetFile(file); }} /></label><button type="button" className="button button-secondary" onClick={downloadSampleTemplate}>Download sample JSON template (synthetic)</button>
         {uploadName && <p className="muted">Selected file: {uploadName}</p>}
+        {samplePreview && ("error" in samplePreview
+          ? <p className="error" role="alert">{samplePreview.error}</p>
+          : <div className="dataset-preview-summary" role="status"><strong>{samplePreview.rows.toLocaleString()} sample rows detected</strong><span>{samplePreview.features} features in first row · {task === "regression" ? "Regression target" : "Binary classification target"}</span><small>Full feature, target, privacy-group and row-level checks run before registration.</small></div>)}
         <label>Samples preview / JSON<textarea rows={10} spellCheck={false} value={samplesText} onChange={(event) => setSamplesText(event.target.value)} placeholder='[{"features":{"completed_attempts":12,"previous_accuracy":0.65,"recent_average_accuracy":0.7,"overall_average_accuracy":0.66,"previous_question_count":20},"target":0.72,"groupId":"64-character-keyed-hmac"}]' /></label>
         {formError && <p className="error" role="alert">{formError}</p>}
         <div className="editor-actions"><button className="primary" disabled={busy || !onRegisterDataset} onClick={submitDataset}>Validate and register dataset</button></div>
