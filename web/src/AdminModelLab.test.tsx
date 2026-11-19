@@ -16,7 +16,7 @@ describe("AdminModelLab", () => {
   });
 
   it("keeps redundant classical candidates visible as legacy without offering activation", () => {
-    render(<AdminModelLab datasets={[]} jobs={[]} models={[{ modelId: "old-tree", version: 1, algorithm: "decision-tree", task: "regression", dataset: "legacy data", isActive: false }]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    render(<AdminModelLab datasets={[]} jobs={[]} models={[{ modelId: "old-tree", version: 1, algorithm: "decision-tree", task: "regression", dataset: "legacy data", isActive: false }]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onDeleteModel={vi.fn()} />);
     expect(screen.getByText("LEGACY · RETAINED")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Activate" })).toBeNull();
     expect(screen.getByRole("button", { name: "Delete version" })).toBeTruthy();
@@ -52,7 +52,7 @@ describe("AdminModelLab", () => {
   it("delegates model configuration, dataset selection, queueing and refresh", () => {
     const onDatasetChange = vi.fn(), onModelPrefixChange = vi.fn(), onQueueTraining = vi.fn(), onRefresh = vi.fn();
     const { rerender } = render(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
-    fireEvent.change(screen.getByLabelText("Training model prefix"), { target: { value: "new-prefix" } });
+    fireEvent.change(screen.getByLabelText("Model ID prefix"), { target: { value: "new-prefix" } });
     fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
     rerender(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="new-prefix" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
     fireEvent.click(screen.getByRole("button", { name: "Queue TensorFlow.js" }));
@@ -142,7 +142,7 @@ describe("AdminModelLab", () => {
       { modelId: "readiness-model", version: 2, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
     ];
     render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={registry} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onEvaluateModel={onEvaluateModel} />);
-    fireEvent.click(screen.getByRole("button", { name: "Compare with v1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate vs v1" }));
     expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, 1, "dataset-1");
   });
 
