@@ -99,8 +99,8 @@ function createWindow() {
   const window = new BrowserWindow({
     width: 1440,
     height: 940,
-    minWidth: 760,
-    minHeight: 600,
+    minWidth: 360,
+    minHeight: 560,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#f4f6fa",
@@ -147,14 +147,33 @@ function createWindow() {
   });
 
   window.webContents.on("before-input-event", (event, input) => {
-    if (!examMode) return;
     const key = String(input.key || "").toUpperCase();
-    const devToolsShortcut = (input.control || input.meta) && input.shift && key === "I";
-    const refreshShortcut = key === "F5" || ((input.control || input.meta) && key === "R");
-    const fullscreenShortcut = key === "F11";
-    const closeShortcut = input.alt && key === "F4";
-    if (key === "F12" || devToolsShortcut || refreshShortcut || fullscreenShortcut || closeShortcut) {
+    const modifier = input.control || input.meta;
+    if (examMode) {
+      const devToolsShortcut = modifier && input.shift && key === "I";
+      const refreshShortcut = key === "F5" || (modifier && key === "R");
+      const fullscreenShortcut = key === "F11";
+      const closeShortcut = input.alt && key === "F4";
+      if (key === "F12" || devToolsShortcut || refreshShortcut || fullscreenShortcut || closeShortcut) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    // Desktop accessibility: let users resize the UI without changing
+    // operating-system display scaling.
+    if (modifier && (key === "0" || key === "=" || key === "+" || key === "-")) {
       event.preventDefault();
+      const current = window.webContents.getZoomFactor();
+      const nextZoom = key === "0"
+        ? 1
+        : Math.min(1.6, Math.max(0.75, current + (key === "-" ? -0.1 : 0.1)));
+      window.webContents.setZoomFactor(Number(nextZoom.toFixed(2)));
+      return;
+    }
+    if (key === "F11") {
+      event.preventDefault();
+      window.setFullScreen(!window.isFullScreen());
     }
   });
 
