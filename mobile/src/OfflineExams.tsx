@@ -6,6 +6,7 @@ import {
   getPendingSubmissions,
   getRemainingSeconds,
   listCachedExamPackages,
+  listActiveAttemptIds,
   queueOfflineSubmission,
   restoreActiveAttempt,
   saveExamPackage,
@@ -59,6 +60,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [assignments, setAssignments] = useState<AssignedExam[]>([]);
   const [cachedIds, setCachedIds] = useState<string[]>([]);
   const [cachedPackages, setCachedPackages] = useState<OfflineExamPackage[]>([]);
+  const [activeAttemptIds, setActiveAttemptIds] = useState<string[]>([]);
   const [activePackage, setActivePackage] = useState<OfflineExamPackage | null>(null);
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -97,13 +99,15 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const refreshLocalState = useCallback(async () => {
     const generation = lifecycleGeneration.current;
     configureOfflineStore(userId);
-    const [packages, pending] = await Promise.all([
+    const [packages, pending, activeIds] = await Promise.all([
       listCachedExamPackages(),
       getPendingSubmissions(userId),
+      listActiveAttemptIds(),
     ]);
     if (!mountedRef.current || generation !== lifecycleGeneration.current) return;
     setCachedIds(packages.map((item) => item.assignmentId));
     setCachedPackages(packages);
+    setActiveAttemptIds(activeIds);
     setPendingCount(pending.length);
   }, [userId]);
 
@@ -279,6 +283,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       await reportAppReopened({ api: apiRef.current, assignmentId });
       await startExamGuard({ api: apiRef.current, assignmentId, usePinning: true });
       setActivePackage(started.examPackage);
+      setActiveAttemptIds((current) => current.filter((id) => id !== assignmentId));
       setCurrentQuestionIndex(0);
       setActiveAttemptUuid(started.attemptUuid);
       setAnswers(restored?.answers ?? {});
@@ -327,7 +332,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       setActivePackage(null);
       setCurrentQuestionIndex(0);
       setActiveAttemptUuid("");
-      setSyncMessage("Exam saved on this device. You can resume it from assigned exams.");
+      setSyncMessage("Exam saved on this device. You can resume it from interrupted attempts.");
+      await refreshLocalState();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not safely pause this exam.");
     }
@@ -562,6 +568,28 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         {pendingCount === 1 ? "" : "s"}
       </Text>
       {!!syncMessage && <Text style={styles.syncMessage}>{syncMessage}</Text>}
+      {activeAttemptIds.length > 0 && (
+        <View style={styles.assignment}>
+          <Text style={styles.assignmentTitle}>Interrupted exam{activeAttemptIds.length === 1 ? "" : "s"} found</Text>
+          <Text style={styles.muted}>Your unfinished attempts and saved answers are ready to recover.</Text>
+          {activeAttemptIds.map((assignmentId) => {
+            const examPackage = cachedPackages.find((item) => item.assignmentId === assignmentId);
+            if (!examPackage) return null;
+            return (
+              <View key={assignmentId} style={{ gap: 8, marginTop: 10 }}>
+                <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
+                <TouchableOpacity
+                  disabled={busyId !== null}
+                  onPress={() => void startExam(assignmentId)}
+                  style={[styles.primarySmall, { alignSelf: "flex-start" }]}
+                >
+                  <Text style={styles.primaryText}>Recover interrupted exam</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      )}
       {assignments.length === 0 && cachedPackages.length === 0 ? (
         <Text style={styles.empty}>No exams have been assigned to this account yet.</Text>
       ) : (
