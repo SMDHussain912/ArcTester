@@ -1,22 +1,6 @@
 name: ArcTester Windows Desktop Build
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "desktop/**"
-      - "web/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/desktop-build.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "desktop/**"
-      - "web/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/desktop-build.yml"
   workflow_dispatch:
 
 permissions:
