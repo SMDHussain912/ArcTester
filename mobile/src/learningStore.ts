@@ -64,6 +64,8 @@ export function validateOfflineLearningPackage(value: unknown): OfflineLearningP
       typeof question.subject !== "string" || !question.subject.trim() ||
       !(question.topic === null || typeof question.topic === "string") ||
       typeof question.text !== "string" || !question.text.trim() ||
+      Object.prototype.hasOwnProperty.call(question, "correctIndex") ||
+      Object.prototype.hasOwnProperty.call(question, "explanation") ||
       !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 4 ||
       question.options.some((option) => typeof option !== "string" || !option.trim()) ||
       typeof question.difficulty !== "string"
