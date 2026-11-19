@@ -866,13 +866,17 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           sampleCount: true, metricsJson: true, status: true, evaluatedAt: true,
         },
       });
-      res.json({ ok: true, evaluations: evaluations.map((item) => ({
-        id: item.id, actorId: item.actorId, modelId: item.modelId,
-        candidateVersion: item.candidateVersion, baselineVersion: item.baselineVersion,
-        evaluationDataset: item.evaluationDataset, datasetFingerprint: item.datasetFingerprint,
-        sampleCount: item.sampleCount, metrics: JSON.parse(item.metricsJson),
-        status: item.status, evaluatedAt: item.evaluatedAt,
-      })) });
+      res.json({ ok: true, evaluations: evaluations.map((item) => {
+        const metrics = JSON.parse(item.metricsJson) as { baselineModelId?: string };
+        return {
+          id: item.id, actorId: item.actorId, modelId: item.modelId,
+          candidateVersion: item.candidateVersion, baselineModelId: metrics.baselineModelId ?? item.modelId,
+          baselineVersion: item.baselineVersion,
+          evaluationDataset: item.evaluationDataset, datasetFingerprint: item.datasetFingerprint,
+          sampleCount: item.sampleCount, metrics,
+          status: item.status, evaluatedAt: item.evaluatedAt,
+        };
+      }) });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
       next(error);
