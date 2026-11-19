@@ -52,10 +52,8 @@ function metrics(artifact: RegistryArtifact, samples: ModelEvaluationSample[]): 
 
   if (artifact.task === "multiclass-classification") {
     const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
-    const predicted = samples.map((sample, index) => {
-      const prediction = predictWithRegistryArtifact(artifact, sample.features);
-      return prediction.readiness?.category ?? (typeof prediction.prediction === "string" ? prediction.prediction : null);
-    });
+    const predicted = predictions.map((prediction) =>
+      typeof prediction === "string" ? prediction : null);
     const actual = samples.map((sample) => labels[sample.target]);
     let totalCorrect = 0;
     const classF1 = labels.map((label) => {
@@ -68,16 +66,19 @@ function metrics(artifact: RegistryArtifact, samples: ModelEvaluationSample[]): 
       return tp + fp + fn === 0 ? 0 : (2 * tp) / (2 * tp + fp + fn);
     });
     samples.forEach((_sample, index) => { if (actual[index] === predicted[index]) totalCorrect += 1; });
-    const notReadyRows = samples.filter((sample) => sample.target === 0);
-    const falseReady = notReadyRows.filter((sample) => {
-      const index = samples.indexOf(sample);
-      return predicted[index] === "READY";
-    }).length;
+    let notReadyCount = 0;
+    let falseReady = 0;
+    samples.forEach((sample, index) => {
+      if (sample.target === 0) {
+        notReadyCount += 1;
+        if (predicted[index] === "READY") falseReady += 1;
+      }
+    });
     return {
       rows: samples.length,
       accuracy: totalCorrect / samples.length,
       macroF1: classF1.reduce((sum, value) => sum + value, 0) / labels.length,
-      falseReadyRate: notReadyRows.length ? falseReady / notReadyRows.length : 1,
+      falseReadyRate: notReadyCount ? falseReady / notReadyCount : 1,
     };
   }
 
