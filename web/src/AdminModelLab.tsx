@@ -46,12 +46,15 @@ type AdminModelLabProps = {
   intelligenceStatus?: IntelligenceProviderStatus | null;
   onDatasetChange: (id: string) => void;
   onModelPrefixChange: (prefix: string) => void;
-  onQueueTraining: () => void;
-  onTrainClassical: () => void;
+  onQueueTraining: (options: {seed:number;epochs:number;batchSize:number}) => void;
+  onTrainClassical: (seed:number) => void;
   onRefresh: () => void;
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
   onCancelJob?: (jobId: string) => void;
   onEvaluateModel?: (modelId: string, version: number, baselineVersion: number, datasetId: string) => void;
+  onEditDataset?: (id:string, values:{name:string;sourceDescription:string})=>void;
+  onDeleteDataset?: (id:string)=>void;
+  onDeleteModel?: (modelId:string,version:number)=>void;
 };
 
 function validateDatasetRows(
@@ -122,7 +125,7 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
@@ -141,6 +144,12 @@ export default function AdminModelLab({
   const [testResult,setTestResult]=useState<unknown>(null);
   const [testError,setTestError]=useState("");
   const [actionBusy,setActionBusy]=useState(false);
+  const [seed,setSeed]=useState("42");
+  const [epochs,setEpochs]=useState("80");
+  const [batchSize,setBatchSize]=useState("32");
+  const [editingDatasetId,setEditingDatasetId]=useState("");
+  const [editingDatasetName,setEditingDatasetName]=useState("");
+  const [editingDatasetSource,setEditingDatasetSource]=useState("");
 
   async function readDatasetFile(file: File) {
     setFormError("");
@@ -230,18 +239,7 @@ export default function AdminModelLab({
         <button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button>
       </div>
 
-      <section className="admin-panel model-lab-guide" aria-label="How to use Model Lab">
-        <div className="admin-panel-head"><div><p className="eyebrow">START HERE · SIMPLE WORKFLOW</p><h2>What should I do in Model Lab?</h2></div></div>
-        <ol>
-          <li><strong>Prepare data.</strong> Register a dataset containing past examples and the value you want the model to predict.</li>
-          <li><strong>Train candidates.</strong> ArcTester trains several algorithms. Training creates experiments; it does not put a model into use.</li>
-          <li><strong>Compare fairly.</strong> Evaluate each candidate on held-out data against the current baseline. Lower MAE/RMSE is better for score prediction.</li>
-          <li><strong>Approve only if eligible.</strong> A candidate must pass the evaluation and governance checks before an administrator can activate it.</li>
-        </ol>
-        <p className="muted"><strong>Important:</strong> The model shown in your screenshot is not ready to use. Its TensorFlow candidate scored worse than the baseline on both MAE and RMSE, so leave it inactive. Continue using the existing baseline/rule-based recommendations while collecting better representative data.</p>
-      </section>
 
-      <section className="admin-panel model-lab-summary"><p className="eyebrow">MODEL OPERATIONS</p><h2>Registry control</h2><p className="muted">Train candidates, compare versions, test active models and manage production activation.</p></section>
 
       <section className="model-lab-health-grid" aria-label="Model Lab summary">
         <article><span>Registered datasets</span><strong>{datasets.length}</strong><small>{totalDatasetRows.toLocaleString()} total samples</small></article>
@@ -273,17 +271,22 @@ export default function AdminModelLab({
         <p className="muted">Real learner data must be authorized and pseudonymized. Never upload names, emails, raw student IDs or secrets. Synthetic datasets can be used for experiments but must never qualify a production model.</p>
       </section>
 
+      <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">DATASET MANAGEMENT</p><h2>Registered datasets ({datasets.length})</h2></div></div>
+        {datasets.length===0?<p className="muted">No datasets registered.</p>:datasets.map(dataset=><article className="model-registry-row" key={dataset.id}><div><strong>{dataset.name}</strong><p className="muted">{dataset.task} · {dataset.rowCount.toLocaleString()} rows · {dataset.datasetKind??"unknown provenance"}</p><small>{(dataset.targetColumn?"Target: "+dataset.targetColumn+" · ":"")+(dataset.featureSchema?.length??0)+" features · ID "+dataset.id}</small></div><div className="row wrap">{onEditDataset&&<button className="button button-secondary" disabled={busy} onClick={()=>{setEditingDatasetId(dataset.id);setEditingDatasetName(dataset.name);setEditingDatasetSource("");}}>Edit details</button>}{onDeleteDataset&&<button className="button button-secondary" disabled={busy} onClick={()=>onDeleteDataset(dataset.id)}>Delete</button>}</div></article>)}
+        {editingDatasetId&&<div className="admin-panel model-dataset-editor"><h3>Edit dataset details</h3><label>Dataset name<input value={editingDatasetName} onChange={e=>setEditingDatasetName(e.target.value)}/></label><label>Source description<textarea value={editingDatasetSource} onChange={e=>setEditingDatasetSource(e.target.value)} placeholder="Enter updated provenance description (at least 10 characters)."/></label><div className="row wrap"><button className="primary" disabled={busy||!editingDatasetName.trim()||editingDatasetSource.trim().length<10} onClick={()=>{onEditDataset?.(editingDatasetId,{name:editingDatasetName.trim(),sourceDescription:editingDatasetSource.trim()});setEditingDatasetId("");}}>Save details</button><button className="ghost" onClick={()=>setEditingDatasetId("")}>Cancel</button></div><p className="muted">Editing is allowed only before a dataset is used by a model or training job.</p></div>}
+      </section>
+
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · TRAIN</p><h2>Train a candidate model</h2></div></div>
-        <label>Training model prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
+        <div className="model-training-options"><label>Model ID prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label><label>Random seed<input type="number" min="0" max="4294967295" value={seed} onChange={event=>setSeed(event.target.value)} /></label><label>Epochs<input type="number" min="1" max="500" value={epochs} onChange={event=>setEpochs(event.target.value)} /></label><label>Batch size<input type="number" min="1" max="256" value={batchSize} onChange={event=>setBatchSize(event.target.value)} /></label></div>
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.featureSchema?.length ?? 0} features · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
-        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted"><strong>Which button?</strong> Use <b>Train classical ML candidates</b> first to compare the available baseline algorithms. Use <b>Queue TensorFlow.js</b> to experiment with the neural network on numeric regression data. Both create inactive candidates; neither changes the live model.</p>
+        <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295 || !Number.isInteger(Number(epochs)) || Number(epochs)<1 || Number(epochs)>500 || !Number.isInteger(Number(batchSize)) || Number(batchSize)<1 || Number(batchSize)>256} onClick={()=>onQueueTraining({seed:Number(seed),epochs:Number(epochs),batchSize:Number(batchSize)})}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainClassical(Number(seed))}>Train classical candidates</button></div><p className="muted"><strong>Which button?</strong> Use <b>Train classical ML candidates</b> first to compare the available baseline algorithms. Use <b>Queue TensorFlow.js</b> to experiment with the neural network on numeric regression data. Both create inactive candidates; neither changes the live model.</p>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
       <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Models and versions ({models.length})</h2></div><button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button></div>
         <div className="model-registry-toolbar"><input placeholder="Search model, algorithm or dataset…" aria-label="Search models" value={modelSearch} onChange={e=>setModelSearch(e.target.value)}/><select aria-label="Filter algorithm" value={algorithmFilter} onChange={e=>setAlgorithmFilter(e.target.value)}><option value="all">All algorithms</option>{algorithms.map(x=><option key={x}>{x}</option>)}</select></div>
-        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}</div></article>})}</div>}
+        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}{!model.isActive&&onDeleteModel&&<button className="button button-danger" disabled={busy||actionBusy} onClick={()=>onDeleteModel(model.modelId,model.version)}>Delete version</button>}</div></article>})}</div>}
         <p className="muted">The API enforces evaluation and production eligibility before activation.</p></section>      <section className="admin-panel"><p className="eyebrow">PREDICTION PLAYGROUND</p><h2>Test active model</h2><p className="muted">Run a sample prediction using the live registry endpoint.</p>
         <label>Active model<select value={testModelId} onChange={e=>{setTestModelId(e.target.value);setTestFeatures({});setTestResult(null);setTestError("");}}><option value="">Choose model</option>{models.filter(x=>x.isActive&&x.algorithm!=="tensorflow-js-layers").map(x=><option key={x.modelId} value={x.modelId}>{x.modelId} · v{x.version}</option>)}</select></label>
         {selectedTestModel?<><div className="model-test-fields">{testSchema.map(f=><label key={f.name}>{f.name}{f.type==="categorical"?<select value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}><option value="">Choose…</option>{(f as {categories?:string[]}).categories?.map(x=><option key={x}>{x}</option>)}</select>:<input type="number" step="any" value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}/>}</label>)}</div><button className="primary" disabled={actionBusy||testSchema.some(f=>!testFeatures[f.name]?.trim())} onClick={async()=>{setActionBusy(true);setTestError("");setTestResult(null);try{const features=Object.fromEntries(testSchema.map(f=>[f.name,f.type==="numeric"?Number(testFeatures[f.name]):testFeatures[f.name]]));const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(testModelId)}/predict`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({features})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Prediction test failed");setTestResult(d.prediction);}catch(e){setTestError(e instanceof Error?e.message:"Prediction test failed");}finally{setActionBusy(false);}}}>Run prediction test</button>{testError&&<p className="error" role="alert">{testError}</p>}{testResult!==null&&<pre className="model-result-json">{JSON.stringify(testResult,null,2)}</pre>}</>:<p className="muted">Select an active statistical model. TensorFlow.js uses its dedicated inference path.</p>}</section>
