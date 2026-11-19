@@ -194,39 +194,42 @@ export async function createTest(
     candidates.map((c) => c.id)
   );
 
-  // Build topic mastery only from completed attempts. In-progress answers must
-  // not leak into the learner state used to select the next practice set.
-  const completedAnswers = await db.attemptAnswer.findMany({
-    where: { attempt: { is: { userId, finishedAt: { not: null } } } },
-    select: {
-      isCorrect: true,
-      subjectSnapshot: true,
-      topicSnapshot: true,
-      attempt: { select: { finishedAt: true } },
-    },
-    orderBy: { attemptId: "desc" },
-    take: 2000,
-  });
-  const topicBuckets = new Map<string, { subject: string; topic: string; answered: number; correct: number; lastSeenAt: Date | null }>();
-  for (const answer of completedAnswers) {
-    if (!answer.topicSnapshot) continue;
-    const key = `${answer.subjectSnapshot.toLowerCase()}::${answer.topicSnapshot.toLowerCase()}`;
-    const bucket = topicBuckets.get(key) ?? {
-      subject: answer.subjectSnapshot, topic: answer.topicSnapshot,
-      answered: 0, correct: 0, lastSeenAt: null,
-    };
-    bucket.answered += 1;
-    if (answer.isCorrect) bucket.correct += 1;
-    const finishedAt = answer.attempt.finishedAt;
-    if (finishedAt && (!bucket.lastSeenAt || finishedAt > bucket.lastSeenAt)) bucket.lastSeenAt = finishedAt;
-    topicBuckets.set(key, bucket);
+  const adaptiveTopicStates: AdaptiveTopicState[] = [];
+  if (input.mode === "practice") {
+    // Build topic mastery only from completed attempts. In-progress answers must
+    // not leak into the learner state used to select the next practice set.
+    const completedAnswers = await db.attemptAnswer.findMany({
+      where: { attempt: { is: { userId, finishedAt: { not: null } } } },
+      select: {
+        isCorrect: true,
+        subjectSnapshot: true,
+        topicSnapshot: true,
+        attempt: { select: { finishedAt: true } },
+      },
+      orderBy: { attemptId: "desc" },
+      take: 2000,
+    });
+    const topicBuckets = new Map<string, { subject: string; topic: string; answered: number; correct: number; lastSeenAt: Date | null }>();
+    for (const answer of completedAnswers) {
+      if (!answer.topicSnapshot) continue;
+      const key = `${answer.subjectSnapshot.toLowerCase()}::${answer.topicSnapshot.toLowerCase()}`;
+      const bucket = topicBuckets.get(key) ?? {
+        subject: answer.subjectSnapshot, topic: answer.topicSnapshot,
+        answered: 0, correct: 0, lastSeenAt: null,
+      };
+      bucket.answered += 1;
+      if (answer.isCorrect) bucket.correct += 1;
+      const finishedAt = answer.attempt.finishedAt;
+      if (finishedAt && (!bucket.lastSeenAt || finishedAt > bucket.lastSeenAt)) bucket.lastSeenAt = finishedAt;
+      topicBuckets.set(key, bucket);
+    }
+    adaptiveTopicStates.push(...[...topicBuckets.values()].map((bucket) => ({
+      subject: bucket.subject, topic: bucket.topic,
+      accuracy: bucket.answered ? bucket.correct / bucket.answered : null,
+      answered: bucket.answered, exposureCount: bucket.answered,
+      lastSeenAt: bucket.lastSeenAt?.toISOString() ?? null,
+    })));
   }
-  const adaptiveTopicStates: AdaptiveTopicState[] = [...topicBuckets.values()].map((bucket) => ({
-    subject: bucket.subject, topic: bucket.topic,
-    accuracy: bucket.answered ? bucket.correct / bucket.answered : null,
-    answered: bucket.answered, exposureCount: bucket.answered,
-    lastSeenAt: bucket.lastSeenAt?.toISOString() ?? null,
-  }));
 
   let selected: AttemptRow[];
   let warnings: string[] = [];
