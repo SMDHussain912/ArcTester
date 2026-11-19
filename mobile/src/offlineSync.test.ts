@@ -117,7 +117,7 @@ describe("offlineSync", () => {
     expect(mockedKeepPending).toHaveBeenCalledWith("assignment-1", "Network down");
   });
   it("shares one in-flight queue drain when sync is triggered concurrently", async () => {
-    mockedGetPending.mockResolvedValue([attempt]);
+    mockedGetPending.mockResolvedValueOnce([attempt]).mockResolvedValueOnce([]);
     let resolveResponse!: (response: Response) => void;
     const response = new Promise<Response>((resolve) => { resolveResponse = resolve; });
     (global.fetch as ReturnType<typeof vi.fn>).mockReturnValue(response);
@@ -143,7 +143,11 @@ describe("offlineSync", () => {
   });
 
   it("recovers when the server accepted a submission but the response was lost", async () => {
-    mockedGetPending.mockResolvedValue([attempt]);
+    mockedGetPending
+      .mockResolvedValueOnce([attempt])
+      .mockResolvedValueOnce([attempt])
+      .mockResolvedValueOnce([attempt])
+      .mockResolvedValueOnce([]);
     (global.fetch as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("Connection reset after request was sent"))
       .mockResolvedValueOnce({
@@ -164,7 +168,6 @@ describe("offlineSync", () => {
     );
     expect(mockedMarkSynced).not.toHaveBeenCalled();
 
-    mockedGetPending.mockResolvedValue([attempt]);
     const second = await syncPendingSubmissions("https://api.example.com", "token-abc");
     expect(second).toEqual({ uploaded: 1, failed: 0, remaining: 0 });
     expect(mockedMarkSynced).toHaveBeenCalledWith(attempt.assignmentId, "sub-already-created");
@@ -178,7 +181,11 @@ describe("offlineSync", () => {
   });
 
   it("does not share an in-flight sync between different signed-in users", async () => {
-    mockedGetPending.mockResolvedValue([attempt]);
+    mockedGetPending
+      .mockResolvedValueOnce([attempt])
+      .mockResolvedValueOnce([attempt])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     const resolvers: Array<(response: Response) => void> = [];
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() =>
       new Promise<Response>((resolve) => { resolvers.push(resolve); })
