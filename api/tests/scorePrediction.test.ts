@@ -39,6 +39,7 @@ describe("next-attempt score prediction dataset", () => {
     expect(result.regression.rows).toBe(3);
     expect(result.meanBaseline.rows).toBe(3);
     expect(typeof result.beatsMeanBaseline).toBe("boolean");
+    expect(result.beatsMeanBaseline).toBe(result.beatsMeanBaselineMae && result.beatsMeanBaselineRmse);
   });
 
   it("evaluates each later sample using only its earlier chronological prefix", () => {
@@ -49,6 +50,8 @@ describe("next-attempt score prediction dataset", () => {
     expect(result.evaluationWindows).toBe(3);
     expect(result.regression.mae).toBeGreaterThanOrEqual(0);
     expect(result.meanBaseline.mae).toBeGreaterThanOrEqual(0);
+    expect(result.regression.rmse).toBeGreaterThanOrEqual(0);
+    expect(result.meanBaseline.rmse).toBeGreaterThanOrEqual(0);
   });
 
   it("keeps walk-forward metrics finite for a noisy score history", () => {
