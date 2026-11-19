@@ -74,6 +74,7 @@ type AdminModelLabProps = {
   onTrainReadiness?: (seed:number) => void;
   onRefresh: () => void;
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
+  onBuildPerformanceDataset?: (payload: { name: string; sourceDescription: string; sourceAttested: true }) => void;
   onCancelJob?: (jobId: string) => void;
   onEvaluateModel?: (modelId: string, version: number, baselineVersion: number, datasetId: string) => void;
   onEditDataset?: (id:string, values:{name:string;sourceDescription:string})=>void;
@@ -156,9 +157,13 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onTrainClassical, onTrainReadiness, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onTrainReadiness, onRefresh, onRegisterDataset, onBuildPerformanceDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
+  const [performanceDatasetName, setPerformanceDatasetName] = useState("performance-history-v1");
+  const [performanceSourceDescription, setPerformanceSourceDescription] = useState("");
+  const [performanceSourceAttested, setPerformanceSourceAttested] = useState(false);
+  const [performanceBuildError, setPerformanceBuildError] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
   const [task, setTask] = useState<"regression" | "binary-classification" | "multiclass-classification">("regression");
   const [datasetKind, setDatasetKind] = useState<"synthetic" | "real-anonymized">("synthetic");
@@ -343,6 +348,23 @@ export default function AdminModelLab({
     } finally {setActionBusy(false);}
   }
 
+  function submitPerformanceDataset() {
+    setPerformanceBuildError("");
+    try {
+      if (!performanceDatasetName.trim()) throw new Error("Enter a version name for the performance dataset.");
+      if (performanceSourceDescription.trim().length < 10) throw new Error("Describe the authorized practice-history source in at least 10 characters.");
+      if (!performanceSourceAttested) throw new Error("Confirm that this learner history is authorized for anonymized model training.");
+      if (!onBuildPerformanceDataset) throw new Error("The performance dataset builder is not connected to the API.");
+      onBuildPerformanceDataset({
+        name: performanceDatasetName.trim(),
+        sourceDescription: performanceSourceDescription.trim(),
+        sourceAttested: true,
+      });
+    } catch (cause) {
+      setPerformanceBuildError(cause instanceof Error ? cause.message : "Performance dataset request is invalid.");
+    }
+  }
+
   function submitDataset() {
     setFormError("");
     try {
@@ -430,6 +452,19 @@ export default function AdminModelLab({
           </article>)}
         </div>
         <p className="muted"><a href="https://github.com/smdgamekingindo-TN/ArcTester/blob/main/docs/APPROVED_MODEL_ARCHITECTURE.md" target="_blank" rel="noreferrer">Open exact input/output, dataset, evaluation and deployment contracts</a></p>
+      </section>
+
+      <section className="admin-panel" aria-labelledby="performance-dataset-builder-title">
+        <div className="admin-panel-head"><div><p className="eyebrow">PERFORMANCE DATA · V1</p><h2 id="performance-dataset-builder-title">Build dataset from practice history</h2></div><span className="status status-pending">POINT-IN-TIME · ANONYMIZED</span></div>
+        <p className="muted">Builds one next-attempt accuracy snapshot per eligible completed practice attempt. Features use only earlier completed attempts; learner IDs are stored as keyed HMAC groups. The builder requires at least 500 rows across 50 learner groups, with both improving and declining histories. It reports unanswered responses separately rather than counting them as incorrect.</p>
+        <div className="admin-two-col">
+          <label>Dataset version name<input value={performanceDatasetName} onChange={(event) => setPerformanceDatasetName(event.target.value)} placeholder="performance-history-v1" /></label>
+          <label>Authorized data source description<textarea value={performanceSourceDescription} onChange={(event) => setPerformanceSourceDescription(event.target.value)} placeholder="Describe the authorized use of completed learner practice history." /></label>
+        </div>
+        <label className="dataset-attestation"><input type="checkbox" checked={performanceSourceAttested} onChange={(event) => setPerformanceSourceAttested(event.target.checked)} /> I confirm this learner history is authorized for model training and that only pseudonymous learner groups will be stored.</label>
+        {performanceBuildError && <p className="error" role="alert">{performanceBuildError}</p>}
+        <div className="editor-actions"><button className="primary" disabled={busy || !onBuildPerformanceDataset} onClick={submitPerformanceDataset}>Build point-in-time performance dataset</button></div>
+        <p className="muted">If the sample or learner-group thresholds are not met, the API returns the actual counts and does not register a dataset. Use synthetic uploads only for pipeline experiments; they cannot qualify a production model.</p>
       </section>
 
       <section className="admin-panel">
