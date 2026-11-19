@@ -268,14 +268,23 @@ export async function createTest(
       topics.add(item.topic);
       topicsBySubject.set(item.subject, topics);
     }
-    const pool = practiceCandidates.filter((question) => {
-      if (!chosenSubjects.includes(question.subject)) return false;
+    const matchesPracticeFilters = (question: AttemptRow, subject: string): boolean => {
+      if (question.subject !== subject) return false;
       if (input.difficulty !== "any" && question.difficulty !== input.difficulty) return false;
-      const selectedTopicsForSubject = topicsBySubject.get(question.subject);
+      const selectedTopicsForSubject = topicsBySubject.get(subject);
       if (selectedTopicsForSubject) {
         return selectedTopicsForSubject.size === 0 || (question.topic !== null && selectedTopicsForSubject.has(question.topic));
       }
       return topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic));
+    };
+    const pool = chosenSubjects.flatMap((subject) => {
+      const practiceOnly = practiceCandidates.filter((question) => matchesPracticeFilters(question, subject));
+      if (practiceOnly.length > 0) return practiceOnly;
+      // If this subject has no dedicated practice questions after filters, reuse
+      // matching exam-bank questions rather than returning an empty paper.
+      const overlapFallback = candidates.filter((question) => matchesPracticeFilters(question, subject));
+      if (overlapFallback.length > 0) reusedExamPool = true;
+      return overlapFallback;
     });
     const requested = input.count ?? 20;
     const selectedById = new Set<number>();
