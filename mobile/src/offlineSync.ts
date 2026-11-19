@@ -16,10 +16,15 @@ export type OfflineSyncResult = {
   remaining: number;
 };
 
-export async function syncPendingSubmissions(
-  apiUrl: string,
-  token: string
-): Promise<OfflineSyncResult> {
+let activeSync: Promise<OfflineSyncResult> | null = null;
+
+export function syncPendingSubmissions(apiUrl: string, token: string): Promise<OfflineSyncResult> {
+  if (activeSync) return activeSync;
+  activeSync = runPendingSubmissionSync(apiUrl, token).finally(() => { activeSync = null; });
+  return activeSync;
+}
+
+async function runPendingSubmissionSync(apiUrl: string, token: string): Promise<OfflineSyncResult> {
   const pending = await getPendingSubmissions();
   let uploaded = 0;
   let failed = 0;
