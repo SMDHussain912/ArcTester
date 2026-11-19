@@ -430,7 +430,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
           {savingAnswers ? "Saving answer changes…" : answerSaveError ? "Answer not saved — select the option again to retry" : "All answer changes saved on this device"}
         </Text>
         {!!answerSaveError && <Text style={styles.error}>{answerSaveError}</Text>}
-        <Text style={styles.muted}>
+        <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
           Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.values(answers).filter((value) => value !== null && value !== undefined).length} answered
         </Text>
         <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
@@ -467,7 +467,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
           </View>
           <View style={styles.navigatorLegend}>
             <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>● Answered</Text>
-            <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
+            <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>○ Unanswered</Text>
           </View>
         </View>
         {activePackage.questions[currentQuestionIndex] && (
@@ -506,7 +506,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
             onPress={() => setCurrentQuestionIndex((index) => Math.max(0, index - 1))}
             style={[styles.secondaryButton, currentQuestionIndex === 0 && styles.disabled]}
           >
-            <Text style={styles.secondaryText}>Previous</Text>
+            <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Previous</Text>
           </TouchableOpacity>
           {currentQuestionIndex < activePackage.questions.length - 1 ? (
             <TouchableOpacity
@@ -535,7 +535,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
           onPress={() => void pauseExam()}
           style={[styles.secondaryButton, savingAnswers && styles.disabled]}
         >
-          <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
+          <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Save & exit · Resume later</Text>
         </TouchableOpacity>
       </View>
     );
@@ -567,8 +567,8 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
           <Text style={styles.link}>{syncing ? "Syncing…" : "Sync now"}</Text>
         </TouchableOpacity>
       </View>
-      {onExit && <Text style={styles.sectionTitle}>Assigned exams</Text>}
-      <Text style={styles.muted}>
+      {onExit && <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Assigned exams</Text>}
+      <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
         {online ? "Internet connected" : "Offline mode"} · {pendingCount} pending submission
         {pendingCount === 1 ? "" : "s"}
       </Text>
@@ -577,13 +577,13 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
       {activeAttemptIds.length > 0 && (
         <View style={[styles.assignment, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
           <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>Interrupted exam{activeAttemptIds.length === 1 ? "" : "s"} found</Text>
-          <Text style={styles.muted}>Your unfinished attempts and saved answers are ready to recover.</Text>
+          <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your unfinished attempts and saved answers are ready to recover.</Text>
           {activeAttemptIds.map((assignmentId) => {
             const examPackage = cachedPackages.find((item) => item.assignmentId === assignmentId);
             if (!examPackage) return null;
             return (
               <View key={assignmentId} style={{ gap: 8, marginTop: 10 }}>
-                <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
+                <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>{examPackage.title}</Text>
                 <TouchableOpacity
                   disabled={busyId !== null}
                   onPress={() => void startExam(assignmentId)}
@@ -604,7 +604,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
           return (
             <View key={assignment.id} style={[styles.assignment, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>{assignment.exam.title}</Text>
-              <Text style={styles.muted}>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
                 {assignment.questionCount} questions · {assignment.durationMinutes} minutes · v
                 {assignment.version}
               </Text>
@@ -630,7 +630,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
                     onPress={() => void downloadExam(assignment.id)}
                     style={styles.secondaryButton}
                   >
-                    <Text style={styles.secondaryText}>
+                    <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>
                       {busyId === assignment.id
                         ? "Working…"
                         : downloaded
@@ -658,8 +658,8 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, que
         )
         .map((examPackage) => (
           <View key={examPackage.assignmentId} style={styles.assignment}>
-            <Text style={styles.assignmentTitle}>{examPackage.title}</Text>
-            <Text style={styles.muted}>
+            <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>{examPackage.title}</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
               {examPackage.questions.length} questions · {examPackage.durationMinutes} minutes ·
               Saved offline
             </Text>
