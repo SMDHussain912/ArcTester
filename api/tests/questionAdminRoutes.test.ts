@@ -56,6 +56,11 @@ describe("question administration route contracts", () => {
   });
 
 
+  it("validates semantic search input and blocks student access", async () => {
+    expect((await getJson(`${server.baseUrl}/admin/question-embeddings/search?q=x`, adminCookie)).status).toBe(400);
+    expect((await getJson(`${server.baseUrl}/admin/question-embeddings/search?q=queue%20front`, studentCookie)).status).toBe(403);
+  });
+
   it("queues an admin-only question embedding rebuild and reports its progress", async () => {
     const queued = await postJson(`${server.baseUrl}/admin/question-embeddings/rebuild`, { batchSize: 4 }, adminCookie);
     expect(queued.status).toBe(202);

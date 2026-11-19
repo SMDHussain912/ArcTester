@@ -134,7 +134,7 @@ Similarity is a retrieval score, not a probability.
 
 **Evaluation:** Recall@5/10, Precision@5/10, nDCG@10, MRR, duplicate-detection precision/recall, per-subject retrieval quality, and latency/memory budget. Require human review of false-positive duplicate suggestions before any merge or deletion.
 
-**Deployment/integration:** an admin-only rebuild queue and API worker persist vectors in a dedicated PostgreSQL table; the worker loads the pinned ONNX model lazily and processes bounded batches with resumable leases. Automatic re-embedding on create/edit/import, a persisted similarity-search endpoint, human-reviewed retrieval evaluation, and latency benchmarks remain to be completed. Do not load the entire vector matrix into every API request. Vercel is only the UI; inference/indexing belongs on the API worker.
+**Deployment/integration:** an admin-only rebuild queue and API worker persist vectors in a dedicated PostgreSQL table; the worker loads the pinned ONNX model lazily and processes bounded batches with resumable leases. Create/edit/import now enqueue targeted re-embedding jobs, and the admin semantic-search endpoint compares against a bounded candidate window (up to 500 matching model/version vectors), never loading the full vector table per request. Human-reviewed retrieval evaluation, production-scale index strategy and latency benchmarks remain to be completed. Vercel is only the UI; inference/indexing belongs on the API worker.
 
 ### 2.6 Exam Anomaly Detection — flag unusual sessions for human review
 
@@ -203,7 +203,7 @@ This section records implementation progress separately from the qualification g
 | Random Forest | Bootstrap regression forest, randomized feature selection, prediction, feature importance, registered-dataset training and registry validation/inference | Same paired dataset and qualification work as Gradient Boosting |
 | Readiness Classifier | Three-class softmax classifier, strict artifact validation, multiclass registry inference and admin training endpoint | Larger authorized labeled dataset, group-separated calibration, false-READY evaluation and promotion workflow for multiclass models |
 | Adaptive Learning | Practice-paper selection ranks eligible questions using completed topic accuracy, question exposure, last-seen time and difficulty while preserving subject quotas; pseudonymous decision and answer-outcome logs are persisted | Randomized exploration with valid propensities, offline policy evaluation, larger-scale safeguards and monitoring |
-| Question Embeddings | Pinned multilingual MiniLM ONNX int8 encoder, 384-dimensional normalized vectors, source hashes, persistent PostgreSQL store and admin-triggered resumable rebuild worker | Automatic content-change re-embedding, similarity-search API, human-reviewed retrieval evaluation and latency benchmarks |
+| Question Embeddings | Pinned multilingual MiniLM ONNX int8 encoder, persistent 384-dimensional vectors, targeted create/edit/import re-embedding, resumable rebuild worker and bounded admin semantic search | Human-reviewed retrieval evaluation, production-scale index strategy and latency benchmarks |
 | Exam Anomaly Detection | CPU Isolation Forest fitting/scoring, telemetry completeness guard, reason codes and conservative human-review output | Server-side session telemetry aggregation, baseline dataset extraction, durable review queue and false-positive evaluation |
 
 ### Current training and safety behavior
