@@ -21,23 +21,6 @@
       <p>Preparing your workspace…</p>
     </div>
     <div id="root"></div>
-    <script type="module">
-      // Paint the standalone loading page first, animate it, then request the app bundle.
-      // The React boot bridge removes this screen only after the app has committed a render.
-      // An async IIFE keeps the generated HTML entry compatible with Electron's build target.
-      void (async () => {
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        await new Promise((resolve) => setTimeout(resolve, 1400));
-        try {
-          await import("/src/main.tsx");
-        } catch (error) {
-          console.error("ArcTester failed to load:", error);
-          const status = document.querySelector("#boot-screen p");
-          if (status) status.textContent = "ArcTester could not load. Check your connection and reload.";
-          const track = document.querySelector("#boot-screen .boot-track");
-          if (track) track.remove();
-        }
-      })();
-    </script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
