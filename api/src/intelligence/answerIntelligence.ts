@@ -59,7 +59,7 @@ function rememberExplanation(key: string, value: AnswerExplanation): void {
 }
 
 function parseJsonContent(content: string): GeneratedExplanation {
-  const cleaned = content.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
+  const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("AI provider returned no JSON explanation.");
