@@ -524,11 +524,6 @@ export async function submitTest(
     });
     if (claimed.count !== 1) throw conflict("This test was already submitted.");
 
-    await tx.attemptAnswer.updateMany({
-      where: { attemptId, questionId: { in: rows.map((row) => row.questionId) } },
-      // AttemptAnswer values differ per question, so write the immutable
-      // answer snapshots in bounded groups below rather than querying per row.
-    });
     for (const row of rows) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: row.questionId },
