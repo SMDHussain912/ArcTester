@@ -64,6 +64,30 @@ export function studyMaterialRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/study-materials/:id/offline", requireAuth, async (req, res, next) => {
+    try {
+      const id = z.string().min(1).max(64).parse(req.params.id);
+      const material = await db.studyMaterial.findFirst({
+        where: { id, status: "PUBLISHED", mimeType: { in: ["text/plain", "text/markdown"] } },
+      });
+      if (!material) return next(notFound("Published text or Markdown study material was not found."));
+      const bytes = Buffer.from(material.contentBase64, "base64");
+      if (bytes.byteLength !== material.sizeBytes) return next(badRequest("Stored study material failed its integrity check."));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json({
+        ok: true,
+        material: {
+          id: material.id, title: material.title, description: material.description,
+          subject: material.subject, topic: material.topic, fileName: material.fileName,
+          mimeType: material.mimeType, sizeBytes: material.sizeBytes, content: bytes.toString("utf8"),
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      next(error);
+    }
+  });
+
   router.get("/study-materials/:id/preview", requireAuth, async (req, res, next) => {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
