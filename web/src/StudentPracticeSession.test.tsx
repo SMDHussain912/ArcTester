@@ -46,7 +46,7 @@ describe("StudentPracticeSession", () => {
   expect(screen.getByRole("status")).toHaveTextContent("Offline — answers are saved on this device. Reconnect before submitting.");
  });
 
- it("warns when browser storage cannot preserve the practice session", () => {
+ it("shows server synchronization progress and pending retry state", () => {\n  const view = render(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} syncStatus="saving" onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);\n  expect(screen.getByRole("status")).toHaveTextContent("Saving answers to the server");\n  view.rerender(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} syncStatus="saved" onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);\n  expect(screen.getByRole("status")).toHaveTextContent("Answers synced to the server");\n  view.rerender(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} syncStatus="pending" onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);\n  expect(screen.getByRole("status")).toHaveTextContent("Server sync pending");\n });\n it("warns when browser storage cannot preserve the practice session", () => {
   render(<StudentPracticeSession test={test} answers={{}} remainingSeconds={null} busy={false} isOnline localSaveAvailable={false} onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Local recovery is unavailable");
  });
