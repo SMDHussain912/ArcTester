@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./learningStore";
+import { getOfflineLearningPackage, getOfflineStudyMaterials, saveOfflineLearningPackage, saveOfflineStudyMaterial, type OfflineLearningPackage, type OfflineStudyMaterial } from "./learningStore";
 import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -31,6 +31,9 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const [preferences, setPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
   const [savingPreference, setSavingPreference] = useState(false);
   const [offlinePackage, setOfflinePackage] = useState<OfflineLearningPackage | null>(null);
+  const [offlineMaterials, setOfflineMaterials] = useState<OfflineStudyMaterial[]>([]);
+  const [selectedOfflineMaterial, setSelectedOfflineMaterial] = useState<OfflineStudyMaterial | null>(null);
+  const [downloadingMaterialId, setDownloadingMaterialId] = useState<string | null>(null);
   const [downloadingBank, setDownloadingBank] = useState(false);
   const [showOfflineBank, setShowOfflineBank] = useState(false);
   const [offlineQuery, setOfflineQuery] = useState("");
@@ -63,10 +66,42 @@ export default function StudentLearningHub({ api, userId }: Props) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void load(); void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null)); }, [load, userId]);
+  useEffect(() => {
+    void load();
+    void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null));
+    void getOfflineStudyMaterials(userId).then(setOfflineMaterials).catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load saved study materials."));
+  }, [load, userId]);
   const updatePreference = useCallback(async (key: keyof NotificationPreferences, value: boolean) => { const previous = preferences; const next = { ...previous, [key]: value }; setPreferences(next); setSavingPreference(true); try { const result = await apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) }); setPreferences(result.preferences); } catch (cause) { setPreferences(previous); setError(cause instanceof Error ? cause.message : "Could not save notification preferences."); } finally { setSavingPreference(false); } }, [preferences]);
 
   const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [userId]);
+
+  const downloadStudyMaterial = useCallback(async (material: StudyMaterial) => {
+    if (material.mimeType !== "text/plain" && material.mimeType !== "text/markdown") {
+      setError("Offline reading currently supports text and Markdown files. PDF files remain available through the online download and preview endpoints.");
+      return;
+    }
+    setDownloadingMaterialId(material.id);
+    setError("");
+    try {
+      const response = await apiRef.current<{ material: Omit<OfflineStudyMaterial, "downloadedAt"> }>(
+        "/study-materials/" + encodeURIComponent(material.id) + "/offline",
+      );
+      const saved = await saveOfflineStudyMaterial(userId, {
+        ...response.material,
+        downloadedAt: new Date().toISOString(),
+      });
+      setOfflineMaterials((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setSelectedOfflineMaterial(saved);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save this study material for offline reading.");
+    } finally {
+      setDownloadingMaterialId(null);
+    }
+  }, [userId]);
+
+  const openOfflineMaterial = useCallback((material: OfflineStudyMaterial) => {
+    setSelectedOfflineMaterial(material);
+  }, []);
 
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
   const visibleMaterials = useMemo(() => searchStudyMaterials(studyMaterials, materialQuery), [studyMaterials, materialQuery]);
@@ -149,9 +184,36 @@ export default function StudentLearningHub({ api, userId }: Props) {
           <Text style={styles.cardTitle}>{material.title}</Text>
           <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>
           {!!material.description && <Text style={styles.body}>{material.description}</Text>}
+          {(material.mimeType === "text/plain" || material.mimeType === "text/markdown") ? (
+            <TouchableOpacity
+              onPress={() => {
+                const saved = offlineMaterials.find((item) => item.id === material.id);
+                if (saved) openOfflineMaterial(saved);
+                else void downloadStudyMaterial(material);
+              }}
+              disabled={downloadingMaterialId === material.id}
+              style={styles.refresh}
+            >
+              <Text style={styles.refreshText}>
+                {downloadingMaterialId === material.id ? "Saving…" : offlineMaterials.some((item) => item.id === material.id) ? "Read offline" : "Download for offline reading"}
+              </Text>
+            </TouchableOpacity>
+          ) : <Text style={styles.meta}>PDF preview/download requires an internet connection in this mobile app.</Text>}
         </View>
       ))}
       {!loading && visibleMaterials.length === 0 && <Text style={styles.empty}>{materialQuery ? "No study materials match this search." : "No published study materials are available yet."}</Text>}
+
+      {selectedOfflineMaterial ? (
+        <View style={styles.card}>
+          <Text style={styles.meta}>OFFLINE READER · {selectedOfflineMaterial.subject}{selectedOfflineMaterial.topic ? " · " + selectedOfflineMaterial.topic : ""}</Text>
+          <Text style={styles.cardTitle}>{selectedOfflineMaterial.title}</Text>
+          <Text style={styles.body}>{selectedOfflineMaterial.description}</Text>
+          <Text selectable style={styles.offlineContent}>{selectedOfflineMaterial.content}</Text>
+          <TouchableOpacity onPress={() => setSelectedOfflineMaterial(null)} style={styles.refresh}>
+            <Text style={styles.refreshText}>Close reader</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Concept library</Text>
       <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={styles.search} />
@@ -219,6 +281,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: "#172554", fontSize: 15, fontWeight: "900", flexShrink: 1 },
   priority: { color: "#2563eb", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
   body: { color: "#475569", lineHeight: 20, fontSize: 13 },
+  offlineContent: { color: "#334155", lineHeight: 23, fontSize: 13, paddingVertical: 10 },
   meta: { color: "#64748b", fontSize: 11, lineHeight: 17 },
   empty: { color: "#64748b", paddingVertical: 8, lineHeight: 20 },
   search: { backgroundColor: "#ffffff", borderColor: "#cbd5e1", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 12, color: "#172554" },
