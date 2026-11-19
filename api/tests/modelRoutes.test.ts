@@ -137,6 +137,55 @@ describe("admin model registry API", () => {
     expect((audit.body.events as Array<{ action: string }>).map((event) => event.action)).toContain("TRAINED");
   });
 
+  it("trains a multiclass readiness candidate only from attested grouped learner data", async () => {
+    const samples = Array.from({ length: 90 }, (_, index) => {
+      const group = Math.floor(index / 3);
+      const label = group % 3;
+      return {
+        groupId: group.toString(16).padStart(64, "0"),
+        features: { mastery_signal: label * 0.45 + (index % 3) * 0.001, completed_attempts: 10 + index % 4 },
+        target: label,
+      };
+    });
+    const registered = await request("/admin/model-datasets", "POST", {
+      name: "readiness-multiclass-training-fixture",
+      task: "regression",
+      targetColumn: "readiness_label",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+      samples,
+      sourceDescription: "Attested real-anonymized learner snapshots with keyed pseudonymous learner groups for readiness training tests.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(registered.status).toBe(201);
+    const datasetId = (registered.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${datasetId}/train-readiness`, "POST", {
+      modelId: "readiness-fixture",
+      seed: 42,
+    });
+    expect(trained.status).toBe(201);
+    expect(trained.body.promoted).toBe(false);
+    expect(trained.body.model).toMatchObject({
+      modelId: "readiness-fixture-exam-readiness-softmax",
+      version: 1,
+      algorithm: "exam-readiness-softmax",
+      task: "multiclass-classification",
+      isActive: false,
+    });
+    const listed = await request("/admin/models");
+    const candidates = (listed.body.models as Array<{ modelId: string; isActive: boolean }>)
+      .filter((model) => model.modelId === "readiness-fixture-exam-readiness-softmax");
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.isActive).toBe(false);
+    const audit = await request("/admin/models/readiness-fixture-exam-readiness-softmax/audit");
+    expect(audit.status).toBe(200);
+    expect((audit.body.events as Array<{ action: string; details: Record<string, unknown> }>)[0])
+      .toMatchObject({ action: "TRAINED", details: { learnerGroups: 30, evaluationRequired: true } });
+  });
+
   it("rejects evaluation datasets reused to train either compared model", async () => {
     const samples = Array.from({ length: 60 }, (_, index) => ({
       features: { practice_score: index },
