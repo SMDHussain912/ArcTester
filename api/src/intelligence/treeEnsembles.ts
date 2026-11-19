@@ -179,3 +179,52 @@ export function predictGradientBoosting(model: GradientBoostingArtifact, feature
   if (model.modelType !== "gradient-boosting-regressor" || model.version !== 1) throw new Error("Gradient boosting artifact is invalid");
   return model.initialValue + model.learningRate * model.trees.reduce((sum, tree) => sum + predictRegressionTree(tree, features), 0);
 }
+
+import { z } from "zod";
+
+const TreeNodeSchema: z.ZodType<RegressionTreeNode> = z.lazy(() => z.object({
+  value: z.number().finite(),
+  featureIndex: z.number().int().nonnegative().optional(),
+  threshold: z.number().finite().optional(),
+  left: TreeNodeSchema.optional(),
+  right: TreeNodeSchema.optional(),
+}).strict().superRefine((node, context) => {
+  const internal = node.featureIndex !== undefined;
+  if (internal && (node.threshold === undefined || !node.left || !node.right)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Internal tree nodes require a split and two children" });
+  }
+  if (!internal && (node.threshold !== undefined || node.left || node.right)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Leaf tree nodes cannot contain split children" });
+  }
+}) as z.ZodType<RegressionTreeNode>);
+const TreeSchema = z.object({
+  root: TreeNodeSchema,
+  featureCount: z.number().int().positive(),
+}).strict();
+const ForestSchema = z.object({
+  modelType: z.literal("random-forest-regressor"), version: z.literal(1),
+  trees: z.array(TreeSchema).min(1).max(256),
+  featureImportance: z.array(z.number().finite().nonnegative()),
+  featureCount: z.number().int().positive(),
+}).strict().superRefine((model, context) => {
+  if (model.featureImportance.length !== model.featureCount || model.trees.some((tree) => tree.featureCount !== model.featureCount)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Random forest feature dimensions do not match" });
+  }
+});
+const GradientSchema = z.object({
+  modelType: z.literal("gradient-boosting-regressor"), version: z.literal(1),
+  initialValue: z.number().finite(), learningRate: z.number().finite().positive().max(1),
+  trees: z.array(TreeSchema).min(1).max(300),
+  featureImportance: z.array(z.number().finite().nonnegative()),
+  featureCount: z.number().int().positive(),
+}).strict().superRefine((model, context) => {
+  if (model.featureImportance.length !== model.featureCount || model.trees.some((tree) => tree.featureCount !== model.featureCount)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Gradient boosting feature dimensions do not match" });
+  }
+});
+export function validateRandomForestArtifact(input: unknown): RandomForestArtifact {
+  return ForestSchema.parse(input);
+}
+export function validateGradientBoostingArtifact(input: unknown): GradientBoostingArtifact {
+  return GradientSchema.parse(input);
+}
