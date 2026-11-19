@@ -789,14 +789,14 @@ export default function App() {
           </View>
           <View>
             <Text style={styles.brand}>ArcTester</Text>
-            <Text style={styles.muted}>Practice with purpose</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice with purpose</Text>
           </View>
         </View>
 
         {!user ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <Text style={styles.heading}>{register ? "Create your account" : "Welcome back"}</Text>
-            <Text style={styles.muted}>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{register ? "Create your account" : "Welcome back"}</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
               {register
                 ? "Enter the invitation code shared by your admin."
                 : "Sign in to continue your preparation."}
@@ -808,7 +808,7 @@ export default function App() {
               placeholderTextColor="#8b95a7"
               value={email}
               onChangeText={setEmail}
-              style={styles.input}
+              style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
             />
             <TextInput
               secureTextEntry
@@ -816,7 +816,7 @@ export default function App() {
               placeholderTextColor="#8b95a7"
               value={password}
               onChangeText={setPassword}
-              style={styles.input}
+              style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
             />
             {register && (
               <TextInput
@@ -825,7 +825,7 @@ export default function App() {
                 placeholderTextColor="#8b95a7"
                 value={invitationToken}
                 onChangeText={setInvitationToken}
-                style={styles.input}
+                style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
               />
             )}
             <TouchableOpacity disabled={busy} onPress={authenticate} style={styles.primary}>
@@ -845,21 +845,21 @@ export default function App() {
           <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : result ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <Text style={styles.heading}>Practice result</Text>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice result</Text>
             <Text style={styles.statValue}>{result.score} / {result.total}</Text>
-            <Text style={styles.muted}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
-            <Text style={styles.muted}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
             {result.breakdown.map((item) => (
-              <View key={item.subject} style={styles.announcementCard}>
-                <Text style={styles.announcementTitle}>{item.subject}</Text>
-                <Text style={styles.muted}>{item.correct} correct · {item.incorrect} incorrect · {item.unanswered} unanswered</Text>
+              <View key={item.subject} style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+                <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>{item.subject}</Text>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.correct} correct · {item.incorrect} incorrect · {item.unanswered} unanswered</Text>
               </View>
             ))}
-            <Text style={styles.sectionTitle}>Answer review</Text>
+            <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Answer review</Text>
             {result.questions.map((question, index) => (
-              <View key={question.questionId} style={styles.announcementCard}>
-                <Text style={styles.announcementTitle}>Question {index + 1} · {question.subject}</Text>
-                <Text style={styles.announcementMessage}>{question.text}</Text>
+              <View key={question.questionId} style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+                <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>Question {index + 1} · {question.subject}</Text>
+                <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{question.text}</Text>
                 {question.options.map((option, optionIndex) => (
                   <Text key={optionIndex} style={{
                     color: optionIndex === question.correctIndex ? "#15803d" : optionIndex === question.selectedIndex ? "#b42318" : "#526078",
@@ -880,8 +880,8 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <View style={styles.examHeader}>
               <View>
-                <Text style={styles.heading}>Practice session</Text>
-                <Text style={styles.muted}>Question {currentQuestionIndex + 1} of {test.questions.length}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice session</Text>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question {currentQuestionIndex + 1} of {test.questions.length}</Text>
               </View>
               <View style={[styles.timerPill, secondsLeft === 0 && styles.timerExpired]}>
                 <MaterialCommunityIcons name="timer-outline" size={17} color={secondsLeft === 0 ? "#b42318" : "#2563eb"} />
@@ -1015,8 +1015,8 @@ export default function App() {
                 <View><Text style={[styles.subjectName, darkMode && { color: "#f1f5f9" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.count} questions available</Text></View><Text style={styles.arrow}>›</Text>
               </TouchableOpacity>
             ))}
-            {!bank && <Text style={styles.muted}>Loading question bank…</Text>}
-            {bank && bank.total === 0 && <View style={styles.announcementCard}><Text style={styles.announcementTitle}>No practice questions found</Text><Text style={styles.muted}>The server question bank currently reports zero questions. Refresh the bank or ask an administrator to publish/import questions.</Text><TouchableOpacity onPress={() => void refreshQuestionBank()} disabled={busy} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity></View>}
+            {!bank && <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading question bank…</Text>}
+            {bank && bank.total === 0 && <View style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>No practice questions found</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>The server question bank currently reports zero questions. Refresh the bank or ask an administrator to publish/import questions.</Text><TouchableOpacity onPress={() => void refreshQuestionBank()} disabled={busy} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity></View>}
             {bank && bank.total > 0 && <TouchableOpacity disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onPress={() => startPractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Loading…" : "Start mixed practice · 10 questions"}</Text></TouchableOpacity>}
           </Animated.View>
         ) : activeTab === "learn" ? (
@@ -1041,11 +1041,11 @@ export default function App() {
             <Text style={[styles.muted, { textAlign: "center" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
               <Text style={styles.profileLabel}>ACCOUNT ID</Text>
-              <Text style={styles.profileValue}>{user.id}</Text>
+              <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.id}</Text>
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.profileLabel}>QUESTION BANK</Text>
-              <Text style={styles.profileValue}>{bank?.total ?? "Loading…"} questions</Text>
+              <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "Loading…"} questions</Text>
             </View>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
               <MaterialCommunityIcons name="logout" size={18} color="#b42318" />
@@ -1055,22 +1055,22 @@ export default function App() {
         ) : (
           <>
             <Animated.View style={[styles.hero, animatedEntrance(entrance)]}>
-              <Text style={styles.muted}>SIGNED IN AS</Text>
-              <Text style={styles.heading}>{user.email}</Text>
-              <Text style={styles.muted}>Your next focused session starts here.</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>SIGNED IN AS</Text>
+              <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your next focused session starts here.</Text>
             </Animated.View>
             <Animated.View style={[styles.stats, { opacity: statsEntrance, transform: [{ translateY: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }, { scale: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
-              <View style={styles.stat}>
+              <View style={[styles.stat, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                 <Text style={styles.statValue}>{bank?.total ?? "—"}</Text>
-                <Text style={styles.muted}>Questions</Text>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Questions</Text>
               </View>
-              <View style={styles.stat}>
+              <View style={[styles.stat, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                 <Text style={styles.statValue}>{bank?.subjects.length ?? "—"}</Text>
-                <Text style={styles.muted}>Subjects</Text>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
             <View style={styles.announcementHeader}>
-              <Text style={styles.sectionTitle}>Announcements</Text>
+              <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Announcements</Text>
               <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
                 <Text style={styles.refreshText}>
                   {refreshingAnnouncements ? "Refreshing…" : "Refresh"}
@@ -1078,14 +1078,14 @@ export default function App() {
               </TouchableOpacity>
             </View>
             {announcements.length === 0 ? (
-              <View style={styles.announcementCard}>
-                <Text style={styles.muted}>No announcements right now.</Text>
+              <View style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>No announcements right now.</Text>
               </View>
             ) : (
               announcements.map((announcement) => (
                 <Animated.View key={announcement.id} style={[styles.announcementCard, animatedEntrance(entrance)]}>
-                  <Text style={styles.announcementTitle}>{announcement.title}</Text>
-                  <Text style={styles.announcementMessage}>{announcement.message}</Text>
+                  <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>{announcement.title}</Text>
+                  <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{announcement.message}</Text>
                   <Text style={styles.announcementDate}>
                     {new Date(announcement.publishedAt).toLocaleString()}
                   </Text>
@@ -1100,7 +1100,7 @@ export default function App() {
               ))
             )}
             <View style={styles.announcementHeader}>
-              <Text style={styles.sectionTitle}>
+              <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>
                 Notifications{unreadNotificationCount > 0 ? ` · ${unreadNotificationCount} unread` : ""}
               </Text>
               <TouchableOpacity onPress={refreshNotifications} disabled={refreshingNotifications}>
@@ -1110,8 +1110,8 @@ export default function App() {
               </TouchableOpacity>
             </View>
             {notifications.length === 0 ? (
-              <View style={styles.announcementCard}>
-                <Text style={styles.muted}>No notifications right now.</Text>
+              <View style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>No notifications right now.</Text>
               </View>
             ) : (
               notifications.map((notification) => (
@@ -1123,10 +1123,10 @@ export default function App() {
                   accessibilityLabel={`${notification.readAt ? "Read" : "Unread"} notification: ${notification.title}`}
                 >
                   <View style={styles.announcementHeader}>
-                    <Text style={styles.announcementTitle}>{notification.title}</Text>
+                    <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>{notification.title}</Text>
                     {!notification.readAt ? <Text style={styles.notificationBadge}>NEW</Text> : null}
                   </View>
-                  <Text style={styles.announcementMessage}>{notification.message}</Text>
+                  <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{notification.message}</Text>
                   <Text style={styles.announcementDate}>{new Date(notification.createdAt).toLocaleString()}</Text>
                 </TouchableOpacity>
               ))
@@ -1142,16 +1142,16 @@ export default function App() {
             >
               <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
             </TouchableOpacity>
-            <Text style={styles.sectionTitle}>Practice by subject</Text>
+            <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Practice by subject</Text>
             {bank?.subjects.map((item) => (
               <TouchableOpacity
                 key={item.subject}
                 onPress={() => startPractice(item.subject)}
-                style={styles.subject}
+                style={[styles.subject, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}
               >
                 <View>
                   <Text style={styles.subjectName}>{item.subject}</Text>
-                  <Text style={styles.muted}>{item.count} questions</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.count} questions</Text>
                 </View>
                 <Text style={styles.arrow}>›</Text>
               </TouchableOpacity>
