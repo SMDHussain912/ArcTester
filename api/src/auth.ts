@@ -89,10 +89,32 @@ export function verifyJwt(token: string): Record<string, unknown> {
     throw new Error("bad signature");
   }
 
-  const payload = JSON.parse(parseBase64Url(body).toString("utf8")) as Record<string, unknown>;
-  if (typeof payload.exp === "number" && payload.exp <= nowSeconds()) {
-    throw new Error("expired token");
+  let parsedHeader: unknown;
+  try {
+    parsedHeader = JSON.parse(parseBase64Url(header).toString("utf8"));
+  } catch {
+    throw new Error("malformed token header");
   }
+  if (
+    !parsedHeader || typeof parsedHeader !== "object" ||
+    (parsedHeader as Record<string, unknown>).alg !== "HS256" ||
+    (parsedHeader as Record<string, unknown>).typ !== "JWT"
+  ) {
+    throw new Error("unsupported JWT header");
+  }
+
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(parseBase64Url(body).toString("utf8"));
+  } catch {
+    throw new Error("malformed token payload");
+  }
+  if (!parsedPayload || typeof parsedPayload !== "object" || Array.isArray(parsedPayload)) {
+    throw new Error("malformed token payload");
+  }
+  const payload = parsedPayload as Record<string, unknown>;
+  if (!Number.isSafeInteger(payload.exp)) throw new Error("missing or invalid token expiry");
+  if ((payload.exp as number) <= nowSeconds()) throw new Error("expired token");
   return payload;
 }
 

@@ -74,7 +74,7 @@ const material = {
   topic: "Normalization",
   fileName: "normalization.md",
   mimeType: "text/markdown" as const,
-  sizeBytes: 38,
+  sizeBytes: 39,
   content: "# Normalization\nFunctional dependencies",
   downloadedAt: "2026-11-19T08:00:00.000Z",
 };

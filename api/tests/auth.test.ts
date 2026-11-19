@@ -1,6 +1,7 @@
+import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
-import { validateJwtSecret } from "../src/auth.js";
+import { signJwt, validateJwtSecret, verifyJwt } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
 import {
   issueTestInvitation,
@@ -63,6 +64,21 @@ describe("JWT secret configuration", () => {
 
   it("accepts a sufficiently strong production secret", () => {
     expect(() => validateJwtSecret("a".repeat(64), true)).not.toThrow();
+  });
+
+
+  it("requires the supported HS256 header and a valid expiry claim", () => {
+    const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const signed = (header: unknown, payload: unknown) => {
+      const message = encode(header) + "." + encode(payload);
+      const signature = createHmac("sha256", "dev-secret-change-me-in-production").update(message).digest("base64url");
+      return message + "." + signature;
+    };
+    const now = Math.floor(Date.now() / 1000);
+    expect(() => verifyJwt(signJwt({ sub: "1" }, -1))).toThrow(/expired token/i);
+    expect(() => verifyJwt(signed({ alg: "none", typ: "JWT" }, { sub: "1", exp: now + 60 }))).toThrow(/unsupported jwt header/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1" }))).toThrow(/missing or invalid token expiry/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1", exp: now + 60 }))).not.toThrow();
   });
 
   it("does not require production-strength secrets in development or tests", () => {
