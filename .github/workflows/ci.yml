@@ -180,6 +180,15 @@ jobs:
       - name: Verify migrations
         run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
 
+      - name: Bootstrap isolated E2E administrator
+        run: npm run admin:bootstrap --workspace=api
+        env:
+          BOOTSTRAP_ADMIN_EMAIL: admin@arctester.test
+          BOOTSTRAP_ADMIN_PASSWORD: ArcTester-CI-Admin-2026!
+
+      - name: Seed the question bank
+        run: npm run prisma:seed --workspace=api
+
       - name: Start API server
         run: |
           npm run dev --workspace=api &
