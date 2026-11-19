@@ -5,8 +5,8 @@ export type PracticeSessionTest = {
   questions: { id: number; subject: string; topic: string | null; text: string; options: string[] }[];
   warnings: string[];
 };
-type Props = { test: PracticeSessionTest; answers: Record<number, number>; remainingSeconds: number | null; busy: boolean; onLeave: () => void; onSelectAnswer: (questionId: number, selectedIndex: number) => void; onSubmit: () => void };
-export default function StudentPracticeSession({ test, answers, remainingSeconds, busy, onLeave, onSelectAnswer, onSubmit }: Props) {
+type Props = { test: PracticeSessionTest; answers: Record<number, number>; remainingSeconds: number | null; busy: boolean; isOnline?: boolean; localSaveAvailable?: boolean; onLeave: () => void; onSelectAnswer: (questionId: number, selectedIndex: number) => void; onSubmit: () => void };
+export default function StudentPracticeSession({ test, answers, remainingSeconds, busy, isOnline = true, localSaveAvailable = true, onLeave, onSelectAnswer, onSubmit }: Props) {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const answeredCount = test.questions.filter((question) => answers[question.id] !== undefined).length;
   const currentQuestion = test.questions[activeQuestionIndex];
@@ -22,6 +22,13 @@ export default function StudentPracticeSession({ test, answers, remainingSeconds
   return (
     <section>
       <div className="page-heading"><div><p className="eyebrow">PRACTICE SESSION</p><h1>Stay focused.</h1><p className="muted">{test.questions.length} questions · {answeredCount} answered{timer}</p></div><button type="button" className="ghost" disabled={busy} onClick={onLeave}>Leave session</button></div>
+      <p className={localSaveAvailable ? "practice-save-status" : "practice-save-status unavailable"} role="status">
+        {!localSaveAvailable
+          ? "Local recovery is unavailable. Keep this tab open and submit before closing it."
+          : isOnline
+            ? "Saved on this device. Your answers are sent to the server when you submit."
+            : "Offline — answers are saved on this device. Reconnect before submitting."}
+      </p>
       {test.warnings.map((warning) => <p className="notice" key={warning}>{warning}</p>)}
       <section className="panel exam-question-navigator" aria-label="Practice question navigator">
         <div className="exam-progress-heading"><strong>Question progress</strong><span>{answeredCount} / {test.questions.length} answered · {test.questions.length - answeredCount} remaining</span></div>
