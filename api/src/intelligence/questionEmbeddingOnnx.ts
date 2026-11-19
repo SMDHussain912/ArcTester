@@ -12,7 +12,7 @@ type FeatureExtractor = (
 export type FeaturePipelineFactory = (
   task: "feature-extraction",
   modelId: string,
-  options: { revision: string; dtype: "q8"; device: "cpu"; cache_dir?: string; local_files_only?: boolean },
+  options: { revision: string; dtype: "int8"; device: "cpu"; cache_dir?: string; local_files_only?: boolean },
 ) => Promise<FeatureExtractor>;
 
 export interface OnnxQuestionEmbeddingOptions {
@@ -37,12 +37,12 @@ export async function createOnnxQuestionEmbeddingEncoder(
   const factory = options.pipelineFactory ?? defaultPipelineFactory;
   const extractor = await factory("feature-extraction", QUESTION_EMBEDDING_MODEL_ID, {
     revision: QUESTION_EMBEDDING_MODEL_REVISION,
-    dtype: "q8", device: "cpu",
+    dtype: "int8", device: "cpu",
     ...(options.cacheDir ? { cache_dir: options.cacheDir } : {}),
     ...(options.localFilesOnly !== undefined ? { local_files_only: options.localFilesOnly } : {}),
   });
   return {
-    modelName: `${QUESTION_EMBEDDING_MODEL_ID}@${QUESTION_EMBEDDING_MODEL_REVISION}:onnx-q8`,
+    modelName: `${QUESTION_EMBEDDING_MODEL_ID}@${QUESTION_EMBEDDING_MODEL_REVISION}:onnx-int8`,
     modelVersion: QUESTION_EMBEDDING_MODEL_VERSION,
     async encode(text: string): Promise<number[]> {
       if (!text.trim()) throw new Error("Question embedding text cannot be empty.");
