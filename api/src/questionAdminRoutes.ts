@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
+import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
 import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
 import { getOnnxQuestionEmbeddingEncoder } from "./intelligence/questionEmbeddingOnnx.js";
 import { searchPersistedQuestionEmbeddings } from "./intelligence/questionEmbeddingSearch.js";
@@ -25,7 +25,7 @@ export function questionAdminRouter(db: PrismaClient): Router {
   router.use("/admin", requireAuth, requireAdmin(db));
 
 
-  router.get("/admin/question-embeddings/status", async (_req, res, next) => {  router.get("/admin/question-embeddings/search", async (req, res, next) => {
+  router.get("/admin/question-embeddings/search", async (req, res, next) => {
     try {
       const input = z.object({
         q: z.string().trim().min(3).max(1000),
