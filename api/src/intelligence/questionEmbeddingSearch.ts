@@ -21,6 +21,10 @@ export async function searchPersistedQuestionEmbeddings(
   if (normalizedQuery.length < 3 || normalizedQuery.length > 1000) {
     throw new Error("Semantic search query must contain 3 to 1,000 characters.");
   }
+  const limit = options.limit ?? 10;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw new Error("Semantic search limit must be from 1 to 50.");
+  }
   const candidateLimit = options.candidateLimit ?? 500;
   if (!Number.isInteger(candidateLimit) || candidateLimit < 1 || candidateLimit > 500) {
     throw new Error("Semantic search candidateLimit must be from 1 to 500.");
@@ -60,7 +64,7 @@ export async function searchPersistedQuestionEmbeddings(
     } catch { /* Ignore corrupt or obsolete vectors; report only valid matches. */ }
   }
   const queryVector = await encoder.encode(normalizedQuery);
-  const result = index.search(queryVector, { limit: options.limit ?? 10 });
+  const result = index.search(queryVector, { limit });
   const questionById = new Map(records.map((record) => [record.questionId, record.question]));
   return {
     ...result,
