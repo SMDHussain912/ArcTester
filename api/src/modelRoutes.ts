@@ -54,6 +54,7 @@ const TrainingSchema = z.object({
 }).strict();
 
 const EvaluationSchema = z.object({
+  baselineModelId: ModelIdSchema.optional(),
   baselineVersion: z.number().int().positive(),
   datasetId: z.string().min(1).max(64),
 }).strict();
@@ -883,10 +884,17 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const modelId = ModelIdSchema.parse(req.params.modelId);
       const version = VersionSchema.parse(req.params.version);
       const input = EvaluationSchema.parse(req.body);
-      if (input.baselineVersion === version) return next(badRequest("Candidate and baseline versions must differ."));
+      const baselineModelId = input.baselineModelId ?? modelId;
+      if (baselineModelId === modelId && input.baselineVersion === version) {
+        return next(badRequest("Candidate and baseline versions must differ."));
+      }
+      if ((modelId === "performance-gradient-boosting" || modelId === "performance-random-forest") &&
+          baselineModelId !== "performance-multiple-linear-regression") {
+        return next(badRequest("Performance Gradient Boosting and Random Forest candidates must be evaluated against the registered linear-regression baseline."));
+      }
       const [candidateRow, baselineRow, dataset] = await Promise.all([
         db.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } }),
-        db.registeredModel.findUnique({ where: { modelId_version: { modelId, version: input.baselineVersion } } }),
+        db.registeredModel.findUnique({ where: { modelId_version: { modelId: baselineModelId, version: input.baselineVersion } } }),
         db.modelDataset.findUnique({ where: { id: input.datasetId } }),
       ]);
       if (!candidateRow || !baselineRow) return next(notFound("Candidate or baseline model version was not found."));
@@ -909,7 +917,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (trainingDatasetIds.length) {
         const trainingDatasets = await db.modelDataset.findMany({
           where: { id: { in: trainingDatasetIds } },
-          select: { id: true, datasetKind: true, samplesJson: true },
+          select: { id: true, datasetKind: true, sourceAttested: true, samplesJson: true },
         });
         const evaluationSamples = JSON.parse(dataset.samplesJson) as Array<{ groupId?: string }>;
         const evaluationGroupRows = evaluationSamples.flatMap((sample) =>
@@ -942,9 +950,32 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         return next(badRequest("Evaluation dataset task or feature schema does not match the model."));
       }
       const samples = JSON.parse(dataset.samplesJson) as Array<{
-        features: Record<string, number | string>; target: number; groupId?: string;
+        features: Record<string, number | string>;
+        target: number;
+        groupId?: string;
+        occurredAt?: string;
+        unansweredCount?: number;
       }>;
+      if (modelId === "performance-gradient-boosting" || modelId === "performance-random-forest") {
+        const evaluationGroups = new Set(samples.map((sample) => sample.groupId).filter((value): value is string =>
+          typeof value === "string" && /^[a-f0-9]{64}$/.test(value)));
+        const trainingDatasets = await db.modelDataset.findMany({
+          where: { id: { in: [candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter((id): id is string => Boolean(id)) } },
+          select: { datasetKind: true, sourceAttested: true },
+        });
+        if (dataset.task !== "regression" || dataset.datasetKind !== "real-anonymized" ||
+            samples.length < 200 || evaluationGroups.size < 50 ||
+            samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+              typeof sample.occurredAt !== "string" || !Number.isFinite(Date.parse(sample.occurredAt)) ||
+              !Number.isInteger(sample.unansweredCount) || sample.unansweredCount! < 0 ||
+              !Number.isFinite(sample.target) || sample.target < 0 || sample.target > 1) ||
+            trainingDatasets.length !== new Set([candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter(Boolean)).size ||
+            trainingDatasets.some((trainingDataset) => trainingDataset.datasetKind !== "real-anonymized" || !trainingDataset.sourceAttested)) {
+          return next(conflict("Performance evaluation requires an attested real-anonymized holdout with 200+ timestamped snapshots across 50+ independent learner groups, separate from eligible training data."));
+        }
+      }
       const report = evaluateRegistryCandidate(candidate, baseline, samples, dataset.name);
+      const reportWithBaseline = { ...report, baselineModelId };
       await db.$transaction(async (tx) => {
         await tx.modelEvaluation.create({
           data: {
@@ -959,6 +990,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             metricsJson: JSON.stringify({
               candidate: report.candidateMetrics,
               baseline: report.baselineMetrics,
+              baselineModelId,
               acceptanceRule: report.acceptanceRule,
             }),
             status: report.status,
@@ -969,6 +1001,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             actorId: req.user!.id, modelId, version, action: "EVALUATED",
             details: JSON.stringify({
               status: report.status,
+              baselineModelId,
               baselineVersion: report.baselineVersion,
               evaluationDataset: report.evaluationDataset,
               datasetId: dataset.id,
@@ -978,7 +1011,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           },
         });
       });
-      res.json({ ok: true, report });
+      res.json({ ok: true, report: reportWithBaseline });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
       if (error instanceof Error) return next(badRequest(error.message));
@@ -1117,7 +1150,19 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               })
               : null,
             tx.registeredModel.findUnique({
-              where: { modelId_version: { modelId, version: evaluation.baselineVersion } },
+              where: {
+                modelId_version: {
+                  modelId: (() => {
+                    try {
+                      const details = JSON.parse(evaluation.metricsJson) as { baselineModelId?: string };
+                      return details.baselineModelId ?? modelId;
+                    } catch {
+                      return modelId;
+                    }
+                  })(),
+                  version: evaluation.baselineVersion,
+                },
+              },
               select: { trainingDatasetId: true },
             }),
           ]);
