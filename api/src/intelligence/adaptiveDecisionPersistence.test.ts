@@ -13,19 +13,29 @@ const selection: AdaptiveSelection = {
   fallbackUsed: false,
 };
 
-function database() {
+type MockDatabase = {
+  adaptiveDecisionLog: {
+    createMany: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+};
+
+function database(): MockDatabase {
   return {
     adaptiveDecisionLog: {
       createMany: vi.fn().mockResolvedValue({ count: 2 }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-  } as never;
+  };
 }
+
+const persistenceDb = (db: MockDatabase) =>
+  db as unknown as Parameters<typeof persistAdaptiveSelection>[0];
 
 describe("adaptive decision persistence", () => {
   it("stores selected questions with the full eligible set and privacy-safe learner grouping", async () => {
     const db = database();
-    const result = await persistAdaptiveSelection(db, {
+    const result = await persistAdaptiveSelection(persistenceDb(db), {
       attemptId: 7,
       learnerGroupId: "a".repeat(64),
       eligibleQuestionIds: ["12", "13", "14"],
@@ -35,7 +45,7 @@ describe("adaptive decision persistence", () => {
     });
 
     expect(result).toEqual({ created: 2, skipped: 0 });
-    const call = (db as any).adaptiveDecisionLog.createMany.mock.calls[0][0];
+    const call = db.adaptiveDecisionLog.createMany.mock.calls[0][0];
     expect(call.skipDuplicates).toBe(true);
     expect(call.data).toHaveLength(2);
     expect(call.data[0]).toMatchObject({
@@ -80,7 +90,7 @@ describe("adaptive decision persistence", () => {
 
   it("records a correct or incorrect answer once and leaves unmatched decisions pending", async () => {
     const db = database();
-    expect(await recordAdaptiveAnswerOutcome(db, {
+    expect(await recordAdaptiveAnswerOutcome(persistenceDb(db), {
       attemptId: 7, questionId: 12, isCorrect: true,
     })).toBe(true);
     const call = (db as any).adaptiveDecisionLog.updateMany.mock.calls[0][0];
