@@ -277,7 +277,10 @@ export async function createTest(
             topic: question.topic ?? "Uncategorized",
             difficulty: question.difficulty === "easy" ? 1 : question.difficulty === "hard" ? 5 : 3,
             exposureCount: stats[String(question.id)]?.seen ?? 0,
-            lastSeenAt: stats[String(question.id)]?.lastSeen?.toISOString() ?? null,
+            lastSeenAt: (() => {
+              const lastSeen = stats[String(question.id)]?.lastSeen;
+              return lastSeen == null ? null : lastSeen instanceof Date ? lastSeen.toISOString() : new Date(lastSeen).toISOString();
+            })(),
           })),
           topicStates: adaptiveTopicStates,
           questionCount: Math.min(quota, available.length, remaining - added),
