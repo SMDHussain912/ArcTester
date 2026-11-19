@@ -37,7 +37,7 @@ async function database(userId: string) {
   return db;
 }
 
-function validatePackage(value: unknown): OfflineLearningPackage {
+export function validateOfflineLearningPackage(value: unknown): OfflineLearningPackage {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("The offline question bank is invalid.");
   }
@@ -67,7 +67,7 @@ function validatePackage(value: unknown): OfflineLearningPackage {
 }
 
 export async function saveOfflineLearningPackage(userId: string, value: unknown): Promise<void> {
-  const pack = validatePackage(value);
+  const pack = validateOfflineLearningPackage(value);
   const db = await database(userId);
   await db.runAsync(
     "INSERT INTO offline_learning_package (id, payload_json, downloaded_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET payload_json = excluded.payload_json, downloaded_at = excluded.downloaded_at",
@@ -82,7 +82,7 @@ export async function getOfflineLearningPackage(userId: string): Promise<Offline
     "SELECT payload_json FROM offline_learning_package WHERE id = 1",
   );
   if (!row) return null;
-  try { return validatePackage(JSON.parse(row.payload_json)); }
+  try { return validateOfflineLearningPackage(JSON.parse(row.payload_json)); }
   catch { throw new Error("The saved offline question bank is damaged. Download it again."); }
 }
 
