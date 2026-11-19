@@ -664,6 +664,124 @@ describe("admin model registry API", () => {
     expect(String(insufficient.body.error)).toContain("improving and declining trajectories");
   });
 
+  it("trains canonical performance models with chronological splits and evaluates against the linear baseline", async () => {
+    const featureSchema = [
+      "completed_attempts",
+      "previous_accuracy",
+      "recent_accuracy_mean_3",
+      "overall_accuracy_mean",
+      "previous_question_count",
+      "recent_accuracy_slope_3",
+      "topic_coverage_ratio",
+      "topic_coverage_ratio_missing",
+      "days_since_last_attempt",
+      "subject_accuracy_mathematics_12345678",
+      "subject_accuracy_mathematics_12345678_missing",
+    ].map((name) => ({ name, type: "numeric" as const }));
+    const featureNames = featureSchema.map((feature) => feature.name);
+    const trainingSamples = Array.from({ length: 50 }, (_, groupIndex) =>
+      Array.from({ length: 11 }, (_, sampleIndex) => {
+        const improving = groupIndex < 25;
+        const target = improving ? 0.2 + sampleIndex * 0.05 : 0.8 - sampleIndex * 0.05;
+        const features = Object.fromEntries(featureNames.map((name) => [name, ({
+          completed_attempts: sampleIndex + 3,
+          previous_accuracy: Math.max(0, target - 0.05),
+          recent_accuracy_mean_3: Math.max(0, target - 0.1),
+          overall_accuracy_mean: target,
+          previous_question_count: 10,
+          recent_accuracy_slope_3: improving ? 0.04 : -0.04,
+          topic_coverage_ratio: 0.7,
+          topic_coverage_ratio_missing: 0,
+          days_since_last_attempt: 1,
+          subject_accuracy_mathematics_12345678: 0.6,
+          subject_accuracy_mathematics_12345678_missing: 0,
+        })[name]]));
+        return {
+          features,
+          target,
+          groupId: groupIndex.toString(16).padStart(64, "0"),
+          occurredAt: new Date(Date.UTC(2026, 0, 1) +
+            (groupIndex * 10 + 3 + sampleIndex) * 24 * 60 * 60 * 1000).toISOString(),
+          unansweredCount: 0,
+        };
+      })).flat();
+    const created = await request("/admin/model-datasets", "POST", {
+      name: "performance-point-in-time-training-v1",
+      task: "regression",
+      targetColumn: "next_attempt_accuracy",
+      featureSchema,
+      samples: trainingSamples,
+      sourceDescription: "ArcTester point-in-time performance-v1 extraction; authorized training cohort fixture.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(created.status).toBe(201);
+    const datasetId = (created.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${datasetId}/train`, "POST", {
+      modelId: "performance",
+      seed: 42,
+    });
+    expect(trained.status).toBe(201);
+    expect(trained.body.models.map((model: { modelId: string }) => model.modelId).sort()).toEqual([
+      "performance-gradient-boosting",
+      "performance-multiple-linear-regression",
+      "performance-random-forest",
+    ]);
+    expect(trained.body.models.every((model: { isActive: boolean }) => !model.isActive)).toBe(true);
+    expect(trained.body.models.find((model: { modelId: string }) => model.modelId === "performance-gradient-boosting"))
+      .toMatchObject({
+        splitStrategy: "chronological-grouped-70-15-15",
+        timeSplit: { trainGroups: 35, validationGroups: 7, testGroups: 8 },
+      });
+
+    const evaluationSamples = Array.from({ length: 200 }, (_, index) => {
+      const groupIndex = Math.floor(index / 4);
+      const target = 0.3 + (index % 4) * 0.1;
+      const features = Object.fromEntries(featureNames.map((name) => [name, ({
+        completed_attempts: 14 + index % 5,
+        previous_accuracy: target - 0.05,
+        recent_accuracy_mean_3: target - 0.1,
+        overall_accuracy_mean: target,
+        previous_question_count: 10,
+        recent_accuracy_slope_3: 0.02,
+        topic_coverage_ratio: 0.75,
+        topic_coverage_ratio_missing: 0,
+        days_since_last_attempt: 2,
+        subject_accuracy_mathematics_12345678: 0.65,
+        subject_accuracy_mathematics_12345678_missing: 0,
+      })[name]]));
+      return {
+        features,
+        target,
+        groupId: (100 + groupIndex).toString(16).padStart(64, "0"),
+        occurredAt: new Date(Date.UTC(2026, 6, 1) +
+          (groupIndex * 4 + index % 4) * 24 * 60 * 60 * 1000).toISOString(),
+        unansweredCount: index % 2,
+      };
+    });
+    const holdout = await request("/admin/model-datasets", "POST", {
+      name: "performance-independent-holdout-v1",
+      task: "regression",
+      targetColumn: "next_attempt_accuracy",
+      featureSchema,
+      samples: evaluationSamples,
+      sourceDescription: "Independent authorized real-anonymized performance holdout cohort.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(holdout.status).toBe(201);
+    const evaluation = await request("/admin/models/performance-gradient-boosting/1/evaluate", "POST", {
+      baselineModelId: "performance-multiple-linear-regression",
+      baselineVersion: 1,
+      datasetId: (holdout.body.dataset as { id: string }).id,
+    });
+    expect(evaluation.status).toBe(200);
+    expect(evaluation.body.report).toMatchObject({
+      baselineModelId: "performance-multiple-linear-regression",
+      sampleCount: 200,
+    });
+  });
+
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
     const datasetId = await registerEvaluationDataset("dataset-registry-test");
     const listed = await request("/admin/model-datasets");
