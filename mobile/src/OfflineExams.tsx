@@ -97,7 +97,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     configureOfflineStore(userId);
     const [packages, pending] = await Promise.all([
       listCachedExamPackages(),
-      getPendingSubmissions(),
+      getPendingSubmissions(userId),
     ]);
     if (!mountedRef.current || generation !== lifecycleGeneration.current) return;
     setCachedIds(packages.map((item) => item.assignmentId));
@@ -121,11 +121,11 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     setError("");
     try {
       configureOfflineStore(userId);
-      const pending = await getPendingSubmissions();
+      const pending = await getPendingSubmissions(userId);
       if (!mountedRef.current || generation !== lifecycleGeneration.current) return;
       if (pending.length > 0) {
         setSyncMessage("Uploading saved exam submissions…");
-        await syncPendingSubmissions(apiUrl, token);
+        await syncPendingSubmissions(apiUrl, token, userId);
       }
       setSyncMessage("Loading assigned exams…");
       await refreshAssignments();
