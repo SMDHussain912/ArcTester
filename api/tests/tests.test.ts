@@ -532,3 +532,31 @@ describe("submit + result", () => {
     });
   });
 });
+
+describe("PUT /tests/:id/answers", () => {
+  it("persists and restores answer snapshots; replaying the request is safe", async () => {
+    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    const payload = { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }, { questionId: attempt.questions[1].id, selectedIndex: null }] };
+    expect((await api.put(`/tests/${attempt.attemptId}/answers`, payload)).status).toBe(200);
+    const replay = await api.put(`/tests/${attempt.attemptId}/answers`, payload);
+    expect(replay.status).toBe(200);
+    expect(replay.json).toMatchObject({ attemptId: attempt.attemptId, saved: 2 });
+    const restored = await api.get(`/tests/${attempt.attemptId}`);
+    expect(restored.json).toMatchObject({ saved: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }, { questionId: attempt.questions[1].id, selectedIndex: null }] });
+  });
+  it("rejects foreign questions, duplicate question IDs, foreign attempts and submitted attempts", async () => {
+    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 1 });
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    const foreignQuestion = await server.db.question.findFirstOrThrow({ where: { subject: { name: "Physics" } } });
+    const foreignQuestionResponse = await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: foreignQuestion.id, selectedIndex: 0 }] });
+    expect(foreignQuestionResponse.status).toBe(400);
+    const duplicateResponse = await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 0 }, { questionId: attempt.questions[0].id, selectedIndex: 1 }] });
+    expect(duplicateResponse.status).toBe(400);
+    const other = await signUp(server.baseUrl, "answer-save-other@example.com");
+    const otherApi = bindSession(server.baseUrl, other.cookie);
+    expect((await otherApi.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 1 }] })).status).toBe(404);
+    expect((await api.post(`/tests/${attempt.attemptId}/submit`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 1 }] })).status).toBe(200);
+    expect((await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }] })).status).toBe(409);
+  });
+});
