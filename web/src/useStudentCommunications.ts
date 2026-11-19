@@ -209,6 +209,31 @@ export function useStudentCommunications({
     }
   }
 
+  async function markAllNotificationsRead() {
+    const requestIdentity = identity;
+    const unread = notifications.filter((item) => !item.readAt);
+    if (unread.length === 0) return;
+
+    notificationRequestSequence.current += 1;
+    const optimisticReadAt = new Date().toISOString();
+    setNotifications((items) => items.map((item) => item.readAt ? item : { ...item, readAt: optimisticReadAt }));
+    setUnreadNotificationCount(0);
+
+    try {
+      await request<{ updatedCount: number }>("/notifications/read-all", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+    } catch (cause) {
+      if (identityRef.current === requestIdentity) {
+        setError((cause as Error).message);
+        void refreshNotifications().catch((refreshCause) => {
+          if (identityRef.current === requestIdentity) setError((refreshCause as Error).message);
+        });
+      }
+    }
+  }
+
   const clear = useCallback(() => {
     // A pending poll must not repopulate the inbox after sign-out clears it.
     notificationRequestSequence.current += 1;
@@ -228,6 +253,7 @@ export function useStudentCommunications({
     dismissAnnouncement,
     acknowledgeAnnouncement,
     markNotificationRead,
+    markAllNotificationsRead,
     clear,
   };
 }
