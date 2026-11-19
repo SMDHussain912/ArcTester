@@ -18,6 +18,7 @@ import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
+import StudentLearningHub from "./src/StudentLearningHub";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -116,7 +117,7 @@ export default function App() {
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [showExams, setShowExams] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "profile">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "learn" | "profile">("home");
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
@@ -949,6 +950,10 @@ export default function App() {
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
+        ) : activeTab === "learn" ? (
+          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+            <StudentLearningHub api={api} />
+          </Animated.View>
         ) : activeTab === "profile" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <View style={styles.profileAvatar}>
@@ -1094,6 +1099,10 @@ export default function App() {
             <TouchableOpacity style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
               <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
               <Text style={styles.navLabel}>Exams</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("learn")}>
+              <MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} />
+              <Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("profile")}>
               <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
