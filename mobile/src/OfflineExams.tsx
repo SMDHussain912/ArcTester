@@ -558,7 +558,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
   }
 
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, darkMode && { backgroundColor: "#0b1220" }]}>
       <View style={styles.headerRow}>
         {onExit ? <TouchableOpacity onPress={onExit}><Text style={styles.link}>‹ Dashboard</Text></TouchableOpacity> : <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Assigned exams</Text>}
         <TouchableOpacity disabled={syncing} onPress={() => void syncOutbox()}>
@@ -571,6 +571,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
         {pendingCount === 1 ? "" : "s"}
       </Text>
       {!!syncMessage && <Text style={styles.syncMessage}>{syncMessage}</Text>}
+      <View style={[styles.assignmentSummary, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><View style={styles.summaryMetric}><Text style={[styles.summaryValue, darkMode && { color: "#93c5fd" }]}>{assignments.length}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Assigned</Text></View><View style={styles.summaryMetric}><Text style={[styles.summaryValue, darkMode && { color: "#93c5fd" }]}>{cachedIds.length}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Downloaded</Text></View><View style={styles.summaryMetric}><Text style={[styles.summaryValue, darkMode && { color: "#93c5fd" }]}>{pendingCount}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>To sync</Text></View></View>
       {activeAttemptIds.length > 0 && (
         <View style={[styles.assignment, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
           <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>Interrupted exam{activeAttemptIds.length === 1 ? "" : "s"} found</Text>
@@ -599,12 +600,14 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
         assignments.map((assignment) => {
           const downloaded = cachedIds.includes(assignment.id);
           return (
-            <View key={assignment.id} style={styles.assignment}>
-              <Text style={styles.assignmentTitle}>{assignment.exam.title}</Text>
+            <View key={assignment.id} style={[styles.assignment, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+              <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>{assignment.exam.title}</Text>
               <Text style={styles.muted}>
                 {assignment.questionCount} questions · {assignment.durationMinutes} minutes · v
                 {assignment.version}
               </Text>
+              <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>{assignment.availableFrom ? "Opens " + new Date(assignment.availableFrom).toLocaleString() : "Available now"} · {assignment.dueAt ? "Due " + new Date(assignment.dueAt).toLocaleString() : "No due date"}</Text>
+              <Text style={[styles.statusLine, darkMode && { color: "#93c5fd" }]}>{assignment.status.replaceAll("_", " ")}</Text>
               {assignment.submission ? (
                 <View style={{ gap: 8 }}>
                   <Text style={styles.submitted}>
@@ -735,6 +738,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   secondaryText: { color: "#526078", fontWeight: "700" },
+  assignmentSummary: { flexDirection: "row", justifyContent: "space-around", backgroundColor: "#fff", borderWidth: 1, borderColor: "#e4e8ef", borderRadius: 14, padding: 12, marginBottom: 12 },
+  summaryMetric: { alignItems: "center", flex: 1 },
+  summaryValue: { color: "#172033", fontSize: 22, fontWeight: "800" },
+  statusLine: { color: "#2563eb", fontSize: 11, fontWeight: "800", marginTop: 5, letterSpacing: 0.6 },
   assignment: {
     backgroundColor: "#fff",
     borderWidth: 1,
