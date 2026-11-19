@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import morgan from "morgan";
 import { PrismaClient } from "@prisma/client";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
@@ -107,6 +108,11 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // requireAuth resolves the same injected client used by every router and test schema.
   app.locals.db = database;
   app.set("trust proxy", 1);
+  // Morgan request logs expose route, status, latency and origin without logging
+  // cookies, bearer tokens, request bodies or query-string secrets.
+  app.use(morgan(":method :url :status :response-time ms origin=:req[origin]", {
+    skip: (req) => req.path === "/health" || req.path === "/ready",
+  }));
   // helmet sets secure defaults (HSTS, X-Content-Type-Options, CSP, referrer
   // policy, etc.). Disable frameguard so the admin live monitor can be framed
   // only where explicitly desired; keep the rest of the defaults.
