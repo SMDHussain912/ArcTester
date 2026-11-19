@@ -12,7 +12,7 @@ describe("AdminModelLab", () => {
       expect(screen.getByText(name)).toBeTruthy();
     }
     expect(screen.getByText("2 trainable · 4 core engines in progress")).toBeTruthy();
-    expect(screen.getByText("TRAINABLE · CANDIDATE ONLY")).toBeTruthy();
+    expect(screen.getAllByText("TRAINABLE · CANDIDATE ONLY")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
   });
 
