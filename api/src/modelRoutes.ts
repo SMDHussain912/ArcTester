@@ -682,6 +682,19 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           if (!evaluation || evaluation.status !== "PASSED") {
             return { error: "evaluation-required" as const };
           }
+          // A passing score on synthetic or unattested data is useful for development,
+          // but it is not sufficient evidence for production promotion.
+          const evaluationDataset = evaluation.datasetId
+            ? await tx.modelDataset.findUnique({
+              where: { id: evaluation.datasetId },
+              select: { datasetKind: true, sourceAttested: true },
+            })
+            : null;
+          if (!evaluationDataset
+            || evaluationDataset.datasetKind !== "real-anonymized"
+            || !evaluationDataset.sourceAttested) {
+            return { error: "evaluation-dataset-ineligible" as const };
+          }
         }
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
         const model = await tx.registeredModel.update({
@@ -698,6 +711,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if ("error" in activated) {
         if (activated.error === "tensorflow-production-gate") {
           return next(conflict("TensorFlow.js model cannot be activated until it passes real-anonymized production eligibility."));
+        }
+        if (activated.error === "evaluation-dataset-ineligible") {
+          return next(conflict("This model version needs a passing evaluation on an attested real-anonymized dataset before production activation."));
         }
         return next(conflict("This model version needs a passing evaluation against a baseline before activation."));
       }
