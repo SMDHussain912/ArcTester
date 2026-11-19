@@ -166,7 +166,7 @@ describe("admin model registry API", () => {
       modelId: "readiness-fixture",
       seed: 42,
     });
-    expect(trained.status).toBe(201);
+    expect(trained.status, JSON.stringify(trained.body)).toBe(201);
     expect(trained.body.promoted).toBe(false);
     const secondTraining = await request(`/admin/model-datasets/${datasetId}/train-readiness`, "POST", {
       modelId: "readiness-fixture",
