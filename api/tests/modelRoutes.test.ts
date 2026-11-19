@@ -129,6 +129,43 @@ describe("admin model registry API", () => {
     expect((audit.body.events as Array<{ action: string }>).map((event) => event.action)).toContain("TRAINED");
   });
 
+  it("rejects evaluation datasets reused to train either compared model", async () => {
+    const samples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: index >= 30 ? 1 : 0,
+    }));
+    const created = await request("/admin/model-datasets", "POST", {
+      name: "evaluation-training-overlap",
+      task: "binary-classification",
+      targetColumn: "target_ready",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples,
+      sourceDescription: "Fixture proving training and evaluation data are isolated.",
+      sourceAttested: true,
+    });
+    expect(created.status).toBe(201);
+    const datasetId = (created.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${datasetId}/train`, "POST", {
+      modelId: "overlap-fixture",
+      seed: 42,
+    });
+    expect(trained.status).toBe(201);
+
+    const modelId = "overlap-fixture-logistic-regression";
+    const baseline = await request("/admin/models", "POST", {
+      ...modelInput("independent-baseline"),
+      modelId,
+    });
+    expect(baseline.status).toBe(201);
+
+    const evaluation = await request(`/admin/models/${modelId}/1/evaluate`, "POST", {
+      baselineVersion: 2,
+      datasetId,
+    });
+    expect(evaluation.status).toBe(409);
+    expect(String(evaluation.body.error ?? evaluation.body.message)).toContain("separate");
+  });
+
   it("serves no TensorFlow artifact unless an eligible active version exists", async () => {
     expect((await request("/models/tensorflow-fixture/active/tensorflow", "GET", undefined, "")).status).toBe(403);
     const missing = await request("/models/tensorflow-fixture/active/tensorflow");
