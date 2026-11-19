@@ -35,6 +35,17 @@ describe("offline learning package", () => {
     expect(() => validateOfflineLearningPackage(duplicate)).toThrow(/invalid question/i);
   });
 
+  it("rejects answer keys and explanations from an offline practice package", () => {
+    const leaked = {
+      ...validPackage,
+      questions: [
+        { ...validPackage.questions[0], correctIndex: 0, explanation: "Protected answer." },
+        validPackage.questions[1],
+      ],
+    };
+    expect(() => validateOfflineLearningPackage(leaked)).toThrow(/invalid question/i);
+  });
+
   it("rejects malformed answer options", () => {
     const invalid = { ...validPackage, questions: [{ ...validPackage.questions[0], options: [""] }, validPackage.questions[1]] };
     expect(() => validateOfflineLearningPackage(invalid)).toThrow(/invalid question/i);
