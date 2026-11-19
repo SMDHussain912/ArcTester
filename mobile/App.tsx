@@ -32,6 +32,7 @@ const API_URL = (() => {
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
+type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number } };
 type Announcement = {
   id: string;
   title: string;
@@ -109,6 +110,8 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
+  const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
+  const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -150,7 +153,7 @@ export default function App() {
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
+  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
 
   async function toggleDarkMode(value: boolean) {
     setDarkMode(value);
@@ -320,6 +323,7 @@ export default function App() {
     api<Bank>("/bank")
       .then((result) => { if (isCurrentSession()) setBank(result); })
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
+    api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
@@ -953,7 +957,7 @@ export default function App() {
                   },
                 ]}
               >
-                <Text style={[styles.questionTitle, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
+                <Text style={[styles.questionTitle, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
                 <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>
                 {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
                   const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
@@ -1057,6 +1061,15 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
+            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
+              <View style={styles.dashboardMetricGrid}>
+                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
+                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
+                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.graded ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Graded exams</Text></View>
+                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.scorePercentage == null ? "—" : Math.round(learningOverview.formalExams.scorePercentage) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Exam average</Text></View>
+              </View>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{learningOverview ? learningOverview.practice.questions + " practice questions attempted · " + learningOverview.practice.correct + " correct · " + learningOverview.practice.incorrect + " incorrect · " + learningOverview.formalExams.reviewRequired + " exam reviews pending" : "Performance data will appear after your first completed paper."}</Text>
+            </View>
             <View style={styles.announcementHeader}>
               <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Announcements</Text>
               <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
@@ -1341,6 +1354,9 @@ const styles = StyleSheet.create({
   notificationUnread: { borderColor: "#93c5fd", borderWidth: 1.5 },
   notificationBadge: { color: "#2563eb", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   announcementDate: { color: "#9aa3b2", fontSize: 11, marginTop: 10 },
+  dashboardMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 10 },
+  dashboardMetric: { width: "47%", padding: 10, borderRadius: 12, backgroundColor: "#f7f9fc" },
+  dashboardMetricValue: { color: "#172033", fontSize: 22, fontWeight: "800" },
   sectionTitle: {
     color: "#172033",
     fontSize: 17,
