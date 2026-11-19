@@ -551,6 +551,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
           api={apiRef.current}
           token={token}
           onBack={() => setViewingResultId(null)}
+          darkMode={darkMode}
         />
       </View>
     );
