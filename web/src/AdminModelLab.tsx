@@ -46,6 +46,15 @@ const DEFAULT_FEATURE_SCHEMA = [
   { name: "previous_question_count", type: "numeric" },
 ];
 
+const APPROVED_MODEL_PORTFOLIO = [
+  { id: "performance-gradient-boosting", name: "Gradient Boosting", purpose: "Next-attempt performance prediction", inputs: "Point-in-time attempt history and subject/topic mastery", outputs: "Predicted accuracy, interval and local explanation factors", gate: "500+ examples · 50+ learner groups · beat MAE and RMSE baselines" },
+  { id: "performance-random-forest", name: "Random Forest", purpose: "Performance prediction and feature importance", inputs: "Same versioned performance features and splits as Gradient Boosting", outputs: "Predicted accuracy, interval and stable global feature importance", gate: "Paired holdout comparison · stable importance across folds" },
+  { id: "exam-readiness-classifier", name: "Readiness Classifier", purpose: "Classify exam readiness", inputs: "Recent practice, subject coverage and prior full mock history", outputs: "Not ready / Developing / Ready probabilities", gate: "1,000+ labeled snapshots · 100+ learner groups · calibrated false-READY rate" },
+  { id: "adaptive-question-selector", name: "Adaptive Learning", purpose: "Personalized next-question ranking", inputs: "Learner mastery state, eligible questions and session constraints", outputs: "Ranked question IDs with reason codes", gate: "10,000+ logged decisions · 200+ learner groups · offline policy evaluation" },
+  { id: "question-semantic-embeddings", name: "Question Embeddings", purpose: "Semantic search and question relationships", inputs: "Approved question stem and subject/topic context", outputs: "384-dimensional vectors and ranked semantic matches", gate: "Human-reviewed pairs · retrieval quality and latency benchmarks" },
+  { id: "exam-session-anomaly", name: "Exam Anomaly Detection", purpose: "Flag unusual exam sessions for human review", inputs: "Server-observed session event aggregates and telemetry coverage", outputs: "Anomaly score, severity and evidence reason codes", gate: "2,000+ sessions · 200+ learner groups · reviewed false-positive rate" },
+] as const;
+
 type ModelAuditEvent = {id:string;actorId:number|null;modelId:string;version:number;action:string;details:Record<string,unknown>;createdAt:string};
 type ModelEvaluation = {id:string;actorId:number|null;modelId:string;candidateVersion:number;baselineVersion:number;evaluationDataset:string;datasetFingerprint:string;sampleCount:number;metrics:Record<string,unknown>;status:string;evaluatedAt:string};
 
@@ -285,6 +294,18 @@ export default function AdminModelLab({
         <article><span>Training in progress</span><strong>{activeJobs}</strong><small>{jobs.filter((job) => job.status === "QUEUED").length} queued · {jobs.filter((job) => job.status === "RUNNING").length} running</small></article>
         <article><span>Completed jobs</span><strong>{completedJobs}</strong><small>{failedJobs} failed or cancelled</small></article>
         <article><span>Active models</span><strong>{activeModels}</strong><small>{models.length - activeModels} inactive candidates</small></article>
+      </section>
+
+      <section className="admin-panel" aria-labelledby="approved-model-portfolio-title">
+        <div className="admin-panel-head"><div><p className="eyebrow">INTELLIGENCE ROADMAP</p><h2 id="approved-model-portfolio-title">Approved model portfolio</h2></div><span className="status status-pending">6 planned · 0 newly implemented</span></div>
+        <p className="muted">These six model capabilities are approved architecture targets, not trained or production-active models. Each has its own dataset contract and qualification gate. Existing registry entries below remain separate legacy/baseline artifacts.</p>
+        <div className="model-registry-list">
+          {APPROVED_MODEL_PORTFOLIO.map((model) => <article className="model-registry-row" key={model.id}>
+            <div><strong>{model.name}</strong><p className="muted">{model.purpose}</p><small><b>Inputs:</b> {model.inputs}</small><p><small><b>Outputs:</b> {model.outputs}</small></p><small><b>Qualification:</b> {model.gate}</small></div>
+            <span className="status status-pending">PLANNED</span>
+          </article>)}
+        </div>
+        <p className="muted"><a href="https://github.com/smdgamekingindo-TN/ArcTester/blob/main/docs/APPROVED_MODEL_ARCHITECTURE.md" target="_blank" rel="noreferrer">Open exact input/output, dataset, evaluation and deployment contracts</a></p>
       </section>
 
       <section className="admin-panel">
