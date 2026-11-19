@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BinaryTrainingSample } from "../src/intelligence/classificationValidation.js";
 import {
   createStratifiedFolds,
+  createGroupStratifiedFolds,
   evaluateClassifierCrossValidation,
   tuneClassifierHyperparameters,
 } from "../src/intelligence/modelValidation.js";
@@ -24,6 +25,27 @@ describe("model cross-validation and tuning", () => {
       expect(fold.some((row) => row.label === 0)).toBe(true);
       expect(fold.some((row) => row.label === 1)).toBe(true);
     }
+  });
+
+  it("keeps every learner entirely inside one stratified validation fold", () => {
+    const rows = Array.from({ length: 100 }, (_, index) => ({
+      features: [index / 10, index % 5],
+      label: (index % 10 < 5 ? 0 : 1) as 0 | 1,
+      groupId: String(Math.floor(index / 10)),
+    }));
+    const folds = createGroupStratifiedFolds(rows, { folds: 5, seed: 19 });
+    expect(folds.flat()).toHaveLength(rows.length);
+    for (const fold of folds) {
+      expect(fold.some((row) => row.label === 0)).toBe(true);
+      expect(fold.some((row) => row.label === 1)).toBe(true);
+    }
+    const groupFold = new Map<string, number>();
+    folds.forEach((fold, foldIndex) => fold.forEach((row) => {
+      const existing = groupFold.get(row.groupId);
+      expect(existing === undefined || existing === foldIndex).toBe(true);
+      groupFold.set(row.groupId, foldIndex);
+    }));
+    expect(groupFold.size).toBe(10);
   });
 
   it("rejects invalid fold counts and underrepresented classes", () => {
