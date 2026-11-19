@@ -69,9 +69,22 @@ export default function StudentLearningHub({ api, userId }: Props) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    setOfflinePackage(null);
+    setOfflineMaterials([]);
+    setSelectedOfflineMaterial(null);
     void load();
-    void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null));
-    void getOfflineStudyMaterials(userId).then(setOfflineMaterials).catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load saved study materials."));
+    void getOfflineLearningPackage(userId).then((value) => {
+      if (active) setOfflinePackage(value);
+    }).catch(() => {
+      if (active) setOfflinePackage(null);
+    });
+    void getOfflineStudyMaterials(userId).then((value) => {
+      if (active) setOfflineMaterials(value);
+    }).catch((cause) => {
+      if (active) setError(cause instanceof Error ? cause.message : "Could not load saved study materials.");
+    });
+    return () => { active = false; };
   }, [load, userId]);
 
   useEffect(() => NetInfo.addEventListener((state) => {
