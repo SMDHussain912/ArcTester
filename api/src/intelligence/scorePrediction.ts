@@ -20,6 +20,8 @@ export interface ScorePredictionEvaluation {
   regression: RegressionMetrics;
   meanBaseline: RegressionMetrics;
   beatsMeanBaseline: boolean;
+  beatsMeanBaselineMae: boolean;
+  beatsMeanBaselineRmse: boolean;
 }
 
 const HISTORY_WINDOW = 3;
@@ -116,6 +118,9 @@ export function trainAndEvaluateNextAttemptModel(
     evaluationWindows: targets.length,
     regression,
     meanBaseline,
-    beatsMeanBaseline: regression.mae < meanBaseline.mae,
+    beatsMeanBaselineMae: regression.mae < meanBaseline.mae,
+    beatsMeanBaselineRmse: regression.rmse < meanBaseline.rmse,
+    // A candidate must improve both average absolute error and large-error sensitivity.
+    beatsMeanBaseline: regression.mae < meanBaseline.mae && regression.rmse < meanBaseline.rmse,
   };
 }
