@@ -745,7 +745,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (dataset.task !== candidate.task || JSON.stringify(datasetFeatures) !== JSON.stringify(candidate.featureSchema)) {
         return next(badRequest("Evaluation dataset task or feature schema does not match the model."));
       }
-      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number }>;
+      const samples = JSON.parse(dataset.samplesJson) as Array<{
+        features: Record<string, number | string>; target: number; groupId?: string;
+      }>;
       const report = evaluateRegistryCandidate(candidate, baseline, samples, dataset.name);
       await db.$transaction(async (tx) => {
         await tx.modelEvaluation.create({
