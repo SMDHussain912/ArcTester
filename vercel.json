@@ -2,7 +2,6 @@
   "installCommand": "npm ci",
   "buildCommand": "VITE_BASE_PATH=/ npm run build:web",
   "outputDirectory": "web/dist",
-  "framework": null,
   "rewrites": [
     {
       "source": "/api/(.*)",
