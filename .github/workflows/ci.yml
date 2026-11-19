@@ -97,6 +97,9 @@ jobs:
       - name: Typecheck mobile app
         run: npm run typecheck --prefix mobile
 
+      - name: Run mobile unit tests
+        run: npm test --prefix mobile
+
   dataset-preparation:
     name: TensorFlow dataset preparation tests
     runs-on: ubuntu-latest
