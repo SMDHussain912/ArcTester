@@ -52,7 +52,10 @@ describe("StudentPracticeSession", () => {
   view.rerender(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} syncStatus="saved" onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Answers synced to the server");
   view.rerender(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} syncStatus="pending" onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
-  expect(screen.getByRole("status")).toHaveTextContent("Server sync pending");\n });\n it("warns when browser storage cannot preserve the practice session", () => {
+  expect(screen.getByRole("status")).toHaveTextContent("Server sync pending");
+ });
+
+ it("warns when browser storage cannot preserve the practice session", () => {
   render(<StudentPracticeSession test={test} answers={{}} remainingSeconds={null} busy={false} isOnline localSaveAvailable={false} onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Local recovery is unavailable");
  });
