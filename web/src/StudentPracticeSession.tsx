@@ -33,8 +33,8 @@ export default function StudentPracticeSession({ test, answers, remainingSeconds
         {currentQuestion ? <div className="exam-question-controls">
           <span className="muted">Viewing question {activeQuestionIndex + 1} of {test.questions.length}</span>
           <div className="row">
-            <button type="button" className="button button-secondary" disabled={activeQuestionIndex === 0} onClick={() => goToQuestion(activeQuestionIndex - 1)}>Previous</button>
-            <button type="button" className="button button-secondary" disabled={activeQuestionIndex >= test.questions.length - 1} onClick={() => goToQuestion(activeQuestionIndex + 1)}>Next question</button>
+            <button type="button" className="button button-secondary" disabled={activeQuestionIndex === 0} onClick={() => goToQuestion(activeQuestionIndex - 1)} aria-label="Previous question in navigator">Previous</button>
+            <button type="button" className="button button-secondary" disabled={activeQuestionIndex >= test.questions.length - 1} onClick={() => goToQuestion(activeQuestionIndex + 1)} aria-label="Next question in navigator">Next question</button>
           </div>
         </div> : null}
       </section>
