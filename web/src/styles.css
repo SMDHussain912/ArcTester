@@ -882,3 +882,8 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .model-lab-guide li { padding-left: 4px; }
 .model-result-explanation { margin-top: 14px; padding: 14px; border: 1px solid var(--border, #334155); border-radius: 12px; background: var(--surface-muted, rgba(100,116,139,.10)); line-height: 1.55; }
 .model-result-explanation p { margin: 8px 0 0; }
+
+.model-lab-advanced { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--border, #334155); border-radius: 10px; background: var(--surface-muted, rgba(100,116,139,.06)); }
+.model-lab-advanced > summary { cursor: pointer; font-weight: 650; }
+.model-lab-advanced[open] > summary { margin-bottom: 10px; }
+.model-lab-guide .muted { line-height: 1.6; }
