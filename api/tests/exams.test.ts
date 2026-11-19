@@ -333,21 +333,42 @@ describe("versioned exam management", () => {
   });
 
   it("respects disabled assignment and result notification preferences", async () => {
-    const secondStudent = await server.db.user.findUniqueOrThrow({ where: { email: "other-student@arctester.test" }, select: { id: true } });
-    await server.db.studentNotificationPreference.create({ data: { userId: secondStudent.id, examAssignments: false, examResults: false } });
-    const assigned = await request(`/admin/exams/${examId}/assign`, "POST", { studentIds: [secondStudent.id] }, adminCookie);
+    // Use a dedicated fixture: the shared second student is intentionally reused
+    // by later reporting and offline-submission tests in this suite.
+    const email = `notification-preferences-${randomUUID()}@arctester.test`;
+    const preferenceCookie = await createSession(email, "STUDENT");
+    const candidate = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    await server.db.studentNotificationPreference.create({
+      data: { userId: candidate.id, examAssignments: false, examResults: false },
+    });
+    const assigned = await request(`/admin/exams/${examId}/assign`, "POST", { studentIds: [candidate.id] }, adminCookie);
     expect(assigned.status).toBe(201);
-    const assignment = await server.db.examAssignment.findFirstOrThrow({ where: { studentId: secondStudent.id, examVersion: { examId } }, include: { examVersion: { include: { questions: true } } } });
-    expect(await server.db.studentNotification.count({ where: { userId: secondStudent.id, kind: "EXAM_ASSIGNMENT" } })).toBe(0);
-    const started = await request(`/exams/assignments/${assignment.id}/session/start`, "POST", {}, secondStudentCookie);
+    const assignment = await server.db.examAssignment.findFirstOrThrow({
+      where: { studentId: candidate.id, examVersion: { examId } },
+      include: { examVersion: { include: { questions: true } } },
+    });
+    expect(await server.db.studentNotification.count({
+      where: { userId: candidate.id, kind: "EXAM_ASSIGNMENT" },
+    })).toBe(0);
+    const started = await request(`/exams/assignments/${assignment.id}/session/start`, "POST", {}, preferenceCookie);
     expect(started.status).toBe(200);
     const session = started.json.session as { startedAt: string };
     const submitted = await request(`/exams/assignments/${assignment.id}/submission`, "POST", {
       attemptUuid: randomUUID(), startedAt: session.startedAt, submittedAt: new Date().toISOString(),
       answers: [{ examQuestionId: assignment.examVersion.questions[0].id, selectedIndex: 1 }],
-    }, secondStudentCookie);
+    }, preferenceCookie);
     expect(submitted.status).toBe(201);
-    expect(await server.db.studentNotification.count({ where: { userId: secondStudent.id, kind: { in: ["EXAM_RESULT", "EXAM_REVIEW"] } } })).toBe(0);
+    expect(await server.db.studentNotification.count({
+      where: { userId: candidate.id, kind: { in: ["EXAM_RESULT", "EXAM_REVIEW"] } },
+    })).toBe(0);
+
+    await server.db.examSubmission.deleteMany({ where: { assignmentId: assignment.id } });
+    await server.db.examSessionEvent.deleteMany({ where: { session: { assignmentId: assignment.id } } });
+    await server.db.examSession.deleteMany({ where: { assignmentId: assignment.id } });
+    await server.db.studentNotification.deleteMany({ where: { userId: candidate.id } });
+    await server.db.examAssignment.delete({ where: { id: assignment.id } });
+    await server.db.studentNotificationPreference.delete({ where: { userId: candidate.id } });
+    await server.db.user.delete({ where: { id: candidate.id } });
   });
 
   it("lists versioned exam details and restricts admin read endpoints to administrators", async () => {
