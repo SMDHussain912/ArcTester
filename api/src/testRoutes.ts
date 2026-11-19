@@ -24,23 +24,51 @@ export function testRouter(db: PrismaClient): Router {
     try {
       const rows = await db.subject.findMany({
         select: {
+          id: true,
           name: true,
           _count: { select: { questions: true } },
           topics: {
             orderBy: { name: "asc" },
-            select: { name: true, _count: { select: { questions: true } } },
+            select: { id: true, name: true, _count: { select: { questions: true } } },
           },
         },
         orderBy: { name: "asc" },
       });
+      const publishedExamRows = await db.examVersionQuestion.findMany({
+        where: {
+          sourceQuestionId: { not: null },
+          examVersion: { is: { publishedAt: { not: null } } },
+        },
+        select: { sourceQuestionId: true },
+      });
+      const examQuestionIds = publishedExamRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]);
+      const practiceRows = await db.question.findMany({
+        where: { id: { notIn: examQuestionIds } },
+        select: { subjectId: true, topicId: true },
+      });
+      const practiceSubjectCounts = new Map<number, number>();
+      const practiceTopicCounts = new Map<string, number>();
+      for (const question of practiceRows) {
+        practiceSubjectCounts.set(question.subjectId, (practiceSubjectCounts.get(question.subjectId) ?? 0) + 1);
+        if (question.topicId !== null) {
+          const key = question.subjectId + ":" + question.topicId;
+          practiceTopicCounts.set(key, (practiceTopicCounts.get(key) ?? 0) + 1);
+        }
+      }
       const subjects = rows.map((r) => ({
         subject: r.name,
         count: r._count.questions,
-        topics: r.topics.map((topic) => ({ topic: topic.name, count: topic._count.questions })),
+        practiceCount: practiceSubjectCounts.get(r.id) ?? 0,
+        topics: r.topics.map((topic) => ({
+          topic: topic.name,
+          count: topic._count.questions,
+          practiceCount: practiceTopicCounts.get(r.id + ":" + topic.id) ?? 0,
+        })),
       }));
       res.json({
         subjects,
         total: subjects.reduce((sum, s) => sum + s.count, 0),
+        practiceTotal: subjects.reduce((sum, s) => sum + s.practiceCount, 0),
         serverNow: new Date().toISOString(),
       });
     } catch (error) {
