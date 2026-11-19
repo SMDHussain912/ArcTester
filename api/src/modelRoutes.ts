@@ -310,7 +310,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           metadata.improvingLearnerGroups < 1 || metadata.decliningLearnerGroups < 1) {
         return res.status(409).json({
           ok: false,
-          error: "Insufficient authorized learner history for a qualified performance dataset.",
+          error: `Insufficient authorized learner history: found ${metadata.sampleCount} rows across ${metadata.learnerGroupCount} learner groups; require at least 500 rows, 50 groups, and both improving and declining trajectories.`,
           qualification: {
             requiredRows: 500,
             requiredLearnerGroups: 50,
@@ -449,7 +449,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const created = await db.$transaction(async (tx) => {
         const models = [];
         for (const result of ranked) {
-          const modelId = `${input.modelId}-${result.algorithm}`;
+          const modelId = input.modelId === "performance" ? result.algorithm : `${input.modelId}-${result.algorithm}`;
           const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
           const version = (latest._max.version ?? 0) + 1;
           const artifact = validateRegistryArtifact({
