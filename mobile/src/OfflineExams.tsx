@@ -62,6 +62,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [activePackage, setActivePackage] = useState<OfflineExamPackage | null>(null);
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
+  const [savingAnswers, setSavingAnswers] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const questionTransition = useRef(new Animated.Value(1)).current;
@@ -188,7 +189,17 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       const currentExam = activePackageRef.current;
       if (currentExam && (state === "background" || state === "inactive")) {
         pushViolation("APP_BACKGROUND", "The app moved to the background during an assigned exam.");
-        void flushGuardEvents({ api: apiRef.current, assignmentId: currentExam.assignmentId });
+        // Give queued answer writes a chance to reach SQLite before the OS
+        // suspends or terminates the process.
+        void (async () => {
+          try {
+            await answerSaveQueue.current;
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "An answer could not be saved before leaving the app.");
+            return;
+          }
+          await flushGuardEvents({ api: apiRef.current, assignmentId: currentExam.assignmentId });
+        })();
       }
     });
 
@@ -371,12 +382,20 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     const assignmentId = activePackage.assignmentId;
     // Update the UI immediately, but serialize SQLite read-modify-write operations.
     setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
-    answerSaveQueue.current = answerSaveQueue.current
+    setSavingAnswers(true);
+    const queuedSave = answerSaveQueue.current
       .catch(() => undefined)
       .then(() => saveOfflineAnswer(assignmentId, questionId, selectedIndex));
-    void answerSaveQueue.current.catch((cause) => {
-      setError(cause instanceof Error ? cause.message : "Could not save your answer.");
-    });
+    answerSaveQueue.current = queuedSave;
+    void queuedSave.then(
+      () => {
+        if (answerSaveQueue.current === queuedSave) setSavingAnswers(false);
+      },
+      (cause) => {
+        if (answerSaveQueue.current === queuedSave) setSavingAnswers(false);
+        setError(cause instanceof Error ? cause.message : "Could not save your answer. Select the option again to retry.");
+      },
+    );
   };
 
   if (activePackage) {
@@ -391,6 +410,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         </Text>
         <Text style={styles.muted}>
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
+        </Text>
+        <Text accessibilityLiveRegion="polite" style={styles.muted}>
+          {savingAnswers ? "Saving answer changes…" : "All answer changes saved on this device"}
         </Text>
         <Text style={styles.muted}>
           Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.values(answers).filter((value) => value !== null && value !== undefined).length} answered
@@ -492,9 +514,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          disabled={busyId !== null}
+          disabled={busyId !== null || savingAnswers}
           onPress={() => void pauseExam()}
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, savingAnswers && styles.disabled]
         >
           <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
         </TouchableOpacity>
