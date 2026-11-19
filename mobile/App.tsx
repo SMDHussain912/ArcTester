@@ -908,7 +908,8 @@ export default function App() {
             <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
-            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · timed practiceText>
+            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · timed practice</Text>
+            {test.warnings?.map((warning, index) => <Text key={index} style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>{warning}</Text>)}
             <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
               <View style={styles.navigatorGrid}>
@@ -970,6 +971,7 @@ export default function App() {
                   },
                 ]}
               >
+                <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{test.questions[currentQuestionIndex].subject}{test.questions[currentQuestionIndex].topic ? " · " + test.questions[currentQuestionIndex].topic : ""}</Text>
                 <Text style={[styles.questionTitle, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
                 <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>
                 {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
