@@ -149,7 +149,7 @@ describe("admin model registry API", () => {
     });
     const registered = await request("/admin/model-datasets", "POST", {
       name: "readiness-multiclass-training-fixture",
-      task: "regression",
+      task: "multiclass-classification",
       targetColumn: "readiness_label",
       featureSchema: [
         { name: "mastery_signal", type: "numeric" },
@@ -168,6 +168,40 @@ describe("admin model registry API", () => {
     });
     expect(trained.status).toBe(201);
     expect(trained.body.promoted).toBe(false);
+    const secondTraining = await request(`/admin/model-datasets/${datasetId}/train-readiness`, "POST", {
+      modelId: "readiness-fixture",
+      seed: 42,
+    });
+    expect(secondTraining.status).toBe(201);
+    expect(secondTraining.body.model).toMatchObject({ version: 2, isActive: false });
+
+    const evaluationDataset = await request("/admin/model-datasets", "POST", {
+      name: "readiness-multiclass-independent-evaluation",
+      task: "multiclass-classification",
+      targetColumn: "readiness_label",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+      samples: samples.map((sample) => ({ ...sample, features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 } })),
+      sourceDescription: "Independent attested real-anonymized learner holdout with privacy-safe pseudonymous group separation for readiness evaluation.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(evaluationDataset.status).toBe(201);
+    const evaluationDatasetId = (evaluationDataset.body.dataset as { id: string }).id;
+    const evaluation = await request("/admin/models/readiness-fixture-exam-readiness-softmax/2/evaluate", "POST", {
+      baselineVersion: 1,
+      datasetId: evaluationDatasetId,
+    });
+    expect(evaluation.status).toBe(201);
+    expect(evaluation.body.evaluation).toMatchObject({ status: "PASSED" });
+    const activated = await request("/admin/models/readiness-fixture-exam-readiness-softmax/2/activate", "POST", {
+      reason: "Independent multiclass holdout passed.",
+    });
+    expect(activated.status).toBe(200);
+    expect(activated.body.model).toMatchObject({ version: 2, isActive: true });
+
     expect(trained.body.model).toMatchObject({
       modelId: "readiness-fixture-exam-readiness-softmax",
       version: 1,
