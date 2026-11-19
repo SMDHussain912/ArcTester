@@ -88,7 +88,7 @@ describe("admin model registry API", () => {
       .toEqual([[2, false], [1, true]]);
   });
 
-  it("trains model candidates from a registered dataset without auto-promoting them", async () => {
+  it("trains only the approved logistic baseline from a registered dataset without auto-promoting it", async () => {
     const samples = Array.from({ length: 60 }, (_, index) => ({
       features: { practice_score: index },
       target: index >= 30 ? 1 : 0,
@@ -111,8 +111,9 @@ describe("admin model registry API", () => {
     expect(trained.status).toBe(201);
     expect(trained.body.promoted).toBe(false);
     const models = trained.body.models as Array<{ modelId: string; version: number; isActive: boolean; rank: number; trainRows: number; testRows: number }>;
-    expect(models).toHaveLength(4);
-    expect(models.map((model) => model.rank)).toEqual([1, 2, 3, 4]);
+    expect(models).toHaveLength(1);
+    expect(models[0]?.modelId).toBe("training-fixture-logistic-regression");
+    expect(models.map((model) => model.rank)).toEqual([1]);
     expect(trained.body.ranking).toMatchObject({ scope: "same deterministic held-out split from this training run" });
     expect(models.every((model) => model.version === 1 && model.isActive === false)).toBe(true);
     expect(models.every((model) => model.trainRows + model.testRows === 60)).toBe(true);
