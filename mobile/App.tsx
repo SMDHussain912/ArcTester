@@ -266,7 +266,7 @@ export default function App() {
   useEffect(() => {
     SecureStore.getItemAsync("arctester-token").then((saved) => {
       if (saved) setToken(saved);
-    }).catch(() => { setToken(null); });
+    }).catch(async () => { await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined); setToken(null); });
   }, []);
 
   useEffect(() => {
