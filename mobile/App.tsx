@@ -32,6 +32,7 @@ const API_URL = (() => {
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
+type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
   id: string;
@@ -111,6 +112,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
+  const [savingNotificationPreference, setSavingNotificationPreference] = useState(false);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
@@ -155,6 +158,19 @@ export default function App() {
     setDarkMode(value);
     try { await setLocalValue("arctester-dark-mode", String(value)); }
     catch { /* Keep the selected theme for this session even if persistence is unavailable. */ }
+  }
+
+  async function updateNotificationPreference(key: keyof NotificationPreferences, value: boolean) {
+    const previous = notificationPreferences;
+    setNotificationPreferences({ ...previous, [key]: value });
+    setSavingNotificationPreference(true);
+    try {
+      const result = await api<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) });
+      setNotificationPreferences(result.preferences);
+    } catch (cause) {
+      setNotificationPreferences(previous);
+      setError((cause as Error).message);
+    } finally { setSavingNotificationPreference(false); }
   }
 
   async function refreshQuestionBank() {
@@ -320,6 +336,7 @@ export default function App() {
       .then((result) => { if (isCurrentSession()) setBank(result); })
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
+    api<{ preferences: NotificationPreferences }>("/notifications/preferences").then((result) => { if (isCurrentSession()) setNotificationPreferences(result.preferences); }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
@@ -1018,6 +1035,7 @@ export default function App() {
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>NOTIFICATIONS</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam assignments</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when a new exam is assigned</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examAssignments} onValueChange={(value) => void updateNotificationPreference("examAssignments", value)} /></View><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam results</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when results or reviews are available</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examResults} onValueChange={(value) => void updateNotificationPreference("examResults", value)} /></View>{savingNotificationPreference ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Saving preferences…</Text> : null}</View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={styles.secondaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
