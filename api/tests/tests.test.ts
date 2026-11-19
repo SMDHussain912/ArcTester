@@ -652,6 +652,12 @@ describe("practice and exam question pools", () => {
       },
     });
     try {
+      const bank = await api.get("/bank");
+      const bankBody = bank.json as { subjects: { subject: string; count: number; practiceCount: number }[]; practiceTotal: number };
+      const mathsBank = bankBody.subjects.find((subject) => subject.subject === "Maths");
+      expect(mathsBank).toBeDefined();
+      expect(mathsBank!.count - mathsBank!.practiceCount).toBe(2);
+      expect(bankBody.practiceTotal).toBeLessThanOrEqual((bank.json as { total: number }).total);
       const response = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
       expect(response.status).toBe(201);
       const body = response.json as { questions: { id: number }[]; warnings: string[] };
