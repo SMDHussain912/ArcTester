@@ -6,6 +6,22 @@ const datasets: ModelLabDataset[] = [{ id: "dataset-1", name: "CSE readiness", t
 const jobs: ModelLabJob[] = [{ id: "job-1", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "RUNNING", progress: 45, errorMessage: "" }];
 
 describe("AdminModelLab", () => {
+  it("ignores incomplete adaptive analytics payloads without breaking other Model Lab controls", async () => {
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, summary: {}, byReason: [], daily: [] }),
+    }));
+    try {
+      render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+      expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
+      await waitFor(() => expect(screen.queryByText("Questions selected")).toBeNull());
+      expect(screen.getByText("Gradient Boosting")).toBeTruthy();
+    } finally {
+      vi.stubGlobal("fetch", originalFetch);
+    }
+  });
+
   it("shows implementation progress for the six approved model capabilities", () => {
     render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     for (const name of ["Gradient Boosting", "Random Forest", "Readiness Classifier", "Adaptive Learning", "Question Embeddings", "Exam Anomaly Detection"]) {
