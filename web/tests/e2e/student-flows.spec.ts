@@ -42,15 +42,9 @@ async function loginUi(page: Page, email: string, password: string) {
 
 /** Setup test data: create admin, student, questions, exam, assignment */
 async function setupExamData(page: Page) {
-  // Try to create admin user (may already exist)
-  await apiRequest(page, "/auth/register", "POST", {
-    email: "admin@arctester.test",
-    password: "AdminPass123!",
-    invitationToken: "",
-  }).catch(() => {});
-
-  // Login as admin to create content
-  const adminCookie = await loginApi(page, "admin@arctester.test", "AdminPass123!").catch(() => "");
+  // The CI workflow provisions this administrator before starting the API.
+  const adminCookie = await loginApi(page, "admin@arctester.test", "ArcTester-CI-Admin-2026!");
+  if (!adminCookie) throw new Error("E2E administrator login failed.");
 
   // Create subject
   await apiRequest(page, "/admin/subjects", "POST", { name: "Mathematics" }, adminCookie);
@@ -100,14 +94,15 @@ async function setupExamData(page: Page) {
 
     // Create student user via invitation flow
     // First create invitation as admin
+    const studentEmail = `student-${Date.now()}@arctester.test`;
     const inviteRes = await apiRequest(page, "/auth/invitations", "POST", {
-      email: `student-${Date.now()}@arctester.test`,
+      email: studentEmail,
     }, adminCookie);
     const inviteToken = inviteRes.json.invitation?.token;
 
     // Register student
     await apiRequest(page, "/auth/register", "POST", {
-      email: "student@arctester.test",
+      email: studentEmail,
       password: "StudentPass123!",
       invitationToken: inviteToken || "",
     });
@@ -122,12 +117,12 @@ async function setupExamData(page: Page) {
     }, adminCookie);
   }
 
-  return { examId };
+  return { examId, studentEmail };
 }
 
 test.describe("Student Practice Flow", () => {
   test("student can create, take, and submit a practice test", async ({ page }) => {
-    await setupExamData(page);
+    const { studentEmail } = await setupExamData(page);
 
     // Login as student through UI
     await loginUi(page, studentEmail, "StudentPass123!");
@@ -173,10 +168,10 @@ test.describe("Student Practice Flow", () => {
 
 test.describe("Formal Exam Flow", () => {
   test("student can take and submit an assigned exam", async ({ page }) => {
-    await setupExamData(page);
+    const { studentEmail } = await setupExamData(page);
 
     // Login as student through UI
-    await loginUi(page, "student@arctester.test", "StudentPass123!");
+    await loginUi(page, studentEmail, "StudentPass123!");
 
     // Should see assigned exams
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
