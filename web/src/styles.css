@@ -925,3 +925,19 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .admin-model-lab .model-history-entry details{margin-top:10px}
 .admin-model-lab .model-history-entry summary{cursor:pointer;font-weight:650}
 @media(max-width:760px){.admin-model-lab .model-history-entry .row{align-items:flex-start;flex-direction:column}}
+
+/* Live TensorFlow training charts */
+.admin-model-lab .training-live-metrics{margin:16px 0;padding:15px;border:1px solid var(--border);border-radius:13px;background:var(--bg)}
+.admin-model-lab .training-live-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.admin-model-lab .training-live-heading span,.admin-model-lab .training-chart-foot,.admin-model-lab .training-live-metrics>small{font-size:11px;color:var(--muted)}
+.admin-model-lab .training-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-model-lab .training-chart{min-width:0;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.admin-model-lab .training-chart-head,.admin-model-lab .training-chart-foot{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.admin-model-lab .training-chart-head{font-size:12px}
+.admin-model-lab .training-chart-head span{font-variant-numeric:tabular-nums;font-weight:700}
+.admin-model-lab .training-chart svg{display:block;width:100%;height:auto;margin:8px 0}
+.admin-model-lab .training-chart-axis{stroke:var(--border);stroke-width:1}
+.admin-model-lab .training-chart-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.admin-model-lab .training-chart-point{fill:var(--accent)}
+.admin-model-lab .training-chart-empty{display:grid;place-items:center;min-height:130px;color:var(--muted);font-size:12px}
+@media(max-width:760px){.admin-model-lab .training-chart-grid{grid-template-columns:1fr}.admin-model-lab .training-live-heading{align-items:flex-start;flex-direction:column}}
