@@ -27,7 +27,7 @@ async function loginApi(page: Page, email: string, password: string): Promise<st
     data: JSON.stringify({ email, password }),
   });
   const setCookie = res.headers()["set-cookie"] || res.headers()["Set-Cookie"] || "";
-  return Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;
+  return Array.isArray(setCookie) ? setCookie[0]?.split(";")[0] || "" : setCookie.split(";")[0] || "";
 }
 
 /** Helper: login via UI */
@@ -101,7 +101,7 @@ async function setupExamData(page: Page) {
     // Create student user via invitation flow
     // First create invitation as admin
     const inviteRes = await apiRequest(page, "/auth/invitations", "POST", {
-      email: "student@arctester.test",
+      email: `student-${Date.now()}@arctester.test`,
     }, adminCookie);
     const inviteToken = inviteRes.json.invitation?.token;
 
@@ -113,8 +113,12 @@ async function setupExamData(page: Page) {
     });
 
     // Assign exam to student (need student id - hardcode 2 for now, or get from API)
+    const studentCookie = await loginApi(page, studentEmail, "StudentPass123!");
+    const studentSession = await apiRequest(page, "/auth/me", "GET", undefined, studentCookie);
+    const studentId = studentSession.json.user?.id;
+    if (!Number.isSafeInteger(studentId)) throw new Error("Could not resolve E2E student ID.");
     await apiRequest(page, `/admin/exams/${examId}/assign`, "POST", {
-      studentIds: [2],
+      studentIds: [studentId],
     }, adminCookie);
   }
 
@@ -126,13 +130,13 @@ test.describe("Student Practice Flow", () => {
     await setupExamData(page);
 
     // Login as student through UI
-    await loginUi(page, "student@arctester.test", "StudentPass123!");
+    await loginUi(page, studentEmail, "StudentPass123!");
 
     // Should be on dashboard
-    await page.waitForSelector("text=Dashboard, text=GET STARTED, text=Practice, text=Create your question paper", { timeout: 10000 });
+    await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
 
     // Navigate to practice
-    await page.click('button:has-text("Practice"), a:has-text("Practice")');
+    await page.getByRole("button", { name: "Practice", exact: true }).click();
 
     // Select subject
     await page.click('text=Mathematics');
@@ -175,7 +179,9 @@ test.describe("Formal Exam Flow", () => {
     await loginUi(page, "student@arctester.test", "StudentPass123!");
 
     // Should see assigned exams
-    await page.waitForSelector("text=Assigned exams, text=ECET Mathematics Mock, text=Start examination", { timeout: 10000 });
+    await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
+    await page.getByRole("button", { name: /Assigned exams/ }).click();
+    await expect(page.getByText("ECET Mathematics Mock")).toBeVisible({ timeout: 10000 });
 
     // Click on assigned exam to start
     await page.click('button:has-text("Start examination")');
