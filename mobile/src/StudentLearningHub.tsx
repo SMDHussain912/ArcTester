@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./learningStore";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
-type Props = { api: ApiRequest };
+type Props = { api: ApiRequest; userId: string };
 type Concept = {
   slug: string; title: string; subject: string; topic: string; definition: string;
   examples: string[]; relatedConcepts: string[]; commonMistakes: string[];
@@ -15,11 +16,15 @@ type Recommendation = { id: string; title: string; reason: string; priority: str
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
 
-export default function StudentLearningHub({ api }: Props) {
+export default function StudentLearningHub({ api, userId }: Props) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [offlinePackage, setOfflinePackage] = useState<OfflineLearningPackage | null>(null);
+  const [downloadingBank, setDownloadingBank] = useState(false);
+  const [showOfflineBank, setShowOfflineBank] = useState(false);
+  const [offlineQuery, setOfflineQuery] = useState("");
   const [query, setQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All");
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
@@ -39,13 +44,15 @@ export default function StudentLearningHub({ api }: Props) {
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
     const failures = [performanceResult, recommendationResult, conceptResult, predictionResult].filter((item) => item.status === "rejected");
-    if (failures.length === 3) setError("Learning data could not be loaded. Check your connection and try again.");
+    if (failures.length === 4) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
   }, [api]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null)); }, [load, userId]);
+  const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await api<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [api, userId]);
 
+  const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
   const subjects = useMemo(() => ["All", ...Array.from(new Set(concepts.map((item) => item.subject))).sort()], [concepts]);
   const filtered = useMemo(() => concepts.filter((item) => {
     const matchesSubject = selectedSubject === "All" || item.subject === selectedSubject;
@@ -98,6 +105,19 @@ export default function StudentLearningHub({ api }: Props) {
         </View>
       )) : <Text style={styles.empty}>More completed practice will unlock personalized recommendations.</Text>}
 
+      <Text style={styles.sectionTitle}>Offline question bank</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{offlinePackage ? offlinePackage.total.toLocaleString() + " questions saved on this device" : "No offline question bank yet"}</Text>
+        <Text style={styles.body}>{offlinePackage ? "Downloaded " + new Date(offlinePackage.exportedAt).toLocaleString() + ". Stored separately for this account and available without a connection." : "Download the question bank while online to browse questions later without internet."}</Text>
+        <TouchableOpacity onPress={() => void downloadQuestionBank()} disabled={downloadingBank} style={styles.downloadButton}><Text style={styles.downloadButtonText}>{downloadingBank ? "Downloading…" : offlinePackage ? "Update offline question bank" : "Download for offline use"}</Text></TouchableOpacity>
+        {offlinePackage ? <TouchableOpacity onPress={() => setShowOfflineBank(!showOfflineBank)} style={styles.refresh}><Text style={styles.refreshText}>{showOfflineBank ? "Hide saved questions" : "Browse saved questions"}</Text></TouchableOpacity> : null}
+      </View>
+      {showOfflineBank && offlinePackage ? <>
+        <TextInput value={offlineQuery} onChangeText={setOfflineQuery} placeholder="Search saved questions" placeholderTextColor="#8993a5" style={styles.search} />
+        {offlineQuestions.map((question) => <View key={question.id} style={styles.card}><Text style={styles.meta}>{question.subject}{question.topic ? " · " + question.topic : ""} · {question.difficulty}</Text><Text style={styles.cardTitle}>{question.text}</Text>{question.options.map((option, index) => <Text key={index} style={styles.body}>{String.fromCharCode(65 + index)}. {option}</Text>)}</View>)}
+        {offlineQuestions.length === 0 ? <Text style={styles.empty}>No saved questions match this search.</Text> : null}
+        {offlinePackage.questions.length > offlineQuestions.length ? <Text style={styles.meta}>Showing up to 30 matching questions. Search to find a specific item.</Text> : null}
+      </> : null}
       <Text style={styles.sectionTitle}>Concept library</Text>
       <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={styles.search} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -146,6 +166,8 @@ const styles = StyleSheet.create({
   muted: { color: "#64748b", lineHeight: 20 },
   refresh: { alignSelf: "flex-start", paddingVertical: 7 },
   refreshText: { color: "#2563eb", fontWeight: "800" },
+  downloadButton: { backgroundColor: "#2563eb", borderRadius: 10, padding: 12, alignItems: "center", marginTop: 6 },
+  downloadButtonText: { color: "#ffffff", fontWeight: "900" },
   notice: { backgroundColor: "#fff7ed", borderRadius: 12, padding: 12 },
   noticeText: { color: "#9a3412", lineHeight: 19 },
   sectionTitle: { color: "#14213d", fontSize: 18, fontWeight: "900", marginTop: 8 },
