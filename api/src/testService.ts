@@ -9,10 +9,8 @@ import { z } from "zod";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import {
-  nextStat,
   selectMockTest,
   selectQuestions,
-  type AnswerOutcome,
   type QuestionStat,
   type Shortfall,
   type StatsById,
@@ -161,11 +159,6 @@ async function loadStats(
     stats[String(row.questionId)] = stat;
   }
   return stats;
-}
-
-function outcomeOf(selectedIndex: number | null, correctIndex: number): AnswerOutcome {
-  if (selectedIndex === null) return "unanswered";
-  return selectedIndex === correctIndex ? "correct" : "wrong";
 }
 
 /** Build a test, persist the Attempt + its question links, return sanitized set. */
@@ -531,35 +524,69 @@ export async function submitTest(
     });
     if (claimed.count !== 1) throw conflict("This test was already submitted.");
 
+    await tx.attemptAnswer.updateMany({
+      where: { attemptId, questionId: { in: rows.map((row) => row.questionId) } },
+      // AttemptAnswer values differ per question, so write the immutable
+      // answer snapshots in bounded groups below rather than querying per row.
+    });
     for (const row of rows) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: row.questionId },
         data: { chosen: row.chosen, isCorrect: row.isCorrect },
       });
-      const prev = await tx.stat.findUnique({
-        where: { userId_questionId: { userId, questionId: row.questionId } },
-      });
-      const next = nextStat(
-        prev ? { seen: prev.seen, wrong: prev.wrong, lastSeen: prev.lastSeen } : undefined,
-        outcomeOf(row.chosen, correctById.get(row.questionId) ?? 0),
-        now
-      );
-      await tx.stat.upsert({
-        where: { userId_questionId: { userId, questionId: row.questionId } },
-        update: { seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen },
-        create: {
-          userId, questionId: row.questionId, seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen,
-        },
-      });
-      await tx.adaptiveDecisionLog.updateMany({
-        where: { attemptId, selectedQuestionId: row.questionId, outcomeStatus: "pending" },
-        data: {
-          reward: row.chosen === null ? null : row.isCorrect ? 1 : 0,
-          outcomeStatus: row.chosen === null ? "unanswered" : row.isCorrect ? "correct" : "incorrect",
-          outcomeAt: now,
-        },
-      });
     }
+
+    const questionIds = rows.map((row) => row.questionId);
+    const correctIds = rows.filter((row) => row.isCorrect).map((row) => row.questionId);
+    const wrongIds = rows.filter((row) => row.chosen !== null && !row.isCorrect).map((row) => row.questionId);
+    const unansweredIds = rows.filter((row) => row.chosen === null).map((row) => row.questionId);
+    const existingStats = await tx.stat.findMany({
+      where: { userId, questionId: { in: questionIds } },
+      select: { questionId: true, wrong: true },
+    });
+    const existingIds = new Set(existingStats.map((stat) => stat.questionId));
+    const newStats = rows.filter((row) => !existingIds.has(row.questionId)).map((row) => ({
+      userId,
+      questionId: row.questionId,
+      seen: 1,
+      wrong: row.isCorrect ? 0 : 1,
+      lastSeen: now,
+    }));
+    if (newStats.length) await tx.stat.createMany({ data: newStats });
+    const existingQuestionIds = [...existingIds];
+    if (existingQuestionIds.length) {
+      await tx.stat.updateMany({
+        where: { userId, questionId: { in: existingQuestionIds } },
+        data: { seen: { increment: 1 }, lastSeen: now },
+      });
+      const existingWrongIds = [...wrongIds, ...unansweredIds].filter((id) => existingIds.has(id));
+      if (existingWrongIds.length) {
+        await tx.stat.updateMany({
+          where: { userId, questionId: { in: existingWrongIds } },
+          data: { wrong: { increment: 1 } },
+        });
+      }
+      const existingCorrectIds = correctIds.filter((id) => existingIds.has(id));
+      if (existingCorrectIds.length) {
+        await tx.stat.updateMany({
+          where: { userId, questionId: { in: existingCorrectIds }, wrong: { gt: 0 } },
+          data: { wrong: { decrement: 1 } },
+        });
+      }
+    }
+
+    const updateAdaptiveOutcomes = async (
+      ids: number[], reward: number | null, outcomeStatus: "correct" | "incorrect" | "unanswered",
+    ) => {
+      if (!ids.length) return;
+      await tx.adaptiveDecisionLog.updateMany({
+        where: { attemptId, selectedQuestionId: { in: ids }, outcomeStatus: "pending" },
+        data: { reward, outcomeStatus, outcomeAt: now },
+      });
+    };
+    await updateAdaptiveOutcomes(correctIds, 1, "correct");
+    await updateAdaptiveOutcomes(wrongIds, 0, "incorrect");
+    await updateAdaptiveOutcomes(unansweredIds, null, "unanswered");
   });
 
   return { attemptId, score, total: memberIds.size, expired };
