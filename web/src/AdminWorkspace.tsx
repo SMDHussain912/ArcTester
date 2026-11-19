@@ -48,6 +48,8 @@ export default function AdminWorkspace(p:Props){
  const modelLabRequestInFlight=useRef(false);
  const modelLabLoaded=useRef(false);
  const [trainingJobs,setTrainingJobs]=useState<ModelLabJob[]>([]);
+ const [notificationHealth,setNotificationHealth]=useState<NotificationHealth|null>(null);
+ const [notificationHealthLoading,setNotificationHealthLoading]=useState(false);
  const [registeredModels,setRegisteredModels]=useState<ModelLabModel[]>([]);
  const [reviewItems,setReviewItems]=useState<ReviewQueueItem[]>([]);
  const [liveSessions,setLiveSessions]=useState<LiveSession[]>([]);
