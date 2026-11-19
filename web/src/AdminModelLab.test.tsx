@@ -11,9 +11,26 @@ describe("AdminModelLab", () => {
     for (const name of ["Gradient Boosting", "Random Forest", "Readiness Classifier", "Adaptive Learning", "Question Embeddings", "Exam Anomaly Detection"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
-    expect(screen.getByText("2 trainable · 4 core engines in progress")).toBeTruthy();
+    expect(screen.getByText("3 trainable · 3 engines integrated or in progress")).toBeTruthy();
     expect(screen.getAllByText("TRAINABLE · CANDIDATE ONLY")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
+  });
+
+  it("offers readiness training only for real-anonymized numeric datasets", () => {
+    const onTrainReadiness = vi.fn();
+    const readinessDataset: ModelLabDataset = {
+      id: "readiness-data", name: "Labeled readiness", task: "regression", rowCount: 180,
+      datasetKind: "real-anonymized",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+    };
+    render(<AdminModelLab datasets={[readinessDataset]} jobs={[]} models={[]} selectedDatasetId="readiness-data" modelPrefix="readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onTrainReadiness={onTrainReadiness} onRefresh={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Train readiness classifier" });
+    expect(button).toBeTruthy();
+    fireEvent.click(button);
+    expect(onTrainReadiness).toHaveBeenCalledWith(42);
   });
 
   it("keeps redundant classical candidates visible as legacy without offering activation", () => {
