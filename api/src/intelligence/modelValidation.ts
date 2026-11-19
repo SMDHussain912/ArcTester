@@ -9,6 +9,8 @@ export interface CrossValidationOptions {
   seed?: number;
 }
 
+type CrossValidationSample = BinaryTrainingSample & { groupId?: string };
+
 export interface CrossValidationMetrics {
   folds: number;
   rows: number;
@@ -66,6 +68,63 @@ export function createStratifiedFolds(
       [group[index], group[swapIndex]] = [group[swapIndex], group[index]];
     }
     group.forEach((sample, index) => result[index % folds].push(sample));
+  }
+  return result;
+}
+
+/** Assigns complete learner groups to folds while balancing both target classes. */
+export function createGroupStratifiedFolds(
+  samples: Array<BinaryTrainingSample & { groupId: string }>,
+  options: CrossValidationOptions = {},
+): Array<Array<BinaryTrainingSample & { groupId: string }>> {
+  const folds = options.folds ?? 5;
+  const seed = options.seed ?? 42;
+  if (!Number.isInteger(folds) || folds < 2 || folds > 10) throw new Error("folds must be an integer from 2 to 10");
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error("seed is invalid");
+  if (samples.some((sample) => typeof sample.groupId !== "string" || !sample.groupId)) {
+    throw new Error("Every grouped sample must have a non-empty groupId");
+  }
+  const grouped = new Map<string, Array<BinaryTrainingSample & { groupId: string }>>();
+  for (const sample of samples) {
+    const rows = grouped.get(sample.groupId) ?? [];
+    rows.push(sample);
+    grouped.set(sample.groupId, rows);
+  }
+  if (grouped.size < folds) throw new Error("Grouped cross-validation requires at least one learner group per fold");
+  const groups = [...grouped.entries()].map(([id, rows]) => ({
+    id, rows,
+    positive: rows.filter((row) => row.label === 1).length,
+    negative: rows.filter((row) => row.label === 0).length,
+  }));
+  if ([0, 1].some((label) => groups.filter((group) => label === 1 ? group.positive > 0 : group.negative > 0).length < folds)) {
+    throw new Error("Each class must appear in at least one learner group per fold");
+  }
+  const random = randomGenerator(seed);
+  for (let index = groups.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [groups[index], groups[swapIndex]] = [groups[swapIndex], groups[index]];
+  }
+  groups.sort((left, right) => Math.max(right.positive, right.negative) - Math.max(left.positive, left.negative) || right.rows.length - left.rows.length);
+  const result = Array.from({ length: folds }, () => [] as Array<BinaryTrainingSample & { groupId: string }>);
+  const counts = Array.from({ length: folds }, () => ({ positive: 0, negative: 0, rows: 0 }));
+  for (const group of groups) {
+    let bestFold = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let fold = 0; fold < folds; fold += 1) {
+      const next = counts[fold];
+      const score =
+        (next.positive + group.positive) ** 2 +
+        (next.negative + group.negative) ** 2 +
+        0.05 * (next.rows + group.rows) ** 2;
+      if (score < bestScore) { bestScore = score; bestFold = fold; }
+    }
+    result[bestFold].push(...group.rows);
+    counts[bestFold].positive += group.positive;
+    counts[bestFold].negative += group.negative;
+    counts[bestFold].rows += group.rows.length;
+  }
+  if (result.some((fold) => !fold.some((row) => row.label === 0) || !fold.some((row) => row.label === 1))) {
+    throw new Error("Grouped folds could not preserve both classes in every validation fold; add more balanced learner groups");
   }
   return result;
 }
@@ -129,12 +188,18 @@ function validateSamples(samples: BinaryTrainingSample[]): void {
 }
 
 export function evaluateClassifierCrossValidation(
-  samples: BinaryTrainingSample[],
+  samples: CrossValidationSample[],
   candidate: HyperparameterCandidate,
   options: CrossValidationOptions = {},
 ): CrossValidationMetrics {
   validateSamples(samples);
-  const foldRows = createStratifiedFolds(samples, options);
+  const hasGroupIds = samples.some((sample) => sample.groupId !== undefined);
+  if (hasGroupIds && samples.some((sample) => typeof sample.groupId !== "string" || !sample.groupId)) {
+    throw new Error("Grouped cross-validation requires a groupId on every sample");
+  }
+  const foldRows = hasGroupIds
+    ? createGroupStratifiedFolds(samples as Array<BinaryTrainingSample & { groupId: string }>, options)
+    : createStratifiedFolds(samples, options);
   const adapter = adapters.find((item) => item.algorithm === candidate.algorithm);
   if (!adapter) throw new Error("Unsupported classifier algorithm");
   const actual: number[] = [];
@@ -172,7 +237,7 @@ const candidateGrid: Record<HyperparameterCandidate["algorithm"], Array<Record<s
 
 /** Selects parameters using cross-validation only; keep the final test set untouched. */
 export function tuneClassifierHyperparameters(
-  samples: BinaryTrainingSample[],
+  samples: CrossValidationSample[],
   algorithm: HyperparameterCandidate["algorithm"],
   options: CrossValidationOptions = {},
 ): TunedClassifierResult {
