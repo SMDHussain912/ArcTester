@@ -45,6 +45,7 @@ async function setupExamData(page: Page) {
   // The CI workflow provisions this administrator before starting the API.
   const adminCookie = await loginApi(page, "admin@arctester.test", "ArcTester-CI-Admin-2026!");
   if (!adminCookie) throw new Error("E2E administrator login failed.");
+  const studentEmail = `student-${Date.now()}@arctester.test`;
 
   // Create subject
   await apiRequest(page, "/admin/subjects", "POST", { name: "Mathematics" }, adminCookie);
@@ -94,7 +95,6 @@ async function setupExamData(page: Page) {
 
     // Create student user via invitation flow
     // First create invitation as admin
-    const studentEmail = `student-${Date.now()}@arctester.test`;
     const inviteRes = await apiRequest(page, "/auth/invitations", "POST", {
       email: studentEmail,
     }, adminCookie);
@@ -117,6 +117,7 @@ async function setupExamData(page: Page) {
     }, adminCookie);
   }
 
+  if (!examId) throw new Error("E2E exam creation failed.");
   return { examId, studentEmail };
 }
 
