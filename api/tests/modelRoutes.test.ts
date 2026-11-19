@@ -135,6 +135,10 @@ describe("admin model registry API", () => {
     expect(listed.status).toBe(200);
     expect((listed.body.models as Array<{ version: number; isActive: boolean }>).map((item) => [item.version, item.isActive]))
       .toEqual([[2, false], [1, true]]);
+
+    const missingReason = await request("/admin/models/exam-readiness-demo/2/activate", "POST", {});
+    expect(missingReason.status).toBe(400);
+    expect(String(missingReason.body.error ?? missingReason.body.message)).toContain("reason");
   });
 
   it("trains only the approved logistic baseline from a registered dataset without auto-promoting it", async () => {
@@ -390,7 +394,7 @@ describe("admin model registry API", () => {
     const listed = await request("/admin/models");
     expect((listed.body.models as Array<{ modelId: string; productionEligible: boolean }>).find((item) => item.modelId === modelId)?.productionEligible).toBe(true);
 
-    const activated = await request(`/admin/models/${modelId}/1/activate`, "POST", {});
+    const activated = await request(`/admin/models/${modelId}/1/activate`, "POST", { reason: "Approve verified production-eligible candidate." });
     expect(activated.status).toBe(200);
     expect(activated.body.model).toMatchObject({ modelId, version: 1, isActive: true });
 
@@ -424,7 +428,7 @@ describe("admin model registry API", () => {
         dataset: "synthetic-fixture", artifactJson: JSON.stringify(artifact), isActive: false,
       },
     });
-    const activation = await request(`/admin/models/${modelId}/1/activate`, "POST", {});
+    const activation = await request(`/admin/models/${modelId}/1/activate`, "POST", { reason: "Approve verified production-eligible candidate." });
     expect(activation.status).toBe(409);
     expect(String(activation.body.error ?? activation.body.message)).toContain("real-anonymized production eligibility");
   });
@@ -701,7 +705,7 @@ describe("admin model registry API", () => {
     expect(evaluation.status).toBe(200);
     expect(evaluation.body.report).toMatchObject({ status: "PASSED" });
 
-    const activation = await request(`/admin/models/${modelId}/2/activate`, "POST", {});
+    const activation = await request(`/admin/models/${modelId}/2/activate`, "POST", { reason: "Test activation rejection for synthetic evaluation." });
     expect(activation.status).toBe(409);
     expect(String(activation.body.error ?? activation.body.message)).toContain("real-anonymized");
     const versions = await server.db.registeredModel.findMany({ where: { modelId, isActive: true } });
@@ -727,7 +731,7 @@ describe("admin model registry API", () => {
     expect(evaluation.status).toBe(200);
     expect(evaluation.body.report).toMatchObject({ status: "REJECTED", candidateVersion: 3 });
 
-    const activation = await request("/admin/models/exam-readiness-demo/3/activate", "POST", {});
+    const activation = await request("/admin/models/exam-readiness-demo/3/activate", "POST", { reason: "Test rejection of candidate below baseline." });
     expect(activation.status).toBe(409);
   });
 
@@ -787,7 +791,7 @@ describe("admin model registry API", () => {
     });
     expect(invalid.status).toBe(400);
 
-    const missing = await request("/admin/models/exam-readiness-demo/999/activate", "POST", {});
+    const missing = await request("/admin/models/exam-readiness-demo/999/activate", "POST", { reason: "Test missing model version handling." });
     expect(missing.status).toBe(404);
   });
 });
