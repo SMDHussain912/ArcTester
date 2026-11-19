@@ -89,11 +89,11 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
         seed: job.seed,
         epochs: job.epochs,
         batchSize: job.batchSize,
-        onEpochEnd: async (epoch) => {
+        onEpochEnd: async (epoch, metrics) => {
           const progress = 10 + Math.floor(((epoch + 1) / job.epochs) * 70);
           const renewed = await db.modelTrainingJob.updateMany({
             where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-            data: { progress, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
+            data: { progress, resultJson: JSON.stringify({ epoch: epoch + 1, totalEpochs: job.epochs, loss: metrics.loss ?? null, mae: metrics.mae ?? null, updatedAt: new Date().toISOString() }), leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
           });
           if (renewed.count !== 1) {
             throw new Error("Training worker lease was lost during epoch progress reporting.");

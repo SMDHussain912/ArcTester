@@ -5,7 +5,7 @@ import { getOfflineLearningPackage, getOfflineStudyMaterials, removeOfflineStudy
 import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
-type Props = { api: ApiRequest; userId: string; darkMode?: boolean };
+type Props = { api: ApiRequest; userId: string; darkMode?: boolean; onStartPractice?: (subject?: string) => void };
 type Concept = {
   slug: string; title: string; subject: string; topic: string; definition: string;
   examples: string[]; relatedConcepts: string[]; commonMistakes: string[];
@@ -20,7 +20,7 @@ type Prediction = { status: string; message: string; predictedScorePercent?: num
 type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 type StudyMaterial = StudyMaterialSummary;
 
-export default function StudentLearningHub({ api, userId, darkMode = false }: Props) {
+export default function StudentLearningHub({ api, userId, darkMode = false, onStartPractice }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -198,6 +198,9 @@ export default function StudentLearningHub({ api, userId, darkMode = false }: Pr
           </View>
           <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{item.reason}</Text>
           <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{item.subject ?? "Mixed practice"}{item.topic ? " · " + item.topic : ""} · {item.questionCount} questions</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => onStartPractice?.(item.subject)} style={styles.recommendationAction}>
+            <Text style={styles.recommendationActionText}>{item.subject ? "Practice this subject" : "Start mixed practice"} →</Text>
+          </TouchableOpacity>
         </View>
       )) : <Text style={styles.empty}>More completed practice will unlock personalized recommendations.</Text>}
 
@@ -320,6 +323,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { color: "#172554", fontSize: 15, fontWeight: "900", flexShrink: 1 },
   priority: { color: "#2563eb", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
+  recommendationAction: { alignSelf: "flex-start", backgroundColor: "#2563eb", borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, marginTop: 4 },
+  recommendationActionText: { color: "#ffffff", fontSize: 12, fontWeight: "900" },
   body: { color: "#475569", lineHeight: 20, fontSize: 13 },
   offlineContent: { color: "#334155", lineHeight: 23, fontSize: 13, paddingVertical: 10 },
   networkStatus: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 8 },

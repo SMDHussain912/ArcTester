@@ -887,3 +887,57 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .model-lab-advanced > summary { cursor: pointer; font-weight: 650; }
 .model-lab-advanced[open] > summary { margin-bottom: 10px; }
 .model-lab-guide .muted { line-height: 1.6; }
+
+/* Model Lab operational layout */
+.admin-model-lab .model-lab-summary{margin-bottom:16px}
+.model-registry-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(170px,240px);gap:12px;margin:0 0 16px}
+.model-registry-toolbar input,.model-registry-toolbar select,.model-test-fields input,.model-test-fields select,.model-training-options input,.model-training-options select{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)}
+.model-registry-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:17px 0;border-bottom:1px solid var(--border)}
+.model-registry-row:last-child{border-bottom:0}
+.model-registry-row>div:first-child{min-width:0;display:grid;gap:5px}
+.model-registry-row small{font-size:11px;color:var(--muted)}
+.model-registry-row .row{justify-content:flex-end}
+.model-training-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}
+.model-training-options label,.model-test-fields label{display:grid;gap:7px;font-size:12px;font-weight:700;min-width:0}
+.model-test-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:16px 0}
+.model-result-json{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-size:12px}
+@media(max-width:760px){.model-registry-toolbar,.model-training-options,.model-test-fields{grid-template-columns:1fr}.model-registry-row{align-items:flex-start;flex-direction:column}.model-registry-row .row{justify-content:flex-start}.model-registry-row .row button{flex:1}.admin-model-lab .admin-panel{padding:17px}}
+
+/* Admin Model Lab: practical controls and responsive dataset actions */
+.admin-model-lab .model-dataset-editor{margin-top:16px;box-shadow:none;background:var(--bg)}
+.admin-model-lab .model-dataset-editor h3{margin:0 0 12px}
+.admin-model-lab .model-dataset-editor label{display:grid;gap:7px;margin:12px 0;font-size:13px;font-weight:700}
+.admin-model-lab .model-dataset-editor input,.admin-model-lab .model-dataset-editor textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text)}
+.admin-model-lab .model-registry-row .button-danger{background:color-mix(in srgb,var(--danger) 10%,var(--surface));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,var(--border))}
+.admin-model-lab .model-registry-row .button-danger:hover{background:color-mix(in srgb,var(--danger) 16%,var(--surface))}
+.admin-model-lab .model-training-options{margin:14px 0 18px}
+.admin-model-lab .model-registry-toolbar{margin-top:12px}
+@media(max-width:760px){.admin-model-lab .model-dataset-editor .row{align-items:stretch;flex-direction:column}.admin-model-lab .model-dataset-editor .row button{width:100%}}
+
+/* Model history and governance panel */
+.admin-model-lab .model-history-panel{margin-top:18px}
+.admin-model-lab .model-history-panel h3{margin:22px 0 10px;font-size:15px}
+.admin-model-lab .model-history-list{display:grid;gap:10px}
+.admin-model-lab .model-history-entry{min-width:0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.admin-model-lab .model-history-entry .row{justify-content:space-between;align-items:center;gap:10px}
+.admin-model-lab .model-history-entry p{margin:8px 0}
+.admin-model-lab .model-history-entry small{overflow-wrap:anywhere;color:var(--muted)}
+.admin-model-lab .model-history-entry details{margin-top:10px}
+.admin-model-lab .model-history-entry summary{cursor:pointer;font-weight:650}
+@media(max-width:760px){.admin-model-lab .model-history-entry .row{align-items:flex-start;flex-direction:column}}
+
+/* Live TensorFlow training charts */
+.admin-model-lab .training-live-metrics{margin:16px 0;padding:15px;border:1px solid var(--border);border-radius:13px;background:var(--bg)}
+.admin-model-lab .training-live-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.admin-model-lab .training-live-heading span,.admin-model-lab .training-chart-foot,.admin-model-lab .training-live-metrics>small{font-size:11px;color:var(--muted)}
+.admin-model-lab .training-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-model-lab .training-chart{min-width:0;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.admin-model-lab .training-chart-head,.admin-model-lab .training-chart-foot{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.admin-model-lab .training-chart-head{font-size:12px}
+.admin-model-lab .training-chart-head span{font-variant-numeric:tabular-nums;font-weight:700}
+.admin-model-lab .training-chart svg{display:block;width:100%;height:auto;margin:8px 0}
+.admin-model-lab .training-chart-axis{stroke:var(--border);stroke-width:1}
+.admin-model-lab .training-chart-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.admin-model-lab .training-chart-point{fill:var(--accent)}
+.admin-model-lab .training-chart-empty{display:grid;place-items:center;min-height:130px;color:var(--muted);font-size:12px}
+@media(max-width:760px){.admin-model-lab .training-chart-grid{grid-template-columns:1fr}.admin-model-lab .training-live-heading{align-items:flex-start;flex-direction:column}}

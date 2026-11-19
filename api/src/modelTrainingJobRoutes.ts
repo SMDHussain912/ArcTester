@@ -107,6 +107,7 @@ export function modelTrainingJobsRouter(db: PrismaClient): Router {
         jobs: jobs.map(({ resultJson, ...job }) => ({
           ...job,
           result: job.status === "SUCCEEDED" ? JSON.parse(resultJson) : null,
+          liveMetrics: job.status === "RUNNING" && resultJson !== "{}" ? JSON.parse(resultJson) : null,
         })),
       });
     } catch (error) { next(error); }
@@ -126,6 +127,7 @@ export function modelTrainingJobsRouter(db: PrismaClient): Router {
         job: {
           ...publicJob,
           result: job.status === "SUCCEEDED" ? JSON.parse(resultJson) : null,
+          liveMetrics: job.status === "RUNNING" && resultJson !== "{}" ? JSON.parse(resultJson) : null,
         },
       });
     } catch (error) {
