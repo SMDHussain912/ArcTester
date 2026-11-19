@@ -145,3 +145,86 @@ describe("registered dataset training", () => {
       .toThrow("at least 10 examples of each class");
   });
 });
+
+
+describe("chronological performance model training", () => {
+  const featureSchema = [
+    { name: "completed_attempts", type: "numeric" as const },
+    { name: "previous_accuracy", type: "numeric" as const },
+    { name: "recent_accuracy_mean_3", type: "numeric" as const },
+  ];
+
+  function performanceSamples() {
+    const dayMs = 24 * 60 * 60 * 1000;
+    return Array.from({ length: 50 }, (_, groupIndex) => {
+      const groupId = createHash("sha256").update(`performance-test-learner:${groupIndex}`).digest("hex");
+      return Array.from({ length: 11 }, (_, sampleIndex) => {
+        const improving = groupIndex < 25;
+        const target = improving
+          ? 0.2 + sampleIndex * 0.05
+          : 0.8 - sampleIndex * 0.05;
+        const occurredAt = new Date(Date.UTC(2026, 0, 1) +
+          (groupIndex * 10 + 3 + sampleIndex) * dayMs).toISOString();
+        return {
+          groupId,
+          occurredAt,
+          target,
+          features: {
+            completed_attempts: sampleIndex + 3,
+            previous_accuracy: Math.max(0, target - 0.05),
+            recent_accuracy_mean_3: Math.max(0, target - 0.1),
+          },
+        };
+      });
+    }).flat();
+  }
+
+  it("uses chronological 70/15/15 group holdouts, validation selection and rolling-origin folds", () => {
+    const results = trainRegisteredDataset(
+      performanceSamples(),
+      featureSchema,
+      "regression",
+      42,
+      { splitStrategy: "chronological-grouped" },
+    );
+    expect(results.map((result) => result.algorithm)).toEqual([
+      "multiple-linear-regression",
+      "performance-gradient-boosting",
+      "performance-random-forest",
+    ]);
+    for (const result of results) {
+      expect(result.splitStrategy).toBe("chronological-grouped-70-15-15");
+      expect(result.validationRows).toBeGreaterThan(0);
+      expect(result.timeSplit).toMatchObject({
+        trainGroups: 35,
+        validationGroups: 7,
+        testGroups: 8,
+      });
+      expect(result.timeSplit!.trainCutoff < result.timeSplit!.validationCutoff).toBe(true);
+      expect(result.crossValidation).toMatchObject({
+        method: "rolling-origin-grouped",
+        folds: expect.arrayContaining([
+          expect.objectContaining({ trainGroups: expect.any(Number), testGroups: expect.any(Number) }),
+          expect.objectContaining({ trainGroups: expect.any(Number), testGroups: expect.any(Number) }),
+        ]),
+      });
+      expect(result.metrics).toMatchObject({
+        mae: expect.any(Number),
+        rmse: expect.any(Number),
+        r2: expect.any(Number),
+      });
+    }
+  });
+
+  it("rejects performance training without point-in-time timestamps and enough learner groups", () => {
+    const samples = performanceSamples().map((sample, index) =>
+      index === 0 ? { ...sample, occurredAt: undefined } : sample);
+    expect(() => trainRegisteredDataset(
+      samples,
+      featureSchema,
+      "regression",
+      42,
+      { splitStrategy: "chronological-grouped" },
+    )).toThrow("valid occurredAt timestamp");
+  });
+});
