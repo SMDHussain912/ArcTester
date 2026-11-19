@@ -53,12 +53,19 @@ describe("registered dataset training", () => {
       { name: "attempts", type: "numeric" },
       { name: "accuracy", type: "numeric" },
     ], "regression", 7);
-    expect(results).toHaveLength(1);
-    expect(results[0]?.algorithm).toBe("multiple-linear-regression");
-    expect(results[0]?.metrics).toHaveProperty("mae");
-    expect(results[0]?.metrics).toHaveProperty("rmse");
-    expect(results[0]?.uncertainty).toMatchObject({ method: "holdout-rmse" });
-    expect(results[0]?.uncertainty?.residualStdDev).toBeGreaterThanOrEqual(0);
+    expect(results.map((result) => result.algorithm)).toEqual([
+      "multiple-linear-regression",
+      "performance-gradient-boosting",
+      "performance-random-forest",
+    ]);
+    for (const result of results) {
+      expect(result.metrics).toHaveProperty("mae");
+      expect(result.metrics).toHaveProperty("rmse");
+      expect(result.uncertainty).toMatchObject({ method: "holdout-rmse" });
+      expect(result.uncertainty?.residualStdDev).toBeGreaterThanOrEqual(0);
+    }
+    expect(results[1]?.model).toHaveProperty("modelType", "gradient-boosting-regressor");
+    expect(results[2]?.model).toHaveProperty("modelType", "random-forest-regressor");
   });
 
   it("ranks classifiers by F1 then accuracy and regression models by error", () => {
