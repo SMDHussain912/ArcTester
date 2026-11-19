@@ -219,6 +219,17 @@ export default function AdminModelLab({
         <button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button>
       </div>
 
+      <section className="admin-panel model-lab-guide" aria-label="How to use Model Lab">
+        <div className="admin-panel-head"><div><p className="eyebrow">START HERE · SIMPLE WORKFLOW</p><h2>What should I do in Model Lab?</h2></div></div>
+        <ol>
+          <li><strong>Prepare data.</strong> Register a dataset containing past examples and the value you want the model to predict.</li>
+          <li><strong>Train candidates.</strong> ArcTester trains several algorithms. Training creates experiments; it does not put a model into use.</li>
+          <li><strong>Compare fairly.</strong> Evaluate each candidate on held-out data against the current baseline. Lower MAE/RMSE is better for score prediction.</li>
+          <li><strong>Approve only if eligible.</strong> A candidate must pass the evaluation and governance checks before an administrator can activate it.</li>
+        </ol>
+        <p className="muted"><strong>Important:</strong> The model shown in your screenshot is not ready to use. Its TensorFlow candidate scored worse than the baseline on both MAE and RMSE, so leave it inactive. Continue using the existing baseline/rule-based recommendations while collecting better representative data.</p>
+      </section>
+
       <section className="model-intelligence-overview">
         <div className="model-intelligence-heading">
           <div><p className="eyebrow">ARCTESTER INTELLIGENCE STACK</p><h2>Model ecosystem</h2><p>Train specialist models, compare evidence, then use the decision layer to choose safe study actions.</p></div>
@@ -325,6 +336,18 @@ export default function AdminModelLab({
                   <div><small>Candidate RMSE</small><strong>{metric(result.candidate.rmse)}</strong></div>
                   <div><small>Baseline RMSE</small><strong>{metric(result.baseline.rmse)}</strong></div>
                 </div>}
+                {result.candidate && result.baseline && (() => {
+                  const maeKnown = typeof result.candidate.mae === "number" && typeof result.baseline.mae === "number";
+                  const rmseKnown = typeof result.candidate.rmse === "number" && typeof result.baseline.rmse === "number";
+                  const beatsMae = maeKnown && result.candidate.mae! < result.baseline.mae!;
+                  const beatsRmse = rmseKnown && result.candidate.rmse! < result.baseline.rmse!;
+                  const compared = maeKnown && rmseKnown;
+                  return <div className="model-result-explanation" role="status">
+                    <strong>{result.productionEligible ? "What this means: candidate passed the evaluation gate." : "What this means: keep this candidate inactive."}</strong>
+                    <p>{compared ? (beatsMae && beatsRmse ? "The candidate has lower average error on both metrics. It may proceed to the remaining approval checks; it is not automatically deployed." : "The candidate did not beat the baseline on both error metrics. The current baseline is the safer choice for predictions.") : "The report does not contain enough comparable error metrics to decide whether this candidate is better."}</p>
+                    <p><b>Next action:</b> {result.productionEligible ? "Review the data source, holdout split and approval record before activation." : "Do not activate or deploy it. Check data quality, collect more representative real-world examples, then train and evaluate a new candidate."}</p>
+                  </div>;
+                })()}
                 {result.reason && <p className="muted">{result.reason}</p>}
                 <details><summary>Raw training report</summary><pre className="model-result-json">{JSON.stringify(job.result, null, 2)}</pre></details>
               </div>;
