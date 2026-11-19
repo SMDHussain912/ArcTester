@@ -24,6 +24,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [section, setSection] = useState<"overview" | "materials" | "concepts" | "offline">("overview");
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
@@ -162,9 +163,13 @@ export default function StudentLearningHub({ api, userId }: Props) {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.sectionTabs} accessibilityRole="tablist">
+        {(["overview", "materials", "concepts", "offline"] as const).map((item) => <TouchableOpacity key={item} accessibilityRole="tab" accessibilityState={{ selected: section === item }} onPress={() => setSection(item)} style={[styles.sectionTab, section === item && styles.sectionTabActive]}><Text style={[styles.sectionTabText, section === item && styles.sectionTabTextActive]}>{item === "overview" ? "Overview" : item === "materials" ? "Study materials" : item === "concepts" ? "Concepts" : "Offline"}</Text></TouchableOpacity>)}
+      </View>
       {!!error && <View style={styles.notice}><Text style={styles.noticeText}>{error}</Text></View>}
       {loading && !overview && concepts.length === 0 && <ActivityIndicator size="large" style={{ marginVertical: 24 }} />}
 
+      {section === "overview" && <View>
       <Text style={styles.sectionTitle}>Your progress</Text>
       {overview ? (
         <View style={styles.metrics}>
@@ -203,6 +208,8 @@ export default function StudentLearningHub({ api, userId }: Props) {
         <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Exam results</Text><Text style={styles.meta}>Notify me when a result or reviewed submission is available.</Text></View><Switch value={preferences.examResults} disabled={savingPreference} onValueChange={(value) => void updatePreference("examResults", value)} /></View>
         {savingPreference ? <Text style={styles.meta}>Saving preference…</Text> : null}
       </View>
+      </View>}
+      {section === "offline" && <View>
       <Text style={styles.sectionTitle}>Offline question bank</Text>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{offlinePackage ? offlinePackage.total.toLocaleString() + " questions saved on this device" : "No offline question bank yet"}</Text>
@@ -271,6 +278,15 @@ export default function StudentLearningHub({ api, userId }: Props) {
         </View>
       ) : null}
 
+      </View>}
+      {section === "materials" && <View>
+        <Text style={styles.sectionTitle}>Study materials</Text>
+        <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={styles.search} />
+        {visibleMaterials.map((material) => <View key={material.id} style={styles.card}><Text style={styles.cardTitle}>{material.title}</Text><Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>{!!material.description && <Text style={styles.body}>{material.description}</Text>}{(material.mimeType === "text/plain" || material.mimeType === "text/markdown") ? <TouchableOpacity onPress={() => { const saved = offlineMaterials.find((item) => item.id === material.id); if (saved) openOfflineMaterial(saved); else void downloadStudyMaterial(material); }} disabled={downloadingMaterialId === material.id} style={styles.refresh}><Text style={styles.refreshText}>{downloadingMaterialId === material.id ? "Saving…" : offlineMaterials.some((item) => item.id === material.id) ? "Read offline" : "Download for offline reading"}</Text></TouchableOpacity> : <Text style={styles.meta}>PDF preview/download requires an internet connection in this mobile app.</Text>}</View>)}
+        {!loading && visibleMaterials.length === 0 && <Text style={styles.empty}>{materialQuery ? "No study materials match this search." : "No published study materials are available yet."}</Text>}
+        {selectedOfflineMaterial ? <View style={styles.card}><Text style={styles.meta}>OFFLINE READER · {selectedOfflineMaterial.subject}{selectedOfflineMaterial.topic ? " · " + selectedOfflineMaterial.topic : ""}</Text><Text style={styles.cardTitle}>{selectedOfflineMaterial.title}</Text><Text style={styles.body}>{selectedOfflineMaterial.description}</Text><Text selectable style={styles.offlineContent}>{selectedOfflineMaterial.content}</Text><TouchableOpacity onPress={() => setSelectedOfflineMaterial(null)} style={styles.refresh}><Text style={styles.refreshText}>Close reader</Text></TouchableOpacity></View> : null}
+      </View>}
+      {section === "concepts" && <View>
       <Text style={styles.sectionTitle}>Concept library</Text>
       <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={styles.search} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -306,6 +322,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
         );
       })}
       {!loading && filtered.length === 0 && <Text style={styles.empty}>No concepts match this search.</Text>}
+      </View>}
       <Text style={styles.footer}>{concepts.length} curated concepts available</Text>
     </ScrollView>
   );
@@ -313,6 +330,11 @@ export default function StudentLearningHub({ api, userId }: Props) {
 
 const styles = StyleSheet.create({
   container: { paddingBottom: 28, gap: 12 },
+  sectionTabs: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  sectionTab: { borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 20, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: "#ffffff" },
+  sectionTabActive: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
+  sectionTabText: { color: "#475569", fontSize: 12, fontWeight: "800" },
+  sectionTabTextActive: { color: "#ffffff" },
   header: { backgroundColor: "#eef4ff", borderRadius: 18, padding: 18, gap: 7 },
   eyebrow: { color: "#2563eb", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
   title: { color: "#14213d", fontSize: 25, fontWeight: "900" },
