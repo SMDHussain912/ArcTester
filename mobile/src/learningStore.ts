@@ -9,7 +9,8 @@ export type OfflineLearningQuestion = {
   difficulty: string;
 };
 export type OfflineLearningPackage = {
-  schemaVersion: 2;
+  schemaVersion: 2 | 3;
+  practiceOnly?: true;
   exportedAt: string;
   total: number;
   subjects: string[];
@@ -48,7 +49,8 @@ export function validateOfflineLearningPackage(value: unknown): OfflineLearningP
   }
   const item = value as Partial<OfflineLearningPackage>;
   if (
-    item.schemaVersion !== 2 ||
+    (item.schemaVersion !== 2 && item.schemaVersion !== 3) ||
+    (item.schemaVersion === 3 && item.practiceOnly !== true) ||
     typeof item.exportedAt !== "string" || !Number.isFinite(Date.parse(item.exportedAt)) ||
     !Array.isArray(item.subjects) || item.subjects.some((subject) => typeof subject !== "string") ||
     !Array.isArray(item.questions) || item.questions.length > 100000 ||
