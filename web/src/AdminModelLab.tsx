@@ -46,12 +46,12 @@ const DEFAULT_FEATURE_SCHEMA = [
 const LEGACY_BASELINE_ALGORITHMS = new Set(["knn", "decision-tree", "gaussian-naive-bayes"]);
 
 const APPROVED_MODEL_PORTFOLIO = [
-  { id: "performance-gradient-boosting", name: "Gradient Boosting", purpose: "Next-attempt performance prediction", inputs: "Point-in-time attempt history and subject/topic mastery", outputs: "Predicted accuracy, interval and local explanation factors", gate: "500+ examples · 50+ learner groups · beat MAE and RMSE baselines" },
-  { id: "performance-random-forest", name: "Random Forest", purpose: "Performance prediction and feature importance", inputs: "Same versioned performance features and splits as Gradient Boosting", outputs: "Predicted accuracy, interval and stable global feature importance", gate: "Paired holdout comparison · stable importance across folds" },
-  { id: "exam-readiness-classifier", name: "Readiness Classifier", purpose: "Classify exam readiness", inputs: "Recent practice, subject coverage and prior full mock history", outputs: "Not ready / Developing / Ready probabilities", gate: "1,000+ labeled snapshots · 100+ learner groups · calibrated false-READY rate" },
-  { id: "adaptive-question-selector", name: "Adaptive Learning", purpose: "Personalized next-question ranking", inputs: "Learner mastery state, eligible questions and session constraints", outputs: "Ranked question IDs with reason codes", gate: "10,000+ logged decisions · 200+ learner groups · offline policy evaluation" },
-  { id: "question-semantic-embeddings", name: "Question Embeddings", purpose: "Semantic search and question relationships", inputs: "Approved question stem and subject/topic context", outputs: "384-dimensional vectors and ranked semantic matches", gate: "Human-reviewed pairs · retrieval quality and latency benchmarks" },
-  { id: "exam-session-anomaly", name: "Exam Anomaly Detection", purpose: "Flag unusual exam sessions for human review", inputs: "Server-observed session event aggregates and telemetry coverage", outputs: "Anomaly score, severity and evidence reason codes", gate: "2,000+ sessions · 200+ learner groups · reviewed false-positive rate" },
+  { id: "performance-gradient-boosting", name: "Gradient Boosting", purpose: "Next-attempt performance prediction", inputs: "Point-in-time attempt history and subject/topic mastery", outputs: "Predicted accuracy, interval and local explanation factors", status: "TRAINABLE · CANDIDATE ONLY", gate: "500+ examples · 50+ learner groups · beat MAE and RMSE baselines" },
+  { id: "performance-random-forest", name: "Random Forest", purpose: "Performance prediction and feature importance", inputs: "Same versioned performance features and splits as Gradient Boosting", outputs: "Predicted accuracy, interval and stable global feature importance", status: "TRAINABLE · CANDIDATE ONLY", gate: "Paired holdout comparison · stable importance across folds" },
+  { id: "exam-readiness-classifier", name: "Readiness Classifier", purpose: "Classify exam readiness", inputs: "Recent practice, subject coverage and prior full mock history", outputs: "Not ready / Developing / Ready probabilities", status: "CORE CLASSIFIER BUILT · REGISTRY PENDING", gate: "1,000+ labeled snapshots · 100+ learner groups · calibrated false-READY rate" },
+  { id: "adaptive-question-selector", name: "Adaptive Learning", purpose: "Personalized next-question ranking", inputs: "Learner mastery state, eligible questions and session constraints", outputs: "Ranked question IDs with reason codes", status: "BASELINE POLICY BUILT · API WIRING PENDING", gate: "10,000+ logged decisions · 200+ learner groups · offline policy evaluation" },
+  { id: "question-semantic-embeddings", name: "Question Embeddings", purpose: "Semantic search and question relationships", inputs: "Approved question stem and subject/topic context", outputs: "384-dimensional vectors and ranked semantic matches", status: "INDEX BUILT · PRETRAINED ENCODER PENDING", gate: "Human-reviewed pairs · retrieval quality and latency benchmarks" },
+  { id: "exam-session-anomaly", name: "Exam Anomaly Detection", purpose: "Flag unusual exam sessions for human review", inputs: "Server-observed session event aggregates and telemetry coverage", outputs: "Anomaly score, severity and evidence reason codes", status: "ISOLATION FOREST BUILT · REVIEW PIPELINE PENDING", gate: "2,000+ sessions · 200+ learner groups · reviewed false-positive rate" },
 ] as const;
 
 type ModelAuditEvent = {id:string;actorId:number|null;modelId:string;version:number;action:string;details:Record<string,unknown>;createdAt:string};
@@ -325,12 +325,12 @@ export default function AdminModelLab({
       </section>
 
       <section className="admin-panel" aria-labelledby="approved-model-portfolio-title">
-        <div className="admin-panel-head"><div><p className="eyebrow">INTELLIGENCE ROADMAP</p><h2 id="approved-model-portfolio-title">Approved model portfolio</h2></div><span className="status status-pending">6 planned · 0 newly implemented</span></div>
-        <p className="muted">These six model capabilities are approved architecture targets, not trained or production-active models. Each has its own dataset contract and qualification gate. Existing registry entries below remain separate legacy/baseline artifacts.</p>
+        <div className="admin-panel-head"><div><p className="eyebrow">INTELLIGENCE ROADMAP</p><h2 id="approved-model-portfolio-title">Approved model portfolio</h2></div><span className="status status-pending">2 trainable · 4 core engines in progress</span></div>
+        <p className="muted">Implementation is underway. Gradient Boosting and Random Forest now train as registry candidates. The other four have core algorithms or infrastructure in place, with the remaining registry, runtime, and product integration work shown below. No candidate is production-active without independent real-data evaluation and approval.</p>
         <div className="model-registry-list">
           {APPROVED_MODEL_PORTFOLIO.map((model) => <article className="model-registry-row" key={model.id}>
             <div><strong>{model.name}</strong><p className="muted">{model.purpose}</p><small><b>Inputs:</b> {model.inputs}</small><p><small><b>Outputs:</b> {model.outputs}</small></p><small><b>Qualification:</b> {model.gate}</small></div>
-            <span className="status status-pending">PLANNED</span>
+            <span className="status status-pending">{model.status}</span>
           </article>)}
         </div>
         <p className="muted"><a href="https://github.com/smdgamekingindo-TN/ArcTester/blob/main/docs/APPROVED_MODEL_ARCHITECTURE.md" target="_blank" rel="noreferrer">Open exact input/output, dataset, evaluation and deployment contracts</a></p>
