@@ -71,6 +71,7 @@ type AdminModelLabProps = {
   onModelPrefixChange: (prefix: string) => void;
   onQueueTraining: (options: {seed:number;epochs:number;batchSize:number}) => void;
   onTrainClassical: (seed:number) => void;
+  onTrainReadiness?: (seed:number) => void;
   onRefresh: () => void;
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
   onCancelJob?: (jobId: string) => void;
@@ -148,7 +149,7 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onTrainReadiness, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
@@ -182,6 +183,7 @@ export default function AdminModelLab({
   const [historyError,setHistoryError]=useState("");
   const [epochHistory,setEpochHistory]=useState<Record<string,EpochPoint[]>>({});
   const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId);
+  const readinessEligible = selectedDataset?.task === "regression" && selectedDataset.datasetKind === "real-anonymized" && !!selectedDataset.featureSchema?.some((feature) => feature.name === "completed_attempts" && feature.type === "numeric") && !!selectedDataset.featureSchema?.length && selectedDataset.featureSchema.every((feature) => feature.type === "numeric");
   const tensorflowEligible = selectedDataset?.task === "regression" &&
     (selectedDataset.featureSchema?.length ?? 0) > 0 &&
     selectedDataset.featureSchema?.every((feature) => feature.type === "numeric") === true;
@@ -369,8 +371,8 @@ export default function AdminModelLab({
         <div className="model-training-options"><label>Model ID prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label><label>Random seed<input type="number" min="0" max="4294967295" value={seed} onChange={event=>setSeed(event.target.value)} /></label></div>
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.featureSchema?.length ?? 0} features · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
         <details className="model-training-settings"><summary>TensorFlow.js training settings</summary><div className="model-training-options"><label>Epochs<input type="number" min="1" max="500" value={epochs} onChange={event=>setEpochs(event.target.value)} /></label><label>Batch size<input type="number" min="1" max="256" value={batchSize} onChange={event=>setBatchSize(event.target.value)} /></label></div><p className="muted">These settings apply only to TensorFlow.js jobs, not the logistic or linear baseline.</p></details>
-        <div className="row wrap"><button className="primary" disabled={!tensorflowEligible || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295 || !Number.isInteger(Number(epochs)) || Number(epochs)<1 || Number(epochs)>500 || !Number.isInteger(Number(batchSize)) || Number(batchSize)<1 || Number(batchSize)>256} onClick={()=>onQueueTraining({seed:Number(seed),epochs:Number(epochs),batchSize:Number(batchSize)})}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainClassical(Number(seed))}>{selectedDataset?.task === "regression" ? "Train performance models" : "Train logistic baseline"}</button></div>
-        {selectedDataset && !tensorflowEligible && <p className="muted">TensorFlow.js requires a regression dataset with numeric-only features. Use the logistic/linear baseline for this dataset.</p>}<p className="muted"><strong>Which button?</strong> For regression datasets, <b>Train performance models</b> trains the linear baseline, Gradient Boosting and Random Forest on the same holdout split. For binary classification, <b>Train logistic baseline</b> trains the logistic-regression baseline. <b>Queue TensorFlow.js</b> remains a separate numeric-regression experiment. All candidates are inactive until independently evaluated and approved.</p>
+        <div className="row wrap"><button className="primary" disabled={!tensorflowEligible || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295 || !Number.isInteger(Number(epochs)) || Number(epochs)<1 || Number(epochs)>500 || !Number.isInteger(Number(batchSize)) || Number(batchSize)<1 || Number(batchSize)>256} onClick={()=>onQueueTraining({seed:Number(seed),epochs:Number(epochs),batchSize:Number(batchSize)})}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainClassical(Number(seed))}>{selectedDataset?.task === "regression" ? "Train performance models" : "Train logistic baseline"}</button>{readinessEligible && onTrainReadiness && <button className="button button-secondary" disabled={busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainReadiness(Number(seed))}>Train readiness classifier</button>}</div>
+        {selectedDataset && !tensorflowEligible && <p className="muted">TensorFlow.js requires a regression dataset with numeric-only features. Use the logistic/linear baseline for this dataset.</p>}<p className="muted"><strong>Which button?</strong> For regression datasets, <b>Train performance models</b> trains the linear baseline, Gradient Boosting and Random Forest on the same holdout split. For binary classification, <b>Train logistic baseline</b> trains the logistic-regression baseline. <b>Queue TensorFlow.js</b> remains a separate numeric-regression experiment. Readiness training requires real-anonymized labels encoded as 0 = Not Ready, 1 = Developing, 2 = Ready. All candidates remain inactive until independently evaluated and approved.</p>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
