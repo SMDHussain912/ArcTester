@@ -44,8 +44,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [error, setError] = useState("");
+  const loadGeneration = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError("");
     const [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult] = await Promise.allSettled([
@@ -62,6 +64,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
     if (predictionResult.status === "fulfilled") setPrediction(predictionResult.value);
     if (preferenceResult.status === "fulfilled") setPreferences(preferenceResult.value.preferences);
     if (materialResult.status === "fulfilled") setStudyMaterials(materialResult.value.materials ?? []);
+    if (generation !== loadGeneration.current) return;
     const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
     if (failures.length === 6) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
@@ -84,7 +87,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
     }).catch((cause) => {
       if (active) setError(cause instanceof Error ? cause.message : "Could not load saved study materials.");
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      loadGeneration.current += 1;
+    };
   }, [load, userId]);
 
   useEffect(() => NetInfo.addEventListener((state) => {

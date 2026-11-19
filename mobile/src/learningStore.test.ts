@@ -55,6 +55,12 @@ describe("offline study material", () => {
     expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, mimeType: "application/pdf" })).toThrow(/unsupported or incomplete format/i);
   });
 
+  it("checks the stored byte count using UTF-8 rather than JavaScript character count", () => {
+    const unicode = { ...validOfflineMaterial, content: "Résumé", sizeBytes: 8 };
+    expect(validateOfflineStudyMaterial(unicode)).toEqual(unicode);
+    expect(() => validateOfflineStudyMaterial({ ...unicode, sizeBytes: 6 })).toThrow(/unsupported or incomplete format/i);
+  });
+
   it("rejects content that exceeds the offline storage limit", () => {
     expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, sizeBytes: 8 * 1024 * 1024 + 1 })).toThrow(/unsupported or incomplete format/i);
   });
