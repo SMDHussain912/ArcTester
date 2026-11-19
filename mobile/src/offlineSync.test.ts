@@ -142,6 +142,41 @@ describe("offlineSync", () => {
     expect(mockedMarkSynced).toHaveBeenCalledTimes(1);
   });
 
+  it("recovers when the server accepted a submission but the response was lost", async () => {
+    mockedGetPending.mockResolvedValue([attempt]);
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("Connection reset after request was sent"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          duplicate: true,
+          submission: { id: "sub-already-created", attemptUuid: attempt.attemptUuid },
+        }),
+      } as Response);
+
+    const first = await syncPendingSubmissions("https://api.example.com/", "token-abc");
+    expect(first).toEqual({ uploaded: 0, failed: 1, remaining: 1 });
+    expect(mockedKeepPending).toHaveBeenCalledWith(
+      attempt.assignmentId,
+      "Connection reset after request was sent"
+    );
+    expect(mockedMarkSynced).not.toHaveBeenCalled();
+
+    mockedGetPending.mockResolvedValue([attempt]);
+    const second = await syncPendingSubmissions("https://api.example.com", "token-abc");
+    expect(second).toEqual({ uploaded: 1, failed: 0, remaining: 0 });
+    expect(mockedMarkSynced).toHaveBeenCalledWith(attempt.assignmentId, "sub-already-created");
+
+    const requests = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(requests).toHaveLength(2);
+    const firstBody = JSON.parse(requests[0][1].body as string);
+    const retryBody = JSON.parse(requests[1][1].body as string);
+    expect(retryBody).toEqual(firstBody);
+    expect(retryBody.attemptUuid).toBe(attempt.attemptUuid);
+  });
+
   it("keeps a submission pending when the server omits the attempt identifier", async () => {
     mockedGetPending.mockResolvedValue([attempt]);
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
