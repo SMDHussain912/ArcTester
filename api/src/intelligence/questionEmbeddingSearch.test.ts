@@ -76,5 +76,9 @@ describe("persisted question embedding search", () => {
     await expect(searchPersistedQuestionEmbeddings(db, "  ", encoder)).rejects.toThrow("3 to 1,000");
     await expect(searchPersistedQuestionEmbeddings(db, "valid search text", encoder, { candidateLimit: 501 }))
       .rejects.toThrow("candidateLimit");
+    await expect(searchPersistedQuestionEmbeddings(db, "valid search text", encoder, { limit: 0 }))
+      .rejects.toThrow("limit");
+    await expect(searchPersistedQuestionEmbeddings(db, "valid search text", encoder, { limit: 51 }))
+      .rejects.toThrow("limit");
   });
 });
