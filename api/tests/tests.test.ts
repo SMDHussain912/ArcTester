@@ -678,4 +678,41 @@ describe("practice and exam question pools", () => {
       await server.db.exam.delete({ where: { id: exam.id } });
     }
   });
+  it("uses only practice-pool questions when that pool can satisfy the requested paper", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const [examQuestion] = await server.db.question.findMany({ where: { subjectId: maths.id }, take: 1 });
+    expect(examQuestion).toBeDefined();
+    const exam = await server.db.exam.create({
+      data: {
+        title: "Practice-only selection test",
+        createdById: userId,
+        versions: { create: {
+          version: 1,
+          durationMinutes: 30,
+          sebKeys: [],
+          publishedAt: new Date(),
+          questions: { create: {
+            sourceQuestionId: examQuestion!.id,
+            position: 1,
+            subject: "Maths",
+            topic: null,
+            text: examQuestion!.text,
+            options: examQuestion!.options,
+            correctIndex: examQuestion!.correctIndex,
+          } },
+        } },
+      },
+    });
+    try {
+      const response = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+      expect(response.status).toBe(201);
+      const body = response.json as { questions: { id: number }[]; warnings: string[] };
+      expect(body.questions).toHaveLength(2);
+      expect(body.questions.every((question) => question.id !== examQuestion!.id)).toBe(true);
+      expect(body.warnings.some((warning) => warning.toLowerCase().includes("exam questions"))).toBe(false);
+    } finally {
+      await server.db.exam.delete({ where: { id: exam.id } });
+    }
+  });
+
 });
