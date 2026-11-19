@@ -301,6 +301,31 @@ describe("offlineStore", () => {
     expect(remaining).toBeLessThanOrEqual(60 * 60);
   });
 
+  it("atomically saves answers and freezes the answer set when queueing submission", async () => {
+    configureOfflineStore("user-atomic-submission");
+    await saveExamPackage(packagePayload, expectedSha256);
+    await startOfflineAttempt("assignment-1");
+
+    fakeSqliteRef.withExclusiveTransactionAsync.mockClear();
+    fakeSqliteRef.withTransactionAsync.mockClear();
+    await saveOfflineAnswer("assignment-1", "q1", 1);
+    const queued = await queueOfflineSubmission("assignment-1");
+
+    expect(
+      fakeSqliteRef.withExclusiveTransactionAsync.mock.calls.length +
+      fakeSqliteRef.withTransactionAsync.mock.calls.length
+    ).toBe(2);
+    expect(queued.answers.find((answer) => answer.examQuestionId === "q1")?.selectedIndex).toBe(1);
+    await expect(saveOfflineAnswer("assignment-1", "q1", 2)).rejects.toThrow(
+      "There is no active attempt to save."
+    );
+
+    const retried = await queueOfflineSubmission("assignment-1");
+    expect(retried.attemptUuid).toBe(queued.attemptUuid);
+    expect(retried.submittedAt).toBe(queued.submittedAt);
+    expect(retried.answers).toEqual(queued.answers);
+  });
+
   it("persists the greatest observed timer checkpoint when the device clock moves backwards", async () => {
     configureOfflineStore("user-clock");
     await saveExamPackage(packagePayload, expectedSha256);
