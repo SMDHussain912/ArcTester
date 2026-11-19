@@ -207,7 +207,7 @@ export default function AdminModelLab({
   useEffect(() => {
     let active = true;
     setAdaptiveAnalyticsLoading(true);
-    const base = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+    const base = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
     fetch(base + "/admin/adaptive-learning/analytics?days=30&limit=5000", { credentials: "include" })
       .then(async (response) => {
         const body = await response.json().catch(() => ({}));
