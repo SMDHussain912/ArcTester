@@ -182,6 +182,15 @@ describe("offlineStore", () => {
     tables.clear();
   });
 
+  it("opens a separate SQLite database for each signed-in user", () => {
+    configureOfflineStore("account-a");
+    configureOfflineStore("account-b");
+
+    const openedNames = fakeSqliteRef.openDatabaseAsync.mock.calls.map(([name]) => name);
+    expect(openedNames).toContain("arctester-offline-account-a.db");
+    expect(openedNames).toContain("arctester-offline-account-b.db");
+  });
+
   it("saves and loads an exam package", async () => {
     configureOfflineStore("user-1");
     await saveExamPackage(packagePayload, expectedSha256);
