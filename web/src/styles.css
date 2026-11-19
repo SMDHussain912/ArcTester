@@ -859,3 +859,14 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .student-analytics .analytics-errors li{margin:3px 0}
 .student-analytics .analytics-errors span{display:block;margin-top:8px;font-size:12px}
 @media(max-width:560px){.student-analytics .analytics-toolbar{align-items:stretch}.student-analytics .analytics-toolbar button{width:100%}.student-analytics .stat-grid{grid-template-columns:1fr}.student-analytics .row{flex-wrap:wrap}}
+
+
+/* Practice-session navigation and answer state */
+.exam-palette-item[aria-current="step"]{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
+.exam-palette-item:focus-visible,.question-card-navigation button:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
+.exam-question-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.question-card[data-active="true"]{scroll-margin-top:18px}
+.question-card-navigation{justify-content:space-between;gap:10px;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)}
+.options .option[aria-pressed="true"]{border-color:var(--accent)}
+@media(max-width:560px){.exam-question-controls{align-items:stretch}.exam-question-controls>.row{width:100%;display:grid;grid-template-columns:1fr 1fr}.exam-question-controls>.row button{min-width:0;padding-inline:8px}.question-card-navigation button{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.exam-question-navigator{scroll-behavior:auto}}
