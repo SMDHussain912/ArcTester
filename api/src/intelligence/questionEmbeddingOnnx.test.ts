@@ -24,7 +24,8 @@ describe("pinned ONNX question embedding encoder", () => {
       QUESTION_EMBEDDING_MODEL_ID,
       {
         revision: QUESTION_EMBEDDING_MODEL_REVISION,
-        quantized: true,
+        dtype: "q8",
+        device: "cpu",
         cache_dir: "/tmp/arctester-model-cache",
         local_files_only: true,
       },
