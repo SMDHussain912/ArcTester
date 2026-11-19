@@ -9,9 +9,7 @@
 import { friendlyError, type SubmitAnswer } from "./answers";
 import type { BrowserTensorflowArtifact } from "./tensorflowInference";
 
-export const API_BASE = (
-  import.meta.env.VITE_API_URL || "https://arctester.onrender.com"
-).replace(/\/+$/, "");
+export const API_BASE = "/api";
 
 export interface PublicQuestion {
   id: number;
