@@ -166,9 +166,9 @@ describe("ModelRegistry", () => {
     const prediction = predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 10 });
     expect(prediction.task).toBe("multiclass-classification");
     expect(prediction.readiness?.status).not.toBe("insufficient_data");
-    expect(prediction.readiness?.probabilities.NOT_READY +
-      prediction.readiness?.probabilities.DEVELOPING +
-      prediction.readiness?.probabilities.READY).toBeCloseTo(1, 8);
+    expect(prediction.readiness).toBeDefined();
+    const probabilities = prediction.readiness!.probabilities;
+    expect(probabilities.NOT_READY + probabilities.DEVELOPING + probabilities.READY).toBeCloseTo(1, 8);
     expect(predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 2 }).readiness?.status)
       .toBe("insufficient_data");
     expect(() => predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 10.5 }))
