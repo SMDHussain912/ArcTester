@@ -6,6 +6,15 @@ const datasets: ModelLabDataset[] = [{ id: "dataset-1", name: "CSE readiness", t
 const jobs: ModelLabJob[] = [{ id: "job-1", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "RUNNING", progress: 45, errorMessage: "" }];
 
 describe("AdminModelLab", () => {
+  it("shows the six approved model capabilities as planned, not active", () => {
+    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    for (const name of ["Gradient Boosting", "Random Forest", "Readiness Classifier", "Adaptive Learning", "Question Embeddings", "Exam Anomaly Detection"]) {
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+    expect(screen.getByText("6 planned · 0 newly implemented")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Refresh" })).toHaveLength(1);
+  });
+
   it("renders datasets, training controls and job progress", () => {
     render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
