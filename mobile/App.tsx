@@ -843,7 +843,7 @@ export default function App() {
             </TouchableOpacity>
           </Animated.View>
         ) : showExams ? (
-          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} darkMode={darkMode} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
+          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} darkMode={darkMode} questionTextSize={questionTextSize} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : result ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice result</Text>
