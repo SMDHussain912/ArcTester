@@ -33,7 +33,7 @@ export interface TensorflowTrainingOptions {
   epochs?: number;
   batchSize?: number;
   /** Persist epoch-level progress without coupling the trainer to a database. */
-  onEpochEnd?: (epoch: number) => void | Promise<void>;
+  onEpochEnd?: (epoch: number, metrics: { loss?: number; mae?: number }) => void | Promise<void>;
 }
 
 export interface TensorflowTrainingResult {
@@ -178,8 +178,8 @@ train.adam(0.01),
       shuffle: false,
       verbose: 0,
       callbacks: {
-        onEpochEnd: async (epoch: number) => {
-          await options.onEpochEnd?.(epoch);
+        onEpochEnd: async (epoch: number, logs?: { loss?: number; mae?: number }) => {
+          await options.onEpochEnd?.(epoch, { loss: logs?.loss, mae: logs?.mae });
         },
       },
     });
