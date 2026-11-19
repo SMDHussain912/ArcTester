@@ -137,6 +137,58 @@ jobs:
       - name: Test SQLite data migration helpers
         run: python -m unittest scripts/test_migrate_sqlite_to_postgres.py -v
 
+  backup-restore-rehearsal:
+    name: PostgreSQL backup/restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester
+      RESTORE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester_rehearsal_ci
+      PGPASSWORD: postgres
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Prepare isolated source and empty rehearsal target
+        run: |
+          createdb --maintenance-db="$DATABASE_URL" arctester_rehearsal_ci
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE backup_rehearsal_probe (
+            id integer PRIMARY KEY,
+            payload text NOT NULL
+          );
+          INSERT INTO backup_rehearsal_probe (id, payload)
+          VALUES (1, 'restore-check-one'), (2, 'restore-check-two');
+          SQL
+
+      - name: Run guarded backup and restore rehearsal
+        env:
+          BACKUP_FILE: ${{ runner.temp }}/arctester-rehearsal.dump
+        run: scripts/backup-restore-rehearsal.sh --execute
+
+      - name: Verify restored application data
+        run: |
+          restored="$(psql "$RESTORE_DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM backup_rehearsal_probe WHERE payload LIKE 'restore-check-%'")"
+          test "$restored" = "2"
   playwright-e2e:
     name: Playwright E2E tests
     runs-on: ubuntu-latest
