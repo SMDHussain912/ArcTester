@@ -1137,7 +1137,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Progress data is temporarily unavailable.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("The progress response was incomplete. Refresh to try again.");
     fireEvent.click(screen.getByRole("button", { name: "Retry progress" }));
     expect(await screen.findByText("2", { selector: "strong" })).toBeInTheDocument();
     expect(analyticsRequests).toBe(2);
