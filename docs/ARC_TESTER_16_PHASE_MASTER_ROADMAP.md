@@ -528,9 +528,9 @@ Only Phases 4, 5, 6, 7, 8, 9 and 10 changed in this audit. No phase is marked co
 
 ### Overall estimated completion
 
-**66% overall (phase-average estimate).**
+**69% overall (phase-average estimate).**
 
-Calculation correction: the 16 phase scores now sum to 1,060 percentage points, so their equally weighted arithmetic mean is 66.25%, rounded to 66%. This is a planning estimate, not a claim that 66% of all possible code or tests are complete.
+Calculation: the 16 phase scores now sum to 1,105 percentage points, so their equally weighted arithmetic mean is 69.06%, rounded to 69%. This is a planning estimate, not a claim that 69% of all possible code or tests are complete.
 
 ### Phase count
 
