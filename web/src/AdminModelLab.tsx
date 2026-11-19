@@ -26,7 +26,7 @@ function TrainingMetricChart({title,points,metric,totalEpochs}:{title:string;poi
 export type IntelligenceProviderStatus = { external: { provider: string; configured: boolean }; local: { provider: string; configured: boolean; baseUrl: string }; fallback: string[] };
 export type ModelDatasetRegistration = {
   name: string;
-  task: "regression" | "binary-classification";
+  task: "regression" | "binary-classification" | "multiclass-classification";
   targetColumn: string;
   featureSchema: { name: string; type: "numeric" | "categorical"; categories?: string[] }[];
   samples: { features: Record<string, number | string>; target: number; groupId: string }[];
@@ -102,6 +102,10 @@ function validateDatasetRows(
   if (!Array.isArray(samples) || samples.length < 30 || samples.length > 5000) {
     throw new Error("Samples must contain 30 to 5,000 rows.");
   }
+  if (task === "multiclass-classification" &&
+    (schema.some((feature) => feature.type !== "numeric") || !schema.some((feature) => feature.name === "completed_attempts"))) {
+    throw new Error("Readiness datasets require numeric-only features including completed_attempts.");
+  }
   for (let index = 0; index < samples.length; index += 1) {
     const sample = samples[index];
     if (!sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features)) {
@@ -115,6 +119,9 @@ function validateDatasetRows(
     }
     if (task === "binary-classification" && sample.target !== 0 && sample.target !== 1) {
       throw new Error("Binary-classification targets must be exactly 0 or 1 (row " + (index + 1) + ").");
+    }
+    if (task === "multiclass-classification" && (!Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2)) {
+      throw new Error("Readiness labels must be exactly 0, 1 or 2 (row " + (index + 1) + ").");
     }
     for (const feature of schema) {
       const value = sample.features[feature.name];
@@ -153,7 +160,7 @@ export default function AdminModelLab({
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
-  const [task, setTask] = useState<"regression" | "binary-classification">("regression");
+  const [task, setTask] = useState<"regression" | "binary-classification" | "multiclass-classification">("regression");
   const [datasetKind, setDatasetKind] = useState<"synthetic" | "real-anonymized">("synthetic");
   const [sourceDescription, setSourceDescription] = useState("");
   const [sourceAttested, setSourceAttested] = useState(false);
@@ -183,7 +190,7 @@ export default function AdminModelLab({
   const [historyError,setHistoryError]=useState("");
   const [epochHistory,setEpochHistory]=useState<Record<string,EpochPoint[]>>({});
   const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId);
-  const readinessEligible = selectedDataset?.task === "regression" && selectedDataset.datasetKind === "real-anonymized" && !!selectedDataset.featureSchema?.some((feature) => feature.name === "completed_attempts" && feature.type === "numeric") && !!selectedDataset.featureSchema?.length && selectedDataset.featureSchema.every((feature) => feature.type === "numeric");
+  const readinessEligible = selectedDataset?.task === "multiclass-classification" && selectedDataset.datasetKind === "real-anonymized" && !!selectedDataset.featureSchema?.some((feature) => feature.name === "completed_attempts" && feature.type === "numeric") && !!selectedDataset.featureSchema?.length && selectedDataset.featureSchema.every((feature) => feature.type === "numeric");
   const tensorflowEligible = selectedDataset?.task === "regression" &&
     (selectedDataset.featureSchema?.length ?? 0) > 0 &&
     selectedDataset.featureSchema?.every((feature) => feature.type === "numeric") === true;
@@ -222,7 +229,7 @@ export default function AdminModelLab({
         overall_average_accuracy: 0.48 + (index % 9) / 20,
         previous_question_count: 20,
       },
-      target: task === "binary-classification" ? index % 2 : Math.min(1, 0.5 + (index % 10) / 20),
+      target: task === "binary-classification" ? index % 2 : task === "multiclass-classification" ? index % 3 : Math.min(1, 0.5 + (index % 10) / 20),
       groupId: (index + 1).toString(16).padStart(64, "0"),
     }));
     const blob = new Blob([JSON.stringify({ samples: rows }, null, 2)], { type: "application/json" });
@@ -344,7 +351,7 @@ export default function AdminModelLab({
         <div className="admin-two-col">
           <label>Dataset name<input value={datasetName} onChange={(event) => setDatasetName(event.target.value)} placeholder="ECET learner score history" /></label>
           <label>Target column<input value={targetColumn} onChange={(event) => setTargetColumn(event.target.value)} /></label>
-          <label>Prediction task<select value={task} onChange={(event) => setTask(event.target.value as typeof task)}><option value="regression">Regression</option><option value="binary-classification">Binary classification</option></select></label>
+          <label>Prediction task<select value={task} onChange={(event) => setTask(event.target.value as typeof task)}><option value="regression">Regression</option><option value="binary-classification">Binary classification</option><option value="multiclass-classification">Readiness classification (0 / 1 / 2)</option></select></label>
           <label>Dataset provenance<select value={datasetKind} onChange={(event) => setDatasetKind(event.target.value as typeof datasetKind)}><option value="synthetic">Synthetic / experiment only</option><option value="real-anonymized">Real anonymized learner data</option></select></label>
         </div>
         <label>Source description<textarea value={sourceDescription} onChange={(event) => setSourceDescription(event.target.value)} placeholder="Describe where the data came from, how it was collected and why its use is authorized." /></label>
@@ -372,7 +379,7 @@ export default function AdminModelLab({
         <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.featureSchema?.length ?? 0} features · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
         <details className="model-training-settings"><summary>TensorFlow.js training settings</summary><div className="model-training-options"><label>Epochs<input type="number" min="1" max="500" value={epochs} onChange={event=>setEpochs(event.target.value)} /></label><label>Batch size<input type="number" min="1" max="256" value={batchSize} onChange={event=>setBatchSize(event.target.value)} /></label></div><p className="muted">These settings apply only to TensorFlow.js jobs, not the logistic or linear baseline.</p></details>
         <div className="row wrap"><button className="primary" disabled={!tensorflowEligible || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295 || !Number.isInteger(Number(epochs)) || Number(epochs)<1 || Number(epochs)>500 || !Number.isInteger(Number(batchSize)) || Number(batchSize)<1 || Number(batchSize)>256} onClick={()=>onQueueTraining({seed:Number(seed),epochs:Number(epochs),batchSize:Number(batchSize)})}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainClassical(Number(seed))}>{selectedDataset?.task === "regression" ? "Train performance models" : "Train logistic baseline"}</button>{readinessEligible && onTrainReadiness && <button className="button button-secondary" disabled={busy || !Number.isInteger(Number(seed)) || Number(seed)<0 || Number(seed)>4294967295} onClick={()=>onTrainReadiness(Number(seed))}>Train readiness classifier</button>}</div>
-        {selectedDataset && !tensorflowEligible && <p className="muted">TensorFlow.js requires a regression dataset with numeric-only features. Use the logistic/linear baseline for this dataset.</p>}<p className="muted"><strong>Which button?</strong> For regression datasets, <b>Train performance models</b> trains the linear baseline, Gradient Boosting and Random Forest on the same holdout split. For binary classification, <b>Train logistic baseline</b> trains the logistic-regression baseline. <b>Queue TensorFlow.js</b> remains a separate numeric-regression experiment. Readiness training requires real-anonymized labels encoded as 0 = Not Ready, 1 = Developing, 2 = Ready. All candidates remain inactive until independently evaluated and approved.</p>
+        {selectedDataset && !tensorflowEligible && <p className="muted">TensorFlow.js requires a regression dataset with numeric-only features. Use the logistic/linear baseline for this dataset.</p>}<p className="muted"><strong>Which button?</strong> For regression datasets, <b>Train performance models</b> trains the linear baseline, Gradient Boosting and Random Forest on the same holdout split. For binary classification, <b>Train logistic baseline</b> trains the logistic-regression baseline. <b>Queue TensorFlow.js</b> remains a separate numeric-regression experiment. Readiness training requires a real-anonymized multiclass dataset with labels 0 = Not Ready, 1 = Developing, 2 = Ready. All candidates remain inactive until independently evaluated and approved.</p>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
