@@ -9,8 +9,7 @@
 import { friendlyError, type SubmitAnswer } from "./answers";
 import type { BrowserTensorflowArtifact } from "./tensorflowInference";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "http://localhost:4000";
+export const API_BASE = "/api";
 
 export interface PublicQuestion {
   id: number;

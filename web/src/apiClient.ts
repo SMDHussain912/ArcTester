@@ -31,5 +31,5 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
 }
 
 /** Default cookie-authenticated JSON request using the configured API base. */
-export const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
+export const API = "/api";
 export const request = createApiClient(API);
