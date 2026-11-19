@@ -638,6 +638,7 @@ describe("practice and exam question pools", () => {
         versions: { create: {
           version: 1,
           durationMinutes: 30,
+          sebKeys: [],
           publishedAt: new Date(),
           questions: { create: examQuestions.map((question, index) => ({
             sourceQuestionId: question.id,
