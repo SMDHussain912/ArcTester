@@ -519,7 +519,7 @@ export async function submitTest(
       await tx.adaptiveDecisionLog.updateMany({
         where: { attemptId, selectedQuestionId: row.questionId, outcomeStatus: "pending" },
         data: {
-          reward: row.isCorrect ? 1 : 0,
+          reward: row.chosen === null ? null : row.isCorrect ? 1 : 0,
           outcomeStatus: row.chosen === null ? "unanswered" : row.isCorrect ? "correct" : "incorrect",
           outcomeAt: now,
         },

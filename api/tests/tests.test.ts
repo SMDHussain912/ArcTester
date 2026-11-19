@@ -126,6 +126,12 @@ describe("POST /tests", () => {
     });
     expect(updated).toMatchObject({ outcomeStatus: "correct", reward: 1 });
     expect(updated.outcomeAt).toBeInstanceOf(Date);
+    const unansweredDecision = decisions.find((decision) => decision.selectedQuestionId !== answer.questionId);
+    expect(unansweredDecision).toBeDefined();
+    const unanswered = await server.db.adaptiveDecisionLog.findUniqueOrThrow({
+      where: { attemptId_selectedQuestionId: { attemptId, selectedQuestionId: unansweredDecision!.selectedQuestionId } },
+    });
+    expect(unanswered).toMatchObject({ outcomeStatus: "unanswered", reward: null });
   });
 
   it("does not create adaptive decision records for mock-mode attempts", async () => {
