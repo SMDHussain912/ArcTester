@@ -11,6 +11,7 @@ import {
   predictGradientBoosting, predictRandomForest,
   validateGradientBoostingArtifact, validateRandomForestArtifact,
 } from "./treeEnsembles.js";
+import { predictReadiness, validateReadinessModel, type ReadinessClass, type ReadinessPrediction } from "./readinessClassifier.js";
 
 const featureEncoderSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().min(1), type: z.literal("numeric") }).strict(),
@@ -33,8 +34,9 @@ const registryArtifactSchema = z.object({
     "gaussian-naive-bayes",
     "performance-gradient-boosting",
     "performance-random-forest",
+    "exam-readiness-softmax",
   ]),
-  task: z.enum(["regression", "binary-classification"]),
+  task: z.enum(["regression", "binary-classification", "multiclass-classification"]),
   dataset: z.string().min(1).max(120),
   targetColumn: z.string().min(1).max(120),
   featureSchema: z.array(featureEncoderSchema).min(1),
@@ -45,9 +47,16 @@ const registryArtifactSchema = z.object({
   }).strict().optional(),
   createdAt: z.string().datetime(),
 }).strict().superRefine((artifact, context) => {
-  const isRegression = ["multiple-linear-regression", "performance-gradient-boosting", "performance-random-forest"].includes(artifact.algorithm);
-  if (isRegression !== (artifact.task === "regression")) {
+  const expectedTask = artifact.algorithm === "exam-readiness-softmax"
+    ? "multiclass-classification"
+    : ["multiple-linear-regression", "performance-gradient-boosting", "performance-random-forest"].includes(artifact.algorithm)
+      ? "regression" : "binary-classification";
+  if (artifact.task !== expectedTask) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["task"], message: "Task does not match algorithm" });
+  }
+  if (artifact.algorithm === "exam-readiness-softmax" &&
+    !artifact.featureSchema.some((feature) => feature.name === "completed_attempts" && feature.type === "numeric")) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["featureSchema"], message: "Readiness models require a numeric completed_attempts feature for the minimum-history safety gate" });
   }
   const names = artifact.featureSchema.map((feature) => feature.name);
   if (new Set(names).size !== names.length) {
@@ -91,8 +100,9 @@ export interface RegisteredModelSummary {
 export interface ModelPrediction {
   modelId: string;
   version: number;
-  task: "regression" | "binary-classification";
-  prediction: number | 0 | 1;
+  task: "regression" | "binary-classification" | "multiclass-classification";
+  prediction: number | 0 | 1 | ReadinessClass | null;
+  readiness?: ReadinessPrediction;
   probability?: number;
   confidence?: number;
   confidenceLevel?: "high" | "moderate" | "low";
@@ -113,6 +123,7 @@ function validateModel(algorithm: RegistryArtifact["algorithm"], input: unknown)
     case "gaussian-naive-bayes": return validateNaiveBayesArtifact(input);
     case "performance-gradient-boosting": return validateGradientBoostingArtifact(input);
     case "performance-random-forest": return validateRandomForestArtifact(input);
+    case "exam-readiness-softmax": return validateReadinessModel(input);
   }
 }
 
@@ -337,6 +348,22 @@ export function predictWithRegistryArtifact(
   input: Record<string, number | string>,
 ): ModelPrediction {
   const features = transformFeatures(artifact.featureSchema, input);
+  if (artifact.task === "multiclass-classification") {
+    if (artifact.algorithm !== "exam-readiness-softmax") throw new Error("Unsupported multiclass classifier algorithm");
+    const completedAttempts = input.completed_attempts;
+    if (typeof completedAttempts !== "number" || !Number.isInteger(completedAttempts) || completedAttempts < 0) {
+      throw new Error("Prediction feature completed_attempts must be a non-negative integer");
+    }
+    const readiness = predictReadiness(artifact.model as Parameters<typeof predictReadiness>[0], features, completedAttempts);
+    return {
+      modelId: artifact.modelId,
+      version: artifact.version,
+      task: "multiclass-classification",
+      prediction: readiness.category,
+      confidence: readiness.confidence,
+      readiness,
+    };
+  }
   if (artifact.task === "regression") {
     const prediction = artifact.algorithm === "performance-gradient-boosting"
       ? predictGradientBoosting(artifact.model as Parameters<typeof predictGradientBoosting>[0], features)
