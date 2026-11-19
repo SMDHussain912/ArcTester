@@ -926,6 +926,91 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+  router.get("/admin/adaptive-learning/analytics", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const query = z.object({
+        days: z.coerce.number().int().min(1).max(365).default(30),
+        limit: z.coerce.number().int().min(1).max(10000).default(5000),
+      }).parse(req.query);
+      const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
+      const rows = await db.adaptiveDecisionLog.findMany({
+        where: { selectedAt: { gte: since } },
+        orderBy: { selectedAt: "desc" },
+        take: query.limit,
+        select: {
+          reasonCode: true,
+          policyVersion: true,
+          policyMode: true,
+          selectionScore: true,
+          reward: true,
+          outcomeStatus: true,
+          selectedAt: true,
+          outcomeAt: true,
+        },
+      });
+
+      const byReason = new Map<string, number>();
+      const byPolicy = new Map<string, number>();
+      const byOutcome = new Map<string, number>();
+      const byDay = new Map<string, { selected: number; observed: number; rewardTotal: number }>();
+      let scoreTotal = 0;
+      let observed = 0;
+      let rewardTotal = 0;
+      let pending = 0;
+      let unanswered = 0;
+
+      for (const row of rows) {
+        byReason.set(row.reasonCode, (byReason.get(row.reasonCode) ?? 0) + 1);
+        const policy = `${row.policyMode}:v${row.policyVersion}`;
+        byPolicy.set(policy, (byPolicy.get(policy) ?? 0) + 1);
+        byOutcome.set(row.outcomeStatus, (byOutcome.get(row.outcomeStatus) ?? 0) + 1);
+        scoreTotal += row.selectionScore;
+        const day = row.selectedAt.toISOString().slice(0, 10);
+        const bucket = byDay.get(day) ?? { selected: 0, observed: 0, rewardTotal: 0 };
+        bucket.selected += 1;
+        if (row.reward !== null) {
+          observed += 1;
+          rewardTotal += row.reward;
+          bucket.observed += 1;
+          bucket.rewardTotal += row.reward;
+        }
+        if (row.outcomeStatus === "pending") pending += 1;
+        if (row.outcomeStatus === "unanswered") unanswered += 1;
+        byDay.set(day, bucket);
+      }
+
+      res.json({
+        ok: true,
+        windowDays: query.days,
+        sampleLimit: query.limit,
+        sampled: rows.length,
+        truncated: rows.length === query.limit,
+        summary: {
+          selected: rows.length,
+          observed,
+          pending,
+          unanswered,
+          averageReward: observed ? Number((rewardTotal / observed).toFixed(4)) : null,
+          averageSelectionScore: rows.length ? Number((scoreTotal / rows.length).toFixed(4)) : null,
+          outcomeCoverage: rows.length ? Number((observed / rows.length).toFixed(4)) : 0,
+        },
+        byReason: [...byReason].map(([reasonCode, count]) => ({ reasonCode, count })).sort((a, b) => b.count - a.count),
+        byPolicy: [...byPolicy].map(([policy, count]) => ({ policy, count })).sort((a, b) => b.count - a.count),
+        byOutcome: [...byOutcome].map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count),
+        daily: [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({
+          date,
+          selected: value.selected,
+          observed: value.observed,
+          averageReward: value.observed ? Number((value.rewardTotal / value.observed).toFixed(4)) : null,
+        })),
+        privacy: { learnerIdentifiersIncluded: false, questionTextIncluded: false },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      next(error);
+    }
+  });
+
   router.post("/admin/models/:modelId/predict", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
