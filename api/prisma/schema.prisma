@@ -598,6 +598,7 @@ model QuestionEmbeddingJob {
   progress        Int      @default(0)
   total           Int      @default(0)
   cursorQuestionId Int     @default(0)
+  questionIdsJson  String?
   errorMessage    String   @default("")
   workerId        String   @default("")
   leaseExpiresAt  DateTime?

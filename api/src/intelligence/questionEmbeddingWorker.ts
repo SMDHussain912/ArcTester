@@ -19,8 +19,22 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     const encoder = await getOnnxQuestionEmbeddingEncoder();
     let cursor = job.cursorQuestionId;
     while (true) {
+      let targetedIds: number[] | null = null;
+      if (job.questionIdsJson) {
+        try {
+          const parsed: unknown = JSON.parse(job.questionIdsJson);
+          if (!Array.isArray(parsed) || !parsed.every((id) => Number.isSafeInteger(id) && id > 0)) {
+            throw new Error("Question embedding job contains invalid target IDs.");
+          }
+          targetedIds = parsed as number[];
+        } catch {
+          throw new Error("Question embedding job target IDs are invalid JSON.");
+        }
+      }
       const questions = await db.question.findMany({
-        where: { id: { gt: cursor } },
+        where: targetedIds
+          ? { AND: [{ id: { in: targetedIds } }, { id: { gt: cursor } }] }
+          : { id: { gt: cursor } },
         orderBy: { id: "asc" },
         take: job.batchSize,
         select: {

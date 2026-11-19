@@ -5,7 +5,8 @@ import { badRequest, conflict, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth } from "./auth.js";
-import { importFromCsv, importFromJson } from "./importService.js";
+import { importFromCsv, importFromJson } from "./importService.js";import { importFromCsv, importFromJson } from "./importService.js";
+import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
 
 export function parseOptions(raw: string): string[] {
   const value: unknown = JSON.parse(raw);
@@ -58,6 +59,11 @@ export function questionRouter(db: PrismaClient): Router {
       const input = QuestionInputSchema.parse(req.body);
       const outcome = await insertQuestion(db, input);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
+      const createdRecord = await db.question.findFirstOrThrow({
+        where: { questionHash: hashQuestion(input.text) },
+        select: { id: true },
+      });
+      await queueQuestionEmbeddingJob(db, [createdRecord.id]);
       const question = await db.question.findFirstOrThrow({
         where: { questionHash: hashQuestion(input.text) },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },

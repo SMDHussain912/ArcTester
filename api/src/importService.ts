@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { parseCsv } from "./csv.js";
-import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";
+import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";import { BaseRowSchema, QuestionInputSchema, encodeOptions, hashQuestion, type QuestionInput } from "./questions.js";
+import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
 
 export type InvalidRow = { row: number; reason: string };
 export type ImportReport = {
@@ -170,9 +171,18 @@ export async function importFromJson(db: PrismaClient, payload: unknown, options
 
   // Use PostgreSQL ON CONFLICT DO NOTHING; catching a unique violation inside
   // a transaction leaves PostgreSQL's transaction aborted.
-  const inserted = await insertValidatedQuestions(db, valid.map((item) => item.input));
+  const inputs = valid.map((item) => item.input);
+  const inserted = await insertValidatedQuestions(db, inputs);
   report.added = inserted.added;
   report.duplicates = inserted.duplicates;
+  if (inserted.added > 0) {
+    const hashes = inputs.map((input) => hashQuestion(input.text));
+    const insertedQuestions = await db.question.findMany({
+      where: { questionHash: { in: hashes } },
+      select: { id: true },
+    });
+    await queueQuestionEmbeddingJob(db, insertedQuestions.map((question) => question.id));
+  }
   return report;
 }
 
@@ -242,6 +252,14 @@ export async function importFromCsv(db: PrismaClient, content: string, options: 
   const inserted = await insertValidatedQuestions(db, valid);
   report.added = inserted.added;
   report.duplicates = inserted.duplicates;
+  if (inserted.added > 0) {
+    const hashes = valid.map((input) => hashQuestion(input.text));
+    const insertedQuestions = await db.question.findMany({
+      where: { questionHash: { in: hashes } },
+      select: { id: true },
+    });
+    await queueQuestionEmbeddingJob(db, insertedQuestions.map((question) => question.id));
+  }
   return report;
 }
 

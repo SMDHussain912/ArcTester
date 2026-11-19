@@ -5,7 +5,10 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
+import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
+import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
+import { getOnnxQuestionEmbeddingEncoder } from "./intelligence/questionEmbeddingOnnx.js";
+import { searchPersistedQuestionEmbeddings } from "./intelligence/questionEmbeddingSearch.js";
 
 const ListSchema = z.object({
   q: z.string().trim().max(300).optional(),
@@ -21,6 +24,24 @@ export function questionAdminRouter(db: PrismaClient): Router {
   const router = Router();
   router.use("/admin", requireAuth, requireAdmin(db));
 
+
+  router.get("/admin/question-embeddings/status", async (_req, res, next) => {  router.get("/admin/question-embeddings/search", async (req, res, next) => {
+    try {
+      const input = z.object({
+        q: z.string().trim().min(3).max(1000),
+        subject: z.string().trim().min(1).max(120).optional(),
+        limit: z.coerce.number().int().min(1).max(25).default(10),
+        candidateLimit: z.coerce.number().int().min(1).max(500).default(500),
+      }).parse(req.query);
+      const encoder = await getOnnxQuestionEmbeddingEncoder();
+      const result = await searchPersistedQuestionEmbeddings(db, input.q, encoder, {
+        ...(input.subject ? { subject: input.subject } : {}),
+        limit: input.limit,
+        candidateLimit: input.candidateLimit,
+      });
+      res.json({ ok: true, query: input.q, ...result });
+    } catch (error) { next(error); }
+  });
 
   router.get("/admin/question-embeddings/status", async (_req, res, next) => {
     try {
@@ -166,6 +187,8 @@ export function questionAdminRouter(db: PrismaClient): Router {
         correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source,
         difficulty: merged.difficulty, questionHash: hashQuestion(merged.text),
       }, include: { subject: true, topic: true } });
+      await db.questionEmbedding.deleteMany({ where: { questionId: id } });
+      await queueQuestionEmbeddingJob(db, [id]);
       res.json({ ok: true, question: updated });
     } catch (error) { next(error); }
   });
