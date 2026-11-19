@@ -135,5 +135,32 @@ export function modelTrainingJobsRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/admin/model-training-jobs/:jobId/cancel", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const jobId = z.string().min(1).max(64).parse(req.params.jobId);
+      const updated = await db.modelTrainingJob.updateMany({
+        where: { id: jobId, status: { in: ["QUEUED", "RUNNING"] } },
+        data: {
+          status: "CANCELLED",
+          errorMessage: "Cancelled by administrator.",
+          completedAt: new Date(),
+          leaseExpiresAt: null,
+        },
+      });
+      if (updated.count !== 1) {
+        const existing = await db.modelTrainingJob.findUnique({ where: { id: jobId }, select: { id: true, status: true } });
+        if (!existing) return next(notFound("Model training job was not found."));
+        return next(badRequest("Only queued or running training jobs can be cancelled."));
+      }
+      const job = await db.modelTrainingJob.findUnique({ where: { id: jobId }, select: jobSelect });
+      if (!job) return next(notFound("Model training job was not found."));
+      res.json({ ok: true, job: { ...job, result: null }, message: "Training job cancelled." });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
   return router;
 }
