@@ -34,6 +34,7 @@ const RegisterSchema = z.object({
     "gaussian-naive-bayes",
     "performance-gradient-boosting",
     "performance-random-forest",
+    "exam-readiness-softmax",
   ]),
   task: z.enum(["regression", "binary-classification", "multiclass-classification"]),
   dataset: z.string().trim().min(1).max(120),
