@@ -62,7 +62,7 @@ const validOfflineMaterial = {
   topic: "Data Structures",
   fileName: "binary-trees.md",
   mimeType: "text/markdown" as const,
-  sizeBytes: 42,
+  sizeBytes: 45,
   content: "# Binary Trees\nA hierarchical data structure.",
   downloadedAt: "2026-11-19T08:00:00.000Z",
 };
