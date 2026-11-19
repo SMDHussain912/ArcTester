@@ -5,6 +5,7 @@ import {
   createTest,
   getAttemptView,
   getResult,
+  saveTestAnswers,
   submitTest,
   SubmitTestSchema,
 } from "./testService.js";
@@ -117,6 +118,19 @@ export function testRouter(db: PrismaClient): Router {
       next(error);
     }
   });
+
+  router.put(
+    "/tests/:id/answers",
+    requireAuth,
+    async (req, res, next) => {
+      try {
+        const { id } = AttemptIdSchema.parse(req.params);
+        const input = SubmitTestSchema.parse(req.body);
+        const saved = await saveTestAnswers(db, (req as AuthedRequest).user!.id, id, input);
+        res.json(saved);
+      } catch (error) { next(error); }
+    },
+  );
 
   router.post(
     "/tests/:id/submit",
