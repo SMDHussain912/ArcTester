@@ -352,26 +352,26 @@ describe("offlineStore", () => {
     configureOfflineStore("user-clock");
     await saveExamPackage(packagePayload, expectedSha256);
     const started = await startOfflineAttempt("assignment-1");
-    const baseline = Date.parse(started.startedAt) - 0;
-    const clock = vi.spyOn(Date, "now");
+    const attemptRows = tables.get("offline_attempts");
+    const attempt = attemptRows?.get("assignment-1");
+    expect(attempt).toBeDefined();
+    const monotonicClock = vi.spyOn(performance, "now");
+    const baselinePerformanceTime = performance.now();
     try {
-      // The monotonic baseline is local wall time; server offset only affects
-      // the displayed start timestamp, so use the actual persisted baseline.
-      const attemptRows = tables.get("offline_attempts");
-      const attempt = attemptRows?.get("assignment-1");
-      const localBaseline = Number(attempt?.started_at_monotonic_ms);
-      clock.mockReturnValue(localBaseline + 8_000);
+      // Advance the monotonic runtime clock, then move it backwards. Wall-clock
+      // changes must not extend an attempt or reduce its persisted checkpoint.
+      monotonicClock.mockReturnValue(baselinePerformanceTime + 8_000);
       const afterEightSeconds = await getRemainingSeconds("assignment-1");
       expect(afterEightSeconds).toBe(60 * 60 - 8);
       const checkpoint = String(attempt?.updated_at);
-      clock.mockReturnValue(localBaseline + 2_000);
+      monotonicClock.mockReturnValue(baselinePerformanceTime + 2_000);
       const afterClockRollback = await getRemainingSeconds("assignment-1");
       expect(afterClockRollback).toBe(afterEightSeconds);
       expect(String(attempt?.updated_at)).toBe(checkpoint);
     } finally {
-      clock.mockRestore();
+      monotonicClock.mockRestore();
     }
-    expect(Number.isFinite(baseline)).toBe(true);
+    expect(typeof started.startedAt).toBe("string");
   });
 
   it("rejects corrupted option indexes before locking an offline submission", async () => {
@@ -382,6 +382,7 @@ describe("offlineStore", () => {
     const attempt = tables.get("offline_attempts")?.get("assignment-1");
     expect(attempt).toBeDefined();
     attempt!.answers_json = JSON.stringify({ q1: 99, q2: null });
+    attempt!.answersJson = attempt!.answers_json;
 
     await expect(queueOfflineSubmission("assignment-1")).rejects.toThrow(
       "saved answers contain invalid question or option data"
@@ -409,6 +410,7 @@ describe("offlineStore", () => {
     await queueOfflineSubmission("assignment-1");
     const attempt = tables.get("offline_attempts")?.get("assignment-1");
     attempt!.answers_json = "{invalid-json";
+    attempt!.answersJson = attempt!.answers_json;
 
     await expect(getPendingSubmissions()).rejects.toThrow(
       "saved answers for pending assignment assignment-1 are corrupted"
