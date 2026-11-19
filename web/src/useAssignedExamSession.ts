@@ -148,7 +148,9 @@ export function useAssignedExamSession({
       setActiveAssignmentPackage(null);
       assignmentStartedAtRef.current = null; assignmentDeadlineRef.current = null; assignmentServerOffsetRef.current = 0;
       setAssignmentAnswers({}); setSaveStatus("idle"); autoSubmitTriggeredRef.current = false;
-      await setAssignments([]);
+      // Refresh the authoritative assignment list after submission so the
+      // candidate immediately sees SUBMITTED / REVIEW_REQUIRED / graded state.
+      await refreshAssignedExams();
       setActivePage("assigned-exams");
     } catch (cause) { setSessionError((cause as Error).message); }
     finally { setSessionBusy(false); }
