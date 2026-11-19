@@ -90,7 +90,7 @@ async function withOfflineTransaction<T>(
         result = await task(db);
       });
     } else {
-      await withOfflineTransaction(db, async (transaction) => {
+      await db.withExclusiveTransactionAsync(async (transaction) => {
         result = await task(transaction);
       });
     }
