@@ -46,6 +46,7 @@ model Question {
   answers      AttemptAnswer[]
   stats        Stat[]
   examSnapshots ExamVersionQuestion[]
+  embedding     QuestionEmbedding?
 
   @@index([subjectId])
 }
@@ -571,4 +572,39 @@ model AdaptiveDecisionLog {
   @@index([learnerGroupId, selectedAt])
   @@index([outcomeStatus, selectedAt])
   @@index([selectedQuestionId, selectedAt])
+}
+
+
+model QuestionEmbedding {
+  id              String   @id @default(cuid())
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId      Int      @unique
+  embeddingJson   String
+  embeddingModel  String
+  embeddingVersion Int
+  sourceHash      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([embeddingModel, embeddingVersion])
+  @@index([sourceHash])
+}
+
+model QuestionEmbeddingJob {
+  id              String   @id @default(cuid())
+  status          String   @default("QUEUED")
+  batchSize       Int      @default(16)
+  force           Boolean  @default(false)
+  progress        Int      @default(0)
+  total           Int      @default(0)
+  cursorQuestionId Int     @default(0)
+  errorMessage    String   @default("")
+  workerId        String   @default("")
+  leaseExpiresAt  DateTime?
+  createdAt       DateTime @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, createdAt])
 }

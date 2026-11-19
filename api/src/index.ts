@@ -11,6 +11,7 @@ import { questionRouter } from "./questionRoutes.js";
 import { sessionRouter } from "./sessionRoutes.js";
 import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
+import { startQuestionEmbeddingWorker } from "./intelligence/questionEmbeddingWorker.js";
 import { modelRegistryRouter } from "./modelRoutes.js";
 import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
 import { startModelTrainingWorker } from "./modelTrainingWorker.js";
@@ -177,6 +178,7 @@ const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     startModelTrainingWorker(db);
+    startQuestionEmbeddingWorker(db);
     console.log(`ecet-api listening on http://localhost:${PORT}`);
   });
 }
