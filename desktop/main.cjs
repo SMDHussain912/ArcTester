@@ -97,10 +97,12 @@ function sendIntegrityViolation(type, detail) {
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 900,
-    minHeight: 640,
+    width: 1440,
+    height: 940,
+    minWidth: 760,
+    minHeight: 600,
+    show: false,
+    autoHideMenuBar: true,
     backgroundColor: "#f4f6fa",
     title: "ArcTester",
     webPreferences: {
@@ -109,6 +111,11 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true
     }
+  });
+
+  // Wait until Chromium has a first frame ready to avoid flashing a blank window.
+  window.once("ready-to-show", () => {
+    if (!window.isDestroyed()) window.show();
   });
 
   const devUrl = process.env.ARCTESTER_WEB_URL;
