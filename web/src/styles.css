@@ -870,3 +870,8 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .options .option[aria-pressed="true"]{border-color:var(--accent)}
 @media(max-width:560px){.exam-question-controls{align-items:stretch}.exam-question-controls>.row{width:100%;display:grid;grid-template-columns:1fr 1fr}.exam-question-controls>.row button{min-width:0;padding-inline:8px}.question-card-navigation button{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.exam-question-navigator{scroll-behavior:auto}}
+
+
+/* Practice local recovery and connection status */
+.practice-save-status{margin:0 0 14px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));border-radius:10px;background:var(--surface);color:var(--muted);font-size:12px;line-height:1.5}
+.practice-save-status.unavailable{border-color:color-mix(in srgb,#d97706 45%,var(--border));background:color-mix(in srgb,#d97706 8%,var(--surface));color:var(--text)}
