@@ -267,7 +267,6 @@ export async function createTest(
       let added = 0;
       for (const entry of active) {
         const available = entry.pool.filter((question) => !selectedById.has(question.id));
-        const availableIds = available.map((question) => question.id);
         const adaptive = selectAdaptiveQuestions({
           candidates: available.map((question) => ({
             questionId: String(question.id),
