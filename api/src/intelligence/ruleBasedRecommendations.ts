@@ -146,47 +146,47 @@ export function buildRuleBasedRecommendations(input: {
     .filter((row) => isWeakEnough(row, input.minimumAnswers, input.weakAccuracyThreshold))
     .sort(sortEvidence);
 
-  if (weakTopics.length > 0) {
-    const recent = weakTopics.filter((row) => isRecent(lastByTopic.get(evidenceKey(row.subject, row.topic))));
-    const eligible = weakTopics
-      .filter((row) => !isRecent(lastByTopic.get(evidenceKey(row.subject, row.topic))))
-      .slice(0, maximumAreas);
-    const recommendations = eligible.flatMap((row): RuleBasedRecommendation[] => {
-      const topic = row.topic!;
-      const percent = Math.round((row.accuracy ?? 0) * 100);
-      const key = encodeURIComponent(`${row.subject}:${topic}`);
-      const evidence = toRecommendationEvidence(row, input.minimumAnswers, input.weakAccuracyThreshold);
-      const items: RuleBasedRecommendation[] = [{
-        id: `revise-topic-${key}`,
-        priority: priorityFor(row, input.minimumAnswers),
-        title: `Revise ${topic}`,
-        reason: `${percent}% accuracy across ${row.seen} answered practice questions in ${row.subject}. This meets the minimum evidence threshold; focus practice here before another full mock.`,
+  const recommendations: RuleBasedRecommendation[] = [];
+  const recentWeakTopics = weakTopics.filter((row) =>
+    isRecent(lastByTopic.get(evidenceKey(row.subject, row.topic))),
+  );
+  const eligibleTopics = weakTopics
+    .filter((row) => !isRecent(lastByTopic.get(evidenceKey(row.subject, row.topic))))
+    .slice(0, maximumAreas);
+
+  for (const row of eligibleTopics) {
+    const topic = row.topic!;
+    const percent = Math.round((row.accuracy ?? 0) * 100);
+    const key = encodeURIComponent(`${row.subject}:${topic}`);
+    const evidence = toRecommendationEvidence(row, input.minimumAnswers, input.weakAccuracyThreshold);
+    recommendations.push({
+      id: `revise-topic-${key}`,
+      priority: priorityFor(row, input.minimumAnswers),
+      title: `Revise ${topic}`,
+      reason: `${percent}% accuracy across ${row.seen} answered practice questions in ${row.subject}. This meets the minimum evidence threshold; focus practice here before another full mock.`,
+      subject: row.subject,
+      topic,
+      mode: "practice",
+      questionCount: 15,
+      evidence,
+    });
+    if (row.wrong >= 3) {
+      recommendations.push({
+        id: `review-topic-mistakes-${key}`,
+        priority: "medium",
+        title: `Review mistakes in ${topic}`,
+        reason: `${row.wrong} incorrect answers are recorded for this topic. Revisit their explanations, then retry related questions.`,
         subject: row.subject,
         topic,
-        mode: "practice",
-        questionCount: 15,
+        mode: "mistakes",
+        questionCount: Math.min(10, row.wrong),
         evidence,
-      }];
-      if (row.wrong >= 3) {
-        items.push({
-          id: `review-topic-mistakes-${key}`,
-          priority: "medium",
-          title: `Review mistakes in ${topic}`,
-          reason: `${row.wrong} incorrect answers are recorded for this topic. Revisit their explanations, then retry related questions.`,
-          subject: row.subject,
-          topic,
-          mode: "mistakes",
-          questionCount: Math.min(10, row.wrong),
-          evidence,
-        });
-      }
-      return items;
-    });
-    return { recommendations, recentlyPracticedWeakCount: recent.length };
+      });
+    }
   }
 
-  // Apply topic precedence per subject: strong topic evidence in one subject
-  // must not hide a genuine subject-level gap in a different subject.
+  // Topic precedence is evaluated independently for each subject. A weak
+  // topic in one subject must not hide a subject-level gap elsewhere.
   const subjectsWithSufficientTopics = new Set(
     namedTopics
       .filter((row) => row.seen >= input.minimumAnswers)
@@ -195,18 +195,21 @@ export function buildRuleBasedRecommendations(input: {
   const weakSubjects = mergeEvidenceRows(input.subjects, true)
     .filter((row) =>
       !subjectsWithSufficientTopics.has(row.subject) &&
-      isWeakEnough(row, input.minimumAnswers, input.weakAccuracyThreshold)
+      isWeakEnough(row, input.minimumAnswers, input.weakAccuracyThreshold),
     )
     .sort(sortEvidence);
-  const recentSubjects = weakSubjects.filter((row) => isRecent(lastBySubject.get(evidenceKey(row.subject, null))));
+  const recentWeakSubjects = weakSubjects.filter((row) =>
+    isRecent(lastBySubject.get(evidenceKey(row.subject, null))),
+  );
   const eligibleSubjects = weakSubjects
     .filter((row) => !isRecent(lastBySubject.get(evidenceKey(row.subject, null))))
     .slice(0, maximumAreas);
-  const recommendations = eligibleSubjects.flatMap((row): RuleBasedRecommendation[] => {
+
+  for (const row of eligibleSubjects) {
     const percent = Math.round((row.accuracy ?? 0) * 100);
     const key = encodeURIComponent(row.subject);
     const evidence = toRecommendationEvidence(row, input.minimumAnswers, input.weakAccuracyThreshold);
-    const items: RuleBasedRecommendation[] = [{
+    recommendations.push({
       id: `revise-subject-${key}`,
       priority: priorityFor(row, input.minimumAnswers),
       title: `Revise ${row.subject}`,
@@ -216,9 +219,9 @@ export function buildRuleBasedRecommendations(input: {
       mode: "practice",
       questionCount: 15,
       evidence,
-    }];
+    });
     if (row.wrong >= 3) {
-      items.push({
+      recommendations.push({
         id: `review-subject-mistakes-${key}`,
         priority: "medium",
         title: `Review mistakes in ${row.subject}`,
@@ -230,10 +233,12 @@ export function buildRuleBasedRecommendations(input: {
         evidence,
       });
     }
-    return items;
-  });
+  }
 
-  return { recommendations, recentlyPracticedWeakCount: recentSubjects.length };
+  return {
+    recommendations,
+    recentlyPracticedWeakCount: recentWeakTopics.length + recentWeakSubjects.length,
+  };
 }
 
 
