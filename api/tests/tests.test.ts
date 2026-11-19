@@ -74,6 +74,38 @@ describe("POST /tests", () => {
     }
   });
 
+  it("prioritizes a learner's weak topic when building adaptive practice", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const topic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Adaptive Weak Topic" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Adaptive Weak Topic" },
+    });
+    const weakQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    await server.db.question.update({ where: { id: weakQuestion.id }, data: { topicId: topic.id } });
+
+    for (let index = 0; index < 6; index += 1) {
+      const finishedAt = new Date(Date.now() - (index + 1) * 60_000);
+      const attempt = await server.db.attempt.create({
+        data: { userId, mode: "practice", startedAt: new Date(finishedAt.getTime() - 60_000), finishedAt },
+      });
+      await server.db.attemptAnswer.create({
+        data: {
+          attemptId: attempt.id, questionId: weakQuestion.id, chosen: 1, isCorrect: false,
+          subjectSnapshot: "Maths", topicSnapshot: "Adaptive Weak Topic",
+        },
+      });
+    }
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice", subject: "Maths", count: 1,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: Array<{ id: number }> };
+    expect(body.questions).toHaveLength(1);
+    expect(body.questions[0]?.id).toBe(weakQuestion.id);
+  });
+
   it("warns on shortfall with a thin bank", async () => {
     const { json } = await api.post(`/tests`, {
       mode: "practice",
