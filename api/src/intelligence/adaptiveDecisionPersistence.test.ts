@@ -80,7 +80,7 @@ describe("adaptive decision persistence", () => {
 
   it("reports duplicate rows as skipped instead of duplicating decision history", async () => {
     const db = database();
-    (db as any).adaptiveDecisionLog.createMany.mockResolvedValue({ count: 1 });
+    db.adaptiveDecisionLog.createMany.mockResolvedValue({ count: 1 });
     const result = await persistAdaptiveSelection(db, {
       attemptId: 7, learnerGroupId: "b".repeat(64), eligibleQuestionIds: ["12", "13"],
       stateFeatures: [1], selection,
@@ -93,15 +93,15 @@ describe("adaptive decision persistence", () => {
     expect(await recordAdaptiveAnswerOutcome(persistenceDb(db), {
       attemptId: 7, questionId: 12, isCorrect: true,
     })).toBe(true);
-    const call = (db as any).adaptiveDecisionLog.updateMany.mock.calls[0][0];
+    const call = db.adaptiveDecisionLog.updateMany.mock.calls[0]?.[0] as { where: Record<string, unknown>; data: Record<string, unknown> };
     expect(call.where).toMatchObject({ attemptId: 7, selectedQuestionId: 12, outcomeStatus: "pending" });
     expect(call.data).toMatchObject({ reward: 1, outcomeStatus: "observed" });
 
-    (db as any).adaptiveDecisionLog.updateMany.mockResolvedValue({ count: 0 });
+    db.adaptiveDecisionLog.updateMany.mockResolvedValue({ count: 0 });
     expect(await recordAdaptiveAnswerOutcome(db, {
       attemptId: 7, questionId: 13, isCorrect: false,
     })).toBe(false);
-    expect((db as any).adaptiveDecisionLog.updateMany.mock.calls[1][0].data.reward).toBe(0);
+    expect((db.adaptiveDecisionLog.updateMany.mock.calls[1]?.[0] as { data: { reward: number } }).data.reward).toBe(0);
   });
 
   it("rejects invalid outcome identifiers", async () => {
