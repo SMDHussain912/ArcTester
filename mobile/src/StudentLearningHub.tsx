@@ -13,11 +13,13 @@ type Overview = {
 };
 type Recommendation = { id: string; title: string; reason: string; priority: string; questionCount: number; mode: string; subject?: string; topic?: string };
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
+type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
 
 export default function StudentLearningHub({ api }: Props) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [query, setQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All");
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
@@ -27,15 +29,16 @@ export default function StudentLearningHub({ api }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const [performanceResult, recommendationResult, conceptResult] = await Promise.allSettled([
+    const [performanceResult, recommendationResult, conceptResult, predictionResult] = await Promise.allSettled([
       api<Overview>("/analytics/overview"),
       api<Recommendations>("/analytics/recommendations"),
       api<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
+      api<Prediction>("/analytics/score-prediction"),
     ]);
     if (performanceResult.status === "fulfilled") setOverview(performanceResult.value);
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
-    const failures = [performanceResult, recommendationResult, conceptResult].filter((item) => item.status === "rejected");
+    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult].filter((item) => item.status === "rejected");
     if (failures.length === 3) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
@@ -73,6 +76,9 @@ export default function StudentLearningHub({ api }: Props) {
           <View style={styles.metric}><Text style={styles.metricValue}>{overview.formalExams.reviewRequired}</Text><Text style={styles.metricLabel}>Awaiting review</Text></View>
         </View>
       ) : <Text style={styles.empty}>Performance summary is unavailable.</Text>}
+
+      <Text style={styles.sectionTitle}>ECET score outlook</Text>
+      {prediction?.status === "ready" ? <View style={styles.explanation}><Text style={styles.predictionValue}>{Math.round(prediction.predictedScorePercent ?? 0)}%</Text><Text style={styles.cardTitle}>Estimated score range: {Math.round(prediction.predictionInterval?.lowerPercent ?? 0)}–{Math.round(prediction.predictionInterval?.upperPercent ?? 0)}%</Text><Text style={styles.body}>{prediction.message}</Text><Text style={styles.meta}>Model MAE {prediction.modelMae?.toFixed(1)} · Baseline MAE {prediction.baselineMae?.toFixed(1)}</Text></View> : <View style={styles.card}><Text style={styles.body}>{prediction?.message ?? "Score prediction is not available yet."}</Text></View>}
 
       <Text style={styles.sectionTitle}>Recommended next steps</Text>
       {recommendations?.performanceExplanation ? (
@@ -148,6 +154,7 @@ const styles = StyleSheet.create({
   metricValue: { color: "#1d4ed8", fontSize: 24, fontWeight: "900" },
   metricLabel: { color: "#64748b", fontSize: 12, marginTop: 3 },
   explanation: { backgroundColor: "#eff6ff", borderRadius: 14, padding: 14, gap: 6 },
+  predictionValue: { color: "#1d4ed8", fontSize: 32, fontWeight: "900" },
   card: { backgroundColor: "#ffffff", borderColor: "#e2e8f0", borderWidth: 1, borderRadius: 14, padding: 14, gap: 8 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { color: "#172554", fontSize: 15, fontWeight: "900", flexShrink: 1 },
