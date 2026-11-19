@@ -411,8 +411,16 @@ export async function getRemainingSeconds(assignmentId: string): Promise<number 
     assignmentId,
   );
   if (!attempt) return null;
-  const examPackage = await getCachedExamPackage(assignmentId);
-  if (!examPackage) return null;
+  // Read the package through the same database handle as the attempt. The
+  // configured account may change while this async function is suspended;
+  // resolving the package through getCachedExamPackage() could then mix two
+  // users' records and calculate a timer from the wrong exam duration.
+  const packageRow = await db.getFirstAsync<{ payload_json: string }>(
+    "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+    assignmentId,
+  );
+  if (!packageRow) return null;
+  const examPackage = parsePackage(packageRow.payload_json);
   // Persist the greatest observed local timestamp so a process restart cannot
   // reset the in-memory clock clamp. If the device clock is moved backwards
   // while the app is closed, the timer pauses at the last checkpoint until the
