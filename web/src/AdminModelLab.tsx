@@ -134,6 +134,13 @@ export default function AdminModelLab({
   const [samplesText, setSamplesText] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [formError, setFormError] = useState("");
+  const [modelSearch,setModelSearch]=useState("");
+  const [algorithmFilter,setAlgorithmFilter]=useState("all");
+  const [testModelId,setTestModelId]=useState("");
+  const [testFeatures,setTestFeatures]=useState<Record<string,string>>({});
+  const [testResult,setTestResult]=useState<unknown>(null);
+  const [testError,setTestError]=useState("");
+  const [actionBusy,setActionBusy]=useState(false);
 
   async function readDatasetFile(file: File) {
     setFormError("");
@@ -184,6 +191,10 @@ export default function AdminModelLab({
   const completedJobs = jobs.filter((job) => job.status === "SUCCEEDED").length;
   const failedJobs = jobs.filter((job) => job.status === "FAILED" || job.status === "CANCELLED").length;
   const activeModels = models.filter((model) => model.isActive).length;
+  const algorithms=Array.from(new Set(models.map(model=>model.algorithm))).sort();
+  const visibleModels=models.filter(model=>(algorithmFilter==="all"||model.algorithm===algorithmFilter)&&`${model.modelId} ${model.algorithm} ${model.dataset}`.toLowerCase().includes(modelSearch.toLowerCase()));
+  const selectedTestModel=models.find(model=>model.modelId===testModelId&&model.isActive);
+  const testSchema=datasets.find(dataset=>dataset.name===selectedTestModel?.dataset)?.featureSchema??DEFAULT_FEATURE_SCHEMA;
 
   function submitDataset() {
     setFormError("");
@@ -230,41 +241,7 @@ export default function AdminModelLab({
         <p className="muted"><strong>Important:</strong> The model shown in your screenshot is not ready to use. Its TensorFlow candidate scored worse than the baseline on both MAE and RMSE, so leave it inactive. Continue using the existing baseline/rule-based recommendations while collecting better representative data.</p>
       </section>
 
-      <section className="model-intelligence-overview">
-        <div className="model-intelligence-heading">
-          <div><p className="eyebrow">ARCTESTER INTELLIGENCE STACK</p><h2>Model ecosystem</h2><p>Train specialist models, compare evidence, then use the decision layer to choose safe study actions.</p></div>
-          <div className="model-count-badge"><strong>6</strong><span>available algorithms</span><small>{models.length} trained candidates registered</small></div>
-        </div>
-        <div className="model-catalog-grid">
-          <article className="model-catalog-card"><span className="model-catalog-icon">01</span><div><strong>Multiple linear regression</strong><p>Predicts continuous scores and readiness trends.</p><small>REGRESSION · IMPLEMENTED</small></div></article>
-          <article className="model-catalog-card"><span className="model-catalog-icon">02</span><div><strong>Logistic regression</strong><p>Estimates binary outcome probabilities.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
-          <article className="model-catalog-card"><span className="model-catalog-icon">03</span><div><strong>K-nearest neighbours</strong><p>Compares learners or samples with similar feature patterns.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
-          <article className="model-catalog-card"><span className="model-catalog-icon">04</span><div><strong>Decision tree</strong><p>Produces interpretable rule paths for binary predictions.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
-          <article className="model-catalog-card"><span className="model-catalog-icon">05</span><div><strong>Gaussian Naive Bayes</strong><p>Probabilistic baseline for numeric classification features.</p><small>CLASSIFICATION · IMPLEMENTED</small></div></article>
-          <article className="model-catalog-card model-catalog-card-accent"><span className="model-catalog-icon">06</span><div><strong>TensorFlow.js neural regressor</strong><p>Trainable neural network for numeric score prediction.</p><small>NEURAL NETWORK · IMPLEMENTED</small></div></article>
-        </div>
-        <div className="decision-engine-panel">
-          <div className="decision-engine-top"><div><p className="eyebrow">HYBRID DECISION LAYER</p><h3>ArcTester Decision Engine</h3><p>Turns verified learner evidence into explainable next-step recommendations.</p></div><span className="decision-engine-status">ACTIVE · RULE-BASED</span></div>
-          <div className="decision-engine-flow">
-            <div><strong>01 · Evidence</strong><span>Attempts, answers, topic accuracy and recency</span></div>
-            <i>→</i>
-            <div><strong>02 · Intelligence</strong><span>Validated score prediction + evidence rules</span></div>
-            <i>→</i>
-            <div><strong>03 · Decision</strong><span>Prioritised practice, revision or review actions</span></div>
-          </div>
-          <div className="decision-engine-guardrails"><span>✓ Minimum evidence thresholds</span><span>✓ Confidence and baseline checks</span><span>✓ Explainable reasons</span><span>✓ Human-controlled model activation</span></div>
-          <p className="decision-engine-note">Decision-making is currently handled by the live evidence-based recommendation policy and score predictor—not by a separately trained decision model. Candidate ML models remain inactive until validated. They never autonomously change exam settings, grades or student access.</p>
-          <div className="answer-intelligence-admin">
-            <div><p className="eyebrow">ANSWER INTELLIGENCE · HYBRID ROUTING</p><h3>Explanation providers</h3><p>External AI → local model → question-bank explanation → deterministic offline guide.</p></div>
-            <div className="intelligence-provider-grid">
-              <article><strong>External provider</strong><span className={intelligenceStatus?.external.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.external.configured?intelligenceStatus.external.provider+" configured":"Not configured"}</span></article>
-              <article><strong>Local model</strong><span className={intelligenceStatus?.local.configured?"status status-used":"status status-pending"}>{intelligenceStatus?.local.configured?intelligenceStatus.local.provider+" configured":"Not configured"}</span></article>
-              <article><strong>Offline fallback</strong><span className="status status-used">Always available</span></article>
-            </div>
-            <small className="muted">Provider credentials are configured as API environment variables and are never exposed in this dashboard. AI explanations are labelled unverified until reviewed.</small>
-          </div>
-        </div>
-      </section>
+      <section className="admin-panel model-lab-summary"><p className="eyebrow">MODEL OPERATIONS</p><h2>Registry control</h2><p className="muted">Train candidates, compare versions, test active models and manage production activation.</p></section>
 
       <section className="model-lab-health-grid" aria-label="Model Lab summary">
         <article><span>Registered datasets</span><strong>{datasets.length}</strong><small>{totalDatasetRows.toLocaleString()} total samples</small></article>
@@ -304,17 +281,12 @@ export default function AdminModelLab({
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
 
-      <section className="admin-panel">
-        <div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Candidate models ({models.length})</h2></div></div>
-        {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model registry"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : models.length === 0 ? <p className="muted">No model candidates have been registered yet.</p> : <div className="model-registry-list">
-          {models.map((model) => <article className="model-registry-row" key={model.modelId + "-" + model.version}>
-            <div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · Dataset: {model.dataset}</p></div>
-            <div className="row wrap"><span className={"status " + (model.isActive ? "status-used" : "status-pending")}>{model.isActive ? "ACTIVE" : "CANDIDATE"}</span>{model.productionEligible === true ? <span className="status status-used">PRODUCTION ELIGIBLE</span> : model.productionEligible === false ? <span className="status status-expired">NOT ELIGIBLE</span> : null}{(() => { const baseline = models.filter((candidate) => candidate.modelId === model.modelId && candidate.version < model.version).sort((a, b) => b.version - a.version)[0]; return baseline && selectedDatasetId && model.algorithm !== "tensorflow-js-layers" && onEvaluateModel ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => onEvaluateModel(model.modelId, model.version, baseline.version, selectedDatasetId)}>Compare with v{baseline.version}</button> : null; })()}</div>
-          </article>)}
-        </div>}
-        <p className="muted">Candidates stay inactive until separately evaluated and approved. Synthetic-data models are never production eligible.</p>
-      </section>
-
+      <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Models and versions ({models.length})</h2></div><button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button></div>
+        <div className="model-registry-toolbar"><input placeholder="Search model, algorithm or dataset…" aria-label="Search models" value={modelSearch} onChange={e=>setModelSearch(e.target.value)}/><select aria-label="Filter algorithm" value={algorithmFilter} onChange={e=>setAlgorithmFilter(e.target.value)}><option value="all">All algorithms</option>{algorithms.map(x=><option key={x}>{x}</option>)}</select></div>
+        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}</div></article>})}</div>}
+        <p className="muted">The API enforces evaluation and production eligibility before activation.</p></section>      <section className="admin-panel"><p className="eyebrow">PREDICTION PLAYGROUND</p><h2>Test active model</h2><p className="muted">Run a sample prediction using the live registry endpoint.</p>
+        <label>Active model<select value={testModelId} onChange={e=>{setTestModelId(e.target.value);setTestFeatures({});setTestResult(null);setTestError("");}}><option value="">Choose model</option>{models.filter(x=>x.isActive&&x.algorithm!=="tensorflow-js-layers").map(x=><option key={x.modelId} value={x.modelId}>{x.modelId} · v{x.version}</option>)}</select></label>
+        {selectedTestModel?<><div className="model-test-fields">{testSchema.map(f=><label key={f.name}>{f.name}{f.type==="categorical"?<select value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}><option value="">Choose…</option>{(f as {categories?:string[]}).categories?.map(x=><option key={x}>{x}</option>)}</select>:<input type="number" step="any" value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}/>}</label>)}</div><button className="primary" disabled={actionBusy||testSchema.some(f=>!testFeatures[f.name]?.trim())} onClick={async()=>{setActionBusy(true);setTestError("");setTestResult(null);try{const features=Object.fromEntries(testSchema.map(f=>[f.name,f.type==="numeric"?Number(testFeatures[f.name]):testFeatures[f.name]]));const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(testModelId)}/predict`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({features})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Prediction test failed");setTestResult(d.prediction);}catch(e){setTestError(e instanceof Error?e.message:"Prediction test failed");}finally{setActionBusy(false);}}}>Run prediction test</button>{testError&&<p className="error" role="alert">{testError}</p>}{testResult!==null&&<pre className="model-result-json">{JSON.stringify(testResult,null,2)}</pre>}</>:<p className="muted">Select an active statistical model. TensorFlow.js uses its dedicated inference path.</p>}</section>
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 3 · OBSERVE</p><h2>Training jobs and evaluation</h2></div></div>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading training jobs"><div className="skeleton skeleton-card" /><div className="skeleton skeleton-card" /></div> : jobs.length === 0 ? <p className="muted">No training jobs yet.</p> : jobs.map((job) => (
