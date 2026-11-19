@@ -189,6 +189,25 @@ export async function createTest(
     topic: row.topic?.name ?? null,
     difficulty: row.difficulty,
   }));
+  // Keep student-created practice papers distinct from published exam papers.
+  // A question can still be reused when the practice-only pool is exhausted.
+  let practiceCandidates = candidates;
+  let reusedExamPool = false;
+  if (input.mode === "practice") {
+    const publishedExamQuestions = await db.examVersionQuestion.findMany({
+      where: {
+        sourceQuestionId: { not: null },
+        examVersion: { is: { publishedAt: { not: null } } },
+      },
+      select: { sourceQuestionId: true },
+    });
+    const examQuestionIds = new Set(
+      publishedExamQuestions.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]),
+    );
+    const practiceOnly = candidates.filter((question) => !examQuestionIds.has(question.id));
+    if (practiceOnly.length > 0) practiceCandidates = practiceOnly;
+    else if (examQuestionIds.size > 0) reusedExamPool = true;
+  }
   const stats = await loadStats(
     db,
     userId,
@@ -249,7 +268,7 @@ export async function createTest(
       topics.add(item.topic);
       topicsBySubject.set(item.subject, topics);
     }
-    const pool = candidates.filter((question) => {
+    const pool = practiceCandidates.filter((question) => {
       if (!chosenSubjects.includes(question.subject)) return false;
       if (input.difficulty !== "any" && question.difficulty !== input.difficulty) return false;
       const selectedTopicsForSubject = topicsBySubject.get(question.subject);
@@ -330,13 +349,16 @@ export async function createTest(
       remaining -= added;
       active = active.filter((entry) => entry.pool.some((question) => !selectedById.has(question.id)));
     }
-    warnings = subjectPools.flatMap((entry) => {
+    warnings = reusedExamPool
+      ? ["The question bank is currently used by published exams, so some exam questions may also appear in this practice paper."]
+      : [];
+    warnings.push(...subjectPools.flatMap((entry) => {
       const target = requestedBySubject.get(entry.name) ?? 0;
       const selectedCount = selected.filter((question) => question.subject === entry.name).length;
       return selectedCount < target
         ? [`${entry.name}: requested ${target} questions, but only ${selectedCount} matched the selected topic and difficulty filters.`]
         : [];
-    });
+    }));
     if (selected.length < requested && warnings.length === 0) {
       warnings.push(`Requested ${requested} questions overall, but only ${selected.length} are available across the selected subjects and filters.`);
     }
