@@ -599,16 +599,23 @@ export default function App() {
       setError("Resume or submit your saved practice before starting another one.");
       return;
     }
-    if (!subject && !bank?.subjects.length) {
-      setError("No subjects are available for mixed practice yet.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
+      // Refresh the bank immediately before creating a session. The dashboard
+      // count can be stale after an administrator imports or publishes questions.
+      const freshBank = await api<Bank>("/bank");
+      setBank(freshBank);
+      const availableSubjects = freshBank.subjects.filter((item) => item.count > 0);
+      if (subject && !availableSubjects.some((item) => item.subject === subject)) {
+        throw new Error(`No practice questions are currently available for ${subject}. The question bank was refreshed; ask an administrator to check that subject's published questions.`);
+      }
+      if (!subject && availableSubjects.length === 0) {
+        throw new Error("The server question bank currently contains no practice questions. Ask an administrator to import questions, then refresh this screen.");
+      }
       const created = await api<Test>("/tests", {
         method: "POST",
-        body: JSON.stringify({ mode: "practice", ...(subject ? { subject } : { subjects: (bank?.subjects ?? []).map((item) => item.subject) }), count: 10 }),
+        body: JSON.stringify({ mode: "practice", ...(subject ? { subject } : { subjects: availableSubjects.map((item) => item.subject) }), count: 10 }),
       });
       setTest(created);
       setResult(null);
