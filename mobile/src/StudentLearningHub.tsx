@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { getOfflineLearningPackage, getOfflineStudyMaterials, saveOfflineLearningPackage, saveOfflineStudyMaterial, type OfflineLearningPackage, type OfflineStudyMaterial } from "./learningStore";
+import { getOfflineLearningPackage, getOfflineStudyMaterials, removeOfflineStudyMaterial, saveOfflineLearningPackage, saveOfflineStudyMaterial, type OfflineLearningPackage, type OfflineStudyMaterial } from "./learningStore";
 import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -103,6 +103,16 @@ export default function StudentLearningHub({ api, userId }: Props) {
     setSelectedOfflineMaterial(material);
   }, []);
 
+  const deleteOfflineMaterial = useCallback(async (material: OfflineStudyMaterial) => {
+    try {
+      await removeOfflineStudyMaterial(userId, material.id);
+      setOfflineMaterials((current) => current.filter((item) => item.id !== material.id));
+      setSelectedOfflineMaterial((current) => current?.id === material.id ? null : current);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not remove the saved study material.");
+    }
+  }, [userId]);
+
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
   const visibleMaterials = useMemo(() => searchStudyMaterials(studyMaterials, materialQuery), [studyMaterials, materialQuery]);
   const subjects = useMemo(() => ["All", ...Array.from(new Set(concepts.map((item) => item.subject))).sort()], [concepts]);
@@ -177,6 +187,23 @@ export default function StudentLearningHub({ api, userId }: Props) {
         {offlineQuestions.length === 0 ? <Text style={styles.empty}>No saved questions match this search.</Text> : null}
         {offlinePackage.questions.length > offlineQuestions.length ? <Text style={styles.meta}>Showing up to 30 matching questions. Search to find a specific item.</Text> : null}
       </> : null}
+      <Text style={styles.sectionTitle}>Saved offline study materials</Text>
+      {offlineMaterials.map((material) => (
+        <View key={material.id} style={styles.card}>
+          <Text style={styles.cardTitle}>{material.title}</Text>
+          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · Saved {new Date(material.downloadedAt).toLocaleDateString()}</Text>
+          <View style={styles.preferenceRow}>
+            <TouchableOpacity onPress={() => openOfflineMaterial(material)} style={styles.refresh}>
+              <Text style={styles.refreshText}>Open offline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => void deleteOfflineMaterial(material)} style={styles.refresh}>
+              <Text style={styles.refreshText}>Remove download</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ))}
+      {offlineMaterials.length === 0 ? <Text style={styles.empty}>No saved study materials. Download text or Markdown notes below while online.</Text> : null}
+
       <Text style={styles.sectionTitle}>Study materials</Text>
       <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={styles.search} />
       {visibleMaterials.map((material) => (
