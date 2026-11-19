@@ -194,7 +194,7 @@ describe("admin model registry API", () => {
       baselineVersion: 1,
       datasetId: evaluationDatasetId,
     });
-    expect(evaluation.status).toBe(201);
+    expect(evaluation.status).toBe(200);
     expect(evaluation.body.evaluation).toMatchObject({ status: "PASSED" });
     const activated = await request("/admin/models/readiness-fixture-exam-readiness-softmax/2/activate", "POST", {
       reason: "Independent multiclass holdout passed.",
