@@ -186,7 +186,7 @@ export function evaluateRegistryCandidate(
   if (candidate.modelId !== baseline.modelId && !options.allowCrossModelBaseline) {
     throw new Error("Candidate and baseline must belong to the same model ID unless cross-model baseline evaluation is explicitly enabled.");
   }
-  if (candidate.version === baseline.version) throw new Error("Candidate and baseline versions must differ");
+  if (candidate.modelId === baseline.modelId && candidate.version === baseline.version) throw new Error("Candidate and baseline versions must differ");
   if (candidate.task !== baseline.task) throw new Error("Candidate and baseline tasks must match");
   if (JSON.stringify(candidate.featureSchema) !== JSON.stringify(baseline.featureSchema)) {
     throw new Error("Candidate and baseline feature schemas must match");
