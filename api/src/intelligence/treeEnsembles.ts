@@ -67,28 +67,41 @@ function buildTree(
   const nodeValue = mean(rows);
   if (depth >= options.maxDepth || rows.length < options.minLeafSize * 2 || variance(rows) < 1e-12) return { value: nodeValue };
   const parentError = variance(rows);
-  let best: { feature: number; threshold: number; gain: number; left: RegressionRow[]; right: RegressionRow[] } | undefined;
+  let best: { feature: number; threshold: number; gain: number } | undefined;
   for (const feature of sampleFeatures(rows[0].features.length, options.maxFeatures, random)) {
     const sorted = [...rows].sort((a, b) => a.features[feature] - b.features[feature]);
-    for (let index = options.minLeafSize; index <= sorted.length - options.minLeafSize; index += 1) {
-      const current = sorted[index - 1].features[feature];
+    const totalSum = sorted.reduce((sum, row) => sum + row.target, 0);
+    const totalSquares = sorted.reduce((sum, row) => sum + row.target ** 2, 0);
+    let leftSum = 0;
+    let leftSquares = 0;
+    for (let index = 1; index < sorted.length; index += 1) {
+      const previous = sorted[index - 1];
+      leftSum += previous.target;
+      leftSquares += previous.target ** 2;
+      if (index < options.minLeafSize || sorted.length - index < options.minLeafSize) continue;
+      const current = previous.features[feature];
       const next = sorted[index].features[feature];
       if (current === next) continue;
-      const threshold = (current + next) / 2;
-      const left = sorted.slice(0, index);
-      const right = sorted.slice(index);
-      const gain = parentError - variance(left) - variance(right);
-      if (!best || gain > best.gain) best = { feature, threshold, gain, left, right };
+      const rightCount = sorted.length - index;
+      const rightSum = totalSum - leftSum;
+      const rightSquares = totalSquares - leftSquares;
+      const leftError = leftSquares - leftSum ** 2 / index;
+      const rightError = rightSquares - rightSum ** 2 / rightCount;
+      const gain = parentError - leftError - rightError;
+      if (!best || gain > best.gain) best = { feature, threshold: (current + next) / 2, gain };
     }
   }
   if (!best || best.gain <= 1e-10) return { value: nodeValue };
   importance.values[best.feature] += best.gain;
+  const leftRows = rows.filter((row) => row.features[best.feature] <= best.threshold);
+  const rightRows = rows.filter((row) => row.features[best.feature] > best.threshold);
+  if (!leftRows.length || !rightRows.length) return { value: nodeValue };
   return {
     value: nodeValue,
     featureIndex: best.feature,
     threshold: best.threshold,
-    left: buildTree(best.left, options, random, importance, depth + 1),
-    right: buildTree(best.right, options, random, importance, depth + 1),
+    left: buildTree(leftRows, options, random, importance, depth + 1),
+    right: buildTree(rightRows, options, random, importance, depth + 1),
   };
 }
 function validateRows(rows: RegressionRow[]): number {
