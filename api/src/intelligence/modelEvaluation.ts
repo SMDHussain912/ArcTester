@@ -92,7 +92,6 @@ function metrics(artifact: RegistryArtifact, samples: ModelEvaluationSample[]): 
       const support = samples.filter((sample) => sample.target === classIndex).length;
       const fp = confusionMatrix.reduce((sum, row, rowIndex) =>
         sum + (rowIndex === classIndex ? 0 : row[classIndex]), 0);
-      const fn = support - tp;
       const precision = tp + fp ? tp / (tp + fp) : 0;
       const recall = support ? tp / support : 0;
       const f1 = precision + recall ? 2 * precision * recall / (precision + recall) : 0;
