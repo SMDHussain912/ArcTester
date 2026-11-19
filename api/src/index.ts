@@ -133,6 +133,17 @@ export function buildApp(database: PrismaClient = db): express.Express {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
   });
 
+  // Readiness is distinct from liveness: only report ready when the active
+  // database connection can execute a trivial query.
+  app.get("/ready", async (_req, res) => {
+    try {
+      await database.$queryRaw`SELECT 1`;
+      res.json({ ok: true, service: "ecet-api", database: "ready", time: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ ok: false, service: "ecet-api", database: "unavailable" });
+    }
+  });
+
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
   // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
