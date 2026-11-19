@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type ModelLabDataset = { id: string; name: string; task: string; rowCount: number; targetColumn?: string; sourceDescription?: string; datasetKind?: string; featureSchema?: { name: string; type: string }[] };
-export type ModelLabModel = { modelId: string; version: number; algorithm: string; task: string; dataset: string; isActive: boolean; productionEligible?: boolean | null; createdAt?: string };
+export type ModelLabModel = { modelId: string; version: number; algorithm: string; task: string; dataset: string; isActive: boolean; productionEligible?: boolean | null; createdAt?: string; activatedAt?: string | null };
 export type ModelLabJob = {
   id: string;
   datasetId: string;
@@ -167,6 +167,8 @@ export default function AdminModelLab({
   const [testResult,setTestResult]=useState<unknown>(null);
   const [testError,setTestError]=useState("");
   const [actionBusy,setActionBusy]=useState(false);
+  const [governanceReason,setGovernanceReason]=useState("");
+  const [governanceError,setGovernanceError]=useState("");
   const [seed,setSeed]=useState("42");
   const [epochs,setEpochs]=useState("80");
   const [batchSize,setBatchSize]=useState("32");
@@ -254,6 +256,29 @@ export default function AdminModelLab({
       setEvaluationHistory(Array.isArray(evaluationBody.evaluations)?evaluationBody.evaluations:[]);
     } catch(error) {setHistoryError(error instanceof Error?error.message:"Could not load model history.");}
     finally {setHistoryLoading(false);}
+  }
+
+  async function runGovernanceAction(modelId:string, version:number, action:"activate"|"rollback") {
+    const reason=governanceReason.trim();
+    if(reason.length<10||reason.length>500) {
+      setGovernanceError("Enter a governance reason between 10 and 500 characters.");
+      return;
+    }
+    setActionBusy(true);setGovernanceError("");
+    try {
+      const base=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"");
+      const path=action==="activate"
+        ? `/admin/models/${encodeURIComponent(modelId)}/${version}/activate`
+        : `/admin/models/${encodeURIComponent(modelId)}/rollback`;
+      const response=await fetch(base+path,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({reason})});
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||body.message||(action==="activate"?"Activation failed":"Rollback failed"));
+      setGovernanceReason("");
+      onRefresh();
+      void loadModelHistory(modelId);
+    } catch(error) {
+      setGovernanceError(error instanceof Error?error.message:"Model governance action failed.");
+    } finally {setActionBusy(false);}
   }
 
   function submitDataset() {
@@ -351,7 +376,9 @@ export default function AdminModelLab({
 
       <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Models and versions ({models.length})</h2></div></div>
         <div className="model-registry-toolbar"><input placeholder="Search model, algorithm or dataset…" aria-label="Search models" value={modelSearch} onChange={e=>setModelSearch(e.target.value)}/><select aria-label="Filter algorithm" value={algorithmFilter} onChange={e=>setAlgorithmFilter(e.target.value)}><option value="all">All algorithms</option>{algorithms.map(x=><option key={x}>{x}</option>)}</select></div>
-        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];const legacy=LEGACY_BASELINE_ALGORITHMS.has(model.algorithm);return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{legacy&&<span className="status status-expired">LEGACY · RETAINED</span>}{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!legacy&&!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}<button className="button button-secondary" disabled={historyLoading} onClick={()=>void loadModelHistory(model.modelId)}>History</button>{!model.isActive&&onDeleteModel&&<button className="button button-danger" disabled={busy||actionBusy} onClick={()=>onDeleteModel(model.modelId,model.version)}>Delete version</button>}</div></article>})}</div>}
+        <label>Governance reason (required for activation or rollback)<textarea aria-label="Governance reason" rows={2} maxLength={500} value={governanceReason} onChange={event=>{setGovernanceReason(event.target.value);setGovernanceError("");}} placeholder="Explain the evaluation evidence or operational reason for this decision (10–500 characters)."/></label>
+        {governanceError&&<p className="error" role="alert">{governanceError}</p>}
+        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];const legacy=LEGACY_BASELINE_ALGORITHMS.has(model.algorithm);return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{legacy&&<span className="status status-expired">LEGACY · RETAINED</span>}{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!legacy&&!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy||governanceReason.trim().length<10} onClick={()=>void runGovernanceAction(model.modelId,model.version,"activate")}>Activate</button>}{model.isActive&&models.some(previous=>previous.modelId===model.modelId&&previous.version<model.version&&Boolean(previous.activatedAt))&&<button className="button button-secondary" disabled={busy||actionBusy||governanceReason.trim().length<10} onClick={()=>void runGovernanceAction(model.modelId,model.version,"rollback")}>Rollback</button>}<button className="button button-secondary" disabled={historyLoading} onClick={()=>void loadModelHistory(model.modelId)}>History</button>{!model.isActive&&onDeleteModel&&<button className="button button-danger" disabled={busy||actionBusy} onClick={()=>onDeleteModel(model.modelId,model.version)}>Delete version</button>}</div></article>})}</div>}
         <p className="muted">The API enforces evaluation and production eligibility before activation.</p></section>      {historyModelId&&<section className="admin-panel model-history-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">MODEL GOVERNANCE</p><h2>History · {historyModelId}</h2><p className="muted">Evaluation evidence and administrative actions for every version of this model.</p></div><button className="ghost" onClick={()=>{setHistoryModelId("");setAuditEvents([]);setEvaluationHistory([]);setHistoryError("");}}>Close</button></div>
         {historyLoading?<p className="muted" role="status">Loading audit and evaluation history…</p>:historyError?<p className="error" role="alert">{historyError}</p>:<>
