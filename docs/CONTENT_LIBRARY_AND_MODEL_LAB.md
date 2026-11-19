@@ -70,7 +70,7 @@ Each sample has this structure:
 - The first registered version is the bootstrap baseline. Later versions remain inactive until an administrator evaluates them against a different registered baseline.
 - Evaluation datasets must be attested and must not be the training dataset of either the candidate or baseline model. This prevents direct train/evaluation reuse.
 - A passing metric report alone is not enough for production activation: the evaluation must use a separate, attested `real-anonymized` dataset. Synthetic datasets remain useful for development and regression tests only.
-- Activation and rollback are administrator-only operations and are written to the model registry audit log. Only one version per model ID can be active at a time.
+- Activation and rollback are administrator-only operations and are written to the model registry audit log. Both endpoints accept an optional 10–500 character reason; the audit event stores the supplied reason or a clear administrator-action default. Only one version per model ID can be active at a time.
 - Active versions cannot be deleted. Inactive versions can be deleted only when no training job for that model is queued or running.
 - Before production use, verify the dataset consent/provenance, pseudonymous learner grouping, evaluation report, active version and audit history.
 
