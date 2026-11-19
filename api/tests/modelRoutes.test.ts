@@ -42,7 +42,7 @@ describe("admin model registry API", () => {
     target: index >= 6 ? 1 : 0,
   }));
 
-  async function registerEvaluationDataset(name = "held-out-demo-v1") {
+  async function registerEvaluationDataset(name = "held-out-demo-v1", datasetKind: "synthetic" | "real-anonymized" = "synthetic") {
     const created = await request("/admin/model-datasets", "POST", {
       name,
       task: "binary-classification",
@@ -51,6 +51,7 @@ describe("admin model registry API", () => {
       samples: evaluationSamples,
       sourceDescription: "Curated held-out test fixture for model governance tests.",
       sourceAttested: true,
+      datasetKind,
     });
     expect(created.status).toBe(201);
     return (created.body.dataset as { id: string }).id;
@@ -398,7 +399,7 @@ describe("admin model registry API", () => {
   });
 
   it("evaluates candidates against a baseline before activation and records the report", async () => {
-    const datasetId = await registerEvaluationDataset();
+    const datasetId = await registerEvaluationDataset("held-out-demo-v1", "real-anonymized");
     const evaluation = await request("/admin/models/exam-readiness-demo/2/evaluate", "POST", {
       baselineVersion: 1,
       datasetId,
@@ -426,6 +427,28 @@ describe("admin model registry API", () => {
     expect(actions).toHaveLength(6);
     expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED", "EVALUATED"]));
     expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
+  });
+
+  it("blocks production activation when a passing evaluation used synthetic data", async () => {
+    const modelId = "synthetic-evaluation-gate";
+    const first = await request("/admin/models", "POST", { ...modelInput("synthetic-baseline"), modelId });
+    expect(first.status).toBe(201);
+    const second = await request("/admin/models", "POST", { ...modelInput("synthetic-candidate"), modelId });
+    expect(second.status).toBe(201);
+
+    const datasetId = await registerEvaluationDataset("synthetic-promotion-fixture", "synthetic");
+    const evaluation = await request(`/admin/models/${modelId}/2/evaluate`, "POST", {
+      baselineVersion: 1,
+      datasetId,
+    });
+    expect(evaluation.status).toBe(200);
+    expect(evaluation.body.report).toMatchObject({ status: "PASSED" });
+
+    const activation = await request(`/admin/models/${modelId}/2/activate`, "POST", {});
+    expect(activation.status).toBe(409);
+    expect(String(activation.body.error ?? activation.body.message)).toContain("real-anonymized");
+    const versions = await server.db.registeredModel.findMany({ where: { modelId, isActive: true } });
+    expect(versions.map((model) => model.version)).toEqual([1]);
   });
 
   it("rejects a candidate that fails baseline metrics and blocks its activation", async () => {
