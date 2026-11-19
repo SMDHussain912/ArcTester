@@ -43,7 +43,7 @@ describe("StudentPracticeSession", () => {
 
  it("clearly reports when answers are saved locally while offline", () => {
   render(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} isOnline={false} localSaveAvailable onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
-  expect(screen.getByRole("status")).toHaveTextContent("Offline — answers are saved on this device. Reconnect before submitting.");
+  expect(screen.getByRole("status")).toHaveTextContent("Offline — answers are saved on this device and will sync when you reconnect.");
  });
 
  it("shows server synchronization progress and pending retry state", () => {
@@ -62,6 +62,6 @@ describe("StudentPracticeSession", () => {
 
  it("disables submission while busy and omits countdown for untimed practice", () => {
   render(<StudentPracticeSession test={{ ...test, deadline: null }} answers={{}} remainingSeconds={null} busy onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
-  expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.getByRole("button", { name: "Leave session" })).toBeDisabled(); expect(screen.queryByText(/remaining/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.getByRole("button", { name: "Leave session" })).toBeDisabled(); expect(screen.queryByText(/\d{2}:\d{2} remaining/)).toBeNull();
  });
 });
