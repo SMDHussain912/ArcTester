@@ -34,6 +34,24 @@ describe("AdminModelLab", () => {
     expect(onQueueTraining).toHaveBeenCalledTimes(1);
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
+  it("rejects non-binary target values for classification datasets", () => {
+    const onRegisterDataset = vi.fn();
+    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "Classification dataset" } });
+    fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Synthetic binary classification experiment data." } });
+    fireEvent.change(screen.getByLabelText("Prediction task"), { target: { value: "binary-classification" } });
+    const rows = Array.from({ length: 30 }, (_, index) => ({
+      features: { completed_attempts: 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 },
+      target: index === 0 ? 0.5 : index % 2,
+      groupId: (index % 5).toString(16).padStart(64, "0"),
+    }));
+    fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(rows) } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
+    expect(screen.getByRole("alert").textContent).toContain("exactly 0 or 1");
+    expect(onRegisterDataset).not.toHaveBeenCalled();
+  });
+
   it("rejects rows with missing or non-numeric feature values before registration", () => {
     const onRegisterDataset = vi.fn();
     render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
