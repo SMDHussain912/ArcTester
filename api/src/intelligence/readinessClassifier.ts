@@ -1,3 +1,4 @@
+import { z } from "zod";
 export const READINESS_CLASSES = ["NOT_READY", "DEVELOPING", "READY"] as const;
 export type ReadinessClass = typeof READINESS_CLASSES[number];
 export interface ReadinessRow { features: number[]; label: ReadinessClass; groupId: string }
@@ -133,4 +134,24 @@ export function predictReadiness(
     status: "fallback", factors,
   };
   return { category, probabilities: named, confidence: Math.max(...probabilities), modelVersion: model.version, status: "ready", factors };
+}
+
+const ReadinessModelSchema = z.object({
+  modelType: z.literal("exam-readiness-softmax"),
+  version: z.literal(1),
+  featureCount: z.number().int().positive(),
+  means: z.array(z.number().finite()),
+  scales: z.array(z.number().finite().positive()),
+  weights: z.array(z.array(z.number().finite())).length(3),
+  intercepts: z.array(z.number().finite()).length(3),
+  trainingGroups: z.number().int().min(30),
+  policyVersion: z.literal(1),
+}).strict().superRefine((model, context) => {
+  if (model.means.length !== model.featureCount || model.scales.length !== model.featureCount ||
+    model.weights.some((weights) => weights.length !== model.featureCount)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Readiness model feature dimensions do not match" });
+  }
+});
+export function validateReadinessModel(input: unknown): ReadinessModel {
+  return ReadinessModelSchema.parse(input);
 }
