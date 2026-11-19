@@ -1,10 +1,12 @@
-import type { StudentNotification } from "./useStudentCommunications";
+import type { StudentNotification, StudentNotificationPreferences } from "./useStudentCommunications";
 
 interface StudentNotificationsInboxProps {
   items: StudentNotification[];
   onRefresh: () => void;
   onRead: (id: string) => void;
   onMarkAllRead: () => void;
+  preferences: StudentNotificationPreferences;
+  onPreferenceChange: (patch: Partial<StudentNotificationPreferences>) => void;
   onOpen: (id: string) => void;
 }
 
@@ -13,6 +15,8 @@ export default function StudentNotificationsInbox({
   onRefresh,
   onRead,
   onMarkAllRead,
+  preferences,
+  onPreferenceChange,
   onOpen,
 }: StudentNotificationsInboxProps) {
   return (
@@ -25,6 +29,12 @@ export default function StudentNotificationsInbox({
         </div>
         <div className="row"><button className="ghost" onClick={onRefresh}>Refresh</button>{items.some((item) => !item.readAt) ? <button className="ghost" onClick={onMarkAllRead}>Mark all as read</button> : null}</div>
       </div>
+      <article className="panel notification-preferences">
+        <h2>Notification preferences</h2>
+        <p className="muted">Choose which exam updates appear in your inbox.</p>
+        <label><input type="checkbox" checked={preferences.examAssignments} onChange={(event) => onPreferenceChange({ examAssignments: event.target.checked })} /> Exam assignments</label>
+        <label><input type="checkbox" checked={preferences.examResults} onChange={(event) => onPreferenceChange({ examResults: event.target.checked })} /> Exam results</label>
+      </article>
       {items.length === 0 ? (
         <div className="panel empty-state">
           <h2>No notifications yet</h2>

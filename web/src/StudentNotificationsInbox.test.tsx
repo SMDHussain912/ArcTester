@@ -15,6 +15,8 @@ describe("StudentNotificationsInbox", () => {
       onRefresh={vi.fn()}
       onRead={onRead}
       onMarkAllRead={onMarkAllRead}
+      preferences={{ examAssignments: true, examResults: true }}
+      onPreferenceChange={vi.fn()}
       onOpen={onOpen}
     />);
     expect(screen.getByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();

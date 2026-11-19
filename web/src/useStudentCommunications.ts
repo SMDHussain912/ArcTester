@@ -23,6 +23,8 @@ export interface StudentNotification {
   expiresAt: string | null;
 }
 
+export interface StudentNotificationPreferences { examAssignments: boolean; examResults: boolean; }
+
 export type StudentCommunicationsRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 
 interface UseStudentCommunicationsOptions {
@@ -46,6 +48,7 @@ export function useStudentCommunications({
   const [activeAnnouncements, setActiveAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<StudentNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationPreferences, setNotificationPreferences] = useState<StudentNotificationPreferences>({ examAssignments: true, examResults: true });
   // Page changes can trigger overlapping unread-only and full-inbox requests.
   // Only the newest request may publish results to the inbox.
   const notificationRequestSequence = useRef(0);
@@ -92,6 +95,7 @@ export function useStudentCommunications({
     setActiveAnnouncements([]);
     setNotifications([]);
     setUnreadNotificationCount(0);
+    setNotificationPreferences({ examAssignments: true, examResults: true });
   }, [identity]);
 
   useEffect(() => {
@@ -234,6 +238,30 @@ export function useStudentCommunications({
     }
   }
 
+  useEffect(() => {
+    if (userRole !== "STUDENT") return;
+    const requestIdentity = identity;
+    let cancelled = false;
+    request<{ preferences: StudentNotificationPreferences }>("/notifications/preferences")
+      .then(({ preferences }) => {
+        if (!cancelled && identityRef.current === requestIdentity) setNotificationPreferences({ examAssignments: preferences.examAssignments !== false, examResults: preferences.examResults !== false });
+      })
+      .catch((cause) => { if (!cancelled && identityRef.current === requestIdentity) setError((cause as Error).message); });
+    return () => { cancelled = true; };
+  }, [identity, request, setError, userRole]);
+
+  async function updateNotificationPreferences(patch: Partial<StudentNotificationPreferences>) {
+    const requestIdentity = identity;
+    const previous = notificationPreferences;
+    setNotificationPreferences({ ...previous, ...patch });
+    try {
+      const response = await request<{ preferences: StudentNotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify(patch) });
+      if (identityRef.current === requestIdentity) setNotificationPreferences(response.preferences);
+    } catch (cause) {
+      if (identityRef.current === requestIdentity) { setNotificationPreferences(previous); setError((cause as Error).message); }
+    }
+  }
+
   const clear = useCallback(() => {
     // A pending poll must not repopulate the inbox after sign-out clears it.
     notificationRequestSequence.current += 1;
@@ -248,6 +276,8 @@ export function useStudentCommunications({
     activeAnnouncements,
     notifications,
     unreadNotificationCount,
+    notificationPreferences,
+    updateNotificationPreferences,
     refreshAnnouncements,
     refreshNotifications,
     dismissAnnouncement,
