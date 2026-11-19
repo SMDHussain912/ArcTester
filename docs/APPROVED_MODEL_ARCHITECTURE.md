@@ -1,10 +1,10 @@
 # ArcTester Intelligence — Approved Model Architecture
 
-**Status:** Architecture approved; implementation intentionally deferred  
+**Status:** Architecture approved; core implementation and integration in progress  
 **Repository:** `smdgamekingindo-TN/ArcTester`  
 **Runtime constraints:** Node.js + TypeScript API, PostgreSQL/Prisma, Vercel web, Render API, CPU-first deployment. No self-hosted LLM or Python inference service.
 
-This document defines the six approved model capabilities. It is a contract, not evidence that the models are implemented, trained, qualified, or production-active.
+This document defines the six approved model capabilities and their qualification contracts. The implementation snapshot at the end records the code currently present; implementation or training does not imply qualification or production activation.
 
 ## 1. Shared architecture and data rules
 
@@ -192,3 +192,24 @@ The current registry supports multiple linear regression, logistic regression, k
 7. Exam anomaly scoring after telemetry completeness and human-review workflow are verified.
 
 **Approval outcome:** All six proposals are approved as architecture targets. None is authorized for training, activation, or student-facing use by this document alone.
+
+## 8. Implementation snapshot (2026-11-19)
+
+This section records implementation progress separately from the qualification gates above.
+
+| Capability | Implemented | Remaining before student-facing production use |
+|---|---|---|
+| Gradient Boosting | CPU regression-tree ensemble, deterministic training, prediction, feature importance, registered-dataset training and registry validation/inference | Point-in-time feature extraction, production-sized real datasets, walk-forward/group-isolated evaluation, stability and latency qualification |
+| Random Forest | Bootstrap regression forest, randomized feature selection, prediction, feature importance, registered-dataset training and registry validation/inference | Same paired dataset and qualification work as Gradient Boosting |
+| Readiness Classifier | Three-class softmax classifier, strict artifact validation, multiclass registry inference and admin training endpoint | Larger authorized labeled dataset, group-separated calibration, false-READY evaluation and promotion workflow for multiclass models |
+| Adaptive Learning | Practice-paper selection ranks eligible questions using completed topic accuracy, question exposure, last-seen time and difficulty while preserving subject quotas | Durable propensity/outcome decision logging, offline policy evaluation, larger-scale safeguards and monitoring |
+| Question Embeddings | 384-dimensional encoder contract, source normalization/hash, vector index, cosine retrieval and duplicate/similarity labels | Integrate and pin a pretrained ONNX encoder, persistence/rebuild jobs, human-reviewed retrieval evaluation and latency benchmarks |
+| Exam Anomaly Detection | CPU Isolation Forest fitting/scoring, telemetry completeness guard, reason codes and conservative human-review output | Server-side session telemetry aggregation, baseline dataset extraction, durable review queue and false-positive evaluation |
+
+### Current training and safety behavior
+
+- Performance training creates inactive candidates; the linear baseline, Gradient Boosting and Random Forest use the same registered dataset and deterministic holdout split.
+- Readiness training is available through the administrator Model Lab only for attested real-anonymized datasets. Numeric target encoding is 0 = NOT_READY, 1 = DEVELOPING, 2 = READY. The minimum training guard is 90 labeled rows, 30 distinct keyed learner groups, 30 examples per class, and 10 learner groups represented in each class. These are engineering minimums, not production qualification thresholds.
+- Readiness inference returns insufficient_data below five completed attempts and fallback for out-of-distribution features or low confidence. It does not force a READY label.
+- Adaptive practice uses only completed attempts to compute topic mastery; in-progress answers are excluded. Existing subject and topic filters remain authoritative.
+- None of the newly implemented candidates is automatically promoted. Existing real-data provenance, independent evaluation and governance checks remain mandatory.
