@@ -3,6 +3,10 @@ import type { DatasetFeatureEncoder } from "./datasetPipeline.js";
 import { evaluateLogisticRegression, fitLogisticRegression } from "./logisticRegression.js";
 import { tuneClassifierHyperparameters } from "./modelValidation.js";
 import { predictLinearRegression } from "./linearRegression.js";
+import {
+  fitGradientBoostingRegressor, fitRandomForestRegressor,
+  predictGradientBoosting, predictRandomForest,
+} from "./treeEnsembles.js";
 
 export interface RegisteredTrainingSample {
   features: Record<string, number | string>;
@@ -12,7 +16,7 @@ export interface RegisteredTrainingSample {
 }
 
 export interface RegisteredTrainingResult {
-  algorithm: "logistic-regression" | "multiple-linear-regression";
+  algorithm: "logistic-regression" | "multiple-linear-regression" | "performance-gradient-boosting" | "performance-random-forest";
   model: unknown;
   metrics: object;
   crossValidation?: unknown;
@@ -134,22 +138,62 @@ export function trainRegisteredDataset(
     split.train.map(({ features, target }) => ({ features, target })),
     split.test.map(({ features, target }) => ({ features, target })),
   );
-  const residuals = split.test.map((row) => row.target - predictLinearRegression(result.model, row.features));
-  const residualStdDev = Math.sqrt(residuals.reduce((sum, residual) => sum + residual ** 2, 0) / residuals.length);
-  return [{
-    algorithm: result.algorithm,
-    model: result.model,
-    metrics: result.metrics,
-    uncertainty: { residualStdDev, method: "holdout-rmse" },
-    trainRows: split.train.length,
-    testRows: split.test.length,
-    ...(hasGroupIds ? {
-      groupSplit: {
-        trainGroups: new Set(split.train.map((row) => row.groupId)).size,
-        testGroups: new Set(split.test.map((row) => row.groupId)).size,
+  const trainRows = split.train.map(({ features, target }) => ({ features, target }));
+  const testRows = split.test.map(({ features, target }) => ({ features, target }));
+  const groupSplit = hasGroupIds ? {
+    trainGroups: new Set(split.train.map((row) => row.groupId)).size,
+    testGroups: new Set(split.test.map((row) => row.groupId)).size,
+  } : undefined;
+  const regressionMetrics = (predicted: number[]) => {
+    const errors = testRows.map((row, index) => row.target - predicted[index]);
+    const mae = errors.reduce((sum, error) => sum + Math.abs(error), 0) / errors.length;
+    const rmse = Math.sqrt(errors.reduce((sum, error) => sum + error ** 2, 0) / errors.length);
+    const targetMean = testRows.reduce((sum, row) => sum + row.target, 0) / testRows.length;
+    const total = testRows.reduce((sum, row) => sum + (row.target - targetMean) ** 2, 0);
+    const residual = errors.reduce((sum, error) => sum + error ** 2, 0);
+    return { mae, rmse, r2: total > 0 ? 1 - residual / total : 0 };
+  };
+  const baselinePredictions = testRows.map((row) => predictLinearRegression(result.model, row.features));
+  const baselineResiduals = testRows.map((row, index) => row.target - baselinePredictions[index]);
+  const residualStdDev = Math.sqrt(baselineResiduals.reduce((sum, residual) => sum + residual ** 2, 0) / baselineResiduals.length);
+  const gradient = fitGradientBoostingRegressor(trainRows, { seed });
+  const forest = fitRandomForestRegressor(trainRows, { seed });
+  const gradientPredictions = testRows.map((row) => predictGradientBoosting(gradient, row.features));
+  const forestPredictions = testRows.map((row) => predictRandomForest(forest, row.features));
+  return [
+    {
+      algorithm: result.algorithm,
+      model: result.model,
+      metrics: regressionMetrics(baselinePredictions),
+      uncertainty: { residualStdDev, method: "holdout-rmse" },
+      trainRows: split.train.length, testRows: split.test.length,
+      ...(groupSplit ? { groupSplit } : {}),
+    },
+    {
+      algorithm: "performance-gradient-boosting",
+      model: gradient,
+      metrics: regressionMetrics(gradientPredictions),
+      uncertainty: {
+        residualStdDev: Math.sqrt(gradientPredictions.reduce((sum, prediction, index) =>
+          sum + (testRows[index].target - prediction) ** 2, 0) / testRows.length),
+        method: "holdout-rmse",
       },
-    } : {}),
-  }];
+      trainRows: split.train.length, testRows: split.test.length,
+      ...(groupSplit ? { groupSplit } : {}),
+    },
+    {
+      algorithm: "performance-random-forest",
+      model: forest,
+      metrics: regressionMetrics(forestPredictions),
+      uncertainty: {
+        residualStdDev: Math.sqrt(forestPredictions.reduce((sum, prediction, index) =>
+          sum + (testRows[index].target - prediction) ** 2, 0) / testRows.length),
+        method: "holdout-rmse",
+      },
+      trainRows: split.train.length, testRows: split.test.length,
+      ...(groupSplit ? { groupSplit } : {}),
+    },
+  ];
 }
 
 export interface RankedTrainingResult extends RegisteredTrainingResult {
