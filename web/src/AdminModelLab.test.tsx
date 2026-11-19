@@ -116,11 +116,16 @@ describe("AdminModelLab", () => {
       { modelId: "readiness-model", version: 3, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false, productionEligible: true },
     ];
     render(<AdminModelLab datasets={[]} jobs={[]} models={models} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Activate" }) as HTMLButtonElement).disabled).toBe(true);
+    const activateButtons = screen.getAllByRole("button", { name: "Activate" });
+    expect(activateButtons).toHaveLength(2);
+    expect(activateButtons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     expect(screen.getByRole("button", { name: "Rollback" })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Governance reason"), { target: { value: "Candidate passed independent real-anonymized evaluation." } });
-    fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+    const versionThreeActivate = screen.getAllByRole("button", { name: "Activate" })
+      .find((button) => button.closest("article")?.textContent?.includes("v3"));
+    expect(versionThreeActivate).toBeTruthy();
+    fireEvent.click(versionThreeActivate!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/admin/models/readiness-model/3/activate"),
       expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "Candidate passed independent real-anonymized evaluation." }) }),
