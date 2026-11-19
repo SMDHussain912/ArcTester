@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fitLinearRegression } from "./linearRegression.js";
 import { fitLogisticRegression } from "./logisticRegression.js";
 import { fitGradientBoostingRegressor, fitRandomForestRegressor } from "./treeEnsembles.js";
+import { fitReadinessClassifier } from "./readinessClassifier.js";
 import { ModelRegistry, predictWithRegistryArtifact, transformFeatures, validateRegistryArtifact } from "./modelRegistry.js";
 
 describe("ModelRegistry", () => {
@@ -134,6 +135,44 @@ describe("ModelRegistry", () => {
     expect(prediction.task).toBe("regression");
     expect(Number.isFinite(prediction.prediction)).toBe(true);
     expect(prediction.predictionInterval).toBeDefined();
+  });
+
+  it("validates and serves a three-class readiness artifact with the history safety gate", () => {
+    const rows = Array.from({ length: 90 }, (_, index) => {
+      const group = Math.floor(index / 3);
+      const labelIndex = group % 3;
+      return {
+        groupId: String(group).padStart(64, "0"),
+        label: (["NOT_READY", "DEVELOPING", "READY"] as const)[labelIndex],
+        features: [labelIndex * 0.45 + (index % 3) * 0.001, 10],
+      };
+    });
+    const model = fitReadinessClassifier(rows, { iterations: 1200 });
+    const artifact = validateRegistryArtifact({
+      registrySchemaVersion: 1,
+      modelId: "exam-readiness",
+      version: 1,
+      algorithm: "exam-readiness-softmax",
+      task: "multiclass-classification",
+      dataset: "readiness-labeled-v1",
+      targetColumn: "readiness_label",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+      model,
+      createdAt: new Date().toISOString(),
+    });
+    const prediction = predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 10 });
+    expect(prediction.task).toBe("multiclass-classification");
+    expect(prediction.readiness?.status).not.toBe("insufficient_data");
+    expect(prediction.readiness?.probabilities.NOT_READY +
+      prediction.readiness?.probabilities.DEVELOPING +
+      prediction.readiness?.probabilities.READY).toBeCloseTo(1, 8);
+    expect(predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 2 }).readiness?.status)
+      .toBe("insufficient_data");
+    expect(() => predictWithRegistryArtifact(artifact, { mastery_signal: 0.9, completed_attempts: 10.5 }))
+      .toThrow("non-negative integer");
   });
 
   it("returns a holdout-derived prediction interval for regression artifacts", () => {
