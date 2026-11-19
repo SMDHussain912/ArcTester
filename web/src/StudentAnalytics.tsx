@@ -20,44 +20,44 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [prediction, setPrediction] = useState<StudentScorePrediction | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const cancelledRef = useRef<number>(0);
+  const [errors, setErrors] = useState<string[]>([]);
+  const generationRef = useRef(0);
 
   const loadAnalytics = useCallback(async () => {
-    cancelledRef.current = Date.now();
-    const generation = ++cancelledRef.current;
+    const generation = ++generationRef.current;
     setLoading(true);
-    setError(null);
-    try {
-      const results = await Promise.allSettled([
-        request<PerformanceOverview>("/analytics/overview").then((value) => {
-          if (generation === cancelledRef.current) setOverview(value);
-        }),
-        request<WeakTopicsReport>("/analytics/weak-topics").then((value) => {
-          if (generation === cancelledRef.current) setWeakTopics(value);
-        }),
-        request<StudyRecommendationsReport>("/analytics/recommendations").then((value) => {
-          if (generation === cancelledRef.current) setRecommendations(value);
-        }),
-        request<StudentScorePrediction>("/analytics/score-prediction").then((value) => {
-          if (generation === cancelledRef.current) setPrediction(value);
-        }),
-      ]);
-      const failed = results.find((result) => result.status === "rejected");
-      if (failed?.status === "rejected" && generation === cancelledRef.current) {
-        setError(failed.reason instanceof Error ? failed.reason.message : "Some analytics could not be loaded. Refresh to try again.");
+    setErrors([]);
+    const endpoints = [
+      { label: "Practice overview", path: "/analytics/overview", save: setOverview },
+      { label: "Weak-topic analysis", path: "/analytics/weak-topics", save: setWeakTopics },
+      { label: "Study recommendations", path: "/analytics/recommendations", save: setRecommendations },
+      { label: "Score prediction", path: "/analytics/score-prediction", save: setPrediction },
+    ] as const;
+    const results = await Promise.allSettled(
+      endpoints.map(async (endpoint) => ({
+        endpoint,
+        value: await request<PerformanceOverview | WeakTopicsReport | StudyRecommendationsReport | StudentScorePrediction>(endpoint.path),
+      })),
+    );
+    if (generation !== generationRef.current) return;
+    const failures: string[] = [];
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        const { endpoint, value } = result.value;
+        (endpoint.save as (data: typeof value) => void)(value);
+      } else {
+        const reason = result.reason;
+        failures.push(endpoints[index].label + ": " + (reason instanceof Error ? reason.message : "Could not load this section."));
       }
-    } catch (cause) {
-      if (generation === cancelledRef.current) setError(cause instanceof Error ? cause.message : "Could not load your analytics.");
-    } finally {
-      if (generation === cancelledRef.current) setLoading(false);
-    }
+    });
+    setErrors(failures);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadAnalytics();
     return () => {
-      cancelledRef.current = Date.now();
+      generationRef.current += 1;
     };
   }, [loadAnalytics]);
 
@@ -71,8 +71,20 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
         <p className="muted">A clear view of your practice history and the subjects that need more attention.</p>
       </section>
 
-      {error ? <p className="error" role="alert">{error}</p> : null}
-      {loading ? (
+      <div className="row analytics-toolbar">
+        <span className="muted" role="status">{loading ? "Updating analytics…" : "Analytics are up to date"}</span>
+        <button type="button" className="button button-secondary" onClick={() => void loadAnalytics()} disabled={loading}>
+          {loading ? "Refreshing…" : "Refresh analytics"}
+        </button>
+      </div>
+      {errors.length ? (
+        <div className="error analytics-errors" role="alert">
+          <strong>Some analytics could not be loaded.</strong>
+          <ul>{errors.map((message) => <li key={message}>{message}</li>)}</ul>
+          <span>Other available sections remain visible. Use Refresh analytics to retry.</span>
+        </div>
+      ) : null}
+      {loading && !overview && !weakTopics && !recommendations && !prediction ? (
         <div className="stack" style={{ gap: 10 }}>
           <Skeleton variant="stat-tile" className="skeleton-stat" />
           <Skeleton variant="stat-tile" className="skeleton-stat" />
@@ -80,7 +92,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
         </div>
       ) : null}
 
-      {!loading && overview && (
+      {overview && (
         <>
           <section className="stat-grid">
             <div className="stat-card">
@@ -106,7 +118,8 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
             <div className="panel-header">
               <h2 id="score-prediction-title">Next practice score estimate</h2>
             </div>
-            {prediction === null ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
+            {prediction === null && loading ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
+            {prediction === null && !loading ? <p className="muted">Score prediction is unavailable. Refresh to try again.</p> : null}
             {prediction && prediction.status === "ready" && (
               <div>
                 <div className="big">{prediction.predictedScorePercent}%</div>
@@ -155,7 +168,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
         </>
       )}
 
-      {!loading && weakTopics && (
+      {weakTopics && (
         <section className="panel" aria-labelledby="study-recommendations-title">
           <div className="panel-header">
             <h2 id="study-recommendations-title">Your next study steps</h2>
@@ -209,6 +222,8 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           </div>
         </section>
       )}
+
+      {!loading && !weakTopics ? <section className="panel" aria-live="polite"><h2>Study recommendations unavailable</h2><p className="muted">Weak-topic analysis could not be loaded. Refresh analytics to try again.</p></section> : null}
 
       <div className="row">
         <button className="button button-secondary" onClick={() => setActivePage("learning")}>Open concept library</button>
