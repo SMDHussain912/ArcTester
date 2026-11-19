@@ -337,6 +337,7 @@ export default function App() {
     const initialNotificationRequest = ++notificationRequestSequence.current;
     let cancelled = false;
     const isCurrentSession = () => !cancelled && sessionIdentityRef.current === requestIdentity;
+    setOfflineLearningPackage(null);
     const registerDevice = async () => {
       let fingerprint = await getLocalValue("arctester-device-fingerprint");
       if (!fingerprint) {
