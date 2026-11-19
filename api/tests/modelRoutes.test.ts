@@ -450,11 +450,11 @@ describe("admin model registry API", () => {
     });
     expect((evaluation.body.report as { datasetFingerprint: string }).datasetFingerprint).toMatch(/^[a-f0-9]{64}$/);
 
-    const activated = await request("/admin/models/exam-readiness-demo/2/activate", "POST", {});
+    const activated = await request("/admin/models/exam-readiness-demo/2/activate", "POST", { reason: "Passed independent real-anonymized holdout evaluation." });
     expect(activated.status).toBe(200);
     expect(activated.body.model).toMatchObject({ version: 2, isActive: true });
 
-    const rollback = await request("/admin/models/exam-readiness-demo/rollback", "POST", {});
+    const rollback = await request("/admin/models/exam-readiness-demo/rollback", "POST", { reason: "Rollback after a monitored quality regression." });
     expect(rollback.status).toBe(200);
     expect(rollback.body.model).toMatchObject({ version: 1, isActive: true });
 
@@ -464,6 +464,10 @@ describe("admin model registry API", () => {
     expect(actions).toHaveLength(6);
     expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED", "EVALUATED"]));
     expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
+    const rollbackEvent = (audit.body.events as Array<{ action: string; details: { reason?: string } }>).find((event) => event.action === "ROLLED_BACK");
+    const activationEvent = (audit.body.events as Array<{ action: string; details: { reason?: string } }>).find((event) => event.action === "ACTIVATED");
+    expect(rollbackEvent?.details.reason).toBe("Rollback after a monitored quality regression.");
+    expect(activationEvent?.details.reason).toBe("Passed independent real-anonymized holdout evaluation.");
   });
 
   it("blocks production activation when a passing evaluation used synthetic data", async () => {
