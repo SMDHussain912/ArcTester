@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import NetInfo from "@react-native-community/netinfo";
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getOfflineLearningPackage, getOfflineStudyMaterials, removeOfflineStudyMaterial, saveOfflineLearningPackage, saveOfflineStudyMaterial, type OfflineLearningPackage, type OfflineStudyMaterial } from "./learningStore";
 import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
@@ -41,6 +42,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const [selectedSubject, setSelectedSubject] = useState("All");
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -71,6 +73,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
     void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null));
     void getOfflineStudyMaterials(userId).then(setOfflineMaterials).catch((cause) => setError(cause instanceof Error ? cause.message : "Could not load saved study materials."));
   }, [load, userId]);
+
+  useEffect(() => NetInfo.addEventListener((state) => {
+    setIsOnline(state.isConnected !== false && state.isInternetReachable !== false);
+  }), []);
   const updatePreference = useCallback(async (key: keyof NotificationPreferences, value: boolean) => { const previous = preferences; const next = { ...previous, [key]: value }; setPreferences(next); setSavingPreference(true); try { const result = await apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) }); setPreferences(result.preferences); } catch (cause) { setPreferences(previous); setError(cause instanceof Error ? cause.message : "Could not save notification preferences."); } finally { setSavingPreference(false); } }, [preferences]);
 
   const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [userId]);
@@ -128,6 +134,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
         <Text style={styles.eyebrow}>YOUR STUDY SPACE</Text>
         <Text style={styles.title}>Learning hub</Text>
         <Text style={styles.muted}>Performance insights, next steps and quick concept revision.</Text>
+        <View style={styles.networkStatus}>
+          <View style={[styles.networkDot, isOnline === false ? styles.networkDotOffline : styles.networkDotOnline]} />
+          <Text style={styles.networkStatusText}>{isOnline === null ? "Checking connection…" : isOnline ? "Online · Learning data can refresh" : "Offline · Saved questions and downloaded notes remain available"}</Text>
+        </View>
         <TouchableOpacity onPress={() => void load()} disabled={loading} style={styles.refresh}>
           <Text style={styles.refreshText}>{loading ? "Refreshing…" : "Refresh learning data"}</Text>
         </TouchableOpacity>
@@ -309,6 +319,11 @@ const styles = StyleSheet.create({
   priority: { color: "#2563eb", fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
   body: { color: "#475569", lineHeight: 20, fontSize: 13 },
   offlineContent: { color: "#334155", lineHeight: 23, fontSize: 13, paddingVertical: 10 },
+  networkStatus: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 8 },
+  networkDot: { width: 8, height: 8, borderRadius: 4 },
+  networkDotOnline: { backgroundColor: "#16a34a" },
+  networkDotOffline: { backgroundColor: "#dc2626" },
+  networkStatusText: { color: "#64748b", fontSize: 12, flexShrink: 1 },
   meta: { color: "#64748b", fontSize: 11, lineHeight: 17 },
   empty: { color: "#64748b", paddingVertical: 8, lineHeight: 20 },
   search: { backgroundColor: "#ffffff", borderColor: "#cbd5e1", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 12, color: "#172554" },
