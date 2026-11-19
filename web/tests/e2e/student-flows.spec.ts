@@ -160,7 +160,7 @@ test.describe("Formal Exam Flow", () => {
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
     await page.getByRole("navigation", { name: "Student navigation" })
       .getByRole("button", { name: /Assigned exams/ }).click();
-    await expect(page.getByText(examTitle)).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".assigned-exam-card").getByText(examTitle)).toBeVisible({ timeout: 10000 });
 
     // Click on assigned exam to start
     await page.click('button:has-text("Start examination")');
