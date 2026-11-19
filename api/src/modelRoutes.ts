@@ -57,7 +57,7 @@ const EvaluationSchema = z.object({
   datasetId: z.string().min(1).max(64),
 }).strict();
 const GovernanceActionSchema = z.object({
-  reason: z.string().trim().min(10).max(500).optional(),
+  reason: z.string().trim().min(10).max(500),
 }).strict();
 
 const DatasetSampleSchema = z.object({
