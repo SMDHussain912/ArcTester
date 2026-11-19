@@ -175,6 +175,31 @@ describe("durable TensorFlow training jobs", () => {
     })).toBe(1);
   });
 
+  it("allows admins to cancel queued jobs and prevents cancelling terminal jobs", async () => {
+    const queued = await request(`/admin/model-datasets/${datasetId}/tensorflow-jobs`, "POST", {
+      modelId: "cancel-queued-training-fixture",
+      epochs: 1,
+      batchSize: 16,
+    });
+    expect(queued.status).toBe(202);
+    const jobId = queued.body.job.id as string;
+
+    const denied = await request(`/admin/model-training-jobs/${jobId}/cancel`, "POST", {}, studentCookie);
+    expect(denied.status).toBe(403);
+
+    const cancelled = await request(`/admin/model-training-jobs/${jobId}/cancel`, "POST", {});
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.job).toMatchObject({
+      id: jobId,
+      status: "CANCELLED",
+      errorMessage: "Cancelled by administrator.",
+    });
+
+    const repeated = await request(`/admin/model-training-jobs/${jobId}/cancel`, "POST", {});
+    expect(repeated.status).toBe(400);
+    expect((await request(`/admin/model-training-jobs/${jobId}`)).body.job.status).toBe("CANCELLED");
+  });
+
   it("rejects invalid datasets before creating a queued job", async () => {
     const invalid = await server.db.modelDataset.create({
       data: {
