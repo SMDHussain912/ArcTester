@@ -117,7 +117,7 @@ describe("admin model registry API", () => {
       modelId: "training-fixture",
       seed: 42,
     });
-    expect(trained.status).toBe(201);
+    expect(trained.status, JSON.stringify(trained.body)).toBe(201);
     expect(trained.body.promoted).toBe(false);
     const models = trained.body.models as Array<{ modelId: string; version: number; isActive: boolean; rank: number; trainRows: number; testRows: number }>;
     expect(models).toHaveLength(1);
