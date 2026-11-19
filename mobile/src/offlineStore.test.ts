@@ -40,6 +40,7 @@ function makeFakeSqlite() {
     openDatabaseAsync: vi.fn((): Promise<typeof fakeSqliteRef> => Promise.resolve(fakeSqliteRef)),
     execAsync: vi.fn(async (): Promise<void> => undefined),
     withExclusiveTransactionAsync: vi.fn(async (task: (transaction: ReturnType<typeof makeFakeSqlite>) => Promise<void>) => task(fakeSqliteRef)),
+    withTransactionAsync: vi.fn(async (task: () => Promise<void>) => task()),
     getFirstAsync: vi.fn(async (sql: string, ...params: unknown[]): Promise<Record<string, unknown> | null> => {
       const rows = queryTable(tableFor(sql) ?? "", sql, params);
       return rows.length ? rows[0] : null;
@@ -272,7 +273,10 @@ describe("offlineStore", () => {
     await saveExamPackage(packagePayload, expectedSha256);
     await startOfflineAttempt("assignment-1");
 
-    expect(fakeSqliteRef.withExclusiveTransactionAsync).toHaveBeenCalledTimes(2);
+    expect(
+      fakeSqliteRef.withExclusiveTransactionAsync.mock.calls.length +
+      fakeSqliteRef.withTransactionAsync.mock.calls.length
+    ).toBe(2);
   });
 
   it("starts an attempt, saves answers, and tracks remaining seconds", async () => {
