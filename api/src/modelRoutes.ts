@@ -443,8 +443,63 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (!dataset) return next(notFound("Registered training dataset was not found."));
       if (dataset.task === "multiclass-classification") return next(badRequest("Use the readiness classifier training workflow for multiclass datasets."));
       const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
-      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
-      const trained = trainRegisteredDataset(samples, featureSchema, dataset.task as "regression" | "binary-classification", input.seed);
+      const samples = JSON.parse(dataset.samplesJson) as Array<{
+        features: Record<string, number | string>;
+        target: number;
+        groupId?: string;
+        occurredAt?: string;
+        unansweredCount?: number;
+      }>;
+      if (input.modelId === "performance") {
+        const requiredFeatures = [
+          "completed_attempts", "previous_accuracy", "recent_accuracy_mean_3",
+          "overall_accuracy_mean", "previous_question_count", "recent_accuracy_slope_3",
+          "topic_coverage_ratio", "topic_coverage_ratio_missing", "days_since_last_attempt",
+        ];
+        const featureNames = new Set(featureSchema.map((feature) => feature.name));
+        const subjectFeatures = featureSchema
+          .filter((feature) => feature.name.startsWith("subject_accuracy_") && !feature.name.endsWith("_missing"))
+          .map((feature) => feature.name);
+        const validSubjectFeatures = subjectFeatures.length > 0 &&
+          subjectFeatures.every((name) => featureNames.has(`${name}_missing`));
+        const grouped = new Map<string, Array<{ occurredAt: number; target: number }>>();
+        for (const sample of samples) {
+          if (!sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+              typeof sample.occurredAt !== "string" || !Number.isFinite(Date.parse(sample.occurredAt)) ||
+              !Number.isInteger(sample.unansweredCount) || sample.unansweredCount! < 0 ||
+              !Number.isFinite(sample.target) || sample.target < 0 || sample.target > 1) {
+            return next(badRequest("Performance rows require HMAC learner groups, ISO timestamps, unanswered counts and accuracy targets from 0 to 1."));
+          }
+          const rows = grouped.get(sample.groupId) ?? [];
+          rows.push({ occurredAt: Date.parse(sample.occurredAt), target: sample.target });
+          grouped.set(sample.groupId, rows);
+        }
+        let improvingGroups = 0;
+        let decliningGroups = 0;
+        for (const rows of grouped.values()) {
+          rows.sort((left, right) => left.occurredAt - right.occurredAt);
+          if (rows.length < 2) continue;
+          const slope = (rows[rows.length - 1]!.target - rows[0]!.target) / (rows.length - 1);
+          if (slope > 0.005) improvingGroups += 1;
+          if (slope < -0.005) decliningGroups += 1;
+        }
+        if (dataset.task !== "regression" || dataset.targetColumn !== "next_attempt_accuracy" ||
+            dataset.datasetKind !== "real-anonymized" || !dataset.sourceAttested ||
+            !dataset.sourceDescription.startsWith("ArcTester point-in-time performance-v1 extraction") ||
+            samples.length < 500 || grouped.size < 50 ||
+            featureSchema.length < requiredFeatures.length || featureSchema.some((feature) => feature.type !== "numeric") ||
+            requiredFeatures.some((name) => !featureNames.has(name)) || !validSubjectFeatures ||
+            improvingGroups < 1 || decliningGroups < 1) {
+          return next(badRequest("The performance model ID requires a qualified performance-v1 dataset: 500+ snapshots, 50+ HMAC learner groups, improving and declining trajectories, and the complete numeric feature contract."));
+        }
+      }
+      const trained = trainRegisteredDataset(
+        samples,
+        featureSchema,
+        dataset.task as "regression" | "binary-classification",
+        input.seed,
+        input.modelId === "performance" ? { splitStrategy: "chronological-grouped" } : {},
+      );
       const ranked = rankTrainingResults(trained, dataset.task as "regression" | "binary-classification");
       const created = await db.$transaction(async (tx) => {
         const models = [];
@@ -478,7 +533,10 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               actorId: req.user!.id, modelId, version, action: "TRAINED",
               details: JSON.stringify({
                 datasetId, datasetFingerprint: dataset.fingerprint,
-                trainRows: result.trainRows, testRows: result.testRows,
+                trainRows: result.trainRows, validationRows: result.validationRows ?? null, testRows: result.testRows,
+                splitStrategy: result.splitStrategy ?? "grouped-random",
+                timeSplit: result.timeSplit ?? null,
+                validationMetrics: result.validationMetrics ?? null,
                 heldOutMetrics: result.metrics, crossValidation: result.crossValidation ?? null,
                 parameters: result.parameters ?? null, uncertainty: result.uncertainty ?? null, seed: input.seed,
               }),
@@ -488,7 +546,11 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             ...model,
             rank: result.rank,
             trainRows: result.trainRows,
+            validationRows: result.validationRows ?? null,
             testRows: result.testRows,
+            splitStrategy: result.splitStrategy ?? "grouped-random",
+            timeSplit: result.timeSplit ?? null,
+            validationMetrics: result.validationMetrics ?? null,
             heldOutMetrics: result.metrics,
             crossValidation: result.crossValidation ?? null,
             parameters: result.parameters ?? null,
@@ -503,8 +565,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         models: created,
         promoted: false,
         ranking: {
-          method: dataset.task === "regression" ? "RMSE ascending, then MAE ascending" : "F1 descending, then accuracy, precision and recall descending",
-          scope: "same deterministic held-out split from this training run",
+          method: input.modelId === "performance"
+            ? "Chronological 70/15/15; validation-selected parameters; held-out RMSE ascending, then MAE ascending"
+            : dataset.task === "regression" ? "RMSE ascending, then MAE ascending" : "F1 descending, then accuracy, precision and recall descending",
+          scope: input.modelId === "performance"
+            ? "learner-group-disjoint chronological windows with two rolling-origin folds"
+            : "same deterministic held-out split from this training run",
           note: "Experiment ranking only; this does not approve production promotion.",
         },
         message: "Training completed. Candidates remain inactive until they pass evaluation against an existing baseline.",
