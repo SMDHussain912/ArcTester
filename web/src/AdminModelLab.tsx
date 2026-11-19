@@ -34,6 +34,9 @@ const DEFAULT_FEATURE_SCHEMA = [
   { name: "previous_question_count", type: "numeric" },
 ];
 
+type ModelAuditEvent = {id:string;actorId:number|null;modelId:string;version:number;action:string;details:Record<string,unknown>;createdAt:string};
+type ModelEvaluation = {id:string;actorId:number|null;modelId:string;candidateVersion:number;baselineVersion:number;evaluationDataset:string;datasetFingerprint:string;sampleCount:number;metrics:Record<string,unknown>;status:string;evaluatedAt:string};
+
 type AdminModelLabProps = {
   datasets: ModelLabDataset[];
   jobs: ModelLabJob[];
@@ -150,6 +153,11 @@ export default function AdminModelLab({
   const [editingDatasetId,setEditingDatasetId]=useState("");
   const [editingDatasetName,setEditingDatasetName]=useState("");
   const [editingDatasetSource,setEditingDatasetSource]=useState("");
+  const [historyModelId,setHistoryModelId]=useState("");
+  const [auditEvents,setAuditEvents]=useState<ModelAuditEvent[]>([]);
+  const [evaluationHistory,setEvaluationHistory]=useState<ModelEvaluation[]>([]);
+  const [historyLoading,setHistoryLoading]=useState(false);
+  const [historyError,setHistoryError]=useState("");
 
   async function readDatasetFile(file: File) {
     setFormError("");
@@ -204,6 +212,23 @@ export default function AdminModelLab({
   const visibleModels=models.filter(model=>(algorithmFilter==="all"||model.algorithm===algorithmFilter)&&`${model.modelId} ${model.algorithm} ${model.dataset}`.toLowerCase().includes(modelSearch.toLowerCase()));
   const selectedTestModel=models.find(model=>model.modelId===testModelId&&model.isActive);
   const testSchema=datasets.find(dataset=>dataset.name===selectedTestModel?.dataset)?.featureSchema??DEFAULT_FEATURE_SCHEMA;
+
+  async function loadModelHistory(modelId:string) {
+    setHistoryModelId(modelId);setHistoryLoading(true);setHistoryError("");setAuditEvents([]);setEvaluationHistory([]);
+    try {
+      const base=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\\/+$/,"");
+      const [auditResponse,evaluationResponse]=await Promise.all([
+        fetch(base+`/admin/models/${encodeURIComponent(modelId)}/audit`,{credentials:"include"}),
+        fetch(base+`/admin/models/${encodeURIComponent(modelId)}/evaluations`,{credentials:"include"}),
+      ]);
+      const [auditBody,evaluationBody]=await Promise.all([auditResponse.json().catch(()=>({})),evaluationResponse.json().catch(()=>({}))]);
+      if(!auditResponse.ok)throw new Error(auditBody.error||"Could not load model audit history.");
+      if(!evaluationResponse.ok)throw new Error(evaluationBody.error||"Could not load evaluation history.");
+      setAuditEvents(Array.isArray(auditBody.events)?auditBody.events:[]);
+      setEvaluationHistory(Array.isArray(evaluationBody.evaluations)?evaluationBody.evaluations:[]);
+    } catch(error) {setHistoryError(error instanceof Error?error.message:"Could not load model history.");}
+    finally {setHistoryLoading(false);}
+  }
 
   function submitDataset() {
     setFormError("");
@@ -286,8 +311,26 @@ export default function AdminModelLab({
 
       <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">MODEL REGISTRY</p><h2>Models and versions ({models.length})</h2></div><button className="ghost" onClick={onRefresh} disabled={busy}>Refresh</button></div>
         <div className="model-registry-toolbar"><input placeholder="Search model, algorithm or dataset…" aria-label="Search models" value={modelSearch} onChange={e=>setModelSearch(e.target.value)}/><select aria-label="Filter algorithm" value={algorithmFilter} onChange={e=>setAlgorithmFilter(e.target.value)}><option value="all">All algorithms</option>{algorithms.map(x=><option key={x}>{x}</option>)}</select></div>
-        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}{!model.isActive&&onDeleteModel&&<button className="button button-danger" disabled={busy||actionBusy} onClick={()=>onDeleteModel(model.modelId,model.version)}>Delete version</button>}</div></article>})}</div>}
-        <p className="muted">The API enforces evaluation and production eligibility before activation.</p></section>      <section className="admin-panel"><p className="eyebrow">PREDICTION PLAYGROUND</p><h2>Test active model</h2><p className="muted">Run a sample prediction using the live registry endpoint.</p>
+        {loading?<p className="muted">Loading registry…</p>:visibleModels.length===0?<p className="muted">{models.length?"No matching models.":"No candidates registered."}</p>:<div className="model-registry-list">{visibleModels.map(model=>{const baseline=models.filter(x=>x.modelId===model.modelId&&x.version<model.version).sort((x,y)=>y.version-x.version)[0];return <article className="model-registry-row" key={model.modelId+"-"+model.version}><div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · {model.dataset}</p><small>{model.createdAt?new Date(model.createdAt).toLocaleString():"Date unavailable"}</small></div><div className="row wrap"><span className={"status "+(model.isActive?"status-used":"status-pending")}>{model.isActive?"ACTIVE":"INACTIVE"}</span>{model.productionEligible===true?<span className="status status-used">ELIGIBLE</span>:model.productionEligible===false?<span className="status status-expired">NOT ELIGIBLE</span>:null}{baseline&&selectedDatasetId&&model.algorithm!=="tensorflow-js-layers"&&onEvaluateModel&&<button className="button button-secondary" disabled={busy} onClick={()=>onEvaluateModel(model.modelId,model.version,baseline.version,selectedDatasetId)}>Evaluate vs v{baseline.version}</button>}{!model.isActive&&model.productionEligible!==false&&<button className="button button-secondary" disabled={busy||actionBusy} onClick={async()=>{setActionBusy(true);try{const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(model.modelId)}/${model.version}/activate`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Activation failed");onRefresh();}catch(e){setTestError(e instanceof Error?e.message:"Activation failed");}finally{setActionBusy(false);}}}>Activate</button>}<button className="button button-secondary" disabled={historyLoading} onClick={()=>void loadModelHistory(model.modelId)}>History</button>{!model.isActive&&onDeleteModel&&<button className="button button-danger" disabled={busy||actionBusy} onClick={()=>onDeleteModel(model.modelId,model.version)}>Delete version</button>}</div></article>})}</div>}
+        <p className="muted">The API enforces evaluation and production eligibility before activation.</p></section>      {historyModelId&&<section className="admin-panel model-history-panel">
+        <div className="admin-panel-head"><div><p className="eyebrow">MODEL GOVERNANCE</p><h2>History · {historyModelId}</h2><p className="muted">Evaluation evidence and administrative actions for every version of this model.</p></div><button className="ghost" onClick={()=>{setHistoryModelId("");setAuditEvents([]);setEvaluationHistory([]);setHistoryError("");}}>Close</button></div>
+        {historyLoading?<p className="muted" role="status">Loading audit and evaluation history…</p>:historyError?<p className="error" role="alert">{historyError}</p>:<>
+          <h3>Evaluation history ({evaluationHistory.length})</h3>
+          {evaluationHistory.length===0?<p className="muted">No evaluation records found.</p>:<div className="model-history-list">{evaluationHistory.map(item=><article className="model-history-entry" key={item.id}>
+            <div className="row wrap"><strong>Candidate v{item.candidateVersion} vs baseline v{item.baselineVersion}</strong><span className={"status "+(item.status==="PASSED"?"status-used":"status-expired")}>{item.status}</span></div>
+            <p className="muted">{item.evaluationDataset} · {item.sampleCount.toLocaleString()} holdout samples · {new Date(item.evaluatedAt).toLocaleString()}</p>
+            <small>Dataset fingerprint: {item.datasetFingerprint}</small>
+            <details><summary>Metrics and acceptance rule</summary><pre className="model-result-json">{JSON.stringify(item.metrics,null,2)}</pre></details>
+          </article>)}</div>}
+          <h3>Audit trail ({auditEvents.length})</h3>
+          {auditEvents.length===0?<p className="muted">No administrative events found.</p>:<div className="model-history-list">{auditEvents.map(event=><article className="model-history-entry" key={event.id}>
+            <div className="row wrap"><strong>{event.action} · v{event.version}</strong><small>{new Date(event.createdAt).toLocaleString()}</small></div>
+            <p className="muted">Actor ID: {event.actorId??"Unavailable"} · Event ID: {event.id}</p>
+            <details><summary>Event details</summary><pre className="model-result-json">{JSON.stringify(event.details,null,2)}</pre></details>
+          </article>)}</div>}
+        </>}
+      </section>}
+      <section className="admin-panel"><p className="eyebrow">PREDICTION PLAYGROUND</p><h2>Test active model</h2><p className="muted">Run a sample prediction using the live registry endpoint.</p>
         <label>Active model<select value={testModelId} onChange={e=>{setTestModelId(e.target.value);setTestFeatures({});setTestResult(null);setTestError("");}}><option value="">Choose model</option>{models.filter(x=>x.isActive&&x.algorithm!=="tensorflow-js-layers").map(x=><option key={x.modelId} value={x.modelId}>{x.modelId} · v{x.version}</option>)}</select></label>
         {selectedTestModel?<><div className="model-test-fields">{testSchema.map(f=><label key={f.name}>{f.name}{f.type==="categorical"?<select value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}><option value="">Choose…</option>{(f as {categories?:string[]}).categories?.map(x=><option key={x}>{x}</option>)}</select>:<input type="number" step="any" value={testFeatures[f.name]??""} onChange={e=>setTestFeatures(v=>({...v,[f.name]:e.target.value}))}/>}</label>)}</div><button className="primary" disabled={actionBusy||testSchema.some(f=>!testFeatures[f.name]?.trim())} onClick={async()=>{setActionBusy(true);setTestError("");setTestResult(null);try{const features=Object.fromEntries(testSchema.map(f=>[f.name,f.type==="numeric"?Number(testFeatures[f.name]):testFeatures[f.name]]));const r=await fetch((import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"")+`/admin/models/${encodeURIComponent(testModelId)}/predict`,{method:"POST",credentials:"include",headers:{"content-type":"application/json"},body:JSON.stringify({features})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Prediction test failed");setTestResult(d.prediction);}catch(e){setTestError(e instanceof Error?e.message:"Prediction test failed");}finally{setActionBusy(false);}}}>Run prediction test</button>{testError&&<p className="error" role="alert">{testError}</p>}{testResult!==null&&<pre className="model-result-json">{JSON.stringify(testResult,null,2)}</pre>}</>:<p className="muted">Select an active statistical model. TensorFlow.js uses its dedicated inference path.</p>}</section>
       <section className="admin-panel">
