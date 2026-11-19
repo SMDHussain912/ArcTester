@@ -110,7 +110,7 @@ export default function StudentAssignmentResult({
     return (
       <View style={styles.card}>
         <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Result not available</Text>
-        <Text style={styles.muted}>This exam has not been submitted yet.</Text>
+        <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>This exam has not been submitted yet.</Text>
         <TouchableOpacity onPress={onBack} style={styles.linkRow}>
           <Text style={styles.link}>‹ Back</Text>
         </TouchableOpacity>
@@ -124,7 +124,7 @@ export default function StudentAssignmentResult({
         <TouchableOpacity onPress={onBack} style={styles.linkRow}>
           <Text style={styles.link}>‹ Back to assigned exams</Text>
         </TouchableOpacity>
-        <Text style={styles.heading}>Exam result</Text>
+        <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Exam result</Text>
         <Text style={[styles.subtitle, darkMode && { color: "#a7b4c8" }]}>{result.submissionId}</Text>
         <View style={styles.statusRow}>
           <Text style={[styles.statusLabel, { color: statusColor(result.status) }]}>
@@ -135,7 +135,7 @@ export default function StudentAssignmentResult({
               {result.score ?? 0} / {result.maximumScore ?? 0} ({scorePercent}%)
             </Text>
           ) : (
-            <Text style={styles.muted}>Your result will appear after the instructor reviews it.</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your result will appear after the instructor reviews it.</Text>
           )}
         </View>
         <View style={styles.metaRow}>
@@ -144,8 +144,8 @@ export default function StudentAssignmentResult({
         </View>
         {result.receivedAt && (
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Received</Text>
-            <Text style={styles.metaValue}>{new Date(result.receivedAt).toLocaleString()}</Text>
+            <Text style={[styles.metaLabel, darkMode && { color: "#94a3b8" }]}>Received</Text>
+            <Text style={[styles.metaValue, darkMode && { color: "#e2e8f0" }]}>{new Date(result.receivedAt).toLocaleString()}</Text>
           </View>
         )}
         {released && result.questions.length > 0 && (
@@ -154,7 +154,7 @@ export default function StudentAssignmentResult({
             {result.questions.map((question) => (
               <View key={question.id} style={[styles.questionCard, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
                 <View style={styles.questionHeader}>
-                  <Text style={styles.questionNumber}>Question {question.position + 1}</Text>
+                  <Text style={[styles.questionNumber, darkMode && { color: "#93c5fd" }]}>Question {question.position + 1}</Text>
                   <Text style={[styles.questionTag, { color: question.isCorrect ? "#167647" : "#b42318" }]}>
                     {question.isCorrect ? "Correct" : "Incorrect"}
                   </Text>
@@ -184,14 +184,14 @@ export default function StudentAssignmentResult({
                   <Text style={[styles.marksText, darkMode && { color: "#f1f5f9" }]}>
                     {question.awardedMarks} / {question.marks} marks
                   </Text>
-                  <Text style={styles.muted}>{question.explanation || "No explanation provided."}</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{question.explanation || "No explanation provided."}</Text>
                 </View>
               </View>
             ))}
           </>
         )}
         {!released && result.questions.length === 0 && (
-          <Text style={styles.muted}>No answer details are available while the submission is under review.</Text>
+          <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>No answer details are available while the submission is under review.</Text>
         )}
       </View>
       <TouchableOpacity onPress={onBack} style={styles.backButton}>
