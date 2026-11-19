@@ -50,6 +50,7 @@ type AdminModelLabProps = {
   onTrainClassical: () => void;
   onRefresh: () => void;
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
+  onCancelJob?: (jobId: string) => void;
 };
 
 function validateDatasetRows(
@@ -120,7 +121,7 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
@@ -294,7 +295,7 @@ export default function AdminModelLab({
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 3 · OBSERVE</p><h2>Training jobs and evaluation</h2></div></div>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading training jobs"><div className="skeleton skeleton-card" /><div className="skeleton skeleton-card" /></div> : jobs.length === 0 ? <p className="muted">No training jobs yet.</p> : jobs.map((job) => (
           <article key={job.id} className="question-review-row">
-            <div className="panel-header"><strong>{job.modelId}</strong><span className={job.status === "SUCCEEDED" ? "status status-used" : job.status === "FAILED" ? "status status-expired" : "status status-pending"}>{job.status}</span></div>
+            <div className="panel-header"><strong>{job.modelId}</strong><div className="row wrap"><span className={job.status === "SUCCEEDED" ? "status status-used" : job.status === "FAILED" || job.status === "CANCELLED" ? "status status-expired" : "status status-pending"}>{job.status}</span>{(job.status === "QUEUED" || job.status === "RUNNING") && onCancelJob && <button type="button" className="button button-secondary" disabled={busy} onClick={() => onCancelJob(job.id)}>Cancel job</button>}</div></div>
             <p className="muted">Job {job.id} · Dataset {job.datasetId}</p>
             <div className="training-progress" role="progressbar" aria-label={job.modelId + " training progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, job.progress))}><span style={{ width: Math.max(0, Math.min(100, job.progress)) + "%" }} /></div>
             <p>{job.progress}% complete</p>
