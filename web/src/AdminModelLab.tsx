@@ -223,13 +223,18 @@ export default function AdminModelLab({
         ].every((value) => typeof value === "number" && Number.isFinite(value)) &&
           (summary.averageReward === null || (typeof summary.averageReward === "number" && Number.isFinite(summary.averageReward))) &&
           (summary.averageSelectionScore === null || (typeof summary.averageSelectionScore === "number" && Number.isFinite(summary.averageSelectionScore)));
-        const validReasons = Array.isArray(body?.byReason) && body.byReason.every((item) =>
-          item && typeof item.reasonCode === "string" && typeof item.count === "number" && Number.isFinite(item.count),
-        );
-        const validDaily = Array.isArray(body?.daily) && body.daily.every((item) =>
-          item && typeof item.date === "string" && typeof item.selected === "number" &&
-          typeof item.observed === "number" && (item.averageReward === null || typeof item.averageReward === "number"),
-        );
+        const validReasons = Array.isArray(body?.byReason) && body.byReason.every((item: unknown) => {
+          if (!item || typeof item !== "object") return false;
+          const row = item as Record<string, unknown>;
+          return typeof row.reasonCode === "string" && typeof row.count === "number" && Number.isFinite(row.count);
+        });
+        const validDaily = Array.isArray(body?.daily) && body.daily.every((item: unknown) => {
+          if (!item || typeof item !== "object") return false;
+          const row = item as Record<string, unknown>;
+          return typeof row.date === "string" && typeof row.selected === "number" &&
+            typeof row.observed === "number" &&
+            (row.averageReward === null || typeof row.averageReward === "number");
+        });
         if (!validSummary || !validReasons || !validDaily) {
           setAdaptiveAnalytics(null);
           setAdaptiveAnalyticsError("");
