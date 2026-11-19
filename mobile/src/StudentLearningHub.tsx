@@ -5,7 +5,7 @@ import { getOfflineLearningPackage, getOfflineStudyMaterials, removeOfflineStudy
 import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
-type Props = { api: ApiRequest; userId: string };
+type Props = { api: ApiRequest; userId: string; darkMode?: boolean };
 type Concept = {
   slug: string; title: string; subject: string; topic: string; definition: string;
   examples: string[]; relatedConcepts: string[]; commonMistakes: string[];
@@ -20,7 +20,7 @@ type Prediction = { status: string; message: string; predictedScorePercent?: num
 type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 type StudyMaterial = StudyMaterialSummary;
 
-export default function StudentLearningHub({ api, userId }: Props) {
+export default function StudentLearningHub({ api, userId, darkMode = false }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -149,11 +149,11 @@ export default function StudentLearningHub({ api, userId }: Props) {
   }), [concepts, query, selectedSubject]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
+    <ScrollView style={darkMode ? { backgroundColor: "#0b1220" } : undefined} contentContainerStyle={styles.container}>
+      <View style={[styles.header, darkMode && { backgroundColor: "#172235" }]}>
         <Text style={styles.eyebrow}>YOUR STUDY SPACE</Text>
-        <Text style={styles.title}>Learning hub</Text>
-        <Text style={styles.muted}>Performance insights, next steps and quick concept revision.</Text>
+        <Text style={[styles.title, darkMode && { color: "#f1f5f9" }]}>Learning hub</Text>
+        <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Performance insights, next steps and quick concept revision.</Text>
         <View style={styles.networkStatus}>
           <View style={[styles.networkDot, isOnline === false ? styles.networkDotOffline : styles.networkDotOnline]} />
           <Text style={styles.networkStatusText}>{isOnline === null ? "Checking connection…" : isOnline ? "Online · Learning data can refresh" : "Offline · Saved questions and downloaded notes remain available"}</Text>
@@ -170,64 +170,64 @@ export default function StudentLearningHub({ api, userId }: Props) {
       {loading && !overview && concepts.length === 0 && <ActivityIndicator size="large" style={{ marginVertical: 24 }} />}
 
       {section === "overview" && <View>
-      <Text style={styles.sectionTitle}>Your progress</Text>
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Your progress</Text>
       {overview ? (
         <View style={styles.metrics}>
-          <View style={styles.metric}><Text style={styles.metricValue}>{overview.practice.completedAttempts}</Text><Text style={styles.metricLabel}>Practice tests</Text></View>
-          <View style={styles.metric}><Text style={styles.metricValue}>{overview.practice.accuracy === null ? "—" : Math.round(overview.practice.accuracy * 100) + "%"}</Text><Text style={styles.metricLabel}>Practice accuracy</Text></View>
-          <View style={styles.metric}><Text style={styles.metricValue}>{overview.formalExams.graded}</Text><Text style={styles.metricLabel}>Graded exams</Text></View>
-          <View style={styles.metric}><Text style={styles.metricValue}>{overview.formalExams.reviewRequired}</Text><Text style={styles.metricLabel}>Awaiting review</Text></View>
+          <View style={[styles.metric, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.metricValue, darkMode && { color: "#93c5fd" }]}>{overview.practice.completedAttempts}</Text><Text style={[styles.metricLabel, darkMode && { color: "#a7b4c8" }]}>Practice tests</Text></View>
+          <View style={[styles.metric, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.metricValue, darkMode && { color: "#93c5fd" }]}>{overview.practice.accuracy === null ? "—" : Math.round(overview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.metricLabel, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
+          <View style={[styles.metric, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.metricValue, darkMode && { color: "#93c5fd" }]}>{overview.formalExams.graded}</Text><Text style={[styles.metricLabel, darkMode && { color: "#a7b4c8" }]}>Graded exams</Text></View>
+          <View style={[styles.metric, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.metricValue, darkMode && { color: "#93c5fd" }]}>{overview.formalExams.reviewRequired}</Text><Text style={[styles.metricLabel, darkMode && { color: "#a7b4c8" }]}>Awaiting review</Text></View>
         </View>
       ) : <Text style={styles.empty}>Performance summary is unavailable.</Text>}
 
-      <Text style={styles.sectionTitle}>ECET score outlook</Text>
-      {prediction?.status === "ready" ? <View style={styles.explanation}><Text style={styles.predictionValue}>{Math.round(prediction.predictedScorePercent ?? 0)}%</Text><Text style={styles.cardTitle}>Estimated score range: {Math.round(prediction.predictionInterval?.lowerPercent ?? 0)}–{Math.round(prediction.predictionInterval?.upperPercent ?? 0)}%</Text><Text style={styles.body}>{prediction.message}</Text><Text style={styles.meta}>Model MAE {prediction.modelMae?.toFixed(1)} · Baseline MAE {prediction.baselineMae?.toFixed(1)}</Text></View> : <View style={styles.card}><Text style={styles.body}>{prediction?.message ?? "Score prediction is not available yet."}</Text></View>}
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>ECET score outlook</Text>
+      {prediction?.status === "ready" ? <View style={[styles.explanation, darkMode && { backgroundColor: "#1e293b" }]}><Text style={styles.predictionValue}>{Math.round(prediction.predictedScorePercent ?? 0)}%</Text><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>Estimated score range: {Math.round(prediction.predictionInterval?.lowerPercent ?? 0)}–{Math.round(prediction.predictionInterval?.upperPercent ?? 0)}%</Text><Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{prediction.message}</Text><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Model MAE {prediction.modelMae?.toFixed(1)} · Baseline MAE {prediction.baselineMae?.toFixed(1)}</Text></View> : <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{prediction?.message ?? "Score prediction is not available yet."}</Text></View>}
 
-      <Text style={styles.sectionTitle}>Recommended next steps</Text>
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Recommended next steps</Text>
       {recommendations?.performanceExplanation ? (
-        <View style={styles.explanation}>
-          <Text style={styles.cardTitle}>{recommendations.performanceExplanation.headline}</Text>
-          {recommendations.performanceExplanation.details.map((detail, index) => <Text key={index} style={styles.body}>• {detail}</Text>)}
+        <View style={[styles.explanation, darkMode && { backgroundColor: "#1e293b" }]}>
+          <Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{recommendations.performanceExplanation.headline}</Text>
+          {recommendations.performanceExplanation.details.map((detail, index) => <Text key={index} style={[styles.body, darkMode && { color: "#cbd5e1" }]}>• {detail}</Text>)}
         </View>
       ) : null}
       {recommendations?.recommendations.length ? recommendations.recommendations.map((item) => (
-        <View key={item.id} style={styles.card}>
+        <View key={item.id} style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
           <View style={styles.row}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{item.title}</Text>
             <Text style={styles.priority}>{item.priority}</Text>
           </View>
-          <Text style={styles.body}>{item.reason}</Text>
-          <Text style={styles.meta}>{item.subject ?? "Mixed practice"}{item.topic ? " · " + item.topic : ""} · {item.questionCount} questions</Text>
+          <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{item.reason}</Text>
+          <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{item.subject ?? "Mixed practice"}{item.topic ? " · " + item.topic : ""} · {item.questionCount} questions</Text>
         </View>
       )) : <Text style={styles.empty}>More completed practice will unlock personalized recommendations.</Text>}
 
-      <Text style={styles.sectionTitle}>Notification preferences</Text>
-      <View style={styles.card}>
-        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Exam assignments</Text><Text style={styles.meta}>Notify me when an exam is assigned to me.</Text></View><Switch value={preferences.examAssignments} disabled={savingPreference} onValueChange={(value) => void updatePreference("examAssignments", value)} /></View>
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Notification preferences</Text>
+      <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>Exam assignments</Text><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Notify me when an exam is assigned to me.</Text></View><Switch value={preferences.examAssignments} disabled={savingPreference} onValueChange={(value) => void updatePreference("examAssignments", value)} /></View>
         <View style={styles.preferenceDivider} />
-        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Exam results</Text><Text style={styles.meta}>Notify me when a result or reviewed submission is available.</Text></View><Switch value={preferences.examResults} disabled={savingPreference} onValueChange={(value) => void updatePreference("examResults", value)} /></View>
-        {savingPreference ? <Text style={styles.meta}>Saving preference…</Text> : null}
+        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>Exam results</Text><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Notify me when a result or reviewed submission is available.</Text></View><Switch value={preferences.examResults} disabled={savingPreference} onValueChange={(value) => void updatePreference("examResults", value)} /></View>
+        {savingPreference ? <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Saving preference…</Text> : null}
       </View>
       </View>}
       {section === "offline" && <View>
-      <Text style={styles.sectionTitle}>Offline question bank</Text>
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{offlinePackage ? offlinePackage.total.toLocaleString() + " questions saved on this device" : "No offline question bank yet"}</Text>
-        <Text style={styles.body}>{offlinePackage ? "Downloaded " + new Date(offlinePackage.exportedAt).toLocaleString() + ". Stored separately for this account and available without a connection." : "Download the question bank while online to browse questions later without internet."}</Text>
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Offline question bank</Text>
+      <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+        <Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{offlinePackage ? offlinePackage.total.toLocaleString() + " questions saved on this device" : "No offline question bank yet"}</Text>
+        <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{offlinePackage ? "Downloaded " + new Date(offlinePackage.exportedAt).toLocaleString() + ". Stored separately for this account and available without a connection." : "Download the question bank while online to browse questions later without internet."}</Text>
         <TouchableOpacity onPress={() => void downloadQuestionBank()} disabled={downloadingBank} style={styles.downloadButton}><Text style={styles.downloadButtonText}>{downloadingBank ? "Downloading…" : offlinePackage ? "Update offline question bank" : "Download for offline use"}</Text></TouchableOpacity>
         {offlinePackage ? <TouchableOpacity onPress={() => setShowOfflineBank(!showOfflineBank)} style={styles.refresh}><Text style={styles.refreshText}>{showOfflineBank ? "Hide saved questions" : "Browse saved questions"}</Text></TouchableOpacity> : null}
       </View>
       {showOfflineBank && offlinePackage ? <>
-        <TextInput value={offlineQuery} onChangeText={setOfflineQuery} placeholder="Search saved questions" placeholderTextColor="#8993a5" style={styles.search} />
-        {offlineQuestions.map((question) => <View key={question.id} style={styles.card}><Text style={styles.meta}>{question.subject}{question.topic ? " · " + question.topic : ""} · {question.difficulty}</Text><Text style={styles.cardTitle}>{question.text}</Text>{question.options.map((option, index) => <Text key={index} style={styles.body}>{String.fromCharCode(65 + index)}. {option}</Text>)}</View>)}
+        <TextInput value={offlineQuery} onChangeText={setOfflineQuery} placeholder="Search saved questions" placeholderTextColor="#8993a5" style={[styles.search, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+        {offlineQuestions.map((question) => <View key={question.id} style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{question.subject}{question.topic ? " · " + question.topic : ""} · {question.difficulty}</Text><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{question.text}</Text>{question.options.map((option, index) => <Text key={index} style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{String.fromCharCode(65 + index)}. {option}</Text>)}</View>)}
         {offlineQuestions.length === 0 ? <Text style={styles.empty}>No saved questions match this search.</Text> : null}
-        {offlinePackage.questions.length > offlineQuestions.length ? <Text style={styles.meta}>Showing up to 30 matching questions. Search to find a specific item.</Text> : null}
+        {offlinePackage.questions.length > offlineQuestions.length ? <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Showing up to 30 matching questions. Search to find a specific item.</Text> : null}
       </> : null}
-      <Text style={styles.sectionTitle}>Saved offline study materials</Text>
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Saved offline study materials</Text>
       {offlineMaterials.map((material) => (
-        <View key={material.id} style={styles.card}>
-          <Text style={styles.cardTitle}>{material.title}</Text>
-          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · Saved {new Date(material.downloadedAt).toLocaleDateString()}</Text>
+        <View key={material.id} style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+          <Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{material.title}</Text>
+          <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{material.subject}{material.topic ? " · " + material.topic : ""} · Saved {new Date(material.downloadedAt).toLocaleDateString()}</Text>
           <View style={styles.preferenceRow}>
             <TouchableOpacity onPress={() => openOfflineMaterial(material)} style={styles.refresh}>
               <Text style={styles.refreshText}>Open offline</Text>
@@ -242,15 +242,15 @@ export default function StudentLearningHub({ api, userId }: Props) {
 
       </View>}
       {section === "materials" && <View>
-        <Text style={styles.sectionTitle}>Study materials</Text>
-        <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={styles.search} />
-        {visibleMaterials.map((material) => <View key={material.id} style={styles.card}><Text style={styles.cardTitle}>{material.title}</Text><Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>{!!material.description && <Text style={styles.body}>{material.description}</Text>}{(material.mimeType === "text/plain" || material.mimeType === "text/markdown") ? <TouchableOpacity onPress={() => { const saved = offlineMaterials.find((item) => item.id === material.id); if (saved) openOfflineMaterial(saved); else void downloadStudyMaterial(material); }} disabled={downloadingMaterialId === material.id} style={styles.refresh}><Text style={styles.refreshText}>{downloadingMaterialId === material.id ? "Saving…" : offlineMaterials.some((item) => item.id === material.id) ? "Read offline" : "Download for offline reading"}</Text></TouchableOpacity> : <Text style={styles.meta}>PDF preview/download requires an internet connection in this mobile app.</Text>}</View>)}
+        <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Study materials</Text>
+        <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={[styles.search, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+        {visibleMaterials.map((material) => <View key={material.id} style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{material.title}</Text><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>{!!material.description && <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{material.description}</Text>}{(material.mimeType === "text/plain" || material.mimeType === "text/markdown") ? <TouchableOpacity onPress={() => { const saved = offlineMaterials.find((item) => item.id === material.id); if (saved) openOfflineMaterial(saved); else void downloadStudyMaterial(material); }} disabled={downloadingMaterialId === material.id} style={styles.refresh}><Text style={styles.refreshText}>{downloadingMaterialId === material.id ? "Saving…" : offlineMaterials.some((item) => item.id === material.id) ? "Read offline" : "Download for offline reading"}</Text></TouchableOpacity> : <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>PDF preview/download requires an internet connection in this mobile app.</Text>}</View>)}
         {!loading && visibleMaterials.length === 0 && <Text style={styles.empty}>{materialQuery ? "No study materials match this search." : "No published study materials are available yet."}</Text>}
-        {selectedOfflineMaterial ? <View style={styles.card}><Text style={styles.meta}>OFFLINE READER · {selectedOfflineMaterial.subject}{selectedOfflineMaterial.topic ? " · " + selectedOfflineMaterial.topic : ""}</Text><Text style={styles.cardTitle}>{selectedOfflineMaterial.title}</Text><Text style={styles.body}>{selectedOfflineMaterial.description}</Text><Text selectable style={styles.offlineContent}>{selectedOfflineMaterial.content}</Text><TouchableOpacity onPress={() => setSelectedOfflineMaterial(null)} style={styles.refresh}><Text style={styles.refreshText}>Close reader</Text></TouchableOpacity></View> : null}
+        {selectedOfflineMaterial ? <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>OFFLINE READER · {selectedOfflineMaterial.subject}{selectedOfflineMaterial.topic ? " · " + selectedOfflineMaterial.topic : ""}</Text><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{selectedOfflineMaterial.title}</Text><Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{selectedOfflineMaterial.description}</Text><Text selectable style={styles.offlineContent}>{selectedOfflineMaterial.content}</Text><TouchableOpacity onPress={() => setSelectedOfflineMaterial(null)} style={styles.refresh}><Text style={styles.refreshText}>Close reader</Text></TouchableOpacity></View> : null}
       </View>}
       {section === "concepts" && <View>
-      <Text style={styles.sectionTitle}>Concept library</Text>
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={styles.search} />
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Concept library</Text>
+      <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={[styles.search, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
         {subjects.map((subject) => (
           <TouchableOpacity key={subject} onPress={() => setSelectedSubject(subject)} style={[styles.filter, selectedSubject === subject && styles.filterActive]}>
@@ -261,24 +261,24 @@ export default function StudentLearningHub({ api, userId }: Props) {
       {filtered.map((concept) => {
         const expanded = expandedSlug === concept.slug;
         return (
-          <View key={concept.slug} style={styles.card}>
+          <View key={concept.slug} style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
             <TouchableOpacity onPress={() => setExpandedSlug(expanded ? null : concept.slug)} accessibilityRole="button" accessibilityState={{ expanded }}>
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{concept.title}</Text>
-                  <Text style={styles.meta}>{concept.subject} · {concept.topic}</Text>
+                  <Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>{concept.title}</Text>
+                  <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{concept.subject} · {concept.topic}</Text>
                 </View>
                 <Text style={styles.expand}>{expanded ? "−" : "+"}</Text>
               </View>
-              <Text style={styles.body} numberOfLines={expanded ? undefined : 2}>{concept.definition}</Text>
+              <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]} numberOfLines={expanded ? undefined : 2}>{concept.definition}</Text>
             </TouchableOpacity>
             {expanded && <>
               <Text style={styles.subheading}>Examples</Text>
-              {concept.examples.map((value, index) => <Text key={index} style={styles.body}>• {value}</Text>)}
+              {concept.examples.map((value, index) => <Text key={index} style={[styles.body, darkMode && { color: "#cbd5e1" }]}>• {value}</Text>)}
               <Text style={styles.subheading}>Common mistakes</Text>
-              {concept.commonMistakes.map((value, index) => <Text key={index} style={styles.body}>• {value}</Text>)}
+              {concept.commonMistakes.map((value, index) => <Text key={index} style={[styles.body, darkMode && { color: "#cbd5e1" }]}>• {value}</Text>)}
               <Text style={styles.subheading}>Related concepts</Text>
-              <Text style={styles.meta}>{concept.relatedConcepts.join(" · ") || "No related concepts listed"}</Text>
+              <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>{concept.relatedConcepts.join(" · ") || "No related concepts listed"}</Text>
             </>}
           </View>
         );
