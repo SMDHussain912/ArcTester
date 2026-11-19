@@ -51,6 +51,7 @@ type AdminModelLabProps = {
   onRefresh: () => void;
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
   onCancelJob?: (jobId: string) => void;
+  onEvaluateModel?: (modelId: string, version: number, baselineVersion: number, datasetId: string) => void;
 };
 
 function validateDatasetRows(
@@ -121,7 +122,7 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
-  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob,
+  onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
   const [targetColumn, setTargetColumn] = useState("next_score");
@@ -297,7 +298,7 @@ export default function AdminModelLab({
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model registry"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : models.length === 0 ? <p className="muted">No model candidates have been registered yet.</p> : <div className="model-registry-list">
           {models.map((model) => <article className="model-registry-row" key={model.modelId + "-" + model.version}>
             <div><strong>{model.modelId} · v{model.version}</strong><p className="muted">{model.algorithm} · {model.task} · Dataset: {model.dataset}</p></div>
-            <div className="row wrap"><span className={"status " + (model.isActive ? "status-used" : "status-pending")}>{model.isActive ? "ACTIVE" : "CANDIDATE"}</span>{model.productionEligible === true ? <span className="status status-used">PRODUCTION ELIGIBLE</span> : model.productionEligible === false ? <span className="status status-expired">NOT ELIGIBLE</span> : null}</div>
+            <div className="row wrap"><span className={"status " + (model.isActive ? "status-used" : "status-pending")}>{model.isActive ? "ACTIVE" : "CANDIDATE"}</span>{model.productionEligible === true ? <span className="status status-used">PRODUCTION ELIGIBLE</span> : model.productionEligible === false ? <span className="status status-expired">NOT ELIGIBLE</span> : null}{(() => { const baseline = models.filter((candidate) => candidate.modelId === model.modelId && candidate.version < model.version).sort((a, b) => b.version - a.version)[0]; return baseline && selectedDatasetId && model.algorithm !== "tensorflow-js-layers" && onEvaluateModel ? <button type="button" className="button button-secondary" disabled={busy} onClick={() => onEvaluateModel(model.modelId, model.version, baseline.version, selectedDatasetId)}>Compare with v{baseline.version}</button> : null; })()}</div>
           </article>)}
         </div>}
         <p className="muted">Candidates stay inactive until separately evaluated and approved. Synthetic-data models are never production eligible.</p>
