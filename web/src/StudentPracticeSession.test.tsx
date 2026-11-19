@@ -41,6 +41,16 @@ describe("StudentPracticeSession", () => {
   expect(screen.getByRole("button", { name: /Submit answers/ })).toHaveTextContent("1/2");
  });
 
+ it("clearly reports when answers are saved locally while offline", () => {
+  render(<StudentPracticeSession test={test} answers={{ 1: 1 }} remainingSeconds={null} busy={false} isOnline={false} localSaveAvailable onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Offline — answers are saved on this device. Reconnect before submitting.");
+ });
+
+ it("warns when browser storage cannot preserve the practice session", () => {
+  render(<StudentPracticeSession test={test} answers={{}} remainingSeconds={null} busy={false} isOnline localSaveAvailable={false} onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Local recovery is unavailable");
+ });
+
  it("disables submission while busy and omits countdown for untimed practice", () => {
   render(<StudentPracticeSession test={{ ...test, deadline: null }} answers={{}} remainingSeconds={null} busy onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
   expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.getByRole("button", { name: "Leave session" })).toBeDisabled(); expect(screen.queryByText(/remaining/)).toBeNull();
