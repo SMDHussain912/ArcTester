@@ -31,6 +31,8 @@ const RegisterSchema = z.object({
     "knn",
     "decision-tree",
     "gaussian-naive-bayes",
+    "performance-gradient-boosting",
+    "performance-random-forest",
   ]),
   task: z.enum(["regression", "binary-classification"]),
   dataset: z.string().trim().min(1).max(120),
