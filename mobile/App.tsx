@@ -952,7 +952,7 @@ export default function App() {
           </Animated.View>
         ) : activeTab === "learn" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <StudentLearningHub api={api} />
+            <StudentLearningHub api={api} userId={String(user.id)} />
           </Animated.View>
         ) : activeTab === "profile" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
