@@ -3,15 +3,24 @@ import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
 import { monotonicNow } from "./clock";
 
-let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+const databasePromises = new Map<string, Promise<SQLite.SQLiteDatabase>>();
 let configuredUserId: string | null = null;
+
+function databaseForUser(userId: string): Promise<SQLite.SQLiteDatabase> {
+  let promise = databasePromises.get(userId);
+  if (!promise) {
+    // User IDs are server-issued numeric identifiers. Keep each account's
+    // offline cache in a separate SQLite file on shared devices.
+    promise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
+    databasePromises.set(userId, promise);
+  }
+  return promise;
+}
 
 export function configureOfflineStore(userId: string): void {
   if (!userId) throw new Error("A signed-in user is required for offline storage.");
-  if (configuredUserId !== userId) {
-    configuredUserId = userId;
-    dbPromise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
-  }
+  configuredUserId = userId;
+  void databaseForUser(userId);
 }
 
 export type OfflineExamQuestion = {
@@ -101,11 +110,11 @@ async function withOfflineTransaction<T>(
 }
 
 
-async function database() {
-  if (!dbPromise) {
+async function database(userId = configuredUserId) {
+  if (!userId) {
     throw new Error("Offline storage has not been configured for this account.");
   }
-  const db = await dbPromise;
+  const db = await databaseForUser(userId);
   let initialization = databaseInitializations.get(db);
   if (!initialization) {
     initialization = db.execAsync(`
@@ -495,19 +504,23 @@ export async function queueOfflineSubmission(
   return result;
 }
 
-export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
-  const db = await database();
+export async function getPendingSubmissions(userId?: string): Promise<PendingAttempt[]> {
+  const db = await database(userId);
   const rows = await db.getAllAsync<AttemptRow>(
     "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
-    const examPackage = await getCachedExamPackage(row.assignmentId);
-    if (!examPackage) {
+    const packageRow = await db.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      row.assignmentId,
+    );
+    if (!packageRow) {
       throw new Error(
         `The saved exam package for pending assignment ${row.assignmentId} is missing. Its submission remains on this device and needs recovery.`,
       );
     }
+    const examPackage = parsePackage(packageRow.payload_json);
     if (!row.submittedAt) {
       throw new Error(
         `The pending submission for assignment ${row.assignmentId} has no submission timestamp. It remains on this device and needs recovery.`,
@@ -554,8 +567,9 @@ export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
 export async function markSubmissionSynced(
   assignmentId: string,
   submissionId: string,
+  userId?: string,
 ): Promise<void> {
-  const db = await database();
+  const db = await database(userId);
   await db.runAsync(
     "UPDATE offline_attempts SET status = 'SYNCED', submission_id = ?, last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'PENDING'",
     submissionId,
@@ -567,8 +581,9 @@ export async function markSubmissionSynced(
 export async function keepSubmissionPending(
   assignmentId: string,
   message: string,
+  userId?: string,
 ): Promise<void> {
-  const db = await database();
+  const db = await database(userId);
   await db.runAsync(
     "UPDATE offline_attempts SET last_error = ?, updated_at = ? WHERE assignment_id = ? AND status = 'PENDING'",
     message.slice(0, 500),
