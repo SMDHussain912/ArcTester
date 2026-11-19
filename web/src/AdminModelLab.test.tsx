@@ -99,4 +99,12 @@ describe("AdminModelLab", () => {
     expect(onRegisterDataset.mock.calls[0][0]).toMatchObject({ name: "ECET score history", task: "regression", targetColumn: "next_score", sourceAttested: true, datasetKind: "synthetic" });
   });
 
+  it("explains when a TensorFlow candidate loses to the baseline", () => {
+    const completed: ModelLabJob[] = [{ id: "job-2", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "SUCCEEDED", progress: 100, errorMessage: "", result: { productionEligible: false, candidate: { mae: 0.0526, rmse: 0.0671 }, baseline: { mae: 0.0495, rmse: 0.0599 }, reason: "Candidate did not beat both baseline metrics." } }];
+    render(<AdminModelLab datasets={datasets} jobs={completed} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByText("keep this candidate inactive.", { exact: false })).toBeTruthy();
+    expect(screen.getByText(/current baseline is the safer choice/i)).toBeTruthy();
+    expect(screen.getByText(/Do not activate or deploy it/i)).toBeTruthy();
+  });
+
 });
