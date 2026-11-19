@@ -138,7 +138,7 @@ describe("admin model registry API", () => {
 
     const missingReason = await request("/admin/models/exam-readiness-demo/2/activate", "POST", {});
     expect(missingReason.status).toBe(400);
-    expect(String(missingReason.body.error ?? missingReason.body.message)).toContain("reason");
+    expect(missingReason.body.reasons).toEqual(expect.arrayContaining([expect.stringContaining("reason")]));
   });
 
   it("trains only the approved logistic baseline from a registered dataset without auto-promoting it", async () => {
