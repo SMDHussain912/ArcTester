@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateOfflineLearningPackage } from "./learningStore";
+import { validateOfflineLearningPackage, validateOfflineStudyMaterial } from "./learningStore";
 
 const validPackage = {
   schemaVersion: 2 as const,
@@ -29,5 +29,38 @@ describe("offline learning package", () => {
   it("rejects malformed answer options", () => {
     const invalid = { ...validPackage, questions: [{ ...validPackage.questions[0], options: [""] }, validPackage.questions[1]] };
     expect(() => validateOfflineLearningPackage(invalid)).toThrow(/invalid question/i);
+  });
+});
+
+
+const validOfflineMaterial = {
+  id: "material-1",
+  title: "Binary Trees",
+  description: "Revision notes",
+  subject: "Computer Science",
+  topic: "Data Structures",
+  fileName: "binary-trees.md",
+  mimeType: "text/markdown" as const,
+  sizeBytes: 42,
+  content: "# Binary Trees\\nA hierarchical data structure.",
+  downloadedAt: "2026-11-19T08:00:00.000Z",
+};
+
+describe("offline study material", () => {
+  it("accepts a complete text or Markdown document", () => {
+    expect(validateOfflineStudyMaterial(validOfflineMaterial)).toEqual(validOfflineMaterial);
+  });
+
+  it("rejects PDF and unsupported binary formats for the text reader", () => {
+    expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, mimeType: "application/pdf" })).toThrow(/unsupported or incomplete format/i);
+  });
+
+  it("rejects content that exceeds the offline storage limit", () => {
+    expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, sizeBytes: 8 * 1024 * 1024 + 1 })).toThrow(/unsupported or incomplete format/i);
+  });
+
+  it("rejects missing content and invalid download timestamps", () => {
+    expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, content: "" })).toThrow(/unsupported or incomplete format/i);
+    expect(() => validateOfflineStudyMaterial({ ...validOfflineMaterial, downloadedAt: "not-a-date" })).toThrow(/unsupported or incomplete format/i);
   });
 });
