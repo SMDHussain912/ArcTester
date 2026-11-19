@@ -38,7 +38,7 @@ export default function StudentNotificationsInbox({
         <label><input type="checkbox" checked={preferences.examAssignments} onChange={(event) => onPreferenceChange({ examAssignments: event.target.checked })} /> Exam assignments</label>
         <label><input type="checkbox" checked={preferences.examResults} onChange={(event) => onPreferenceChange({ examResults: event.target.checked })} /> Exam results</label>
       </article>
-      <div aria-live="polite" aria-relevant="additions removals text">
+      <div aria-live="polite" aria-relevant="additions text">
         {items.length === 0 ? (
           <div className="panel empty-state">
             <h2>No notifications yet</h2>
