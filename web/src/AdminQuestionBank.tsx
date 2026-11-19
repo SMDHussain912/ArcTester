@@ -45,8 +45,8 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
       </div>
       <div className="admin-panel table-panel">
-        <div className="table-top"><span>{total.toLocaleString()} questions found</span><div className="row-actions">
-          <label className="sr-only" htmlFor="bulk-question-difficulty">Selected question difficulty</label>
+        <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label htmlFor="bulk-question-difficulty" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}>Selected question difficulty</label>
           <select id="bulk-question-difficulty" aria-label="Selected question difficulty" value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as "easy" | "medium" | "hard")} disabled={!selected.length || busy}>
             <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
           </select>
