@@ -27,29 +27,22 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
     const generation = ++generationRef.current;
     setLoading(true);
     setErrors([]);
-    const endpoints = [
-      { label: "Practice overview", path: "/analytics/overview", save: setOverview },
-      { label: "Weak-topic analysis", path: "/analytics/weak-topics", save: setWeakTopics },
-      { label: "Study recommendations", path: "/analytics/recommendations", save: setRecommendations },
-      { label: "Score prediction", path: "/analytics/score-prediction", save: setPrediction },
-    ] as const;
-    const results = await Promise.allSettled(
-      endpoints.map(async (endpoint) => ({
-        endpoint,
-        value: await request<PerformanceOverview | WeakTopicsReport | StudyRecommendationsReport | StudentScorePrediction>(endpoint.path),
-      })),
-    );
+    const results = await Promise.allSettled([
+      request<PerformanceOverview>("/analytics/overview"),
+      request<WeakTopicsReport>("/analytics/weak-topics"),
+      request<StudyRecommendationsReport>("/analytics/recommendations"),
+      request<StudentScorePrediction>("/analytics/score-prediction"),
+    ]);
     if (generation !== generationRef.current) return;
     const failures: string[] = [];
-    results.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        const { endpoint, value } = result.value;
-        (endpoint.save as (data: typeof value) => void)(value);
-      } else {
-        const reason = result.reason;
-        failures.push(endpoints[index].label + ": " + (reason instanceof Error ? reason.message : "Could not load this section."));
-      }
-    });
+    if (results[0].status === "fulfilled") setOverview(results[0].value);
+    else failures.push("Practice overview: " + (results[0].reason instanceof Error ? results[0].reason.message : "Could not load this section."));
+    if (results[1].status === "fulfilled") setWeakTopics(results[1].value);
+    else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
+    if (results[2].status === "fulfilled") setRecommendations(results[2].value);
+    else failures.push("Study recommendations: " + (results[2].reason instanceof Error ? results[2].reason.message : "Could not load this section."));
+    if (results[3].status === "fulfilled") setPrediction(results[3].value);
+    else failures.push("Score prediction: " + (results[3].reason instanceof Error ? results[3].reason.message : "Could not load this section."));
     setErrors(failures);
     setLoading(false);
   }, []);
