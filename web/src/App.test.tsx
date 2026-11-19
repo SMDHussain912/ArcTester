@@ -480,7 +480,7 @@ describe("live Vite application", () => {
     expect(await screen.findByText("Second restored question?")).toBeInTheDocument();
     const secondQuestion = screen.getByText("Second restored question?").closest("article");
     expect(within(secondQuestion!).getAllByRole("button").every((button) => !button.classList.contains("selected"))).toBe(true);
-    expect(screen.getByText("1 / 2 answered")).toBeInTheDocument();
+    expect(screen.getByText(/1 \/ 2 answered/)).toBeInTheDocument();
 
     await act(async () => {
       window.dispatchEvent(new StorageEvent("storage", {
@@ -489,7 +489,7 @@ describe("live Vite application", () => {
       }));
     });
     expect(within(secondQuestion!).getAllByRole("button")[2]).toHaveClass("selected");
-    expect(screen.getByText("2 / 2 answered")).toBeInTheDocument();
+    expect(screen.getByText(/2 \/ 2 answered/)).toBeInTheDocument();
   });
 
   it("preserves practice recovery data when restore fails because the network is unavailable", async () => {
@@ -563,8 +563,8 @@ describe("live Vite application", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
-    fireEvent.click(screen.getByLabelText(/Maths/));
-    fireEvent.click(screen.getByLabelText(/Physics/));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Maths 3 questions available/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Physics 2 questions available/ }));
     fireEvent.click(screen.getAllByLabelText(/Algebra/)[0]);
     fireEvent.change(screen.getByLabelText("Number of questions"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "easy" } });
