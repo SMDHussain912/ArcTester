@@ -141,4 +141,39 @@ describe("offlineSync", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(mockedMarkSynced).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a submission pending when the server omits the attempt identifier", async () => {
+    mockedGetPending.mockResolvedValue([attempt]);
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ submission: { id: "sub-missing-uuid" } }),
+    } as Response);
+
+    const result = await syncPendingSubmissions("https://api.example.com", "token-abc");
+
+    expect(result).toEqual({ uploaded: 0, failed: 1, remaining: 1 });
+    expect(mockedKeepPending).toHaveBeenCalledWith(
+      "assignment-1",
+      expect.stringContaining("different attempt identifier")
+    );
+    expect(mockedMarkSynced).not.toHaveBeenCalled();
+  });
+
+  it("keeps a submission pending when the server returns another attempt identifier", async () => {
+    mockedGetPending.mockResolvedValue([attempt]);
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ submission: { id: "sub-wrong-uuid", attemptUuid: "another-attempt" } }),
+    } as Response);
+
+    const result = await syncPendingSubmissions("https://api.example.com", "token-abc");
+
+    expect(result).toEqual({ uploaded: 0, failed: 1, remaining: 1 });
+    expect(mockedKeepPending).toHaveBeenCalledWith(
+      "assignment-1",
+      expect.stringContaining("different attempt identifier")
+    );
+    expect(mockedMarkSynced).not.toHaveBeenCalled();
+  });
+
 });
