@@ -23,11 +23,11 @@ describe("StudentPracticeSession", () => {
   const first = screen.getByRole("button", { name: "Go to question 1, answered" });
   const second = screen.getByRole("button", { name: "Go to question 2, unanswered" });
   expect(first).toHaveAttribute("aria-current", "step");
-  fireEvent.click(screen.getByRole("button", { name: "Next question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next question in navigator" }));
   expect(second).toHaveAttribute("aria-current", "step");
   expect(screen.getByText("Viewing question 2 of 2")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Next question" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Previous question" }));
+  fireEvent.click(screen.getByRole("button", { name: "Previous question in navigator" }));
   expect(first).toHaveAttribute("aria-current", "step");
   fireEvent.click(second);
   expect(second).toHaveAttribute("aria-pressed", "true");
