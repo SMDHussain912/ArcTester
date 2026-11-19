@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
+import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -595,7 +596,7 @@ export default function App() {
     }
   }
 
-  async function startPractice(subject?: string) {
+  async function startPractice(config: PracticePaperConfig) {
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -620,7 +621,7 @@ export default function App() {
       }
       const created = await api<Test>("/tests", {
         method: "POST",
-        body: JSON.stringify({ mode: "practice", ...(subject ? { subject } : { subjects: availableSubjects.map((item) => item.subject) }), count: 10 }),
+        body: JSON.stringify({ mode: "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: config.count }),
       });
       setTest(created);
       setResult(null);
@@ -1010,21 +1011,12 @@ export default function App() {
               <Text style={styles.secondaryText}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
-         ) : activeTab === "practice" ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice</Text>
-            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Choose a subject or start a mixed 10-question session.</Text>
-            {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
-            {bank?.subjects.filter((item) => item.count > 0).map((item) => (
-              <TouchableOpacity key={item.subject} onPress={() => startPractice(item.subject)} style={[styles.subject, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
-                <View><Text style={[styles.subjectName, darkMode && { color: "#f1f5f9" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.count} questions available</Text></View><Text style={styles.arrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-            {!bank && <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading question bank…</Text>}
-            {bank && bank.total === 0 && <View style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>No practice questions found</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>The server question bank currently reports zero questions. Refresh the bank or ask an administrator to publish/import questions.</Text><TouchableOpacity onPress={() => void refreshQuestionBank()} disabled={busy} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity></View>}
-            {bank && bank.total > 0 && <TouchableOpacity disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onPress={() => startPractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Loading…" : "Start mixed practice · 10 questions"}</Text></TouchableOpacity>}
-          </Animated.View>
-        ) : activeTab === "learn" ? (
+                   ) : activeTab === "practice" ? (
+           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+             {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
+             {bank ? <StudentPracticeBuilder subjects={bank.subjects} total={bank.total} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onRefresh={() => void refreshQuestionBank()} onStart={(config) => void startPractice(config)} /> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading subject and topic catalogue…</Text>}
+           </Animated.View>
+) : activeTab === "learn" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
             <StudentLearningHub api={api} userId={String(user.id)} darkMode={darkMode} onStartPractice={(subject) => { setActiveTab("practice"); void startPractice(subject); }} />
           </Animated.View>
