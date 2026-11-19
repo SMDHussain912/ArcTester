@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./learningStore";
 
@@ -17,6 +17,8 @@ type Recommendations = { basedOnAttempts: number; recommendations: Recommendatio
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
 
 export default function StudentLearningHub({ api, userId }: Props) {
+  const apiRef = useRef(api);
+  apiRef.current = api;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
@@ -35,10 +37,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
     setLoading(true);
     setError("");
     const [performanceResult, recommendationResult, conceptResult, predictionResult] = await Promise.allSettled([
-      api<Overview>("/analytics/overview"),
-      api<Recommendations>("/analytics/recommendations"),
-      api<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
-      api<Prediction>("/analytics/score-prediction"),
+      apiRef.current<Overview>("/analytics/overview"),
+      apiRef.current<Recommendations>("/analytics/recommendations"),
+      apiRef.current<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
+      apiRef.current<Prediction>("/analytics/score-prediction"),
     ]);
     if (performanceResult.status === "fulfilled") setOverview(performanceResult.value);
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
@@ -47,10 +49,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
     if (failures.length === 4) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
-  }, [api]);
+  }, []);
 
   useEffect(() => { void load(); void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null)); }, [load, userId]);
-  const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await api<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [api, userId]);
+  const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [api, userId]);
 
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
   const subjects = useMemo(() => ["All", ...Array.from(new Set(concepts.map((item) => item.subject))).sort()], [concepts]);
