@@ -2,7 +2,7 @@
 
 **Repository:** `smdgamekingindo-TN/ArcTester`  
 **Baseline:** Existing product requirements, platform implementation, and the separate ArcTester Intelligence roadmap  
-**Last audited:** 2026-11-10  
+**Last audited:** 2026-11-19  
 **Purpose:** One master roadmap for the complete product. This document consolidates the platform and Intelligence work; it does not delete or replace the detailed source requirements in `PRODUCT_REQUIREMENTS.md` or `ARC_TESTER_INTELLIGENCE_ROADMAP.md`.
 
 > **Status rule:** A phase is not complete merely because code, an endpoint, a screen, or a CI job exists. Completion requires its acceptance criteria, integration, failure cases, and relevant verification to pass. A percentage below is a planning estimate based on the evidence currently recorded in the repository, not a test-coverage statistic or a claim of production readiness.
@@ -134,7 +134,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Core practice/mock engine, selection, scoring and restore endpoint exist. Full subject/topic UX and resilience verification remain.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can create, take, and submit a practice test`
 
 ## Phase 5 — Results, progress and analytics foundation
@@ -165,7 +165,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Student analytics overview, corrected practice metrics, formal exam separation and admin analytics foundations are recorded. Deeper question/cohort analysis and full UI/production-data verification remain.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student views submitted practice result with score`
 
 ## Phase 6 — Offline-first operation and local data resilience
@@ -193,7 +193,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Assigned-exam local backup, reload restoration, reconnect synchronization, account isolation and explicit sync states are covered by automated tests. Downloaded-learning-content offline availability, app-shell qualification and real-device verification remain.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** downloaded learning content and app shell while fully offline; real-device background/force-close/restart recovery; production clock/network latency.
@@ -222,7 +222,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Revisioned answer saves, local-backup-wins reconciliation, reconnect sync, stale-revision HTTP 409 conflict messaging and retry-safe concurrent submission are documented and covered by tests. Full physical multi-device and production network qualification remain.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can create, take, and submit a practice test`
 
 **NOT VERIFIED:** two physically separate devices under real concurrent edits; offline app restart on Android/iOS; production latency and packet-loss behavior.
@@ -252,7 +252,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Exam authoring, immutable versions, assignments, submissions and reports are recorded as implemented. Full end-to-end and failure-state qualification remains.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can take and submit an assigned exam`
 
 ## Phase 9 — Server-authoritative exam runtime and submission lifecycle
@@ -281,7 +281,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Server-authoritative session start/deadline, heartbeat, pause/resume, answer revision, late-submission review and candidate result-state behavior have API/component coverage. Full production browser/network qualification remains.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** physical device clock manipulation, real network latency, browser/device interruption and production invigilator workflows.
@@ -314,7 +314,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 
 **Current assessment:** Existing session audit events, administrator pause/resume/terminate controls, attendance reporting and review queue are covered by API tests. Candidate-facing awaiting-review state and deadline grace behavior have additional coverage. Full live operational and cross-platform signal qualification remain.
 
-**Evidence — PR #19, CI run:** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/placeholder-e2e)
+**Evidence — CI verification (2026-11-19):** [Playwright E2E CI job green](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790)
 - `student can take and submit an assigned exam`
 
 **NOT VERIFIED:** real-time invigilator operation under production load, physical device lifecycle signals, and cross-platform integrity-policy qualification.
@@ -341,7 +341,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Delivery failure is visible to administrators where delivery is external.
 - [ ] Notification permissions and preferences are respected.
 
-**Current assessment:** Announcement requirements are documented; the complete communication and delivery workflow is not yet verified.
+**Current assessment:** Admin announcement creation, scheduling, expiry and deletion; student inbox/acknowledgement; assignment, review and result notifications; account-scoped delivery; and idempotent read/acknowledgement are implemented with API/UI tests. External push/email delivery, student notification preferences and external-delivery observability remain open.
 
 ## Phase 12 — Student/admin experience, accessibility and maintainability
 
@@ -476,7 +476,7 @@ ArcTester is an offline-first, multi-platform AP ECET CSE learning and examinati
 - [ ] Real-browser and real-device checks pass; CI success alone is not treated as deployment proof.
 - [ ] Release notes, known limitations and rollback procedure are documented.
 
-**Current assessment:** Web/API deployment configuration, mobile and desktop scaffolds, and CI workflows exist. Real-device, production security, provider configuration, backup/restore and full release qualification remain.
+**Current assessment:** Web/API production builds pass CI; the Windows NSIS installer and desktop smoke test pass on the latest verified commit. Android/iOS real-device workflows, production provider configuration, security review, backup/restore and full release qualification remain.
 
 ---
 
@@ -498,7 +498,7 @@ The percentage is an **estimated phase-progress average**, not a count of passin
 | 8 | Exam authoring and assignments | 82% | Core authoring/version/assignment implementation exists; Playwright E2E assigned-exam submit verified; full E2E remains |
 | 9 | Server-authoritative exam runtime | 78% | Expanded deadline, pause/resume, submission and candidate result tests; Playwright E2E formal exam submit verified; production qualification remains |
 | 10 | Invigilation, ArcGuard, attendance and audit | 74% | Existing invigilation/attendance/review coverage strengthened; Playwright E2E exam flow verified; live operational qualification remains |
-| 11 | Announcements and notifications | 25% | Requirements defined; complete workflow not verified |
+| 11 | Announcements and notifications | 70% | Core in-app workflows implemented and tested; external delivery/preferences remain |
 | 12 | UX, accessibility and maintainability | 55% | Incremental modularization started; broader polish remains |
 | 13 | Intelligence analytics and weak-area detection | 70% | Major analytics/recommendation foundations implemented; acceptance remains |
 | 14 | ML regression, classification and governance | 45% | Regression and TensorFlow pipeline slices exist; classification/real-data qualification remain |
@@ -555,3 +555,14 @@ Calculation correction: the 16 phase scores now sum to 1,060 percentage points, 
 - A green CI run verifies the checks included in that workflow for that commit. It does not prove production environment configuration, real-browser cookie behavior, all real-device workflows or release readiness.
 
 **Do not increase a phase score or mark a phase complete without adding the corresponding implementation evidence and verification result here.**
+
+
+## Latest verification — 2026-11-19
+
+Verified commit: `ba3b475122564b9e1193b8f62d20e44dfaff8230` on `main`.
+
+- [Full CI run](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809790) — tests, lint, web/API build, Playwright practice and formal-exam flows, mobile typecheck, TensorFlow dataset tests, and SQLite-to-PostgreSQL migration tests all passed.
+- [Windows desktop build](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44458809844) — desktop smoke test, Windows NSIS installer build and artifact upload passed.
+- The formal-exam client now refreshes the assignment list after submission so the student sees the current submitted/review/graded state.
+
+This verification does not certify real Android/iOS devices, production Vercel/Render configuration, backup/restore, or the remaining acceptance criteria in Phases 6, 10, 11, 12, 14, 15 and 16. No phase is marked fully complete solely from CI success.
