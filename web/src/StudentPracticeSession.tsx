@@ -21,7 +21,7 @@ export default function StudentPracticeSession({ test, answers, remainingSeconds
 
   return (
     <section>
-      <div className="page-heading"><div><p className="eyebrow">PRACTICE SESSION</p><h1>Stay focused.</h1><p className="muted">{test.questions.length} questions · {answeredCount} answered{timer}</p></div><button type="button" className="ghost" onClick={onLeave}>Leave session</button></div>
+      <div className="page-heading"><div><p className="eyebrow">PRACTICE SESSION</p><h1>Stay focused.</h1><p className="muted">{test.questions.length} questions · {answeredCount} answered{timer}</p></div><button type="button" className="ghost" disabled={busy} onClick={onLeave}>Leave session</button></div>
       {test.warnings.map((warning) => <p className="notice" key={warning}>{warning}</p>)}
       <section className="panel exam-question-navigator" aria-label="Practice question navigator">
         <div className="exam-progress-heading"><strong>Question progress</strong><span>{answeredCount} / {test.questions.length} answered · {test.questions.length - answeredCount} remaining</span></div>
