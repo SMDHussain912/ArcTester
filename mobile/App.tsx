@@ -31,7 +31,7 @@ const API_URL = (() => {
   return url.replace(/\/+$/, "");
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
+type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number } };
 type Announcement = {
   id: string;
