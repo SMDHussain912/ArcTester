@@ -5,8 +5,8 @@ export type PracticeSessionTest = {
   questions: { id: number; subject: string; topic: string | null; text: string; options: string[] }[];
   warnings: string[];
 };
-type Props = { test: PracticeSessionTest; answers: Record<number, number>; remainingSeconds: number | null; busy: boolean; isOnline?: boolean; localSaveAvailable?: boolean; onLeave: () => void; onSelectAnswer: (questionId: number, selectedIndex: number) => void; onSubmit: () => void };
-export default function StudentPracticeSession({ test, answers, remainingSeconds, busy, isOnline = true, localSaveAvailable = true, onLeave, onSelectAnswer, onSubmit }: Props) {
+type Props = { test: PracticeSessionTest; answers: Record<number, number>; remainingSeconds: number | null; busy: boolean; isOnline?: boolean; syncStatus?: "idle" | "saving" | "saved" | "pending"; localSaveAvailable?: boolean; onLeave: () => void; onSelectAnswer: (questionId: number, selectedIndex: number) => void; onSubmit: () => void };
+export default function StudentPracticeSession({ test, answers, remainingSeconds, busy, isOnline = true, localSaveAvailable = true, syncStatus = "idle", onLeave, onSelectAnswer, onSubmit }: Props) {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const answeredCount = test.questions.filter((question) => answers[question.id] !== undefined).length;
   const currentQuestion = test.questions[activeQuestionIndex];
@@ -26,8 +26,11 @@ export default function StudentPracticeSession({ test, answers, remainingSeconds
         {!localSaveAvailable
           ? "Local recovery is unavailable. Keep this tab open and submit before closing it."
           : isOnline
-            ? "Saved on this device. Your answers are sent to the server when you submit."
-            : "Offline — answers are saved on this device. Reconnect before submitting."}
+            ? syncStatus === "saving" ? "Saving answers to the server…"
+              : syncStatus === "saved" ? "Answers synced to the server and saved on this device."
+              : syncStatus === "pending" ? "Server sync pending. Answers remain saved on this device; retrying on your next edit or reconnection."
+              : "Saved on this device. Server synchronization is automatic."
+            : "Offline — answers are saved on this device and will sync when you reconnect."}
       </p>
       {test.warnings.map((warning) => <p className="notice" key={warning}>{warning}</p>)}
       <section className="panel exam-question-navigator" aria-label="Practice question navigator">
