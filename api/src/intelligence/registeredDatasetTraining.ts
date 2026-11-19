@@ -100,9 +100,10 @@ export function trainRegisteredDataset(
     }
   }
   if (task === "binary-classification") {
-    const trainingSamples = split.train.map(({ features, target }) => ({
+    const trainingSamples = split.train.map(({ features, target, groupId }) => ({
       features,
       label: target as 0 | 1,
+      ...(groupId ? { groupId } : {}),
     }));
     const testSamples = split.test.map(({ features, target }) => ({
       features,
