@@ -257,6 +257,12 @@ jobs:
       - name: Seed the question bank
         run: npm run prisma:seed --workspace=api
 
+      - name: Approve isolated E2E fixture questions
+        run: |
+          npx prisma db execute --schema=api/prisma/schema.prisma --stdin <<'SQL'
+          UPDATE "Question" SET "reviewStatus" = 'APPROVED';
+          SQL
+
       - name: Start API server
         run: |
           npm run dev --workspace=api &
