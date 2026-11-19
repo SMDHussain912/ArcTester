@@ -45,6 +45,8 @@ export type StudentScorePrediction =
       };
       modelMae: number;
       baselineMae: number;
+      modelRmse: number;
+      baselineRmse: number;
       message: string;
       populationFeatures?: Record<string, number>;
     };
@@ -156,6 +158,8 @@ export async function getStudentScorePrediction(
     },
     modelMae: evaluation.regression.mae,
     baselineMae: evaluation.meanBaseline.mae,
+    modelRmse: evaluation.regression.rmse,
+    baselineRmse: evaluation.meanBaseline.rmse,
     message: "Estimate based on your completed practice history; actual results may differ.",
     populationFeatures: populationFeatureRecord(attempts),
   };
