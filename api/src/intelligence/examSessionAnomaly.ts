@@ -90,9 +90,17 @@ function pathLength(node: IsolationTreeNode, row: number[], depth = 0): number {
   return pathLength(row[node.featureIndex] < (node.splitValue as number) ? node.left : node.right, row, depth + 1);
 }
 function telemetryVector(telemetry: ExamSessionTelemetry): number[] {
-  const vector = FEATURE_NAMES.map((name) => telemetry[name]);
-  if (telemetry.event_rate_deviation !== null) vector[8] = telemetry.event_rate_deviation;
-  return vector;
+  return [
+    telemetry.focus_loss_count,
+    telemetry.disconnect_count,
+    telemetry.heartbeat_gap_count,
+    telemetry.heartbeat_gap_max_seconds,
+    telemetry.answer_change_count,
+    telemetry.rapid_answer_burst_count,
+    telemetry.submission_retry_count,
+    telemetry.session_duration_ratio,
+    telemetry.event_rate_deviation ?? 0,
+  ];
 }
 export function fitExamSessionIsolationForest(
   referenceRows: number[][],
