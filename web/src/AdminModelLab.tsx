@@ -214,7 +214,7 @@ export default function AdminModelLab({
         if (!response.ok) throw new Error(body.error || body.message || "Could not load adaptive learning analytics.");
         return body;
       })
-      .then((body) => { if (active) { setAdaptiveAnalytics(body); setAdaptiveAnalyticsError(""); } })
+      .then((body) => { if (!active) return; if (!body || typeof body !== "object" || !body.summary || !Array.isArray(body.byReason) || !Array.isArray(body.daily)) { setAdaptiveAnalytics(null); setAdaptiveAnalyticsError(""); return; } setAdaptiveAnalytics(body); setAdaptiveAnalyticsError(""); })
       .catch((error) => { if (active) setAdaptiveAnalyticsError(error instanceof Error ? error.message : "Could not load adaptive learning analytics."); })
       .finally(() => { if (active) setAdaptiveAnalyticsLoading(false); });
     return () => { active = false; };
