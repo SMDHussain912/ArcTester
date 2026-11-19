@@ -48,7 +48,13 @@ describe("admin model registry API", () => {
       task: "binary-classification",
       targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
-      samples: evaluationSamples,
+      samples: datasetKind === "real-anonymized"
+        ? evaluationSamples.map((sample, index) => ({
+          ...sample,
+          // Six deterministic pseudonymous learner groups, each represented in both classes.
+          groupId: (index % 6).toString(16).padStart(64, "0"),
+        }))
+        : evaluationSamples,
       sourceDescription: datasetKind === "real-anonymized"
         ? "Curated held-out real-anonymized test fixture with privacy-safe learner grouping for model governance tests."
         : "Curated held-out synthetic test fixture for model governance tests.",
