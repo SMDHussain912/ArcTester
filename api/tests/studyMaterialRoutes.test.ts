@@ -68,6 +68,30 @@ describe("study material publishing API", () => {
     expect((await call("/study-materials", "GET", undefined, studentCookie)).status).toBe(200);
   });
 
+  it("serves published text and Markdown as offline reading content", async () => {
+    const content = "# Binary trees\\n\\nA tree is a hierarchical data structure.";
+    const uploaded = await call("/admin/study-materials", "POST", {
+      title: "Binary Trees Notes",
+      description: "Offline revision notes.",
+      subject: "Computer Science",
+      topic: "Data Structures",
+      fileName: "binary-trees.md",
+      mimeType: "text/markdown",
+      contentBase64: Buffer.from(content, "utf8").toString("base64"),
+    });
+    expect(uploaded.status).toBe(201);
+    const created = await uploaded.json() as { material: { id: string } };
+    expect((await call("/study-materials/" + created.material.id + "/offline", "GET", undefined, studentCookie)).status).toBe(404);
+    expect((await call("/admin/study-materials/" + created.material.id, "PATCH", { status: "PUBLISHED" })).status).toBe(200);
+
+    const response = await call("/study-materials/" + created.material.id + "/offline", "GET", undefined, studentCookie);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      material: { id: created.material.id, title: "Binary Trees Notes", mimeType: "text/markdown", content },
+    });
+  });
+
   it("rejects non-admin uploads and unsupported file types", async () => {
     const denied = await call("/admin/study-materials", "POST", {}, studentCookie);
     expect(denied.status).toBe(403);
