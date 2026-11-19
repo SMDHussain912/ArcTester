@@ -234,6 +234,7 @@ export default function App() {
         const mergedAnswers = { ...answersFromServer, ...answersFromStorage };
         setAnswers(mergedAnswers);
         setPracticeLocalSaveAvailable(safeStorage.setItem(practiceAnswersKey(attemptId), JSON.stringify(mergedAnswers)));
+        setPracticeSyncStatus("idle");
         const clientNow = performance.now();
         setPracticeServerOffset(new Date(restored.serverNow).getTime() - clientNow);
         setPracticeClock(clientNow);
@@ -369,6 +370,7 @@ export default function App() {
       practiceAutoSubmitRef.current = false;
       safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
       setPracticeLocalSaveAvailable(safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}"));
+      setPracticeSyncStatus("idle");
       setAnswers({});
     } catch (cause) {
       setError((cause as Error).message);
@@ -528,6 +530,7 @@ export default function App() {
     setResult(null);
     setAnswers({});
     setPracticeLocalSaveAvailable(false);
+    setPracticeSyncStatus("idle");
     clearStudentCommunications();
     setInvitations([]);
     setPracticeSubjects([]);
