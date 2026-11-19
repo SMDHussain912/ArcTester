@@ -19,6 +19,11 @@ import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } 
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 type Question = AdminPaperQuestion;
+type NotificationHealth = {
+ total:number; active:number; unread:number; read:number; expired:number; generatedAt:string;
+ byKind:{kind:string;count:number}[];
+ preferences:{students:number;configuredStudents:number;examAssignmentsDisabled:number;examResultsDisabled:number};
+};
 
 type Props = { email:string; theme:"light"|"dark"; setTheme:(v:"light"|"dark")=>void; signOut:()=>void; invitations:AdminInvitation[]; createInvitation:(e:FormEvent<HTMLFormElement>)=>void; inviteEmail:string; setInviteEmail:(v:string)=>void; createdInvitation:CreatedAdminInvitation|null; revokeInvitation:(id:string)=>void; busy:boolean };
 async function api<T>(path:string, init:RequestInit={}):Promise<T>{
@@ -93,6 +98,7 @@ export default function AdminWorkspace(p:Props){
  async function deleteStudyMaterial(id:string){await run(async()=>{await api(`/admin/study-materials/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudyMaterials();setNotice("Study material deleted.");});}
  async function loadIntelligenceStatus(){try{const response=await api<{status:IntelligenceProviderStatus}>("/admin/intelligence/status");setIntelligenceStatus(response.status);}catch{setIntelligenceStatus(null);}}
  async function loadModelLab(){if(modelLabRequestInFlight.current)return;if(!modelLabLoaded.current)setModelLabLoading(true);modelLabRequestInFlight.current=true;try{const results=await Promise.allSettled([api<{datasets:ModelLabDataset[]}>("/admin/model-datasets"),api<{jobs:ModelLabJob[]}>("/admin/model-training-jobs"),api<{models:ModelLabModel[]}>("/admin/models")]);const failures:string[]=[];if(results[0].status==="fulfilled"){const d=results[0].value;setModelDatasets(Array.isArray(d.datasets)?d.datasets:[]);if(!selectedDatasetId&&d.datasets?.[0])setSelectedDatasetId(d.datasets[0].id);}else failures.push("datasets: "+(results[0].reason instanceof Error?results[0].reason.message:"request failed"));if(results[1].status==="fulfilled")setTrainingJobs(Array.isArray(results[1].value.jobs)?results[1].value.jobs:[]);else failures.push("training jobs: "+(results[1].reason instanceof Error?results[1].reason.message:"request failed"));if(results[2].status==="fulfilled")setRegisteredModels(Array.isArray(results[2].value.models)?results[2].value.models:[]);else failures.push("model registry: "+(results[2].reason instanceof Error?results[2].reason.message:"request failed"));setModelLabError(failures.length?`Some Model Lab services could not be loaded — ${failures.join(" · ")}`:"");if(failures.length===3)throw new Error(failures.join(" | "));modelLabLoaded.current=true;}finally{modelLabRequestInFlight.current=false;setModelLabLoading(false);}}
+ async function loadNotificationHealth(){setNotificationHealthLoading(true);try{const r=await api<NotificationHealth>("/admin/notifications/summary");setNotificationHealth(r);}finally{setNotificationHealthLoading(false);}}
  async function loadReviewQueue(){const r=await api<{submissions:ReviewQueueItem[]}>("/admin/submissions/review-required");setReviewItems(r.submissions??[]);}
  async function loadLiveSessions(){setLiveSessionsLoading(true);try{const r=await api<{sessions:LiveSession[];total:number;serverTime:string}>("/admin/exams/live-sessions?page=1&limit=50&eventLimit=100");setLiveSessions(Array.isArray(r.sessions)?r.sessions:[]);setLiveSessionsTotal(Number.isFinite(r.total)?r.total:0);setLiveSessionsUpdatedAt(r.serverTime||new Date().toISOString());}finally{setLiveSessionsLoading(false);}}
  async function loadAttendance(nextPage=attendancePage){setAttendanceLoading(true);try{const r=await api<{attendance:AttendanceRow[];total:number;serverTime:string}>(`/admin/exams/attendance?page=${nextPage}&limit=25`);setAttendanceRows(Array.isArray(r.attendance)?r.attendance:[]);setAttendanceTotal(Number.isFinite(r.total)?r.total:0);setAttendancePage(nextPage);setAttendanceUpdatedAt(r.serverTime||new Date().toISOString());}finally{setAttendanceLoading(false);}}
@@ -104,7 +110,7 @@ export default function AdminWorkspace(p:Props){
    setNotice(action==="PAUSE"?"Candidate session paused.":action==="RESUME"?"Candidate session resumed.":"Candidate session terminated.");
   });
  }
- useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="model-lab")return;const timer=window.setInterval(()=>{void loadModelLab().catch(()=>{});},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab==="attendance")void loadAttendance(1).catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="live-monitor")return;let active=true;const refresh=()=>{if(active)void loadLiveSessions().catch(e=>setError(e.message));};refresh();const timer=window.setInterval(refresh,15000);return()=>{active=false;window.clearInterval(timer);};},[tab]);
@@ -132,7 +138,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["model-lab","Model lab","⌁"],["study-materials","Study materials","▧"]];
+ const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["model-lab","Model lab","⌁"],["study-materials","Study materials","▧"]];
  return <div className="admin-shell">
   <aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
    <div className="admin-nav-label">WORKSPACE</div>{nav.map(([id,label,icon])=><button key={id} aria-label={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>setTab(id)}><span>{icon}</span>{label}{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}
@@ -173,6 +179,29 @@ export default function AdminWorkspace(p:Props){
    />}
    {tab==="study-materials"&&<AdminStudyMaterials materials={studyMaterials} busy={busy} onUpload={(payload) => uploadStudyMaterial(payload)} onStatusChange={(id,status) => void changeStudyMaterialStatus(id,status)} onDelete={(id) => void deleteStudyMaterial(id)} onRefresh={() => void loadStudyMaterials()} />}
    {tab==="model-lab"&&<AdminModelLab datasets={modelDatasets} jobs={trainingJobs} models={registeredModels} selectedDatasetId={selectedDatasetId} modelPrefix={trainingModelPrefix} busy={busy} loading={modelLabLoading} onDatasetChange={setSelectedDatasetId} onModelPrefixChange={setTrainingModelPrefix} onQueueTraining={() => void queueTensorflowTraining()} onTrainClassical={() => void trainClassicalCandidates()} onRefresh={() => void loadModelLab().catch(()=>{})} error={modelLabError} intelligenceStatus={intelligenceStatus} onRegisterDataset={(payload) => void registerModelDataset(payload)} />}
+   {tab==="notifications"&&<section className="admin-panel">
+    <div className="admin-panel-head"><div><p className="eyebrow">COMMUNICATION OPERATIONS</p><h2>In-app notification health</h2><p>Recipient-scoped inbox records and student preference coverage. External push/email delivery is not configured by this report.</p></div><button className="ghost" disabled={notificationHealthLoading} onClick={()=>void loadNotificationHealth().catch(e=>setError(e.message))}>{notificationHealthLoading?"Refreshing…":"Refresh"}</button></div>
+    {notificationHealth ? <>
+      <div className="admin-stat-grid">
+       <article><span>Total records</span><b>{notificationHealth.total.toLocaleString()}</b><small>All retained in-app notifications</small></article>
+       <article><span>Active unread</span><b>{notificationHealth.unread.toLocaleString()}</b><small>Awaiting student acknowledgement</small></article>
+       <article><span>Active read</span><b>{notificationHealth.read.toLocaleString()}</b><small>Read by recipients</small></article>
+       <article><span>Expired</span><b>{notificationHealth.expired.toLocaleString()}</b><small>Excluded from active inboxes</small></article>
+      </div>
+      <div className="admin-two-col">
+       <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">BREAKDOWN</p><h2>Records by notification type</h2></div></div>
+        {notificationHealth.byKind.length ? notificationHealth.byKind.map(item=><div className="coverage-row" key={item.kind}><span>{item.kind.replaceAll("_"," ")}</span><b>{item.count.toLocaleString()}</b></div>) : <p>No notifications have been created.</p>}
+       </section>
+       <section className="admin-panel"><div className="admin-panel-head"><div><p className="eyebrow">PREFERENCES</p><h2>Student opt-outs</h2></div></div>
+        <div className="coverage-row"><span>Students</span><b>{notificationHealth.preferences.students}</b></div>
+        <div className="coverage-row"><span>Configured preference records</span><b>{notificationHealth.preferences.configuredStudents}</b></div>
+        <div className="coverage-row"><span>Assignment notices disabled</span><b>{notificationHealth.preferences.examAssignmentsDisabled}</b></div>
+        <div className="coverage-row"><span>Result notices disabled</span><b>{notificationHealth.preferences.examResultsDisabled}</b></div>
+       </section>
+      </div>
+      <p className="admin-muted">Snapshot generated {new Date(notificationHealth.generatedAt).toLocaleString()}.</p>
+    </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
+   </section>}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}

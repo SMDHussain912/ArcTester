@@ -298,5 +298,37 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   });
 
+
+  router.get("/admin/notifications/summary", requireAuth, requireAdmin(db), async (_req, res, next) => {
+    try {
+      const now = new Date();
+      const activeWhere = { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
+      const [total, active, unread, read, expired, grouped, preferences, students] = await Promise.all([
+        db.studentNotification.count(),
+        db.studentNotification.count({ where: activeWhere }),
+        db.studentNotification.count({ where: { readAt: null, ...activeWhere } }),
+        db.studentNotification.count({ where: { readAt: { not: null }, ...activeWhere } }),
+        db.studentNotification.count({ where: { expiresAt: { lte: now } } }),
+        db.studentNotification.groupBy({ by: ["kind"], _count: { _all: true }, orderBy: { kind: "asc" } }),
+        db.studentNotificationPreference.findMany({ select: { examAssignments: true, examResults: true } }),
+        db.user.count({ where: { role: "STUDENT" } }),
+      ]);
+      res.json({
+        ok: true,
+        generatedAt: now.toISOString(),
+        total, active, unread, read, expired,
+        byKind: grouped.map((item) => ({ kind: item.kind, count: item._count._all })),
+        preferences: {
+          students,
+          configuredStudents: preferences.length,
+          examAssignmentsDisabled: preferences.filter((item) => !item.examAssignments).length,
+          examResultsDisabled: preferences.filter((item) => !item.examResults).length,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }

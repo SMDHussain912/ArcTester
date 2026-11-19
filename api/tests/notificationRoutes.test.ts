@@ -9,6 +9,7 @@ describe("student notification API", () => {
   let firstCookie = "";
   let secondCookie = "";
   let firstUserId = 0;
+  let adminCookie = "";
 
   beforeAll(async () => {
     server = await startTestServer(buildApp);
@@ -21,6 +22,10 @@ describe("student notification API", () => {
     firstUserId = first.id;
     firstCookie = (await signIn(server.baseUrl, first.email)).cookie;
     secondCookie = (await signIn(server.baseUrl, second.email)).cookie;
+    await server.db.user.create({
+      data: { email: "notification-admin@example.test", passwordHash: hashPassword("correct-horse-battery"), role: "ADMIN" },
+    });
+    adminCookie = (await signIn(server.baseUrl, "notification-admin@example.test")).cookie;
   });
 
   afterAll(async () => {
@@ -146,4 +151,21 @@ describe("student notification API", () => {
     const invalid = await fetch(`${server.baseUrl}/notifications/preferences`, { method: "PATCH", headers: { "content-type": "application/json", cookie: firstCookie }, body: JSON.stringify({ unknown: true }) });
     expect(invalid.status).toBe(400);
   });
+  it("exposes notification health metrics only to administrators", async () => {
+    const response = await getJson(`${server.baseUrl}/admin/notifications/summary`, adminCookie);
+    expect(response.status).toBe(200);
+    const summary = response.json as {
+      total: number; active: number; unread: number; read: number; expired: number;
+      byKind: { kind: string; count: number }[];
+      preferences: { students: number; configuredStudents: number; examAssignmentsDisabled: number; examResultsDisabled: number };
+    };
+    expect(summary.total).toBe(await server.db.studentNotification.count());
+    expect(summary.active + summary.expired).toBe(summary.total);
+    expect(summary.unread + summary.read).toBe(summary.active);
+    expect(summary.byKind.reduce((sum, item) => sum + item.count, 0)).toBe(summary.total);
+    expect(summary.preferences.students).toBe(2);
+    expect(summary.preferences.configuredStudents).toBeGreaterThanOrEqual(0);
+    expect((await getJson(`${server.baseUrl}/admin/notifications/summary`, firstCookie)).status).toBe(403);
+  });
+
 });
