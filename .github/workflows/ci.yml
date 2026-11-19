@@ -81,7 +81,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package-lock.json
           git commit -m "chore: refresh npm lockfile"
-          git push
+          echo "Lockfile changes prepared for artifact handoff."
 
   mobile:
     name: Mobile typecheck
