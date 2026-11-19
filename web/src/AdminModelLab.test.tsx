@@ -22,6 +22,12 @@ describe("AdminModelLab", () => {
     expect(screen.getByRole("button", { name: "Delete version" })).toBeTruthy();
   });
 
+  it("labels the reduced classical training path as a single baseline", () => {
+    render(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Train logistic baseline" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Train classical candidates" })).toBeNull();
+  });
+
   it("renders datasets, training controls and job progress", () => {
     render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
