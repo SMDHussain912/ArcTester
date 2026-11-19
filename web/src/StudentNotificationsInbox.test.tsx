@@ -6,6 +6,7 @@ describe("StudentNotificationsInbox", () => {
   it("renders read and unread notices and forwards open/read actions", () => {
     const onRead = vi.fn();
     const onOpen = vi.fn();
+    const onMarkAllRead = vi.fn();
     render(<StudentNotificationsInbox
       items={[
         { id: "notice-1", kind: "EXAM_ASSIGNMENT", title: "New exam assigned", message: "Open your exams.", href: "/assignments", createdAt: "2026-11-10T08:00:00.000Z", readAt: null, expiresAt: null },
@@ -13,6 +14,7 @@ describe("StudentNotificationsInbox", () => {
       ]}
       onRefresh={vi.fn()}
       onRead={onRead}
+      onMarkAllRead={onMarkAllRead}
       onOpen={onOpen}
     />);
     expect(screen.getByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
@@ -20,7 +22,9 @@ describe("StudentNotificationsInbox", () => {
     expect(screen.getByText("READ")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Open" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark all as read" }));
     expect(onOpen).toHaveBeenCalledWith("notice-1");
     expect(onRead).toHaveBeenCalledWith("notice-1");
+    expect(onMarkAllRead).toHaveBeenCalledTimes(1);
   });
 });
