@@ -852,7 +852,7 @@ export default function App() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setRegister(!register)} style={styles.secondary}>
-              <Text style={styles.secondaryText}>
+              <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>
                 {register
                   ? "Already have an account? Sign in"
                   : "Have an invitation? Create account"}
@@ -887,7 +887,7 @@ export default function App() {
                     {String.fromCharCode(65 + optionIndex)}. {option}{optionIndex === question.correctIndex ? " · Correct" : optionIndex === question.selectedIndex ? " · Your answer" : ""}
                   </Text>
                 ))}
-                <Text style={styles.announcementDate}>{question.explanation || "No explanation provided."}</Text>
+                <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>{question.explanation || "No explanation provided."}</Text>
               </View>
             ))}
             <TouchableOpacity onPress={() => setResult(null)} style={styles.primary}>
@@ -1080,7 +1080,7 @@ export default function App() {
             <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
               <View style={styles.dashboardMetricGrid}>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
-                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
+                <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
                 <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.graded ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Graded exams</Text></View>
                 <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.scorePercentage == null ? "—" : Math.round(learningOverview.formalExams.scorePercentage) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Exam average</Text></View>
               </View>
