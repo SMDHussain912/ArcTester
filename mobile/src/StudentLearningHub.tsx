@@ -16,6 +16,7 @@ type Recommendation = { id: string; title: string; reason: string; priority: str
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
 type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
+type StudyMaterial = { id: string; title: string; description: string; subject: string; topic: string; fileName: string; mimeType: string; sizeBytes: number; createdAt: string };
 
 export default function StudentLearningHub({ api, userId }: Props) {
   const apiRef = useRef(api);
@@ -23,6 +24,8 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
+  const [materialQuery, setMaterialQuery] = useState("");
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
   const [savingPreference, setSavingPreference] = useState(false);
@@ -39,17 +42,21 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult] = await Promise.allSettled([
+    const [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult] = await Promise.allSettled([
       apiRef.current<Overview>("/analytics/overview"),
       apiRef.current<Recommendations>("/analytics/recommendations"),
       apiRef.current<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
       apiRef.current<Prediction>("/analytics/score-prediction"),
       apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences"),
+      apiRef.current<{ materials: StudyMaterial[] }>("/study-materials"),
     ]);
     if (performanceResult.status === "fulfilled") setOverview(performanceResult.value);
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
-    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult].filter((item) => item.status === "rejected");
+    if (predictionResult.status === "fulfilled") setPrediction(predictionResult.value);
+    if (preferenceResult.status === "fulfilled") setPreferences(preferenceResult.value.preferences);
+    if (materialResult.status === "fulfilled") setStudyMaterials(materialResult.value.materials ?? []);
+    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
     if (failures.length === 5) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
@@ -58,9 +65,10 @@ export default function StudentLearningHub({ api, userId }: Props) {
   useEffect(() => { void load(); void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null)); }, [load, userId]);
   const updatePreference = useCallback(async (key: keyof NotificationPreferences, value: boolean) => { const previous = preferences; const next = { ...previous, [key]: value }; setPreferences(next); setSavingPreference(true); try { const result = await apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) }); setPreferences(result.preferences); } catch (cause) { setPreferences(previous); setError(cause instanceof Error ? cause.message : "Could not save notification preferences."); } finally { setSavingPreference(false); } }, [preferences]);
 
-  const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [api, userId]);
+  const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [userId]);
 
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
+  const visibleMaterials = useMemo(() => studyMaterials.filter((item) => [item.title, item.description, item.subject, item.topic, item.fileName].join(" ").toLowerCase().includes(materialQuery.trim().toLowerCase())), [studyMaterials, materialQuery]);
   const subjects = useMemo(() => ["All", ...Array.from(new Set(concepts.map((item) => item.subject))).sort()], [concepts]);
   const filtered = useMemo(() => concepts.filter((item) => {
     const matchesSubject = selectedSubject === "All" || item.subject === selectedSubject;
@@ -133,6 +141,17 @@ export default function StudentLearningHub({ api, userId }: Props) {
         {offlineQuestions.length === 0 ? <Text style={styles.empty}>No saved questions match this search.</Text> : null}
         {offlinePackage.questions.length > offlineQuestions.length ? <Text style={styles.meta}>Showing up to 30 matching questions. Search to find a specific item.</Text> : null}
       </> : null}
+      <Text style={styles.sectionTitle}>Study materials</Text>
+      <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={styles.search} />
+      {visibleMaterials.map((material) => (
+        <View key={material.id} style={styles.card}>
+          <Text style={styles.cardTitle}>{material.title}</Text>
+          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {material.mimeType === "application/pdf" ? "PDF" : material.mimeType === "text/markdown" ? "Markdown" : "Text"} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>
+          {!!material.description && <Text style={styles.body}>{material.description}</Text>}
+        </View>
+      ))}
+      {!loading && visibleMaterials.length === 0 && <Text style={styles.empty}>{materialQuery ? "No study materials match this search." : "No published study materials are available yet."}</Text>}
+
       <Text style={styles.sectionTitle}>Concept library</Text>
       <TextInput value={query} onChangeText={setQuery} placeholder="Search concepts, topics or examples" placeholderTextColor="#8993a5" style={styles.search} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
