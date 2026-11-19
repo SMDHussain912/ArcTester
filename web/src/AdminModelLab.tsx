@@ -52,6 +52,53 @@ type AdminModelLabProps = {
   onRegisterDataset?: (payload: ModelDatasetRegistration) => void;
 };
 
+function validateDatasetRows(
+  schema: ModelDatasetRegistration["featureSchema"],
+  samples: ModelDatasetRegistration["samples"],
+  task: ModelDatasetRegistration["task"],
+) {
+  if (!Array.isArray(schema) || schema.length === 0) throw new Error("Feature schema must be a non-empty JSON array.");
+  const names = new Set<string>();
+  for (const feature of schema) {
+    if (!feature || typeof feature.name !== "string" || !/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(feature.name)) {
+      throw new Error("Every feature needs a valid name (letters, numbers and underscores; max 64 characters).");
+    }
+    if (names.has(feature.name)) throw new Error("Feature names must be unique: " + feature.name);
+    names.add(feature.name);
+    if (feature.type !== "numeric" && feature.type !== "categorical") throw new Error("Unsupported feature type for " + feature.name + ".");
+    if (feature.type === "categorical" && (!Array.isArray(feature.categories) || feature.categories.length === 0 || feature.categories.some((value) => typeof value !== "string" || !value.trim()))) {
+      throw new Error("Categorical feature " + feature.name + " needs a non-empty categories list.");
+    }
+  }
+  if (!Array.isArray(samples) || samples.length < 30 || samples.length > 5000) {
+    throw new Error("Samples must contain 30 to 5,000 rows.");
+  }
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (!sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features)) {
+      throw new Error("Row " + (index + 1) + " must contain a features object.");
+    }
+    if (typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId)) {
+      throw new Error("Row " + (index + 1) + " needs a 64-character lowercase hexadecimal groupId.");
+    }
+    if (typeof sample.target !== "number" || !Number.isFinite(sample.target)) {
+      throw new Error("Row " + (index + 1) + " has a missing or non-finite target value.");
+    }
+    if (task === "binary-classification" && sample.target !== 0 && sample.target !== 1) {
+      throw new Error("Binary-classification targets must be exactly 0 or 1 (row " + (index + 1) + ").");
+    }
+    for (const feature of schema) {
+      const value = sample.features[feature.name];
+      if (feature.type === "numeric" && (typeof value !== "number" || !Number.isFinite(value))) {
+        throw new Error("Row " + (index + 1) + " has a missing or invalid numeric value for " + feature.name + ".");
+      }
+      if (feature.type === "categorical" && (typeof value !== "string" || !feature.categories?.includes(value))) {
+        throw new Error("Row " + (index + 1) + " has an unknown category for " + feature.name + ".");
+      }
+    }
+  }
+}
+
 export default function AdminModelLab({
   datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
@@ -118,9 +165,9 @@ export default function AdminModelLab({
       if (!datasetName.trim()) throw new Error("Enter a dataset name.");
       if (!sourceDescription.trim() || sourceDescription.trim().length < 10) throw new Error("Provide at least 10 characters describing the dataset source.");
       if (!sourceAttested) throw new Error("Confirm that you are authorized to use this dataset and that it contains no direct personal identifiers.");
-      if (!Array.isArray(featureSchema) || featureSchema.length === 0) throw new Error("Feature schema must be a non-empty JSON array.");
-      if (!Array.isArray(samples) || samples.length < 30 || samples.length > 5000) throw new Error("Samples must be a JSON array containing 30 to 5,000 rows for TensorFlow training.");
-      if (samples.some((sample) => typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId))) throw new Error("Every row needs a 64-character lowercase hexadecimal groupId. Use a keyed HMAC pseudonym for real learners; never use a name, email or student ID.");
+      validateDatasetRows(featureSchema, samples, task);
+      if (!targetColumn.trim() || !/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(targetColumn.trim())) throw new Error("Target column must be a valid identifier.");
+      if (datasetKind === "real-anonymized" && !sourceDescription.toLowerCase().includes("anonym")) throw new Error("Describe the anonymization process in the source description for real learner data.");
       if (!onRegisterDataset) throw new Error("Dataset registration is not connected to the API.");
       onRegisterDataset({
         name: datasetName.trim(),
