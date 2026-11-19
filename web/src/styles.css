@@ -838,3 +838,15 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 }
 @media(hover:none){.student-nav-item:hover:not(:disabled){background:transparent;color:var(--muted)}.student-nav-item.active:hover{background:var(--accent-soft);color:var(--accent)}}
 @media(prefers-reduced-motion:reduce){.student-nav-item{transition:none}}
+
+
+/* Student question-bank discovery controls */
+.question-bank-search{display:flex;align-items:center;gap:10px;max-width:620px;margin:0 0 16px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.question-bank-search>span{flex:0 0 auto;color:var(--muted);font-size:11px;font-weight:750}
+.question-bank-search input{flex:1;min-width:0;width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px}
+.question-bank-search input:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:1px}
+.question-bank-empty{display:grid;justify-items:start;gap:8px;padding:22px}
+.question-bank-empty strong{font-size:15px}
+.question-bank-empty p{margin:0;font-size:12px}
+@media(max-width:560px){.question-bank-search{align-items:stretch;flex-wrap:wrap;gap:6px}.question-bank-search>span{width:100%}.question-bank-search input{flex-basis:calc(100% - 72px)}.question-bank-search .ghost{padding-inline:10px}}
+@media(prefers-reduced-motion:reduce){.question-bank-search input{scroll-behavior:auto}}
