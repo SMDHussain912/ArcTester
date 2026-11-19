@@ -24,7 +24,7 @@ export interface OnnxQuestionEmbeddingOptions {
 async function defaultPipelineFactory(
   task: "feature-extraction",
   modelId: string,
-  options: { revision: string; quantized: true; cache_dir?: string; local_files_only?: boolean },
+  options: { revision: string; dtype: "int8"; device: "cpu"; cache_dir?: string; local_files_only?: boolean },
 ): Promise<FeatureExtractor> {
   const { pipeline } = await import("@huggingface/transformers");
   return await pipeline(task, modelId, options) as unknown as FeatureExtractor;
