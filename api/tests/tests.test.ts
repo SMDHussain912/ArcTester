@@ -107,26 +107,35 @@ describe("POST /tests", () => {
   });
 
 
-  it("persists adaptive decisions with pseudonymous learner groups and records answer outcomes", async () => {
-    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+  it("persists adaptive decisions with pseudonymous learner groups and records correct, incorrect and unanswered outcomes", async () => {
+    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 3 });
     expect(created.status).toBe(201);
     const attemptId = (created.json as { attemptId: number }).attemptId;
     const decisions = await server.db.adaptiveDecisionLog.findMany({ where: { attemptId }, orderBy: { selectedQuestionId: "asc" } });
-    expect(decisions).toHaveLength(2);
+    expect(decisions).toHaveLength(3);
     expect(decisions.every((decision) => /^[a-f0-9]{64}$/.test(decision.learnerGroupId))).toBe(true);
     expect(decisions.every((decision) => decision.policyMode === "deterministic-top-k" && decision.selectionProbability === 1)).toBe(true);
     expect(decisions.every((decision) => decision.outcomeStatus === "pending" && decision.reward === null)).toBe(true);
     expect(decisions[0]).not.toHaveProperty("userId");
-    const answer = await server.db.attemptAnswer.findFirstOrThrow({ where: { attemptId } });
+    const answers = await server.db.attemptAnswer.findMany({ where: { attemptId }, orderBy: { questionId: "asc" } });
+    const correctAnswer = answers[0]!;
+    const incorrectAnswer = answers[1]!;
     await api.post(`/tests/${attemptId}/submit`, {
-      answers: [{ questionId: answer.questionId, selectedIndex: answer.correctIndexSnapshot }],
+      answers: [
+        { questionId: correctAnswer.questionId, selectedIndex: correctAnswer.correctIndexSnapshot },
+        { questionId: incorrectAnswer.questionId, selectedIndex: (incorrectAnswer.correctIndexSnapshot + 1) % 4 },
+      ],
     });
     const updated = await server.db.adaptiveDecisionLog.findUniqueOrThrow({
-      where: { attemptId_selectedQuestionId: { attemptId, selectedQuestionId: answer.questionId } },
+      where: { attemptId_selectedQuestionId: { attemptId, selectedQuestionId: correctAnswer.questionId } },
     });
     expect(updated).toMatchObject({ outcomeStatus: "correct", reward: 1 });
     expect(updated.outcomeAt).toBeInstanceOf(Date);
-    const unansweredDecision = decisions.find((decision) => decision.selectedQuestionId !== answer.questionId);
+    const incorrect = await server.db.adaptiveDecisionLog.findUniqueOrThrow({
+      where: { attemptId_selectedQuestionId: { attemptId, selectedQuestionId: incorrectAnswer.questionId } },
+    });
+    expect(incorrect).toMatchObject({ outcomeStatus: "incorrect", reward: 0 });
+    const unansweredDecision = decisions.find((decision) => decision.selectedQuestionId !== correctAnswer.questionId && decision.selectedQuestionId !== incorrectAnswer.questionId);
     expect(unansweredDecision).toBeDefined();
     const unanswered = await server.db.adaptiveDecisionLog.findUniqueOrThrow({
       where: { attemptId_selectedQuestionId: { attemptId, selectedQuestionId: unansweredDecision!.selectedQuestionId } },
