@@ -240,44 +240,6 @@ export default function StudentLearningHub({ api, userId }: Props) {
       ))}
       {offlineMaterials.length === 0 ? <Text style={styles.empty}>No saved study materials. Download text or Markdown notes below while online.</Text> : null}
 
-      <Text style={styles.sectionTitle}>Study materials</Text>
-      <TextInput value={materialQuery} onChangeText={setMaterialQuery} placeholder="Search study materials" placeholderTextColor="#8993a5" style={styles.search} />
-      {visibleMaterials.map((material) => (
-        <View key={material.id} style={styles.card}>
-          <Text style={styles.cardTitle}>{material.title}</Text>
-          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>
-          {!!material.description && <Text style={styles.body}>{material.description}</Text>}
-          {(material.mimeType === "text/plain" || material.mimeType === "text/markdown") ? (
-            <TouchableOpacity
-              onPress={() => {
-                const saved = offlineMaterials.find((item) => item.id === material.id);
-                if (saved) openOfflineMaterial(saved);
-                else void downloadStudyMaterial(material);
-              }}
-              disabled={downloadingMaterialId === material.id}
-              style={styles.refresh}
-            >
-              <Text style={styles.refreshText}>
-                {downloadingMaterialId === material.id ? "Saving…" : offlineMaterials.some((item) => item.id === material.id) ? "Read offline" : "Download for offline reading"}
-              </Text>
-            </TouchableOpacity>
-          ) : <Text style={styles.meta}>PDF preview/download requires an internet connection in this mobile app.</Text>}
-        </View>
-      ))}
-      {!loading && visibleMaterials.length === 0 && <Text style={styles.empty}>{materialQuery ? "No study materials match this search." : "No published study materials are available yet."}</Text>}
-
-      {selectedOfflineMaterial ? (
-        <View style={styles.card}>
-          <Text style={styles.meta}>OFFLINE READER · {selectedOfflineMaterial.subject}{selectedOfflineMaterial.topic ? " · " + selectedOfflineMaterial.topic : ""}</Text>
-          <Text style={styles.cardTitle}>{selectedOfflineMaterial.title}</Text>
-          <Text style={styles.body}>{selectedOfflineMaterial.description}</Text>
-          <Text selectable style={styles.offlineContent}>{selectedOfflineMaterial.content}</Text>
-          <TouchableOpacity onPress={() => setSelectedOfflineMaterial(null)} style={styles.refresh}>
-            <Text style={styles.refreshText}>Close reader</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
       </View>}
       {section === "materials" && <View>
         <Text style={styles.sectionTitle}>Study materials</Text>
