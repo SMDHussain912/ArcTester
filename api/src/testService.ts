@@ -277,22 +277,26 @@ export async function createTest(
       }
       return topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic));
     };
-    const pool = chosenSubjects.flatMap((subject) => {
-      const practiceOnly = practiceCandidates.filter((question) => matchesPracticeFilters(question, subject));
-      if (practiceOnly.length > 0) return practiceOnly;
-      // If this subject has no dedicated practice questions after filters, reuse
-      // matching exam-bank questions rather than returning an empty paper.
-      const overlapFallback = candidates.filter((question) => matchesPracticeFilters(question, subject));
-      if (overlapFallback.length > 0) reusedExamPool = true;
-      return overlapFallback;
-    });
     const requested = input.count ?? 20;
-    const selectedById = new Set<number>();
-    selected = [];
-    const subjectPools = chosenSubjects.map((name) => ({ name, pool: pool.filter((question) => question.subject === name) }));
     const baseQuota = Math.floor(requested / chosenSubjects.length);
     const remainderQuota = requested % chosenSubjects.length;
     const requestedBySubject = new Map(chosenSubjects.map((name, index) => [name, baseQuota + (index < remainderQuota ? 1 : 0)]));
+    const pool = chosenSubjects.flatMap((subject) => {
+      const practiceOnly = practiceCandidates.filter((question) => matchesPracticeFilters(question, subject));
+      const target = requestedBySubject.get(subject) ?? 0;
+      if (practiceOnly.length >= target) return practiceOnly;
+      // Top up from the exam pool only when the dedicated practice pool cannot
+      // satisfy this subject's requested quota.
+      const practiceIds = new Set(practiceOnly.map((question) => question.id));
+      const overlapFallback = candidates.filter((question) =>
+        !practiceIds.has(question.id) && matchesPracticeFilters(question, subject),
+      );
+      if (overlapFallback.length > 0) reusedExamPool = true;
+      return [...practiceOnly, ...overlapFallback];
+    });
+    const selectedById = new Set<number>();
+    selected = [];
+    const subjectPools = chosenSubjects.map((name) => ({ name, pool: pool.filter((question) => question.subject === name) }));
     let remaining = requested;
     let active = subjectPools.filter((entry) => entry.pool.length > 0);
     while (remaining > 0 && active.length > 0) {
