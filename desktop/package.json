@@ -7,7 +7,9 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist:win": "electron-builder --win nsis"
+    "dist:win": "electron-builder --win nsis",
+    "test": "node smoke-test.cjs",
+    "dist:linux": "electron-builder --linux AppImage deb"
   },
   "devDependencies": {
     "electron": "^38.2.0",
@@ -16,12 +18,14 @@
   "build": {
     "appId": "com.arctester.desktop",
     "productName": "ArcTester",
+    "icon": "icon.png",
     "directories": {
       "output": "release"
     },
     "files": [
       "main.cjs",
-      "preload.cjs"
+      "preload.cjs",
+      "icon.png"
     ],
     "win": {
       "target": [
@@ -40,6 +44,13 @@
           "**/*"
         ]
       }
-    ]
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education"
+    }
   }
 }

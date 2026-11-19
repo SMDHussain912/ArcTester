@@ -11,7 +11,7 @@ import {
 
 type Q = SelectableQuestion;
 
-const q = (id: number, subject = "Maths"): Q => ({ id, subject });
+const q = (id: number, subject = "Mathematics"): Q => ({ id, subject });
 const statsOf = (
   entries: [number, { seen: number; wrong: number; lastSeen?: number }][]
 ): StatsById => Object.fromEntries(entries.map(([id, s]) => [String(id), s]));
@@ -87,11 +87,25 @@ describe("selectMockTest", () => {
     expect(shortfalls).toEqual([]);
   });
 
+  it("matches legacy and official syllabus subject labels without double-counting units", () => {
+    const candidates: Q[] = [];
+    let id = 1;
+    for (const quota of MOCK_QUOTAS) {
+      const alias = quota.aliases?.[0] ?? quota.subject;
+      for (let i = 0; i < quota.count; i++) candidates.push(q(id++, alias));
+    }
+    const { questions, shortfalls } = selectMockTest(candidates, {}, fixed(0.37));
+    expect(MOCK_TOTAL).toBe(200);
+    expect(questions).toHaveLength(200);
+    expect(new Set(questions.map((question) => question.id)).size).toBe(200);
+    expect(shortfalls).toEqual([]);
+  });
+
   it("uses what exists and warns per subject on a thin bank", () => {
     const candidates: Q[] = [q(1, "Maths"), q(2, "Maths"), q(3, "Python")];
     const { questions, shortfalls } = selectMockTest(candidates, {}, fixed(0.1));
     expect(questions).toHaveLength(3);
-    const maths = shortfalls.find((s) => s.subject === "Maths");
+    const maths = shortfalls.find((s) => s.subject === "Mathematics");
     const physics = shortfalls.find((s) => s.subject === "Physics");
     expect(maths).toMatchObject({ requested: 50, available: 2 });
     expect(physics).toMatchObject({ requested: 25, available: 0 });

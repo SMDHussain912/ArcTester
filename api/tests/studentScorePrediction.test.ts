@@ -108,6 +108,7 @@ describe("student score prediction endpoint", () => {
     expect(response.json.predictionInterval.estimatedErrorPercent).toBeGreaterThan(0);
     expect(response.json.predictionInterval.method).toBe("walk-forward-rmse");
     expect(response.json.modelMae).toBeLessThan(response.json.baselineMae);
+    expect(response.json.modelRmse).toBeLessThan(response.json.baselineRmse);
   });
 
   it("withholds predictions when a constant history cannot beat the baseline", async () => {
@@ -144,6 +145,8 @@ describe("student score prediction endpoint", () => {
       evaluationSamples: 9,
       modelMae: 0,
       baselineMae: 0,
+      modelRmse: 0,
+      baselineRmse: 0,
     });
     expect(response.json).not.toHaveProperty("predictedScorePercent");
   });

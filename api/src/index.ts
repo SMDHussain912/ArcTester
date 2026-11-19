@@ -1,17 +1,40 @@
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import morgan from "morgan";
 import { PrismaClient } from "@prisma/client";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
 import { examRouter } from "./examRoutes.js";
+import { questionRouter } from "./questionRoutes.js";
+import { sessionRouter } from "./sessionRoutes.js";
+import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
+import { modelRegistryRouter } from "./modelRoutes.js";
+import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
+import { startModelTrainingWorker } from "./modelTrainingWorker.js";
+import { announcementRouter } from "./announcementRoutes.js";
+import { studyMaterialRouter } from "./studyMaterialRoutes.js";
+import { answerIntelligenceRouter } from "./answerIntelligenceRoutes.js";
+import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
 
+// General request rate limiting applied to every API route. Login keeps its own
+// stricter per-IP + per-account throttle in auth.ts.
+const apiRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Try again later." },
+});
+
 /**
- * Minimal CORS without another dependency. Localhost is allowed by default;
- * additional exact origins (for example a phone's LAN URL) must be listed in
- * CORS_ORIGINS as a comma-separated environment variable.
+ * Minimal CORS without another dependency. In production only exact configured
+ * origins are allowed; localhost/loopback is permitted outside production so
+ * local development and the packaged desktop client (file://) can reach the API.
  */
 function localCors(
   _req: express.Request,
@@ -26,8 +49,12 @@ function localCors(
       .filter(Boolean)
   );
   const isLocalOrigin =
+    process.env.NODE_ENV !== "production" &&
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-  if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
+  // file:// (desktop) sends Origin: "null"; allow it outside production so the
+  // packaged desktop app can reach the API on localhost.
+  const isFileOrigin = process.env.NODE_ENV !== "production" && origin === "null";
+  if (origin && (isLocalOrigin || isFileOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -78,7 +105,34 @@ function cookieCsrfGuard(
 
 export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
-  app.use(express.json({ limit: "10mb" }));
+  // requireAuth resolves the same injected client used by every router and test schema.
+  app.locals.db = database;
+  app.set("trust proxy", 1);
+  // Morgan request logs expose route, status, latency and origin without logging
+  // cookies, bearer tokens, request bodies or query-string secrets.
+  morgan.token("route", (req) => req.path);
+  app.use(morgan(":method :route :status :response-time ms origin=:req[origin]", {
+    skip: (req) => req.path === "/health" || req.path === "/ready",
+  }));
+  // helmet sets secure defaults (HSTS, X-Content-Type-Options, CSP, referrer
+  // policy, etc.). Disable frameguard so the admin live monitor can be framed
+  // only where explicitly desired; keep the rest of the defaults.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+    })
+  );
+  app.use(apiRateLimit);
+  // 1 MB JSON body limit by default. The large-payload import routes apply their
+  // own 50 MB parsers below; every other route uses the 1 MB global parser.
+  app.use((req, res, next) => {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
+      return next();
+    }
+    const largePayload = req.path.startsWith("/admin/model-datasets") ||
+      req.path.startsWith("/admin/study-materials");
+    express.json({ limit: largePayload ? "12mb" : "1mb" })(req, res, next);
+  });
   app.use(localCors);
   app.use(cookieCsrfGuard);
 
@@ -86,10 +140,31 @@ export function buildApp(database: PrismaClient = db): express.Express {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
   });
 
+  // Readiness is distinct from liveness: only report ready when the active
+  // database connection can execute a trivial query.
+  app.get("/ready", async (_req, res) => {
+    try {
+      await database.$queryRaw`SELECT 1`;
+      res.json({ ok: true, service: "ecet-api", database: "ready", time: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ ok: false, service: "ecet-api", database: "unavailable" });
+    }
+  });
+
   app.use(testRouter(database));
   app.use("/auth", authRouter(database));
+  // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
+  // and /admin/exams/attendance are matched before the /admin/exams/:id param route.
+  app.use(sessionRouter(database));
   app.use(examRouter(database));
+  app.use(questionRouter(database));
+  app.use(submissionRouter(database));
   app.use(questionAdminRouter(database));
+  app.use(modelRegistryRouter(database));
+  app.use(modelTrainingJobsRouter(database));
+  app.use(announcementRouter(database));
+  app.use(studyMaterialRouter(database));
+  app.use(answerIntelligenceRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
@@ -102,7 +177,7 @@ const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     startModelTrainingWorker(db);
-    console.log(`ecet-api listening on http://localhost:\${PORT}`);
+    console.log(`ecet-api listening on http://localhost:${PORT}`);
   });
 }
 

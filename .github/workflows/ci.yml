@@ -1,10 +1,11 @@
 name: ArcTester CI
+# Run the full verification suite on consolidated development branches as well as main.
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'chatgpt/**']
   pull_request:
-    branches: [main]
+    branches: [main, 'chatgpt/**']
   workflow_dispatch:
 
 permissions:
@@ -12,7 +13,7 @@ permissions:
 
 concurrency:
   group: arctester-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify:
@@ -47,6 +48,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run production dependency audit (high severity gate)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
@@ -132,3 +136,125 @@ jobs:
 
       - name: Test SQLite data migration helpers
         run: python -m unittest scripts/test_migrate_sqlite_to_postgres.py -v
+
+  backup-restore-rehearsal:
+    name: PostgreSQL backup/restore rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester
+      RESTORE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester_rehearsal_ci
+      PGPASSWORD: postgres
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehearse backup and restore using PostgreSQL 16 client tools
+        env:
+          BACKUP_FILE: ${{ runner.temp }}/arctester-rehearsal.dump
+        run: |
+          # The postgres:16 image supplies client tools matching the server.
+          # Keep the backup on the runner and run the existing guarded script.
+          docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
+            -e DATABASE_URL -e RESTORE_DATABASE_URL -e PGPASSWORD \
+            -e BACKUP_FILE=/backup/arctester-rehearsal.dump \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$RUNNER_TEMP:/backup" \
+            --workdir /workspace postgres:16 \
+            bash -euo pipefail -c '
+              createdb --maintenance-db="$DATABASE_URL" arctester_rehearsal_ci
+              psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
+          CREATE TABLE backup_rehearsal_probe (
+            id integer PRIMARY KEY,
+            payload text NOT NULL
+          );
+          INSERT INTO backup_rehearsal_probe (id, payload)
+          VALUES (1, '\''restore-check-one'\''), (2, '\''restore-check-two'\'');
+          SQL
+              bash scripts/backup-restore-rehearsal.sh --execute
+              restored="$(psql "$RESTORE_DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM backup_rehearsal_probe WHERE payload LIKE '\''restore-check-%'\''")"
+              test "$restored" = "2"
+            '
+
+  playwright-e2e:
+    name: Playwright E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
+      VITE_API_URL: http://localhost:4000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=api
+
+      - name: Verify migrations
+        run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
+
+      - name: Bootstrap isolated E2E administrator
+        run: npm run admin:bootstrap --workspace=api
+        env:
+          BOOTSTRAP_ADMIN_EMAIL: admin@arctester.test
+          BOOTSTRAP_ADMIN_PASSWORD: ArcTester-CI-Admin-2026!
+
+      - name: Seed the question bank
+        run: npm run prisma:seed --workspace=api
+
+      - name: Start API server
+        run: |
+          npm run dev --workspace=api &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:4000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy within 60 seconds" >&2
+          exit 1
+
+      - name: Run Playwright E2E tests
+        run: npx playwright test --project=chromium
+        working-directory: web

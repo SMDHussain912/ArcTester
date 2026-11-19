@@ -1,6 +1,7 @@
+import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
-import { validateJwtSecret } from "../src/auth.js";
+import { signJwt, validateJwtSecret, verifyJwt } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
 import {
   issueTestInvitation,
@@ -65,6 +66,21 @@ describe("JWT secret configuration", () => {
     expect(() => validateJwtSecret("a".repeat(64), true)).not.toThrow();
   });
 
+
+  it("requires the supported HS256 header and a valid expiry claim", () => {
+    const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const signed = (header: unknown, payload: unknown) => {
+      const message = encode(header) + "." + encode(payload);
+      const signature = createHmac("sha256", "dev-secret-change-me-in-production").update(message).digest("base64url");
+      return message + "." + signature;
+    };
+    const now = Math.floor(Date.now() / 1000);
+    expect(() => verifyJwt(signJwt({ sub: "1" }, -1))).toThrow(/expired token/i);
+    expect(() => verifyJwt(signed({ alg: "none", typ: "JWT" }, { sub: "1", exp: now + 60 }))).toThrow(/unsupported jwt header/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1" }))).toThrow(/missing or invalid token expiry/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1", exp: now + 60 }))).not.toThrow();
+  });
+
   it("does not require production-strength secrets in development or tests", () => {
     expect(() => validateJwtSecret("", false)).not.toThrow();
   });
@@ -79,7 +95,7 @@ describe("auth", () => {
   });
 
   afterAll(async () => {
-    await server.close();
+    if (server) await server.close();
   });
 
   it("registers a new user with an invitation", async () => {
@@ -134,6 +150,37 @@ describe("auth", () => {
     expect((res.json as { error: string }).error).toBe("Invalid email or password.");
   });
 
+  it("throttles failures per account: one account's failures do not lock out another", async () => {
+    const bobToken = await issueTestInvitation(server.db, "bob@example.com");
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      email: "bob@example.com",
+      password: "secret1234",
+      invitationToken: bobToken,
+    });
+
+    // 8 failed attempts against alice lock alice's account.
+    for (let i = 0; i < 8; i += 1) {
+      await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+        email: "alice@example.com",
+        password: "wrongpassword",
+      });
+    }
+    const aliceBlocked = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+      email: "alice@example.com",
+      password: "wrongpassword",
+    });
+    expect(aliceBlocked.status).toBe(429);
+    expect((aliceBlocked.json as { error: string }).error).toContain("Too many failed sign-in attempts");
+
+    // bob, a different account, can still sign in (not locked out by alice).
+    const bobLogin = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
+      email: "bob@example.com",
+      password: "secret1234",
+    });
+    expect(bobLogin.status).toBe(200);
+    expect((bobLogin.json as { ok: boolean }).ok).toBe(true);
+  });
+
   it("requires auth for protected test routes (403 without cookie)", async () => {
     // Clear cookie to simulate signed-out client
     cookieJar.delete("ecet_session");
@@ -148,7 +195,7 @@ describe("auth", () => {
 
   it("allows protected test routes with a valid session", async () => {
     await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
-      email: "alice@example.com",
+      email: "bob@example.com",
       password: "secret1234",
     });
     const res = await postJsonWithCookie(`${server.baseUrl}/tests`, {
@@ -163,7 +210,7 @@ describe("auth", () => {
     const res = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
     expect(res.status).toBe(200);
     expect((res.json as { ok: boolean; user: { email: string } }).user.email).toBe(
-      "alice@example.com"
+      "bob@example.com"
     );
   });
 

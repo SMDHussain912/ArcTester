@@ -14,6 +14,7 @@ const samples = Array.from({ length: 100 }, (_, index) => {
 
 describe("TensorFlow.js regression candidate training", () => {
   it("trains on grouped student data and evaluates on untouched student groups", async () => {
+    const completedEpochs: number[] = [];
     const result = await trainTensorflowRegressionCandidate(samples, {
       modelId: "tf-student-score",
       version: 1,
@@ -21,6 +22,7 @@ describe("TensorFlow.js regression candidate training", () => {
       datasetKind: "synthetic",
       seed: 17,
       epochs: 40,
+      onEpochEnd: (epoch) => { completedEpochs.push(epoch); },
     });
 
     expect(result.split).toMatchObject({
@@ -34,6 +36,7 @@ describe("TensorFlow.js regression candidate training", () => {
     expect(Number.isFinite(result.candidate.mae)).toBe(true);
     expect(Number.isFinite(result.candidate.rmse)).toBe(true);
     expect(Number.isFinite(result.baseline.mae)).toBe(true);
+    expect(completedEpochs).toEqual(Array.from({ length: 40 }, (_, index) => index));
     expect(result.productionEligible).toBe(false);
     if (result.artifact) {
       expect(result.artifact.evaluation.datasetKind).toBe("synthetic");

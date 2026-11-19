@@ -112,7 +112,7 @@ The application must remain usable on modest hardware (including 8 GB RAM system
 
 - Web: React + TypeScript + Vite.
 - API: Node.js + TypeScript + Express.
-- Persistence: Prisma + SQLite.
+- Persistence: Prisma + PostgreSQL. The `api/prisma-sqlite` directory is retained only for the one-time SQLite-to-PostgreSQL migration; it is not the active application persistence path.
 - Validation: Zod at API boundaries.
 - Keep route handling, business rules, and data access separated as the codebase is modularized.
 - Enforce authentication and role authorization on the server; hiding UI controls is not authorization.

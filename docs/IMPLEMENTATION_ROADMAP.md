@@ -1,5 +1,7 @@
 # ArcTester implementation roadmap
 
+> **Archived — superseded by the 16-phase master roadmap.** This document is retained as historical implementation planning context. The active product plan and phase status are maintained in [`ARC_TESTER_16_PHASE_MASTER_ROADMAP.md`](./ARC_TESTER_16_PHASE_MASTER_ROADMAP.md).
+
 The approved delivery plan contains six phases. Each phase must ship with tests and a demonstrable end-to-end workflow before the next phase is treated as complete.
 
 ## Phase 1 — Backend foundation

@@ -1,16 +1,26 @@
 import * as Crypto from "expo-crypto";
 import * as SQLite from "expo-sqlite";
+import { Platform } from "react-native";
+import { monotonicNow } from "./clock";
 
-let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+const databasePromises = new Map<string, Promise<SQLite.SQLiteDatabase>>();
 let configuredUserId: string | null = null;
+
+function databaseForUser(userId: string): Promise<SQLite.SQLiteDatabase> {
+  let promise = databasePromises.get(userId);
+  if (!promise) {
+    // User IDs are server-issued numeric identifiers. Keep each account's
+    // offline cache in a separate SQLite file on shared devices.
+    promise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
+    databasePromises.set(userId, promise);
+  }
+  return promise;
+}
 
 export function configureOfflineStore(userId: string): void {
   if (!userId) throw new Error("A signed-in user is required for offline storage.");
-  if (configuredUserId !== userId) {
-    configuredUserId = userId;
-    dbPromise = SQLite.openDatabaseAsync("arctester-offline-" + userId + ".db");
-    initialized = false;
-  }
+  configuredUserId = userId;
+  void databaseForUser(userId);
 }
 
 export type OfflineExamQuestion = {
@@ -55,22 +65,59 @@ type AttemptRow = {
   assignmentId: string;
   attemptUuid: string;
   startedAt: string;
+  startedAtMonotonicMs: number;
   submittedAt: string | null;
   answersJson: string;
   status: "ACTIVE" | "PENDING" | "SYNCED";
   submissionId: string | null;
   lastError: string | null;
+  updatedAt: string;
 };
 
-let initialized = false;
+const databaseInitializations = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
 
-async function database() {
-  if (!dbPromise) {
+const transactionQueues = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
+
+async function withOfflineTransaction<T>(
+  db: SQLite.SQLiteDatabase,
+  task: (transaction: SQLite.SQLiteDatabase) => Promise<T>,
+): Promise<T> {
+  const previous = transactionQueues.get(db) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  transactionQueues.set(db, previous.then(() => current));
+  await previous;
+
+  try {
+    let result!: T;
+    if (Platform.OS === "web") {
+      // Expo SQLite does not support exclusive transactions on web.
+      // Serialize this store's transactions and use the web-supported API.
+      await db.withTransactionAsync(async () => {
+        result = await task(db);
+      });
+    } else {
+      await db.withExclusiveTransactionAsync(async (transaction) => {
+        result = await task(transaction);
+      });
+    }
+    return result;
+  } finally {
+    release();
+  }
+}
+
+
+async function database(userId = configuredUserId) {
+  if (!userId) {
     throw new Error("Offline storage has not been configured for this account.");
   }
-  const db = await dbPromise;
-  if (!initialized) {
-    await db.execAsync(`
+  const db = await databaseForUser(userId);
+  let initialization = databaseInitializations.get(db);
+  if (!initialization) {
+    initialization = db.execAsync(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
       CREATE TABLE IF NOT EXISTS exam_packages (
@@ -84,6 +131,7 @@ async function database() {
         assignment_id TEXT PRIMARY KEY NOT NULL,
         attempt_uuid TEXT NOT NULL UNIQUE,
         started_at TEXT NOT NULL,
+        started_at_monotonic_ms INTEGER NOT NULL DEFAULT 0,
         submitted_at TEXT,
         answers_json TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'PENDING', 'SYNCED')),
@@ -92,30 +140,78 @@ async function database() {
         updated_at TEXT NOT NULL
       );
     `);
-    initialized = true;
+    databaseInitializations.set(db, initialization);
   }
+  await initialization;
   return db;
 }
 
 function parsePackage(raw: string): OfflineExamPackage {
-  const value = JSON.parse(raw) as OfflineExamPackage;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error("The downloaded exam package is invalid JSON.");
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The downloaded exam package is invalid.");
+  }
+  const candidate = value as Partial<OfflineExamPackage>;
+  const validDateOrNull = (date: unknown) =>
+    date === null || (typeof date === "string" && Number.isFinite(Date.parse(date)));
   if (
-    !value.assignmentId ||
-    !value.serverTime ||
-    !Number.isInteger(value.durationMinutes) ||
-    value.durationMinutes < 1 ||
-    !Array.isArray(value.questions) ||
-    value.questions.length === 0
+    typeof candidate.assignmentId !== "string" || !candidate.assignmentId.trim() ||
+    typeof candidate.examId !== "string" || !candidate.examId.trim() ||
+    typeof candidate.title !== "string" || !candidate.title.trim() ||
+    typeof candidate.description !== "string" ||
+    typeof candidate.instructions !== "string" ||
+    !Number.isInteger(candidate.version) || (candidate.version ?? 0) < 1 ||
+    typeof candidate.serverTime !== "string" || !Number.isFinite(Date.parse(candidate.serverTime)) ||
+    !Number.isInteger(candidate.durationMinutes) || (candidate.durationMinutes ?? 0) < 1 ||
+    !validDateOrNull(candidate.availableFrom) ||
+    !validDateOrNull(candidate.dueAt) ||
+    !Array.isArray(candidate.questions) || candidate.questions.length === 0 ||
+    candidate.questions.length > 500
   ) {
     throw new Error("The downloaded exam package is invalid.");
   }
-  return value;
+
+  if (candidate.availableFrom && candidate.dueAt && Date.parse(candidate.availableFrom) > Date.parse(candidate.dueAt)) {
+    throw new Error("The downloaded exam package has an invalid availability window.");
+  }
+
+  const ids = new Set<string>();
+  const positions = new Set<number>();
+  for (const question of candidate.questions) {
+    if (
+      !question || typeof question !== "object" ||
+      typeof question.id !== "string" || !question.id.trim() || ids.has(question.id) ||
+      !Number.isInteger(question.position) || question.position < 0 || positions.has(question.position) ||
+      typeof question.subject !== "string" || !question.subject.trim() ||
+      !(question.topic === null || typeof question.topic === "string") ||
+      typeof question.text !== "string" || !question.text.trim() ||
+      !Array.isArray(question.options) || question.options.length < 2 || question.options.length > 4 ||
+      question.options.some((option) => typeof option !== "string" || !option.trim()) ||
+      !Number.isFinite(question.marks) || question.marks <= 0 ||
+      !Number.isFinite(question.negativeMarks) || question.negativeMarks < 0
+    ) {
+      throw new Error("The downloaded exam package contains an invalid question.");
+    }
+    ids.add(question.id);
+    positions.add(question.position);
+  }
+
+  return candidate as OfflineExamPackage;
 }
 
 export async function saveExamPackage(
   examPackage: OfflineExamPackage,
   expectedSha256: string,
 ): Promise<void> {
+  if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(expectedSha256)) {
+    throw new Error("Exam package integrity hash is invalid. Download it again.");
+  }
   const serialized = JSON.stringify(examPackage);
   const actualSha256 = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
@@ -124,6 +220,7 @@ export async function saveExamPackage(
   if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
     throw new Error("Exam package integrity check failed. Download it again.");
   }
+  parsePackage(serialized);
 
   const downloadedAt = new Date();
   const serverTime = new Date(examPackage.serverTime);
@@ -131,29 +228,31 @@ export async function saveExamPackage(
     throw new Error("The exam package has an invalid server timestamp.");
   }
   const db = await database();
-  const existingAttempt = await db.getFirstAsync<{ status: string }>(
-    "SELECT status FROM offline_attempts WHERE assignment_id = ?",
-    examPackage.assignmentId,
-  );
-  if (existingAttempt) {
-    throw new Error("This assignment already has a local attempt and cannot be replaced.");
-  }
+  await withOfflineTransaction(db, async (transaction) => {
+    const existingAttempt = await transaction.getFirstAsync<{ status: string }>(
+      "SELECT status FROM offline_attempts WHERE assignment_id = ?",
+      examPackage.assignmentId,
+    );
+    if (existingAttempt) {
+      throw new Error("This assignment already has a local attempt and cannot be replaced.");
+    }
 
-  await db.runAsync(
-    `INSERT INTO exam_packages
-      (assignment_id, payload_json, sha256, downloaded_at, server_offset_ms)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(assignment_id) DO UPDATE SET
-        payload_json = excluded.payload_json,
-        sha256 = excluded.sha256,
-        downloaded_at = excluded.downloaded_at,
-        server_offset_ms = excluded.server_offset_ms`,
-    examPackage.assignmentId,
-    serialized,
-    actualSha256,
-    downloadedAt.toISOString(),
-    serverTime.getTime() - downloadedAt.getTime(),
-  );
+    await transaction.runAsync(
+      `INSERT INTO exam_packages
+        (assignment_id, payload_json, sha256, downloaded_at, server_offset_ms)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(assignment_id) DO UPDATE SET
+          payload_json = excluded.payload_json,
+          sha256 = excluded.sha256,
+          downloaded_at = excluded.downloaded_at,
+          server_offset_ms = excluded.server_offset_ms`,
+      examPackage.assignmentId,
+      serialized,
+      actualSha256,
+      downloadedAt.toISOString(),
+      serverTime.getTime() - downloadedAt.getTime(),
+    );
+  });
 }
 
 export async function getCachedExamPackage(
@@ -175,59 +274,84 @@ export async function listCachedExamPackages(): Promise<OfflineExamPackage[]> {
   return rows.map((row) => parsePackage(row.payload_json));
 }
 
+export async function listActiveAttemptIds(): Promise<string[]> {
+  const db = await database();
+  const rows = await db.getAllAsync<{ assignment_id: string }>(
+    "SELECT assignment_id FROM offline_attempts WHERE status = 'ACTIVE' ORDER BY updated_at DESC",
+  );
+  return rows.map((row) => row.assignment_id);
+}
+
 export async function startOfflineAttempt(assignmentId: string): Promise<{
   attemptUuid: string;
   startedAt: string;
   examPackage: OfflineExamPackage;
 }> {
   const db = await database();
-  const row = await db.getFirstAsync<{
-    payload_json: string;
-    server_offset_ms: number;
-  }>(
-    "SELECT payload_json, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (!row) throw new Error("Download this exam before starting it.");
+  let result: {
+    attemptUuid: string;
+    startedAt: string;
+    examPackage: OfflineExamPackage;
+  } | null = null;
 
-  const examPackage = parsePackage(row.payload_json);
-  const existing = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (existing) {
-    if (existing.status === "ACTIVE") {
-      // An already-started attempt must remain resumable even after its assignment deadline.
-      return {
-        attemptUuid: existing.attemptUuid,
-        startedAt: existing.startedAt,
-        examPackage,
-      };
+  await withOfflineTransaction(db, async (transaction) => {
+    const row = await transaction.getFirstAsync<{
+      payload_json: string;
+      server_offset_ms: number;
+    }>(
+      "SELECT payload_json, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!row) throw new Error("Download this exam before starting it.");
+
+    const examPackage = parsePackage(row.payload_json);
+    const existing = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (existing) {
+      if (existing.status === "ACTIVE") {
+        // An already-started attempt must remain resumable even after its assignment deadline.
+        result = {
+          attemptUuid: existing.attemptUuid,
+          startedAt: existing.startedAt,
+          examPackage,
+        };
+        return;
+      }
+      throw new Error("An attempt for this assignment has already been submitted or synchronized.");
     }
-    throw new Error("An attempt for this assignment has already been submitted or synchronized.");
-  }
 
-  const adjustedNow = Date.now() + row.server_offset_ms;
-  if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
-    throw new Error("This exam is not available yet.");
-  }
-  if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
-    throw new Error("The exam deadline has passed.");
-  }
+    const adjustedNow = Date.now() + row.server_offset_ms;
+    if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
+      throw new Error("This exam is not available yet.");
+    }
+    if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
+      throw new Error("The exam deadline has passed.");
+    }
 
-  const attemptUuid = Crypto.randomUUID();
-  const startedAt = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO offline_attempts
-      (assignment_id, attempt_uuid, started_at, answers_json, status, updated_at)
-      VALUES (?, ?, ?, ?, 'ACTIVE', ?)`,
-    assignmentId,
-    attemptUuid,
-    startedAt,
-    JSON.stringify({}),
-    startedAt,
-  );
-  return { attemptUuid, startedAt, examPackage };
+    const attemptUuid = Crypto.randomUUID();
+    const startedAtMonotonicMs = monotonicNow();
+    // Use the server-adjusted clock captured when the package was downloaded.
+    // This keeps the local deadline consistent when the device clock is inaccurate.
+    const startedAt = new Date(Date.now() + row.server_offset_ms).toISOString();
+    await transaction.runAsync(
+      `INSERT INTO offline_attempts
+        (assignment_id, attempt_uuid, started_at, started_at_monotonic_ms, answers_json, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      assignmentId,
+      attemptUuid,
+      startedAt,
+      startedAtMonotonicMs,
+      JSON.stringify({}),
+      "ACTIVE",
+      new Date(startedAtMonotonicMs).toISOString(),
+    );
+    result = { attemptUuid, startedAt, examPackage };
+  });
+
+  if (!result) throw new Error("The offline attempt could not be started.");
+  return result;
 }
 
 export async function restoreActiveAttempt(assignmentId: string): Promise<{
@@ -237,7 +361,7 @@ export async function restoreActiveAttempt(assignmentId: string): Promise<{
 } | null> {
   const db = await database();
   const row = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!row) return null;
@@ -254,42 +378,72 @@ export async function saveOfflineAnswer(
   selectedIndex: number | null,
 ): Promise<void> {
   const db = await database();
-  const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
-    assignmentId,
-  );
-  if (!attempt) throw new Error("There is no active attempt to save.");
+  await withOfflineTransaction(db, async (transaction) => {
+    const attempt = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+      assignmentId,
+    );
+    if (!attempt) throw new Error("There is no active attempt to save.");
 
-  const examPackage = await getCachedExamPackage(assignmentId);
-  const question = examPackage?.questions.find((item) => item.id === examQuestionId);
-  if (!question) throw new Error("The question does not belong to this exam.");
-  if (
-    selectedIndex !== null &&
-    (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length)
-  ) {
-    throw new Error("The selected answer is outside the available options.");
-  }
+    const packageRow = await transaction.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!packageRow) throw new Error("The cached exam package is missing.");
+    const examPackage = parsePackage(packageRow.payload_json);
+    const question = examPackage.questions.find((item) => item.id === examQuestionId);
+    if (!question) throw new Error("The question does not belong to this exam.");
+    if (
+      selectedIndex !== null &&
+      (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length)
+    ) {
+      throw new Error("The selected answer is outside the available options.");
+    }
 
-  const answers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
-  answers[examQuestionId] = selectedIndex;
-  await db.runAsync(
-    "UPDATE offline_attempts SET answers_json = ?, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
-    JSON.stringify(answers),
-    new Date().toISOString(),
-    assignmentId,
-  );
+    const answers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
+    answers[examQuestionId] = selectedIndex;
+    const update = await transaction.runAsync(
+      "UPDATE offline_attempts SET answers_json = ?, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+      JSON.stringify(answers),
+      new Date().toISOString(),
+      assignmentId,
+    );
+    if (update.changes !== 1) throw new Error("The attempt was submitted before this answer could be saved.");
+  });
 }
 
 export async function getRemainingSeconds(assignmentId: string): Promise<number | null> {
   const db = await database();
   const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError, updated_at AS updatedAt FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
     assignmentId,
   );
   if (!attempt) return null;
-  const examPackage = await getCachedExamPackage(assignmentId);
-  if (!examPackage) return null;
-  const elapsed = Date.now() - new Date(attempt.startedAt).getTime();
+  // Read the package through the same database handle as the attempt. The
+  // configured account may change while this async function is suspended;
+  // resolving the package through getCachedExamPackage() could then mix two
+  // users' records and calculate a timer from the wrong exam duration.
+  const packageRow = await db.getFirstAsync<{ payload_json: string }>(
+    "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+    assignmentId,
+  );
+  if (!packageRow) return null;
+  const examPackage = parsePackage(packageRow.payload_json);
+  // Persist the greatest observed local timestamp so a process restart cannot
+  // reset the in-memory clock clamp. If the device clock is moved backwards
+  // while the app is closed, the timer pauses at the last checkpoint until the
+  // clock catches up; it never grants extra exam time.
+  const lastObservedAt = Date.parse(attempt.updatedAt);
+  const now = monotonicNow();
+  const observedNow = Number.isFinite(lastObservedAt) ? Math.max(now, lastObservedAt) : now;
+  if (!Number.isFinite(lastObservedAt) || observedNow > lastObservedAt) {
+    await db.runAsync(
+      "UPDATE offline_attempts SET updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+      new Date(observedNow).toISOString(),
+      assignmentId,
+    );
+  }
+  const elapsed = Math.max(0, observedNow - attempt.startedAtMonotonicMs);
   return Math.max(0, examPackage.durationMinutes * 60 - Math.floor(elapsed / 1000));
 }
 
@@ -297,48 +451,121 @@ export async function queueOfflineSubmission(
   assignmentId: string,
 ): Promise<PendingAttempt> {
   const db = await database();
-  const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (!attempt) throw new Error("There is no saved attempt for this assignment.");
-  if (attempt.status === "SYNCED") throw new Error("This attempt has already been synchronized.");
+  let result: PendingAttempt | null = null;
 
-  const submittedAt = attempt.submittedAt ?? new Date().toISOString();
-  if (attempt.status === "ACTIVE") {
-    await db.runAsync(
-      "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ?",
-      submittedAt,
-      new Date().toISOString(),
+  await withOfflineTransaction(db, async (transaction) => {
+    const attempt = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
       assignmentId,
     );
-  }
+    if (!attempt) throw new Error("There is no saved attempt for this assignment.");
+    if (attempt.status === "SYNCED") throw new Error("This attempt has already been synchronized.");
 
-  const examPackage = await getCachedExamPackage(assignmentId);
-  if (!examPackage) throw new Error("The cached exam package is missing.");
-  const savedAnswers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
-  return {
-    assignmentId,
-    attemptUuid: attempt.attemptUuid,
-    startedAt: attempt.startedAt,
-    submittedAt,
-    answers: examPackage.questions.map((question) => ({
-      examQuestionId: question.id,
-      selectedIndex: savedAnswers[question.id] ?? null,
-    })),
-  };
+    const packageRow = await transaction.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!packageRow) throw new Error("The cached exam package is missing.");
+    const examPackage = parsePackage(packageRow.payload_json);
+
+    let savedAnswers: Record<string, number | null>;
+    try {
+      const parsed: unknown = JSON.parse(attempt.answersJson);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Invalid saved answer map.");
+      }
+      savedAnswers = parsed as Record<string, number | null>;
+    } catch {
+      throw new Error("The saved answers are corrupted. Reopen the exam and review your answers before submitting.");
+    }
+
+    const expectedIds = new Set(examPackage.questions.map((question) => question.id));
+    const hasUnknownAnswers = Object.keys(savedAnswers).some((id) => !expectedIds.has(id));
+    const hasInvalidAnswers = examPackage.questions.some((question) => {
+      const selectedIndex = savedAnswers[question.id];
+      return selectedIndex !== undefined &&
+        selectedIndex !== null &&
+        (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
+    });
+    if (hasUnknownAnswers || hasInvalidAnswers) {
+      throw new Error("The saved answers contain invalid question or option data. Reopen the exam and review your answers before submitting.");
+    }
+
+    const submittedAt = attempt.submittedAt ?? new Date().toISOString();
+    if (attempt.status === "ACTIVE") {
+      const update = await transaction.runAsync(
+        "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+        submittedAt,
+        new Date().toISOString(),
+        assignmentId,
+      );
+      if (update.changes !== 1) throw new Error("The attempt changed before its submission could be queued.");
+    } else if (attempt.status !== "PENDING") {
+      throw new Error("This attempt cannot be queued for submission.");
+    }
+
+    result = {
+      assignmentId,
+      attemptUuid: attempt.attemptUuid,
+      startedAt: attempt.startedAt,
+      submittedAt,
+      answers: examPackage.questions.map((question) => ({
+        examQuestionId: question.id,
+        selectedIndex: savedAnswers[question.id] ?? null,
+      })),
+    };
+  });
+
+  if (!result) throw new Error("The offline submission could not be queued.");
+  return result;
 }
 
-export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
-  const db = await database();
+export async function getPendingSubmissions(userId?: string): Promise<PendingAttempt[]> {
+  const db = await database(userId);
   const rows = await db.getAllAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
+    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE status = 'PENDING' ORDER BY updated_at ASC",
   );
   const pending: PendingAttempt[] = [];
   for (const row of rows) {
-    const examPackage = await getCachedExamPackage(row.assignmentId);
-    if (!examPackage || !row.submittedAt) continue;
-    const savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
+    const packageRow = await db.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      row.assignmentId,
+    );
+    if (!packageRow) {
+      throw new Error(
+        `The saved exam package for pending assignment ${row.assignmentId} is missing. Its submission remains on this device and needs recovery.`,
+      );
+    }
+    const examPackage = parsePackage(packageRow.payload_json);
+    if (!row.submittedAt) {
+      throw new Error(
+        `The pending submission for assignment ${row.assignmentId} has no submission timestamp. It remains on this device and needs recovery.`,
+      );
+    }
+
+    let savedAnswers: Record<string, number | null>;
+    try {
+      savedAnswers = JSON.parse(row.answersJson) as Record<string, number | null>;
+    } catch {
+      throw new Error(
+        `The saved answers for pending assignment ${row.assignmentId} are corrupted. The submission was not uploaded.`,
+      );
+    }
+
+    const questionIds = new Set(examPackage.questions.map((question) => question.id));
+    const hasUnknownQuestion = Object.keys(savedAnswers).some((id) => !questionIds.has(id));
+    const hasInvalidOption = examPackage.questions.some((question) => {
+      const selectedIndex = savedAnswers[question.id];
+      return selectedIndex !== undefined &&
+        selectedIndex !== null &&
+        (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
+    });
+    if (hasUnknownQuestion || hasInvalidOption) {
+      throw new Error(
+        `The saved answers for pending assignment ${row.assignmentId} failed integrity validation. The submission was not uploaded.`,
+      );
+    }
+
     pending.push({
       assignmentId: row.assignmentId,
       attemptUuid: row.attemptUuid,
@@ -356,8 +583,9 @@ export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
 export async function markSubmissionSynced(
   assignmentId: string,
   submissionId: string,
+  userId?: string,
 ): Promise<void> {
-  const db = await database();
+  const db = await database(userId);
   await db.runAsync(
     "UPDATE offline_attempts SET status = 'SYNCED', submission_id = ?, last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'PENDING'",
     submissionId,
@@ -369,8 +597,9 @@ export async function markSubmissionSynced(
 export async function keepSubmissionPending(
   assignmentId: string,
   message: string,
+  userId?: string,
 ): Promise<void> {
-  const db = await database();
+  const db = await database(userId);
   await db.runAsync(
     "UPDATE offline_attempts SET last_error = ?, updated_at = ? WHERE assignment_id = ? AND status = 'PENDING'",
     message.slice(0, 500),

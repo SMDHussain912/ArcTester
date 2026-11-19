@@ -1,0 +1,25 @@
+{
+  "name": "ArcTester",
+  "short_name": "ArcTester",
+  "description": "Offline-first AP ECET CSE mock-test platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fa",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["education", "reference"],
+  "lang": "en"
+}

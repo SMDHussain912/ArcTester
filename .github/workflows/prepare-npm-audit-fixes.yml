@@ -1,4 +1,7 @@
-name: Prepare semver-safe npm audit fixes
+name: Prepare and validate npm audit fixes
+
+# Keep the security validation workflow rerunnable after compatibility fixes.
+# Cross-version Zod validation compatibility is checked in both CI and this workflow.
 
 on:
   workflow_dispatch:
@@ -11,14 +14,30 @@ permissions:
   contents: write
 
 concurrency:
-  group: npm-audit-safe-fixes
+  group: npm-audit-security-remediation
   cancel-in-progress: false
 
 jobs:
   prepare:
-    name: Create a branch with non-breaking audit fixes
+    name: Upgrade vulnerable dependencies in an isolated branch
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arctester
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d arctester"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arctester?schema=public
     steps:
       - name: Check out main
         uses: actions/checkout@v4
@@ -34,28 +53,40 @@ jobs:
       - name: Install the current lockfile
         run: npm ci
 
-      - name: Apply semver-compatible npm audit fixes only
+      - name: Apply available security fixes, including required major upgrades
         run: |
-          set +e
-          npm audit fix
-          status=$?
-          set -e
-          echo "npm audit fix exit code: $status (remaining advisories are reported in the audit workflow)."
-          exit 0
+          npm audit fix --force || npm audit --audit-level=high
 
-      - name: Push a review branch
-        id: branch
+      - name: Require zero critical and high advisories
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "No semver-compatible fixes are available."
+          npm audit --audit-level=high
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=api
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy --schema=api/prisma/schema.prisma
+
+      - name: Run complete tests
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build web and API
+        run: npm run build
+
+      - name: Push a validated security review branch
+        run: |
+          if git diff --quiet -- package.json package-lock.json web/package.json api/package.json; then
+            echo "No dependency changes were required."
             exit 0
           fi
-          branch="security/npm-audit-semver-${GITHUB_RUN_ID}"
+          branch="security/npm-audit-validated-${GITHUB_RUN_ID}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add package.json package-lock.json
-          git commit -m "chore(deps): apply semver-safe npm audit fixes"
+          git add package.json package-lock.json web/package.json api/package.json
+          git commit -m "fix(deps): remediate critical and high npm advisories"
           git push origin "$branch"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "Review branch: $branch" >> "$GITHUB_STEP_SUMMARY"
+          echo "Validated security branch: $branch" >> "$GITHUB_STEP_SUMMARY"

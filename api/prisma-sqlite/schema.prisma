@@ -81,6 +81,8 @@ model User {
   assignmentsCreated ExamAssignment[] @relation("AssignmentCreator")
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementReads   AnnouncementRead[]
+  notifications       StudentNotification[]
+  notificationPreferences StudentNotificationPreference?
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
@@ -280,6 +282,7 @@ model AnnouncementRead {
   announcementId String
   studentId      Int
   seenAt         DateTime     @default(now())
+  acknowledgedAt DateTime?
   announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   student        User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -288,6 +291,34 @@ model AnnouncementRead {
 }
 
  
+
+model StudentNotificationPreference {
+  id              String   @id @default(cuid())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int      @unique
+  examAssignments Boolean  @default(true)
+  examResults     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model StudentNotification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  kind      String
+  title     String
+  message   String
+  href      String
+  dedupeKey String   @unique
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  expiresAt DateTime?
+
+  @@index([userId, readAt, createdAt])
+  @@index([expiresAt])
+}
+
 model ExamSession {
   id               String             @id @default(cuid())
   assignment       ExamAssignment    @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
@@ -427,4 +458,24 @@ model ModelDriftBucket {
 
   @@unique([modelId, version, featureName, bucket, periodStart])
   @@index([modelId, version, periodStart])
+}
+
+
+model StudyMaterial {
+  id             String   @id @default(cuid())
+  uploadedById   Int?
+  title          String
+  description    String   @default("")
+  subject        String
+  topic          String   @default("")
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  contentBase64  String
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, subject, title])
+  @@index([uploadedById, createdAt])
 }

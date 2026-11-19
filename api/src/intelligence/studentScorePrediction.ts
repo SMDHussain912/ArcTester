@@ -26,6 +26,8 @@ export type StudentScorePrediction =
       evaluationSamples: number;
       modelMae: number;
       baselineMae: number;
+      modelRmse: number;
+      baselineRmse: number;
       message: string;
       populationFeatures?: Record<string, number>;
     }
@@ -43,6 +45,8 @@ export type StudentScorePrediction =
       };
       modelMae: number;
       baselineMae: number;
+      modelRmse: number;
+      baselineRmse: number;
       message: string;
       populationFeatures?: Record<string, number>;
     };
@@ -131,6 +135,8 @@ export async function getStudentScorePrediction(
       evaluationSamples: evaluation.testRows,
       modelMae: evaluation.regression.mae,
       baselineMae: evaluation.meanBaseline.mae,
+      modelRmse: evaluation.regression.rmse,
+      baselineRmse: evaluation.meanBaseline.rmse,
       message: "There is not enough predictive improvement over a simple baseline to show a score estimate yet.",
       ...(populationFeatureRecord(attempts) ? { populationFeatures: populationFeatureRecord(attempts) } : {}),
     };
@@ -152,6 +158,8 @@ export async function getStudentScorePrediction(
     },
     modelMae: evaluation.regression.mae,
     baselineMae: evaluation.meanBaseline.mae,
+    modelRmse: evaluation.regression.rmse,
+    baselineRmse: evaluation.meanBaseline.rmse,
     message: "Estimate based on your completed practice history; actual results may differ.",
     populationFeatures: populationFeatureRecord(attempts),
   };

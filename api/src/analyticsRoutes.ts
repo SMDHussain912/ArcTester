@@ -1,4 +1,5 @@
 import { Router } from "express";
+import express from "express";
 import { z } from "zod";
 import {
   getHistory,
@@ -83,7 +84,7 @@ export function analyticsRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/import", requireAuth, async (req, res, next) => {
+  router.post("/import", requireAuth, express.json({ limit: "50mb" }), async (req, res, next) => {
     try {
       const report = await importProgress(db, (req as AuthedRequest).user!.id, req.body);
       res.status(200).json(report);

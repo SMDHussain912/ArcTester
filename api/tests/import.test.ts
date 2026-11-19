@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { importFromCsv, importFromJson, previewImport } from "../src/importService.js";
 import { BASE_QUESTIONS } from "../prisma/baseQuestions.js";
 import { closeTestDb, testDb } from "./setup.js";
@@ -12,15 +12,25 @@ const VALID_JSON = [
 
 describe("importFromJson", () => {
   it("rejects oversized JSON imports before writing any rows", async () => {
-    const db = await testDb();
+    const db = {
+      $transaction: vi.fn(),
+      question: {
+        count: vi.fn(),
+        findMany: vi.fn(),
+        createMany: vi.fn(),
+      },
+    } as unknown as import("@prisma/client").PrismaClient;
     const oversized = Array.from({ length: 2001 }, (_, index) => [
       "Maths", `Question ${index}?`, ["a", "b", "c", "d"], 0, "",
     ]);
     const report = await importFromJson(db, oversized);
     expect(report.added).toBe(0);
     expect(report.invalid[0].reason).toContain("2000-question limit");
-    expect(await db.question.count()).toBe(0);
-  });
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.question.findMany).not.toHaveBeenCalled();
+    expect(db.question.createMany).not.toHaveBeenCalled();
+    expect(db.question.count).not.toHaveBeenCalled();
+  }, 15000);
 
   it("imports valid rows", async () => {
     const db = await testDb();

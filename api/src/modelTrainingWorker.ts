@@ -13,7 +13,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
 
   const heartbeat = setInterval(() => {
     void db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     }).catch((error: unknown) => {
       console.error("ArcTester training-job lease renewal failed", error);
@@ -26,16 +26,28 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     if (dataset.task !== "regression") throw new Error("TensorFlow.js training currently supports regression datasets only.");
 
     const featureSchema = JSON.parse(dataset.featureSchemaJson) as DatasetFeature[];
-    if (!featureSchema.length || featureSchema.some((feature) => feature.type !== "numeric")) {
-      throw new Error("TensorFlow.js training requires a non-empty numeric-only feature schema.");
+    if (!Array.isArray(featureSchema) || featureSchema.length === 0 || featureSchema.length > 128 ||
+        featureSchema.some((feature) =>
+          !feature || typeof feature.name !== "string" || !feature.name.trim() ||
+          feature.type !== "numeric"
+        ) || new Set(featureSchema.map((feature) => feature.name)).size !== featureSchema.length) {
+      throw new Error("TensorFlow.js training requires 1 to 128 uniquely named numeric features.");
     }
     const samples = JSON.parse(dataset.samplesJson) as DatasetSample[];
+    if (!Array.isArray(samples) || samples.length !== dataset.rowCount ||
+        samples.length < 30 || samples.length > 5000) {
+      throw new Error("Training dataset rowCount must match its 30 to 5000 stored samples.");
+    }
     if (samples.some((sample) =>
-      !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
-      featureSchema.some((feature) => typeof sample.features[feature.name] !== "number" ||
+      !sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features) ||
+      typeof sample.target !== "number" || !Number.isFinite(sample.target) ||
+      typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+      Object.keys(sample.features).length !== featureSchema.length ||
+      featureSchema.some((feature) => !Object.prototype.hasOwnProperty.call(sample.features, feature.name) ||
+        typeof sample.features[feature.name] !== "number" ||
         !Number.isFinite(sample.features[feature.name]))
     )) {
-      throw new Error("Every TensorFlow sample must contain finite numeric features and a keyed HMAC-SHA-256 pseudonymous groupId.");
+      throw new Error("Every TensorFlow sample must contain finite numeric features, a finite target, and a keyed HMAC-SHA-256 pseudonymous groupId.");
     }
     if (job.modelId === "student-score-population") {
       const expected = ["completed_attempts", "previous_accuracy", "recent_average_accuracy", "overall_average_accuracy", "previous_question_count"];
@@ -53,15 +65,16 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       }
     }
 
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+    const initialLease = await db.modelTrainingJob.updateMany({
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { progress: 10, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
-    const latest = await db.registeredModel.aggregate({
-      where: { modelId: job.modelId },
-      _max: { version: true },
-    });
-    const version = (latest._max.version ?? 0) + 1;
+    if (initialLease.count !== 1) {
+      throw new Error("Training worker lease was lost before training started.");
+    }
+    // The final registry version is allocated inside the commit transaction.
+    // Training only needs a valid positive artifact version; assigning it here
+    // would let concurrent jobs choose the same next version.
     const trained = await trainTensorflowRegressionCandidate(
       samples.map((sample) => ({
         features: featureSchema.map((feature) => sample.features[feature.name] as number),
@@ -70,12 +83,22 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
       })),
       {
         modelId: job.modelId,
-        version,
+        version: 1,
         featureNames: featureSchema.map((feature) => feature.name),
         datasetKind: dataset.datasetKind as "synthetic" | "real-anonymized",
         seed: job.seed,
         epochs: job.epochs,
         batchSize: job.batchSize,
+        onEpochEnd: async (epoch) => {
+          const progress = 10 + Math.floor(((epoch + 1) / job.epochs) * 70);
+          const renewed = await db.modelTrainingJob.updateMany({
+            where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
+            data: { progress, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
+          });
+          if (renewed.count !== 1) {
+            throw new Error("Training worker lease was lost during epoch progress reporting.");
+          }
+        },
       },
     );
 
@@ -85,15 +108,29 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
     });
     if (!lease) throw new Error("Training worker lease was lost; refusing to register a candidate from an unowned job.");
 
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+    const finalizingLease = await db.modelTrainingJob.updateMany({
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: { progress: 85, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
     });
+    if (finalizingLease.count !== 1) {
+      throw new Error("Training worker lease was lost before finalization.");
+    }
 
-    let registeredModel = null;
-    if (trained.artifact) {
-      registeredModel = await db.$transaction(async (tx) => {
-        const created = await tx.registeredModel.create({
+    await db.$transaction(async (tx) => {
+      // Serialize version allocation per model across API instances. The
+      // transaction-scoped lock is released automatically on commit/rollback.
+      await tx.$queryRaw`SELECT true AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${job.modelId}, 0))) AS model_lock`;
+      const latest = await tx.registeredModel.aggregate({
+        where: { modelId: job.modelId },
+        _max: { version: true },
+      });
+      const version = (latest._max.version ?? 0) + 1;
+      const versionedArtifact = trained.artifact
+        ? { ...trained.artifact, version }
+        : null;
+      let registeredModel = null;
+      if (versionedArtifact) {
+        registeredModel = await tx.registeredModel.create({
           data: {
             modelId: job.modelId,
             version,
@@ -101,7 +138,7 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
             task: "regression",
             dataset: dataset.name,
             trainingDatasetId: dataset.id,
-            artifactJson: JSON.stringify(trained.artifact),
+            artifactJson: JSON.stringify(versionedArtifact),
             isActive: false,
             activatedAt: null,
           },
@@ -131,52 +168,54 @@ async function processJob(db: PrismaClient, jobId: string, workerId: string): Pr
             }),
           },
         });
-        return created;
-      });
-    } else {
-      await db.modelRegistryAudit.create({
+      } else {
+        await tx.modelRegistryAudit.create({
+          data: {
+            actorId: job.createdById,
+            modelId: job.modelId,
+            version,
+            action: "TENSORFLOW_CANDIDATE_REJECTED",
+            details: JSON.stringify({
+              jobId,
+              datasetId: dataset.id,
+              datasetFingerprint: dataset.fingerprint,
+              candidate: trained.candidate,
+              baseline: trained.baseline,
+              split: trained.split,
+              reason: trained.reason,
+            }),
+          },
+        });
+      }
+
+      const result = {
+        model: registeredModel,
+        promoted: false,
+        productionEligible: trained.productionEligible,
+        split: trained.split,
+        candidate: trained.candidate,
+        baseline: trained.baseline,
+        reason: trained.reason,
+      };
+      const completed = await tx.modelTrainingJob.updateMany({
+        where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
         data: {
-          actorId: job.createdById,
-          modelId: job.modelId,
-          version,
-          action: "TENSORFLOW_CANDIDATE_REJECTED",
-          details: JSON.stringify({
-            jobId,
-            datasetId: dataset.id,
-            datasetFingerprint: dataset.fingerprint,
-            candidate: trained.candidate,
-            baseline: trained.baseline,
-            split: trained.split,
-            reason: trained.reason,
-          }),
+          status: "SUCCEEDED",
+          progress: 100,
+          resultJson: JSON.stringify(result),
+          errorMessage: "",
+          completedAt: new Date(),
+          leaseExpiresAt: null,
         },
       });
-    }
-
-    const result = {
-      model: registeredModel,
-      promoted: false,
-      productionEligible: trained.productionEligible,
-      split: trained.split,
-      candidate: trained.candidate,
-      baseline: trained.baseline,
-      reason: trained.reason,
-    };
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
-      data: {
-        status: "SUCCEEDED",
-        progress: 100,
-        resultJson: JSON.stringify(result),
-        errorMessage: "",
-        completedAt: new Date(),
-        leaseExpiresAt: null,
-      },
+      if (completed.count !== 1) {
+        throw new Error("Training worker lease was lost before the candidate could be committed.");
+      }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Training failed for an unknown reason.";
     await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId },
+      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
       data: {
         status: "FAILED",
         errorMessage: message.slice(0, 1500),

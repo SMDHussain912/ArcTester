@@ -24,7 +24,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await server.close();
+  if (server) await server.close();
 });
 
 describe("authentication", () => {
@@ -59,12 +59,14 @@ describe("POST /tests", () => {
     const body = json as {
       attemptId: number;
       deadline: string;
+      serverNow: string;
       warnings: string[];
       questions: { id: number; subject: string; text: string; options: string[] }[];
     };
     expect(body.questions).toHaveLength(2);
     expect(body.questions.every((q) => q.subject === "Maths")).toBe(true);
     expect(body.deadline).toBeTruthy();
+    expect(Number.isFinite(Date.parse(body.serverNow))).toBe(true);
     for (const q of body.questions) {
       expect(q).not.toHaveProperty("correctIndex");
       expect(q).not.toHaveProperty("explanation");
@@ -143,6 +145,39 @@ describe("POST /tests", () => {
     expect(body.questions.every((question) => question.subject === "Maths" && question.topic === "Algebra")).toBe(true);
   });
 
+  it("allows the same topic name to be selected independently across subjects", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
+    const mathsTopic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Algebra" },
+    });
+    const physicsTopic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: physics.id, name: "Algebra" } },
+      update: {},
+      create: { subjectId: physics.id, name: "Algebra" },
+    });
+    const mathsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    const physicsQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: physics.id } });
+    await server.db.question.update({ where: { id: mathsQuestion.id }, data: { topicId: mathsTopic.id } });
+    await server.db.question.update({ where: { id: physicsQuestion.id }, data: { topicId: physicsTopic.id } });
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice",
+      subjects: ["Maths", "Physics"],
+      topicFilters: [
+        { subject: "Maths", topic: "Algebra" },
+        { subject: "Physics", topic: "Algebra" },
+      ],
+      count: 10,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: { subject: string; topic: string | null }[] };
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Maths", topic: "Algebra" }));
+    expect(body.questions).toContainEqual(expect.objectContaining({ subject: "Physics", topic: "Algebra" }));
+  });
+
   it("keeps all topics for selected subjects without a topic restriction", async () => {
     const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
     const physics = await server.db.subject.findUniqueOrThrow({ where: { name: "Physics" } });
@@ -215,6 +250,36 @@ describe("POST /tests", () => {
 });
 
 describe("submit + result", () => {
+  it("reports incorrect and unanswered counts separately in overall and subject results", async () => {
+    const isolatedSession = await signUp(server.baseUrl, "result-breakdown@example.com");
+    const isolatedApi = bindSession(server.baseUrl, isolatedSession.cookie);
+    const created = await isolatedApi.post("/tests", {
+      mode: "practice",
+      subject: "Maths",
+      count: 2,
+    });
+    expect(created.status).toBe(201);
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    expect(attempt.questions).toHaveLength(2);
+    const question = await server.db.question.findUniqueOrThrow({
+      where: { id: attempt.questions[0].id },
+    });
+    const submitted = await isolatedApi.post(`/tests/${attempt.attemptId}/submit`, {
+      answers: [{ questionId: question.id, selectedIndex: (question.correctIndex + 1) % 4 }],
+    });
+    expect(submitted.status).toBe(200);
+
+    const response = await isolatedApi.get(`/tests/${attempt.attemptId}/result`);
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({
+      score: 0,
+      incorrect: 1,
+      unanswered: 1,
+      total: 2,
+      breakdown: [{ subject: "Maths", correct: 0, incorrect: 1, unanswered: 1, total: 2 }],
+    });
+  });
+
   it("scores, persists, and reveals answers only after submit", async () => {
     const created = (await api.post(`/tests`, {
       mode: "practice",
@@ -245,7 +310,7 @@ describe("submit + result", () => {
       questions: { correctIndex: number; explanation: string; isCorrect: boolean }[];
     };
     expect(body.score).toBe(1);
-    expect(body.breakdown).toEqual([{ subject: "Physics", correct: 1, total: 1 }]);
+    expect(body.breakdown).toEqual([{ subject: "Physics", correct: 1, incorrect: 0, unanswered: 0, total: 1 }]);
     expect(body.questions[0]).toMatchObject({
       correctIndex: correct.correctIndex,
       explanation: "exp-p1",
@@ -312,6 +377,9 @@ describe("submit + result", () => {
       count: 1,
     })) as { json: { attemptId: number; questions: { id: number }[] } };
     const questionId = created.json.questions[0].id;
+    const previousStat = await server.db.stat.findUnique({
+      where: { userId_questionId: { userId, questionId } },
+    });
     const payload = { answers: [{ questionId, selectedIndex: 0 }] };
     const [first, second] = await Promise.all([
       api.post(`/tests/${created.json.attemptId}/submit`, payload),
@@ -321,7 +389,7 @@ describe("submit + result", () => {
     const stat = await server.db.stat.findUniqueOrThrow({
       where: { userId_questionId: { userId, questionId } },
     });
-    expect(stat.seen).toBe(1);
+    expect(stat.seen).toBe((previousStat?.seen ?? 0) + 1);
   });
 
   it("rejects answers for foreign questions", async () => {
@@ -347,7 +415,7 @@ describe("submit + result", () => {
       count: 1,
     })) as { json: { attemptId: number; questions: { id: number }[] } };
     const questionId = created.json.questions[0].id;
-    await expect(server.db.question.delete({ where: { id: questionId } })).rejects.toMatchObject({ code: "P2003" });
+    await expect(server.db.question.delete({ where: { id: questionId } })).rejects.toThrow(/foreign key constraint|P2003/i);
     expect(await server.db.question.findUnique({ where: { id: questionId } })).not.toBeNull();
   });
 
@@ -425,6 +493,29 @@ describe("submit + result", () => {
       expect((res.json as { error: string }).error).toBe("Test not found.");
     });
 
+    it("prevents another student from reading or submitting a practice attempt", async () => {
+      const created = await api.post("/tests", {
+        mode: "practice",
+        subject: "Maths",
+        count: 1,
+      }) as { status: number; json: { attemptId: number; questions: { id: number }[] } };
+      expect(created.status).toBe(201);
+
+      const otherSession = await signUp(server.baseUrl, "other-student@example.com");
+      const otherApi = bindSession(server.baseUrl, otherSession.cookie);
+      const attemptPath = `/tests/${created.json.attemptId}`;
+
+      expect((await otherApi.get(attemptPath)).status).toBe(404);
+      expect((await otherApi.get(`${attemptPath}/result`)).status).toBe(404);
+      expect((await otherApi.post(`${attemptPath}/submit`, {
+        answers: [{ questionId: created.json.questions[0].id, selectedIndex: 0 }],
+      })).status).toBe(404);
+
+      // The rejected cross-user requests must leave the real owner's attempt intact.
+      expect((await api.get(attemptPath)).status).toBe(200);
+      expect((await api.get(`${attemptPath}/result`)).status).toBe(403);
+    });
+
     it("returns 409 after submission, pointing at the result", async () => {
       const created = (await api.post(`/tests`, {
         mode: "practice",
@@ -439,5 +530,33 @@ describe("submit + result", () => {
       expect((res.json as { error: string }).error).toContain("already submitted");
       expect((res.json as { error: string }).error).toContain("result");
     });
+  });
+});
+
+describe("PUT /tests/:id/answers", () => {
+  it("persists and restores answer snapshots; replaying the request is safe", async () => {
+    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    const payload = { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }, { questionId: attempt.questions[1].id, selectedIndex: null }] };
+    expect((await api.put(`/tests/${attempt.attemptId}/answers`, payload)).status).toBe(200);
+    const replay = await api.put(`/tests/${attempt.attemptId}/answers`, payload);
+    expect(replay.status).toBe(200);
+    expect(replay.json).toMatchObject({ attemptId: attempt.attemptId, saved: 2 });
+    const restored = await api.get(`/tests/${attempt.attemptId}`);
+    expect(restored.json).toMatchObject({ saved: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }, { questionId: attempt.questions[1].id, selectedIndex: null }] });
+  });
+  it("rejects foreign questions, duplicate question IDs, foreign attempts and submitted attempts", async () => {
+    const created = await api.post("/tests", { mode: "practice", subject: "Maths", count: 1 });
+    const attempt = created.json as { attemptId: number; questions: { id: number }[] };
+    const foreignQuestion = await server.db.question.findFirstOrThrow({ where: { subject: { name: "Physics" } } });
+    const foreignQuestionResponse = await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: foreignQuestion.id, selectedIndex: 0 }] });
+    expect(foreignQuestionResponse.status).toBe(400);
+    const duplicateResponse = await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 0 }, { questionId: attempt.questions[0].id, selectedIndex: 1 }] });
+    expect(duplicateResponse.status).toBe(400);
+    const other = await signUp(server.baseUrl, "answer-save-other@example.com");
+    const otherApi = bindSession(server.baseUrl, other.cookie);
+    expect((await otherApi.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 1 }] })).status).toBe(404);
+    expect((await api.post(`/tests/${attempt.attemptId}/submit`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 1 }] })).status).toBe(200);
+    expect((await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }] })).status).toBe(409);
   });
 });

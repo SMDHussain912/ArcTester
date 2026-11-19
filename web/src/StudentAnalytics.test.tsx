@@ -1,0 +1,65 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import StudentAnalytics from "./StudentAnalytics";
+import { request } from "./apiClient";
+
+vi.mock("./apiClient", () => ({ request: vi.fn() }));
+
+const weakTopics = { subjects: [], topics: [], weakest: null };
+const recommendations = {
+  basedOnAttempts: 2,
+  minimumAnswers: 5,
+  weakAccuracyThreshold: 0.6,
+  performanceExplanation: { headline: "Keep practising", details: ["Complete more questions."], answeredQuestions: 4, incorrectAnswers: 2, evidenceThreshold: 5, weakAccuracyThreshold: 0.6 },
+  recommendations: [],
+};
+const prediction = {
+  status: "insufficient_data" as const,
+  completedAttempts: 2,
+  availableSamples: 2,
+  requiredSamples: 10,
+  requiredCompletedAttempts: 5,
+  message: "Complete more practice tests.",
+};
+
+describe("StudentAnalytics", () => {
+  beforeEach(() => vi.mocked(request).mockReset());
+
+  it("keeps successful sections visible when one analytics endpoint fails", async () => {
+    vi.mocked(request).mockImplementation(async (path) => {
+      if (path === "/analytics/overview") throw new Error("Overview temporarily unavailable");
+      if (path === "/analytics/weak-topics") return weakTopics;
+      if (path === "/analytics/recommendations") return recommendations;
+      if (path === "/analytics/score-prediction") return prediction;
+      throw new Error("Unexpected endpoint");
+    });
+
+    render(<StudentAnalytics setActivePage={vi.fn()} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Practice overview: Overview temporarily unavailable");
+    expect(screen.getByRole("heading", { name: "Your next study steps" })).toBeInTheDocument();
+    expect(screen.getByText("Complete more practice tests.")).toBeInTheDocument();
+    expect(screen.getByText("Score prediction is unavailable. Refresh to try again.")).toBeInTheDocument();
+  });
+
+  it("retries failed analytics and reports when the refresh finishes", async () => {
+    vi.mocked(request).mockRejectedValueOnce(new Error("Network unavailable"));
+    vi.mocked(request).mockImplementation(async (path) => {
+      if (path === "/analytics/overview") return {
+        practice: { completedAttempts: 3, questions: 30, correct: 20, incorrect: 8, unanswered: 2, accuracy: 0.714 },
+        formalExams: { graded: 1, scorePercentage: 70, score: 35, maximumScore: 50, reviewRequired: 0 },
+      };
+      if (path === "/analytics/weak-topics") return weakTopics;
+      if (path === "/analytics/recommendations") return recommendations;
+      if (path === "/analytics/score-prediction") return prediction;
+      throw new Error("Unexpected endpoint");
+    });
+
+    render(<StudentAnalytics setActivePage={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Practice overview: Network unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh analytics" }));
+    expect(await screen.findByText("Completed attempts")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Analytics are up to date"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
