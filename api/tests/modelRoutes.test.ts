@@ -219,6 +219,43 @@ describe("admin model registry API", () => {
     expect(secondTraining.status).toBe(201);
     expect(secondTraining.body.model).toMatchObject({ version: 2, isActive: false });
 
+    const undersizedEvaluation = await request("/admin/model-datasets", "POST", {
+      name: "readiness-multiclass-undersized-evaluation",
+      task: "multiclass-classification",
+      targetColumn: "readiness_label",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+      samples: samples.map((sample, index) => ({
+        ...sample,
+        groupId: (Math.floor(index / 3) + 100).toString(16).padStart(64, "0"),
+        features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 },
+      })),
+      sourceDescription: "Independent attested real-anonymized learner holdout for minimum sample-size validation.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(undersizedEvaluation.status).toBe(201);
+    const undersizedId = (undersizedEvaluation.body.dataset as { id: string }).id;
+    const undersizedReport = await request("/admin/models/readiness-fixture-exam-readiness-softmax/2/evaluate", "POST", {
+      baselineVersion: 1,
+      datasetId: undersizedId,
+    });
+    expect(undersizedReport.status).toBe(400);
+    expect(String(undersizedReport.body.error ?? undersizedReport.body.message)).toContain("1,000");
+
+    const evaluationSamples = Array.from({ length: 1200 }, (_, index) => {
+      const label = Math.floor(index / 400);
+      return {
+        groupId: (100 + Math.floor(index / 10)).toString(16).padStart(64, "0"),
+        features: {
+          mastery_signal: label * 0.45 + (index % 10) * 0.001,
+          completed_attempts: 10 + (index % 4),
+        },
+        target: label,
+      };
+    });
     const evaluationDataset = await request("/admin/model-datasets", "POST", {
       name: "readiness-multiclass-independent-evaluation",
       task: "multiclass-classification",
@@ -227,8 +264,8 @@ describe("admin model registry API", () => {
         { name: "mastery_signal", type: "numeric" },
         { name: "completed_attempts", type: "numeric" },
       ],
-      samples: samples.map((sample, index) => ({ ...sample, groupId: (Math.floor(index / 3) + 100).toString(16).padStart(64, "0"), features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 } })),
-      sourceDescription: "Independent attested real-anonymized learner holdout with privacy-safe pseudonymous group separation for readiness evaluation.",
+      samples: evaluationSamples,
+      sourceDescription: "Independent attested real-anonymized learner holdout with privacy-safe pseudonymous learner groups for readiness evaluation.",
       sourceAttested: true,
       datasetKind: "real-anonymized",
     });
