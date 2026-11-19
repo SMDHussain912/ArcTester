@@ -150,6 +150,10 @@ vi.mock("expo-screen-capture", () => ({
 }));
 
 vi.mock("react-native", () => ({
+  Platform: {
+    OS: "ios",
+    select: (values: Record<string, unknown>) => values.ios ?? values.default,
+  },
   NativeModules: {},
   AsyncStorage: {
     getItem: vi.fn(async () => null),
