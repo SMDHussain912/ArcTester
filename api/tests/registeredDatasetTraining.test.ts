@@ -28,6 +28,22 @@ describe("registered dataset training", () => {
     }
   });
 
+  it("keeps learner groups isolated during both holdout and classifier hyperparameter tuning", () => {
+    const samples: RegisteredTrainingSample[] = Array.from({ length: 100 }, (_, index) => ({
+      features: { score: index % 10, attempt: index },
+      target: index % 10 < 5 ? 0 : 1,
+      groupId: String(Math.floor(index / 10)).padStart(64, "0"),
+    }));
+    const results = trainRegisteredDataset(samples, [
+      { name: "score", type: "numeric" },
+      { name: "attempt", type: "numeric" },
+    ], "binary-classification", 17);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.groupSplit?.trainGroups).toBe(8);
+    expect(results[0]?.groupSplit?.testGroups).toBe(2);
+    expect(results[0]?.crossValidation).toMatchObject({ folds: 5, rows: 80 });
+  });
+
   it("trains a regression model and reports held-out errors", () => {
     const samples = Array.from({ length: 60 }, (_, index) => ({
       features: { attempts: index, accuracy: index / 60 },
