@@ -361,30 +361,38 @@ export async function saveOfflineAnswer(
   selectedIndex: number | null,
 ): Promise<void> {
   const db = await database();
-  const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
-    assignmentId,
-  );
-  if (!attempt) throw new Error("There is no active attempt to save.");
+  await withOfflineTransaction(db, async (transaction) => {
+    const attempt = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ? AND status = 'ACTIVE'",
+      assignmentId,
+    );
+    if (!attempt) throw new Error("There is no active attempt to save.");
 
-  const examPackage = await getCachedExamPackage(assignmentId);
-  const question = examPackage?.questions.find((item) => item.id === examQuestionId);
-  if (!question) throw new Error("The question does not belong to this exam.");
-  if (
-    selectedIndex !== null &&
-    (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length)
-  ) {
-    throw new Error("The selected answer is outside the available options.");
-  }
+    const packageRow = await transaction.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!packageRow) throw new Error("The cached exam package is missing.");
+    const examPackage = parsePackage(packageRow.payload_json);
+    const question = examPackage.questions.find((item) => item.id === examQuestionId);
+    if (!question) throw new Error("The question does not belong to this exam.");
+    if (
+      selectedIndex !== null &&
+      (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length)
+    ) {
+      throw new Error("The selected answer is outside the available options.");
+    }
 
-  const answers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
-  answers[examQuestionId] = selectedIndex;
-  await db.runAsync(
-    "UPDATE offline_attempts SET answers_json = ?, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
-    JSON.stringify(answers),
-    new Date().toISOString(),
-    assignmentId,
-  );
+    const answers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
+    answers[examQuestionId] = selectedIndex;
+    const update = await transaction.runAsync(
+      "UPDATE offline_attempts SET answers_json = ?, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+      JSON.stringify(answers),
+      new Date().toISOString(),
+      assignmentId,
+    );
+    if (update.changes !== 1) throw new Error("The attempt was submitted before this answer could be saved.");
+  });
 }
 
 export async function getRemainingSeconds(assignmentId: string): Promise<number | null> {
@@ -418,48 +426,73 @@ export async function queueOfflineSubmission(
   assignmentId: string,
 ): Promise<PendingAttempt> {
   const db = await database();
-  const attempt = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (!attempt) throw new Error("There is no saved attempt for this assignment.");
-  if (attempt.status === "SYNCED") throw new Error("This attempt has already been synchronized.");
+  let result: PendingAttempt | null = null;
 
-  const examPackage = await getCachedExamPackage(assignmentId);
-  if (!examPackage) throw new Error("The cached exam package is missing.");
-  const savedAnswers = JSON.parse(attempt.answersJson) as Record<string, number | null>;
-  const expectedIds = new Set(examPackage.questions.map((question) => question.id));
-  const hasUnknownAnswers = Object.keys(savedAnswers).some((id) => !expectedIds.has(id));
-  const hasInvalidAnswers = examPackage.questions.some((question) => {
-    const selectedIndex = savedAnswers[question.id];
-    return selectedIndex !== undefined &&
-      selectedIndex !== null &&
-      (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
-  });
-  if (hasUnknownAnswers || hasInvalidAnswers) {
-    throw new Error("The saved answers contain invalid question or option data. Reopen the exam and review your answers before submitting.");
-  }
-
-  const submittedAt = attempt.submittedAt ?? new Date().toISOString();
-  if (attempt.status === "ACTIVE") {
-    await db.runAsync(
-      "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
-      submittedAt,
-      new Date().toISOString(),
+  await withOfflineTransaction(db, async (transaction) => {
+    const attempt = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
       assignmentId,
     );
-  }
+    if (!attempt) throw new Error("There is no saved attempt for this assignment.");
+    if (attempt.status === "SYNCED") throw new Error("This attempt has already been synchronized.");
 
-  return {
-    assignmentId,
-    attemptUuid: attempt.attemptUuid,
-    startedAt: attempt.startedAt,
-    submittedAt,
-    answers: examPackage.questions.map((question) => ({
-      examQuestionId: question.id,
-      selectedIndex: savedAnswers[question.id] ?? null,
-    })),
-  };
+    const packageRow = await transaction.getFirstAsync<{ payload_json: string }>(
+      "SELECT payload_json FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!packageRow) throw new Error("The cached exam package is missing.");
+    const examPackage = parsePackage(packageRow.payload_json);
+
+    let savedAnswers: Record<string, number | null>;
+    try {
+      const parsed: unknown = JSON.parse(attempt.answersJson);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Invalid saved answer map.");
+      }
+      savedAnswers = parsed as Record<string, number | null>;
+    } catch {
+      throw new Error("The saved answers are corrupted. Reopen the exam and review your answers before submitting.");
+    }
+
+    const expectedIds = new Set(examPackage.questions.map((question) => question.id));
+    const hasUnknownAnswers = Object.keys(savedAnswers).some((id) => !expectedIds.has(id));
+    const hasInvalidAnswers = examPackage.questions.some((question) => {
+      const selectedIndex = savedAnswers[question.id];
+      return selectedIndex !== undefined &&
+        selectedIndex !== null &&
+        (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= question.options.length);
+    });
+    if (hasUnknownAnswers || hasInvalidAnswers) {
+      throw new Error("The saved answers contain invalid question or option data. Reopen the exam and review your answers before submitting.");
+    }
+
+    const submittedAt = attempt.submittedAt ?? new Date().toISOString();
+    if (attempt.status === "ACTIVE") {
+      const update = await transaction.runAsync(
+        "UPDATE offline_attempts SET submitted_at = ?, status = 'PENDING', last_error = NULL, updated_at = ? WHERE assignment_id = ? AND status = 'ACTIVE'",
+        submittedAt,
+        new Date().toISOString(),
+        assignmentId,
+      );
+      if (update.changes !== 1) throw new Error("The attempt changed before its submission could be queued.");
+    } else if (attempt.status !== "PENDING") {
+      throw new Error("This attempt cannot be queued for submission.");
+    }
+
+    result = {
+      assignmentId,
+      attemptUuid: attempt.attemptUuid,
+      startedAt: attempt.startedAt,
+      submittedAt,
+      answers: examPackage.questions.map((question) => ({
+        examQuestionId: question.id,
+        selectedIndex: savedAnswers[question.id] ?? null,
+      })),
+    };
+  });
+
+  if (!result) throw new Error("The offline submission could not be queued.");
+  return result;
 }
 
 export async function getPendingSubmissions(): Promise<PendingAttempt[]> {
