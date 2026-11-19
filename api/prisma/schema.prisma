@@ -60,6 +60,7 @@ model Attempt {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     Int
   answers    AttemptAnswer[]
+  adaptiveDecisions AdaptiveDecisionLog[]
 
   @@index([userId])
 }
@@ -545,4 +546,29 @@ model StudyMaterial {
 
   @@index([status, subject, title])
   @@index([uploadedById, createdAt])
+}
+
+
+model AdaptiveDecisionLog {
+  id                      String   @id @default(cuid())
+  attempt                 Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId               Int
+  learnerGroupId          String
+  selectedQuestionId      Int
+  eligibleQuestionIdsJson String
+  selectionProbability    Float    @default(1)
+  stateFeaturesJson       String
+  policyVersion           Int
+  policyMode              String   @default("deterministic-top-k")
+  reasonCode              String
+  selectionScore          Float
+  selectedAt              DateTime @default(now())
+  reward                  Float?
+  outcomeStatus           String   @default("pending")
+  outcomeAt               DateTime?
+
+  @@unique([attemptId, selectedQuestionId])
+  @@index([learnerGroupId, selectedAt])
+  @@index([outcomeStatus, selectedAt])
+  @@index([selectedQuestionId, selectedAt])
 }

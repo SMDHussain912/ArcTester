@@ -47,6 +47,15 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/** Domain-separated pseudonym; rotating JWT_SECRET intentionally rotates this ID. */
+export function createAdaptiveLearnerGroupId(userId: number): string {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("A valid learner ID is required.");
+  return createHmac("sha256", JWT_SECRET)
+    .update("ArcTester:adaptive-learner-group:v1:")
+    .update(String(userId))
+    .digest("hex");
+}
+
 export function signJwt(
   payload: Record<string, unknown>,
   ttlSeconds: number = JWT_TTL_SECONDS

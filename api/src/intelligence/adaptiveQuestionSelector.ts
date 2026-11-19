@@ -96,9 +96,11 @@ export function createAdaptiveDecisionLog(input: {
   learnerGroupId: string;
   selectedQuestionId: string;
   eligibleQuestionIds: string[];
-  selectedPropensity: number;
+  selectionProbability: number;
   stateFeatures: number[];
   policyVersion: number;
+  selectionScore: number;
+  reasonCode: AdaptiveReasonCode;
   selectedAt?: string | Date;
 }) {
   if (!/^[a-f0-9]{64}$/.test(input.learnerGroupId)) throw new Error("Decision logs require a keyed HMAC learner pseudonym");
@@ -106,11 +108,14 @@ export function createAdaptiveDecisionLog(input: {
     new Set(input.eligibleQuestionIds).size !== input.eligibleQuestionIds.length) {
     throw new Error("Selected question must be unique and present in the eligible candidate set");
   }
-  if (!Number.isFinite(input.selectedPropensity) || input.selectedPropensity <= 0 || input.selectedPropensity > 1) {
-    throw new Error("selectedPropensity must be greater than 0 and at most 1");
-  }
+  // The current top-k policy is deterministic: 1 is an inclusion probability,
+  // not a randomized propensity suitable for counterfactual policy evaluation.
+  if (input.selectionProbability !== 1) throw new Error("The deterministic top-k policy requires selectionProbability=1");
   if (!input.stateFeatures.length || input.stateFeatures.some((value) => !Number.isFinite(value))) {
     throw new Error("Decision state features must be a non-empty finite vector");
+  }
+  if (!Number.isFinite(input.selectionScore) || !Number.isInteger(input.policyVersion) || input.policyVersion < 1) {
+    throw new Error("Decision score and policy version are invalid");
   }
   const selectedAt = validDate(input.selectedAt ?? new Date());
   if (selectedAt === null) throw new Error("selectedAt must be a valid date");
@@ -118,9 +123,12 @@ export function createAdaptiveDecisionLog(input: {
     learnerGroupId: input.learnerGroupId,
     selectedQuestionId: input.selectedQuestionId,
     eligibleQuestionIds: [...input.eligibleQuestionIds],
-    selectedPropensity: input.selectedPropensity,
+    selectionProbability: input.selectionProbability,
     stateFeatures: [...input.stateFeatures],
     policyVersion: input.policyVersion,
+    policyMode: "deterministic-top-k" as const,
+    selectionScore: input.selectionScore,
+    reasonCode: input.reasonCode,
     selectedAt: new Date(selectedAt).toISOString(),
     reward: null as number | null,
     outcomeStatus: "pending" as const,

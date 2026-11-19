@@ -29,16 +29,25 @@ describe("adaptive question selection policy", () => {
     expect(selectAdaptiveQuestions(request).fallbackUsed).toBe(true);
   });
 
-  it("creates propensity-logged decisions without learner identifiers", () => {
+  it("creates deterministic decision records without storing learner identifiers", () => {
     const record = createAdaptiveDecisionLog({
       learnerGroupId: "a".repeat(64), selectedQuestionId: "q1", eligibleQuestionIds: ["q1", "q2"],
-      selectedPropensity: 0.5, stateFeatures: [0.4, 3, 2], policyVersion: 1,
+      selectionProbability: 1, stateFeatures: [0.4, 3, 2], policyVersion: 1,
+      selectionScore: 1.25, reasonCode: "WEAK_TOPIC",
     });
     expect(record.reward).toBeNull();
     expect(record.outcomeStatus).toBe("pending");
+    expect(record.policyMode).toBe("deterministic-top-k");
+    expect(record.selectionProbability).toBe(1);
     expect(() => createAdaptiveDecisionLog({
       learnerGroupId: "raw-user-id", selectedQuestionId: "q1", eligibleQuestionIds: ["q1"],
-      selectedPropensity: 1, stateFeatures: [1], policyVersion: 1,
+      selectionProbability: 1, stateFeatures: [1], policyVersion: 1,
+      selectionScore: 0.5, reasonCode: "NOVELTY",
     })).toThrow("HMAC learner pseudonym");
+    expect(() => createAdaptiveDecisionLog({
+      learnerGroupId: "a".repeat(64), selectedQuestionId: "q1", eligibleQuestionIds: ["q1"],
+      selectionProbability: 0.5, stateFeatures: [1], policyVersion: 1,
+      selectionScore: 0.5, reasonCode: "NOVELTY",
+    })).toThrow("selectionProbability=1");
   });
 });

@@ -1,6 +1,7 @@
 // Mock-test engine service: DB access + Phase 2 selection glued together.
 import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
-import { selectAdaptiveQuestions, type AdaptiveTopicState } from "./intelligence/adaptiveQuestionSelector.js";
+import { createAdaptiveLearnerGroupId } from "./auth.js";
+import { createAdaptiveDecisionLog, selectAdaptiveQuestions, type AdaptiveTopicState } from "./intelligence/adaptiveQuestionSelector.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
 import type { PrismaClient } from "@prisma/client";
@@ -233,6 +234,7 @@ export async function createTest(
 
   let selected: AttemptRow[];
   let warnings: string[] = [];
+  const adaptiveDecisionLogs: Array<ReturnType<typeof createAdaptiveDecisionLog>> = [];
 
   if (input.mode === "mock") {
     const { questions, shortfalls } = selectMockTest(candidates, stats);
@@ -294,9 +296,34 @@ export async function createTest(
           const question = questionById.get(id);
           return question ? [question] : [];
         });
-        // Keep the existing subject quota and deterministic tie ordering while
-        // using the adaptive policy to rank each eligible subject pool.
-        for (const question of picked) { selected.push(question); selectedById.add(question.id); }
+        // Persist each selected question's deterministic policy decision before reveal.
+        const scoreById = new Map(adaptive.rankedQuestionIds.map((id, index) => [id, adaptive.scores[index] ?? 0]));
+        const reasonById = new Map(adaptive.reasons.map((item) => [item.questionId, item.reasonCode]));
+        const completedAnswerCount = adaptiveTopicStates.reduce((sum, state) => sum + state.answered, 0);
+        const accuracyStates = adaptiveTopicStates.filter((state) => state.accuracy !== null);
+        const averageAccuracy = accuracyStates.length
+          ? accuracyStates.reduce((sum, state) => sum + (state.accuracy ?? 0), 0) / accuracyStates.length : 0;
+        const weakTopicCount = adaptiveTopicStates.filter((state) => state.answered >= 5 && (state.accuracy ?? 1) < 0.65).length;
+        const overdueTopicCount = adaptiveTopicStates.filter((state) => {
+          if (!state.lastSeenAt) return false;
+          const lastSeenAt = new Date(state.lastSeenAt).getTime();
+          return Number.isFinite(lastSeenAt) && now.getTime() - lastSeenAt >= 7 * 86400000;
+        }).length;
+        const stateFeatures = [completedAnswerCount, averageAccuracy, weakTopicCount, overdueTopicCount,
+          input.difficulty === "easy" ? 2 : input.difficulty === "hard" ? 4 : 3];
+        const learnerGroupId = createAdaptiveLearnerGroupId(userId);
+        for (const question of picked) {
+          const questionId = String(question.id);
+          adaptiveDecisionLogs.push(createAdaptiveDecisionLog({
+            learnerGroupId, selectedQuestionId: questionId,
+            eligibleQuestionIds: available.map((candidate) => String(candidate.id)),
+            selectionProbability: 1, stateFeatures, policyVersion: adaptive.policyVersion,
+            selectionScore: scoreById.get(questionId) ?? 0,
+            reasonCode: reasonById.get(questionId) ?? "MIXED_PRACTICE", selectedAt: now,
+          }));
+          selected.push(question);
+          selectedById.add(question.id);
+        }
         added += picked.length;
       }
       if (added === 0) break;
@@ -382,6 +409,20 @@ export async function createTest(
         };
       }),
     });
+    if (adaptiveDecisionLogs.length > 0) {
+      await tx.adaptiveDecisionLog.createMany({
+        data: adaptiveDecisionLogs.map((decision) => ({
+          attemptId: created.id, learnerGroupId: decision.learnerGroupId,
+          selectedQuestionId: Number(decision.selectedQuestionId),
+          eligibleQuestionIdsJson: JSON.stringify(decision.eligibleQuestionIds),
+          selectionProbability: decision.selectionProbability,
+          stateFeaturesJson: JSON.stringify(decision.stateFeatures),
+          policyVersion: decision.policyVersion, policyMode: decision.policyMode,
+          reasonCode: decision.reasonCode, selectionScore: decision.selectionScore,
+          selectedAt: new Date(decision.selectedAt), outcomeStatus: decision.outcomeStatus,
+        })),
+      });
+    }
     return created;
   });
 
@@ -472,11 +513,15 @@ export async function submitTest(
         where: { userId_questionId: { userId, questionId: row.questionId } },
         update: { seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen },
         create: {
-          userId,
-          questionId: row.questionId,
-          seen: next.seen,
-          wrong: next.wrong,
-          lastSeen: next.lastSeen,
+          userId, questionId: row.questionId, seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen,
+        },
+      });
+      await tx.adaptiveDecisionLog.updateMany({
+        where: { attemptId, selectedQuestionId: row.questionId, outcomeStatus: "pending" },
+        data: {
+          reward: row.isCorrect ? 1 : 0,
+          outcomeStatus: row.chosen === null ? "unanswered" : row.isCorrect ? "correct" : "incorrect",
+          outcomeAt: now,
         },
       });
     }
