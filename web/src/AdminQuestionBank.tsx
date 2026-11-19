@@ -1,3 +1,4 @@
+import { useState } from "react";
 export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
 type Topic = { id: number; name: string; _count: { questions: number } };
@@ -20,12 +21,14 @@ type AdminQuestionBankProps = {
   onDifficultyChange: (value: string) => void;
   onToggleSelected: (id: number) => void;
   onDeleteSelected: () => void;
+  onBulkDifficultyChange: (difficulty: "easy" | "medium" | "hard") => void;
   onEditQuestion: (question: AdminBankQuestion) => void;
   onUpload: () => void;
   onPageChange: (page: number) => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
+  const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const pageCount = Math.max(1, Math.ceil(total / 25));
   function confirmDeleteSelected() {
     if (!selected.length) return;
@@ -42,7 +45,14 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
       </div>
       <div className="admin-panel table-panel">
-        <div className="table-top"><span>{total.toLocaleString()} questions found</span><button className="ghost danger-button" disabled={!selected.length || busy} onClick={confirmDeleteSelected}>Delete selected ({selected.length})</button></div>
+        <div className="table-top"><span>{total.toLocaleString()} questions found</span><div className="row-actions">
+          <label className="sr-only" htmlFor="bulk-question-difficulty">Selected question difficulty</label>
+          <select id="bulk-question-difficulty" aria-label="Selected question difficulty" value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as "easy" | "medium" | "hard")} disabled={!selected.length || busy}>
+            <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
+          </select>
+          <button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkDifficultyChange(bulkDifficulty)}>Update difficulty ({selected.length})</button>
+          <button className="ghost danger-button" disabled={!selected.length || busy} onClick={confirmDeleteSelected}>Delete selected ({selected.length})</button>
+        </div></div>
         {questions.length === 0 ? <div className="empty-state"><b>No questions match these filters</b><span>Upload a question set or add the first question.</span></div> : questions.map((question) => (
           <article className="bank-question" key={question.id}>
             <input type="checkbox" aria-label={`Select question ${question.id}`} checked={selected.includes(question.id)} onChange={() => onToggleSelected(question.id)} />
