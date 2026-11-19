@@ -1021,7 +1021,7 @@ export default function App() {
           </Animated.View>
         ) : activeTab === "learn" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <StudentLearningHub api={api} userId={String(user.id)} />
+            <StudentLearningHub api={api} userId={String(user.id)} darkMode={darkMode} />
           </Animated.View>
          ) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
