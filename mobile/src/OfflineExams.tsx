@@ -524,7 +524,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         <TouchableOpacity
           disabled={busyId !== null || savingAnswers}
           onPress={() => void pauseExam()}
-          style={[styles.secondaryButton, savingAnswers && styles.disabled]
+          style={[styles.secondaryButton, savingAnswers && styles.disabled]}
         >
           <Text style={styles.secondaryText}>Save & exit · Resume later</Text>
         </TouchableOpacity>
