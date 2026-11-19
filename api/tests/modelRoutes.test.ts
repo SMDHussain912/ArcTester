@@ -678,12 +678,11 @@ describe("admin model registry API", () => {
       "subject_accuracy_mathematics_12345678",
       "subject_accuracy_mathematics_12345678_missing",
     ].map((name) => ({ name, type: "numeric" as const }));
-    const featureNames = featureSchema.map((feature) => feature.name);
     const trainingSamples = Array.from({ length: 50 }, (_, groupIndex) =>
       Array.from({ length: 11 }, (_, sampleIndex) => {
         const improving = groupIndex < 25;
         const target = improving ? 0.2 + sampleIndex * 0.05 : 0.8 - sampleIndex * 0.05;
-        const features = Object.fromEntries(featureNames.map((name) => [name, ({
+        const features = {
           completed_attempts: sampleIndex + 3,
           previous_accuracy: Math.max(0, target - 0.05),
           recent_accuracy_mean_3: Math.max(0, target - 0.1),
@@ -695,7 +694,7 @@ describe("admin model registry API", () => {
           days_since_last_attempt: 1,
           subject_accuracy_mathematics_12345678: 0.6,
           subject_accuracy_mathematics_12345678_missing: 0,
-        })[name]]));
+        };
         return {
           features,
           target,
@@ -737,7 +736,7 @@ describe("admin model registry API", () => {
     const evaluationSamples = Array.from({ length: 200 }, (_, index) => {
       const groupIndex = Math.floor(index / 4);
       const target = 0.3 + (index % 4) * 0.1;
-      const features = Object.fromEntries(featureNames.map((name) => [name, ({
+      const features = {
         completed_attempts: 14 + index % 5,
         previous_accuracy: target - 0.05,
         recent_accuracy_mean_3: target - 0.1,
@@ -749,7 +748,7 @@ describe("admin model registry API", () => {
         days_since_last_attempt: 2,
         subject_accuracy_mathematics_12345678: 0.65,
         subject_accuracy_mathematics_12345678_missing: 0,
-      })[name]]));
+      };
       return {
         features,
         target,
