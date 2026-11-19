@@ -641,6 +641,29 @@ describe("admin model registry API", () => {
     expect(String(rejected.body.error ?? rejected.body.message)).toContain("exactly the five registered student inference features");
   });
 
+  it("requires explicit authorization and enough learner history before building performance data", async () => {
+    const missingAttestation = await request("/admin/model-datasets/build-performance", "POST", {
+      name: "performance-builder-unattested",
+      sourceDescription: "Authorized practice history source",
+      sourceAttested: false,
+    });
+    expect(missingAttestation.status).toBe(400);
+
+    const insufficient = await request("/admin/model-datasets/build-performance", "POST", {
+      name: "performance-builder-insufficient",
+      sourceDescription: "Authorized anonymized practice history for model training.",
+      sourceAttested: true,
+    });
+    expect(insufficient.status).toBe(409);
+    expect(insufficient.body.qualification).toMatchObject({
+      requiredRows: 500,
+      requiredLearnerGroups: 50,
+      sampleCount: 0,
+      learnerGroupCount: 0,
+    });
+    expect(String(insufficient.body.error)).toContain("improving and declining trajectories");
+  });
+
   it("registers immutable evaluation datasets and rejects duplicate or malformed versions", async () => {
     const datasetId = await registerEvaluationDataset("dataset-registry-test");
     const listed = await request("/admin/model-datasets");
