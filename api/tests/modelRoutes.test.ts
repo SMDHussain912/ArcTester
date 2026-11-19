@@ -227,7 +227,7 @@ describe("admin model registry API", () => {
         { name: "mastery_signal", type: "numeric" },
         { name: "completed_attempts", type: "numeric" },
       ],
-      samples: samples.map((sample) => ({ ...sample, features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 } })),
+      samples: samples.map((sample, index) => ({ ...sample, groupId: (Math.floor(index / 3) + 100).toString(16).padStart(64, "0"), features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 } })),
       sourceDescription: "Independent attested real-anonymized learner holdout with privacy-safe pseudonymous group separation for readiness evaluation.",
       sourceAttested: true,
       datasetKind: "real-anonymized",
