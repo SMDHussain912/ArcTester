@@ -7,6 +7,10 @@ import { predictLogisticProbability, validateLogisticRegressionArtifact } from "
 import { predictKnnProbability, validateKnnArtifact } from "./knn.js";
 import { predictDecisionTreeProbability, validateDecisionTreeArtifact } from "./decisionTree.js";
 import { predictNaiveBayesProbability, validateNaiveBayesArtifact } from "./naiveBayes.js";
+import {
+  predictGradientBoosting, predictRandomForest,
+  validateGradientBoostingArtifact, validateRandomForestArtifact,
+} from "./treeEnsembles.js";
 
 const featureEncoderSchema = z.discriminatedUnion("type", [
   z.object({ name: z.string().min(1), type: z.literal("numeric") }).strict(),
@@ -27,6 +31,8 @@ const registryArtifactSchema = z.object({
     "knn",
     "decision-tree",
     "gaussian-naive-bayes",
+    "performance-gradient-boosting",
+    "performance-random-forest",
   ]),
   task: z.enum(["regression", "binary-classification"]),
   dataset: z.string().min(1).max(120),
@@ -39,7 +45,7 @@ const registryArtifactSchema = z.object({
   }).strict().optional(),
   createdAt: z.string().datetime(),
 }).strict().superRefine((artifact, context) => {
-  const isRegression = artifact.algorithm === "multiple-linear-regression";
+  const isRegression = ["multiple-linear-regression", "performance-gradient-boosting", "performance-random-forest"].includes(artifact.algorithm);
   if (isRegression !== (artifact.task === "regression")) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["task"], message: "Task does not match algorithm" });
   }
@@ -105,6 +111,8 @@ function validateModel(algorithm: RegistryArtifact["algorithm"], input: unknown)
     case "knn": return validateKnnArtifact(input);
     case "decision-tree": return validateDecisionTreeArtifact(input);
     case "gaussian-naive-bayes": return validateNaiveBayesArtifact(input);
+    case "performance-gradient-boosting": return validateGradientBoostingArtifact(input);
+    case "performance-random-forest": return validateRandomForestArtifact(input);
   }
 }
 
@@ -330,7 +338,11 @@ export function predictWithRegistryArtifact(
 ): ModelPrediction {
   const features = transformFeatures(artifact.featureSchema, input);
   if (artifact.task === "regression") {
-    const prediction = predictLinearRegression(artifact.model, features);
+    const prediction = artifact.algorithm === "performance-gradient-boosting"
+      ? predictGradientBoosting(artifact.model as Parameters<typeof predictGradientBoosting>[0], features)
+      : artifact.algorithm === "performance-random-forest"
+        ? predictRandomForest(artifact.model as Parameters<typeof predictRandomForest>[0], features)
+        : predictLinearRegression(artifact.model, features);
     const interval = artifact.uncertainty
       ? {
         lower: prediction - 1.96 * artifact.uncertainty.residualStdDev,
