@@ -69,6 +69,13 @@ describe("AdminModelLab", () => {
     expect(onRegisterDataset).not.toHaveBeenCalled();
   });
 
+  it("offers cancellation for queued and running training jobs", () => {
+    const onCancelJob = vi.fn();
+    render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onCancelJob={onCancelJob} />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel job" }));
+    expect(onCancelJob).toHaveBeenCalledWith("job-1");
+  });
+
   it("registers a JSON dataset with provenance and feature schema", () => {
     const onRegisterDataset = vi.fn();
     render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
