@@ -274,6 +274,14 @@ export async function listCachedExamPackages(): Promise<OfflineExamPackage[]> {
   return rows.map((row) => parsePackage(row.payload_json));
 }
 
+export async function listActiveAttemptIds(): Promise<string[]> {
+  const db = await database();
+  const rows = await db.getAllAsync<{ assignmentId: string }>(
+    "SELECT assignment_id AS assignmentId FROM offline_attempts WHERE status = 'ACTIVE' ORDER BY updated_at DESC",
+  );
+  return rows.map((row) => row.assignmentId);
+}
+
 export async function startOfflineAttempt(assignmentId: string): Promise<{
   attemptUuid: string;
   startedAt: string;
