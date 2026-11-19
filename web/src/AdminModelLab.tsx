@@ -214,7 +214,30 @@ export default function AdminModelLab({
         if (!response.ok) throw new Error(body.error || body.message || "Could not load adaptive learning analytics.");
         return body;
       })
-      .then((body) => { if (!active) return; if (!body || typeof body !== "object" || !body.summary || !Array.isArray(body.byReason) || !Array.isArray(body.daily)) { setAdaptiveAnalytics(null); setAdaptiveAnalyticsError(""); return; } setAdaptiveAnalytics(body); setAdaptiveAnalyticsError(""); })
+      .then((body) => {
+        if (!active) return;
+        const summary = body && typeof body === "object" ? body.summary : null;
+        const validSummary = summary && [
+          summary.selected, summary.observed, summary.pending, summary.unanswered,
+          summary.outcomeCoverage,
+        ].every((value) => typeof value === "number" && Number.isFinite(value)) &&
+          (summary.averageReward === null || (typeof summary.averageReward === "number" && Number.isFinite(summary.averageReward))) &&
+          (summary.averageSelectionScore === null || (typeof summary.averageSelectionScore === "number" && Number.isFinite(summary.averageSelectionScore)));
+        const validReasons = Array.isArray(body?.byReason) && body.byReason.every((item) =>
+          item && typeof item.reasonCode === "string" && typeof item.count === "number" && Number.isFinite(item.count),
+        );
+        const validDaily = Array.isArray(body?.daily) && body.daily.every((item) =>
+          item && typeof item.date === "string" && typeof item.selected === "number" &&
+          typeof item.observed === "number" && (item.averageReward === null || typeof item.averageReward === "number"),
+        );
+        if (!validSummary || !validReasons || !validDaily) {
+          setAdaptiveAnalytics(null);
+          setAdaptiveAnalyticsError("");
+          return;
+        }
+        setAdaptiveAnalytics(body);
+        setAdaptiveAnalyticsError("");
+      })
       .catch((error) => { if (active) setAdaptiveAnalyticsError(error instanceof Error ? error.message : "Could not load adaptive learning analytics."); })
       .finally(() => { if (active) setAdaptiveAnalyticsLoading(false); });
     return () => { active = false; };
@@ -366,10 +389,10 @@ export default function AdminModelLab({
         {adaptiveAnalyticsError ? <p className="error-text" role="alert">{adaptiveAnalyticsError}</p> : null}
         {adaptiveAnalytics ? <>
           <div className="model-lab-health-grid">
-            <article><span>Questions selected</span><strong>{adaptiveAnalytics.summary.selected.toLocaleString()}</strong><small>{adaptiveAnalytics.summary.observed.toLocaleString()} observed outcomes</small></article>
-            <article><span>Average reward</span><strong>{adaptiveAnalytics.summary.averageReward === null ? "—" : (adaptiveAnalytics.summary.averageReward * 100).toFixed(1) + "%"}</strong><small>Correctness across answered questions</small></article>
-            <article><span>Outcome coverage</span><strong>{(adaptiveAnalytics.summary.outcomeCoverage * 100).toFixed(1)}%</strong><small>{adaptiveAnalytics.summary.pending} pending · {adaptiveAnalytics.summary.unanswered} unanswered</small></article>
-            <article><span>Average ranking score</span><strong>{adaptiveAnalytics.summary.averageSelectionScore === null ? "—" : adaptiveAnalytics.summary.averageSelectionScore.toFixed(3)}</strong><small>Deterministic policy score, not a probability</small></article>
+            <article><span>Questions selected</span><strong>{(adaptiveAnalytics.summary.selected ?? 0).toLocaleString()}</strong><small>{(adaptiveAnalytics.summary.observed ?? 0).toLocaleString()} observed outcomes</small></article>
+            <article><span>Average reward</span><strong>{adaptiveAnalytics.summary.averageReward == null ? "—" : (adaptiveAnalytics.summary.averageReward * 100).toFixed(1) + "%"}</strong><small>Correctness across answered questions</small></article>
+            <article><span>Outcome coverage</span><strong>{((adaptiveAnalytics.summary.outcomeCoverage ?? 0) * 100).toFixed(1)}%</strong><small>{adaptiveAnalytics.summary.pending ?? 0} pending · {adaptiveAnalytics.summary.unanswered ?? 0} unanswered</small></article>
+            <article><span>Average ranking score</span><strong>{adaptiveAnalytics.summary.averageSelectionScore == null ? "—" : adaptiveAnalytics.summary.averageSelectionScore.toFixed(3)}</strong><small>Deterministic policy score, not a probability</small></article>
           </div>
           <div className="admin-two-col">
             <div><h3>Selection reasons</h3>
