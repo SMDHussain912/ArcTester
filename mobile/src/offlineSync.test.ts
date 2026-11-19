@@ -177,6 +177,39 @@ describe("offlineSync", () => {
     expect(retryBody.attemptUuid).toBe(attempt.attemptUuid);
   });
 
+  it("does not share an in-flight sync between different signed-in users", async () => {
+    mockedGetPending.mockResolvedValue([attempt]);
+    const resolvers: Array<(response: Response) => void> = [];
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      new Promise<Response>((resolve) => { resolvers.push(resolve); })
+    );
+
+    const first = syncPendingSubmissions("https://api.example.com", "token-user-a", "user-a");
+    const second = syncPendingSubmissions("https://api.example.com", "token-user-b", "user-b");
+
+    expect(second).not.toBe(first);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockedGetPending).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    const success = (id: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ submission: { id, attemptUuid: attempt.attemptUuid } }),
+    } as Response);
+    resolvers[0](success("sub-user-a"));
+    resolvers[1](success("sub-user-b"));
+    const results = await Promise.all([first, second]);
+
+    expect(results).toEqual([
+      { uploaded: 1, failed: 0, remaining: 0 },
+      { uploaded: 1, failed: 0, remaining: 0 },
+    ]);
+    expect(mockedMarkSynced).toHaveBeenCalledWith(attempt.assignmentId, "sub-user-a", "user-a");
+    expect(mockedMarkSynced).toHaveBeenCalledWith(attempt.assignmentId, "sub-user-b", "user-b");
+  });
+
   it("keeps a submission pending when the server omits the attempt identifier", async () => {
     mockedGetPending.mockResolvedValue([attempt]);
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
