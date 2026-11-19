@@ -178,6 +178,11 @@ export default function AdminModelLab({
   }
 
   const samplePreview = samplesText.trim() ? getDatasetPreviewSummary(samplesText) : null;
+  const totalDatasetRows = datasets.reduce((total, dataset) => total + dataset.rowCount, 0);
+  const activeJobs = jobs.filter((job) => job.status === "QUEUED" || job.status === "RUNNING").length;
+  const completedJobs = jobs.filter((job) => job.status === "SUCCEEDED").length;
+  const failedJobs = jobs.filter((job) => job.status === "FAILED" || job.status === "CANCELLED").length;
+  const activeModels = models.filter((model) => model.isActive).length;
 
   function submitDataset() {
     setFormError("");
@@ -249,6 +254,13 @@ export default function AdminModelLab({
         </div>
       </section>
 
+      <section className="model-lab-health-grid" aria-label="Model Lab summary">
+        <article><span>Registered datasets</span><strong>{datasets.length}</strong><small>{totalDatasetRows.toLocaleString()} total samples</small></article>
+        <article><span>Training in progress</span><strong>{activeJobs}</strong><small>{jobs.filter((job) => job.status === "QUEUED").length} queued · {jobs.filter((job) => job.status === "RUNNING").length} running</small></article>
+        <article><span>Completed jobs</span><strong>{completedJobs}</strong><small>{failedJobs} failed or cancelled</small></article>
+        <article><span>Active models</span><strong>{activeModels}</strong><small>{models.length - activeModels} inactive candidates</small></article>
+      </section>
+
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · DATA</p><h2>Register training dataset</h2></div></div>
         <p className="muted">Upload a JSON sample array prepared using the dataset guide. Files are checked before parsing; registration stores the declared features, targets, provenance and dataset fingerprint. It does not start training.</p>
@@ -275,7 +287,7 @@ export default function AdminModelLab({
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · TRAIN</p><h2>Train a candidate model</h2></div></div>
         <label>Training model prefix<input value={modelPrefix} onChange={(event) => onModelPrefixChange(event.target.value)} /></label>
-        <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
+        <label>Dataset<select value={selectedDatasetId} onChange={(event) => onDatasetChange(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount} rows · {dataset.featureSchema?.length ?? 0} features · {dataset.datasetKind ?? dataset.task}</option>)}</select></label>
         <div className="row wrap"><button className="primary" disabled={!selectedDatasetId || busy || !tensorflowSupported} onClick={onQueueTraining}>Queue TensorFlow.js</button><button className="button button-secondary" disabled={!selectedDatasetId || busy} onClick={onTrainClassical}>Train classical ML candidates</button></div><p className="muted">TensorFlow.js requires regression data with numeric features. Classical training supports regression and binary classification. Synthetic data can test the pipeline but cannot qualify a production model.</p>
         {loading ? <div className="model-lab-loading" role="status" aria-label="Loading model datasets"><div className="skeleton skeleton-table-row" /><div className="skeleton skeleton-table-row" /></div> : datasets.length === 0 && <p className="muted">No registered datasets yet. Register a dataset above first.</p>}
       </section>
