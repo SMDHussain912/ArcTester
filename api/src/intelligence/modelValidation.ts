@@ -115,7 +115,7 @@ export function createGroupStratifiedFolds(
       const score =
         (next.positive + group.positive) ** 2 +
         (next.negative + group.negative) ** 2 +
-        0.05 * (next.rows + group.rows) ** 2;
+        0.05 * (next.rows + group.rows.length) ** 2;
       if (score < bestScore) { bestScore = score; bestFold = fold; }
     }
     result[bestFold].push(...group.rows);
