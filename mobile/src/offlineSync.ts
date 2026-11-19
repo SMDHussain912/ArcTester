@@ -25,7 +25,7 @@ export function syncPendingSubmissions(
 ): Promise<OfflineSyncResult> {
   // Never share a queue drain across accounts: the token and database scope
   // are part of the identity of an in-flight sync operation.
-  const key = `${userId ?? "default"}:${apiUrl.replace(/\\/+$/, "")}:${token}`;
+  const key = `${userId ?? "default"}:${apiUrl.replace(/\/+$/, "")}:${token}`;
   const existing = activeSyncs.get(key);
   if (existing) return existing;
   const active = runPendingSubmissionSync(apiUrl, token, userId).finally(() => {
