@@ -332,6 +332,24 @@ describe("versioned exam management", () => {
     });
   });
 
+  it("respects disabled assignment and result notification preferences", async () => {
+    const secondStudent = await server.db.user.findUniqueOrThrow({ where: { email: "other-student@arctester.test" }, select: { id: true } });
+    await server.db.studentNotificationPreference.create({ data: { userId: secondStudent.id, examAssignments: false, examResults: false } });
+    const assigned = await request(`/admin/exams/${examId}/assign`, "POST", { studentIds: [secondStudent.id] }, adminCookie);
+    expect(assigned.status).toBe(201);
+    const assignment = await server.db.examAssignment.findFirstOrThrow({ where: { studentId: secondStudent.id, examVersion: { examId } }, include: { examVersion: { include: { questions: true } } } });
+    expect(await server.db.studentNotification.count({ where: { userId: secondStudent.id, kind: "EXAM_ASSIGNMENT" } })).toBe(0);
+    const started = await request(`/exams/assignments/${assignment.id}/session/start`, "POST", {}, secondStudentCookie);
+    expect(started.status).toBe(200);
+    const session = started.json.session as { startedAt: string };
+    const submitted = await request(`/exams/assignments/${assignment.id}/submission`, "POST", {
+      attemptUuid: randomUUID(), startedAt: session.startedAt, submittedAt: new Date().toISOString(),
+      answers: [{ examQuestionId: assignment.examVersion.questions[0].id, selectedIndex: 1 }],
+    }, secondStudentCookie);
+    expect(submitted.status).toBe(201);
+    expect(await server.db.studentNotification.count({ where: { userId: secondStudent.id, kind: { in: ["EXAM_RESULT", "EXAM_REVIEW"] } } })).toBe(0);
+  });
+
   it("lists versioned exam details and restricts admin read endpoints to administrators", async () => {
     const list = await request("/admin/exams", "GET", undefined, adminCookie);
     expect(list.status).toBe(200);

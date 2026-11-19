@@ -503,18 +503,23 @@ export function submissionRouter(db: PrismaClient): Router {
             where: { id: assignment.id },
             data: { status: "SUBMITTED" },
           });
-          await tx.studentNotification.create({
-            data: {
-              userId: req.user!.id,
-              kind: suspiciousTiming ? "EXAM_REVIEW" : "EXAM_RESULT",
-              title: suspiciousTiming ? "Submission awaiting review" : "Exam result available",
-              message: suspiciousTiming
-                ? `Your submission for ${assignment.examVersion.exam.title} was received and is awaiting invigilator review.`
-                : `Your submission for ${assignment.examVersion.exam.title} has been graded. Open the result to see your score.`,
-              href: `/assignments/${assignment.id}/result`,
-              dedupeKey: `exam-submission:${created.id}`,
-            },
+          const notificationPreferences = await tx.studentNotificationPreference.findUnique({
+            where: { userId: req.user!.id }, select: { examResults: true },
           });
+          if (notificationPreferences?.examResults !== false) {
+            await tx.studentNotification.create({
+              data: {
+                userId: req.user!.id,
+                kind: suspiciousTiming ? "EXAM_REVIEW" : "EXAM_RESULT",
+                title: suspiciousTiming ? "Submission awaiting review" : "Exam result available",
+                message: suspiciousTiming
+                  ? `Your submission for ${assignment.examVersion.exam.title} was received and is awaiting invigilator review.`
+                  : `Your submission for ${assignment.examVersion.exam.title} has been graded. Open the result to see your score.`,
+                href: `/assignments/${assignment.id}/result`,
+                dedupeKey: `exam-submission:${created.id}`,
+              },
+            });
+          }
           await tx.examSessionEvent.create({
             data: { sessionId: submissionSession.id, actorId: req.user!.id, type: "SUBMITTED", detail: suspiciousTiming ? "Submission retained for invigilator review due to timing or connectivity signals." : "Candidate submitted the examination." },
           });
