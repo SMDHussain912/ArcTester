@@ -37,7 +37,7 @@ Administrator workflow:
 9. Monitor the TensorFlow job's state, percentage, errors, training/holdout counts and candidate-versus-baseline MAE/RMSE. Classical training returns a ranked candidate summary immediately.
 10. Candidates are not automatically promoted. Review evaluation evidence and use the model governance controls separately.
 
-For a first-time administrator, keep the default feature schema unchanged and upload a prepared JSON file. The raw schema and sample JSON editors are under **Advanced** disclosures. Choose **Train classical ML candidates** first for the standard baseline comparison; use **Queue TensorFlow.js** only as a separate neural-network experiment. Both paths create inactive candidates.
+For a first-time administrator, keep the default feature schema unchanged and upload a prepared JSON file. The raw schema and sample JSON editors are under **Advanced** disclosures. Choose **Train logistic baseline** for binary classification or multiple linear regression for regression; use **Queue TensorFlow.js** only as a separate neural-network experiment. Redundant KNN, decision-tree and Gaussian naive Bayes algorithms are retained only for historical artifact compatibility and are no longer trained as new candidates. Both paths create inactive candidates.
 
 The personal next-attempt score predictor uses chronological walk-forward validation. It is shown only when it beats the mean baseline on **both MAE and RMSE**. MAE measures typical absolute error; RMSE penalizes larger misses more strongly. If either metric fails, ArcTester withholds the estimate rather than presenting a weaker model as an improvement.
 
