@@ -964,6 +964,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           select: { datasetKind: true, sourceAttested: true },
         });
         if (dataset.task !== "regression" || dataset.datasetKind !== "real-anonymized" ||
+            !candidateRow.trainingDatasetId || !baselineRow.trainingDatasetId ||
             samples.length < 200 || evaluationGroups.size < 50 ||
             samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
               typeof sample.occurredAt !== "string" || !Number.isFinite(Date.parse(sample.occurredAt)) ||
