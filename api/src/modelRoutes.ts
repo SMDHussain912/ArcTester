@@ -751,6 +751,32 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           }
         } else {
           validateRegistryArtifact(JSON.parse(previous.artifactJson));
+          const evaluation = await tx.modelEvaluation.findFirst({
+            where: { modelId, candidateVersion: previous.version },
+            orderBy: { evaluatedAt: "desc" },
+          });
+          if (!evaluation || evaluation.status !== "PASSED") {
+            return { error: "previous-evaluation-required" as const };
+          }
+          const [evaluationDataset, evaluatedBaseline] = await Promise.all([
+            evaluation.datasetId
+              ? tx.modelDataset.findUnique({
+                where: { id: evaluation.datasetId },
+                select: { id: true, datasetKind: true, sourceAttested: true },
+              })
+              : null,
+            tx.registeredModel.findUnique({
+              where: { modelId_version: { modelId, version: evaluation.baselineVersion } },
+              select: { trainingDatasetId: true },
+            }),
+          ]);
+          if (!evaluationDataset
+            || evaluationDataset.datasetKind !== "real-anonymized"
+            || !evaluationDataset.sourceAttested
+            || previous.trainingDatasetId === evaluationDataset.id
+            || evaluatedBaseline?.trainingDatasetId === evaluationDataset.id) {
+            return { error: "previous-evaluation-dataset-ineligible" as const };
+          }
         }
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
         const model = await tx.registeredModel.update({
@@ -765,6 +791,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       });
       if ("error" in outcome) {
         if (outcome.error === "missing-active") return next(notFound("No active model version was found."));
+        if (outcome.error === "previous-evaluation-required") {
+          return next(conflict("The previous model version needs a passing evaluation before rollback."));
+        }
+        if (outcome.error === "previous-evaluation-dataset-ineligible") {
+          return next(conflict("Rollback requires a passing evaluation on an independent, attested real-anonymized dataset."));
+        }
         return next(badRequest("No earlier model version is available for rollback."));
       }
       res.json({ ok: true, model: outcome.model });
