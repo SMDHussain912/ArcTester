@@ -19,7 +19,7 @@ import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
-import StudentLearningHub from "./src/StudentLearningHub";
+import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -30,7 +30,7 @@ const API_URL = (() => {
   return url.replace(/\/+$/, "");
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number }[] };
+type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
 type Announcement = {
   id: string;
   title: string;
@@ -118,7 +118,12 @@ export default function App() {
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [showExams, setShowExams] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "practice" | "learn" | "profile" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
+  const [selectedPracticeSubjects, setSelectedPracticeSubjects] = useState<string[]>([]);
+  const [selectedPracticeTopics, setSelectedPracticeTopics] = useState<Record<string, string[]>>({});
+  const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
+  const [practiceQuestionCount, setPracticeQuestionCount] = useState("20");
+  const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -144,12 +149,12 @@ export default function App() {
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { SecureStore.getItemAsync("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); }, []);
+  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
 
   async function toggleDarkMode(value: boolean) {
     setDarkMode(value);
-    try { await SecureStore.setItemAsync("arctester-dark-mode", String(value)); }
-    catch { setError("Theme could not be saved on this device."); }
+    try { await setLocalValue("arctester-dark-mode", String(value)); }
+    catch { /* Keep the selected theme for this session even if persistence is unavailable. */ }
   }
 
   async function refreshQuestionBank() {
@@ -261,7 +266,7 @@ export default function App() {
   useEffect(() => {
     SecureStore.getItemAsync("arctester-token").then((saved) => {
       if (saved) setToken(saved);
-    });
+    }).catch(() => { setToken(null); });
   }, []);
 
   useEffect(() => {
@@ -269,7 +274,7 @@ export default function App() {
     api<{ user: User }>("/auth/me")
       .then(async (result) => {
         if (result.user.role !== "STUDENT") {
-          await SecureStore.deleteItemAsync("arctester-token");
+          await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
           setToken(null);
           setUser(null);
           setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web.");
@@ -290,10 +295,10 @@ export default function App() {
     let cancelled = false;
     const isCurrentSession = () => !cancelled && sessionIdentityRef.current === requestIdentity;
     const registerDevice = async () => {
-      let fingerprint = await SecureStore.getItemAsync("arctester-device-fingerprint");
+      let fingerprint = await getLocalValue("arctester-device-fingerprint");
       if (!fingerprint) {
         fingerprint = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-        await SecureStore.setItemAsync("arctester-device-fingerprint", fingerprint);
+        await setLocalValue("arctester-device-fingerprint", fingerprint);
       }
       const platform = Platform.OS === "android" || Platform.OS === "ios" ? Platform.OS : "web";
       await api("/auth/devices/register", {
@@ -310,7 +315,7 @@ export default function App() {
         }),
       });
     };
-    registerDevice().catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
+    registerDevice().catch(() => undefined);
     api<Bank>("/bank")
       .then((result) => { if (isCurrentSession()) setBank(result); })
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
@@ -330,14 +335,14 @@ export default function App() {
       })
       .catch(() => undefined);
     setCheckingPracticeRecovery(true);
-    void SecureStore.getItemAsync(practiceRecoveryKey(user.id)).then((raw) => {
+    void getLocalValue(practiceRecoveryKey(user.id)).then((raw) => {
       if (!isCurrentSession() || !raw) return;
       try {
         const recovery = JSON.parse(raw) as Partial<PracticeRecovery>;
         if (Number.isInteger(recovery.attemptId) && recovery.attemptId! > 0) {
           setHasSavedPracticeAttempt(true);
         } else {
-          void SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+          void deleteLocalValue(practiceRecoveryKey(user.id));
         }
       } catch {
         void SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
@@ -467,7 +472,7 @@ export default function App() {
           setPassword("");
           return;
         }
-        await SecureStore.setItemAsync("arctester-token", result.token);
+        await SecureStore.setItemAsync("arctester-token", result.token).catch(() => { throw new Error("Secure sign-in storage is unavailable. Update or reinstall ArcTester, then sign in again."); });
         setToken(result.token);
         setUser(result.user);
       }
@@ -485,7 +490,7 @@ export default function App() {
     const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
     practiceSaveQueue.current = practiceSaveQueue.current
       .catch(() => undefined)
-      .then(() => SecureStore.setItemAsync(practiceRecoveryKey(user.id), JSON.stringify(payload)));
+      .then(() => setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload)));
     try {
       await practiceSaveQueue.current;
       if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(true);
@@ -518,7 +523,7 @@ export default function App() {
     setError("");
     let recoveryAttemptId: number | null = null;
     try {
-      const raw = await SecureStore.getItemAsync(practiceRecoveryKey(user.id));
+      const raw = await getLocalValue(practiceRecoveryKey(user.id));
       if (!raw) {
         if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(false);
         return;
@@ -626,7 +631,7 @@ export default function App() {
         : 20 * 60;
       setSecondsLeft(Math.max(0, remaining));
       if (user) {
-        await SecureStore.setItemAsync(practiceRecoveryKey(user.id), JSON.stringify({
+        await setLocalValue(practiceRecoveryKey(user.id), JSON.stringify({
           attemptId: created.attemptId,
           answers: {},
           currentQuestionIndex: 0,
