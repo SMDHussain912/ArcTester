@@ -744,7 +744,7 @@ export default function App() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style={startupVisible ? "light" : "auto"} />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView style={styles.dashboardScroll} contentContainerStyle={styles.container}>
         <View style={styles.brandRow}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>A</Text>
@@ -1107,30 +1107,30 @@ export default function App() {
             </TouchableOpacity>
           </>
         )}
-        {user && !test && !showExams && (
-          <Animated.View style={[styles.bottomNav, animatedEntrance(entrance)]}>
-            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("home")}>
-              <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
-              <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
-              <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
-              <Text style={styles.navLabel}>Exams</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("learn")}>
-              <MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} />
-              <Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab("profile")}>
-              <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
-              <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Profile</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
         {!!error && <Text style={styles.error}>{error}</Text>}
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
         <Text style={styles.footer}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
+      {user && !test && !showExams && (
+        <Animated.View style={[styles.bottomNav, animatedEntrance(entrance)]}>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "home" }} accessibilityLabel="Home tab" style={styles.navItem} onPress={() => setActiveTab("home")}>
+            <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
+            <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="Assigned exams tab" style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
+            <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
+            <Text style={styles.navLabel}>Exams</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "learn" }} accessibilityLabel="Learn tab" style={styles.navItem} onPress={() => setActiveTab("learn")}>
+            <MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} />
+            <Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
+            <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
+            <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Profile</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
       {startupVisible && (
         <Animated.View style={[styles.startupOverlay, { opacity: startupFade }]}>
           <View style={styles.startupContent}>
