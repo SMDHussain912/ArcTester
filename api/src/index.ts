@@ -176,11 +176,32 @@ const app = buildApp();
 
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    startModelTrainingWorker(db);
-    startQuestionEmbeddingWorker(db);
+  const server = app.listen(PORT, () => {
     console.log(`ecet-api listening on http://localhost:${PORT}`);
   });
+  const stopModelTrainingWorker = startModelTrainingWorker(db);
+  const stopQuestionEmbeddingWorker = startQuestionEmbeddingWorker(db);
+  let shutdownStarted = false;
+  const shutdown = (signal: string) => {
+    if (shutdownStarted) return;
+    shutdownStarted = true;
+    console.log(`ecet-api received ${signal}; stopping background workers and draining requests`);
+    stopModelTrainingWorker();
+    stopQuestionEmbeddingWorker();
+    server.close((error) => {
+      if (error) {
+        console.error("ecet-api HTTP shutdown failed", error);
+        process.exitCode = 1;
+      }
+      void db.$disconnect().catch((disconnectError: unknown) => {
+        console.error("ecet-api database disconnect failed", disconnectError);
+        process.exitCode = 1;
+      });
+    });
+    server.closeIdleConnections?.();
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 export default app;
