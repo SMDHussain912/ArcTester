@@ -52,6 +52,9 @@ const EvaluationSchema = z.object({
   baselineVersion: z.number().int().positive(),
   datasetId: z.string().min(1).max(64),
 }).strict();
+const GovernanceActionSchema = z.object({
+  reason: z.string().trim().min(10).max(500).optional(),
+}).strict();
 
 const DatasetSampleSchema = z.object({
   features: z.record(z.string(), z.union([z.number().finite(), z.string().max(500)])),
@@ -664,6 +667,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
       const version = VersionSchema.parse(req.params.version);
+      const action = GovernanceActionSchema.parse(req.body);
       const activated = await db.$transaction(async (tx) => {
         const target = await tx.registeredModel.findUnique({
           where: { modelId_version: { modelId, version } },
@@ -706,7 +710,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           select: { modelId: true, version: true, isActive: true, activatedAt: true },
         });
         await tx.modelRegistryAudit.create({
-          data: { actorId: req.user!.id, modelId, version, action: "ACTIVATED", details: JSON.stringify({ reason: "manual-promotion" }) },
+          data: { actorId: req.user!.id, modelId, version, action: "ACTIVATED", details: JSON.stringify({ reason: action.reason ?? "Administrator requested model promotion." }) },
         });
         return model;
       });
@@ -731,6 +735,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
   router.post("/admin/models/:modelId/rollback", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
+      const action = GovernanceActionSchema.parse(req.body);
       const outcome = await db.$transaction(async (tx) => {
         const active = await tx.registeredModel.findFirst({ where: { modelId, isActive: true } });
         if (!active) return { error: "missing-active" as const };
@@ -754,7 +759,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           select: { modelId: true, version: true, isActive: true, activatedAt: true },
         });
         await tx.modelRegistryAudit.create({
-          data: { actorId: req.user!.id, modelId, version: previous.version, action: "ROLLED_BACK", details: JSON.stringify({ fromVersion: active.version }) },
+          data: { actorId: req.user!.id, modelId, version: previous.version, action: "ROLLED_BACK", details: JSON.stringify({ fromVersion: active.version, reason: action.reason ?? "Administrator requested rollback." }) },
         });
         return { model };
       });
