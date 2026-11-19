@@ -37,7 +37,7 @@ async function loginUi(page: Page, email: string, password: string) {
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button:has-text("Sign in")');
-  await page.waitForTimeout(2000);
+  await page.getByRole("navigation", { name: "Student navigation" }).waitFor({ state: "visible", timeout: 15000 });
 }
 
 /** Setup test data: create admin, student, questions, exam, assignment */
