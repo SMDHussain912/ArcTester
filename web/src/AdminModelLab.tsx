@@ -53,7 +53,7 @@ type AdminModelLabProps = {
 };
 
 export default function AdminModelLab({
-  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, error = "", intelligenceStatus = null, onDatasetChange,
+  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
