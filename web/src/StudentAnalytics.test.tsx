@@ -38,8 +38,8 @@ describe("StudentAnalytics", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Practice overview: Overview temporarily unavailable");
     expect(screen.getByRole("heading", { name: "Your next study steps" })).toBeInTheDocument();
-    expect(screen.getByText("Complete more practice tests.")).toBeInTheDocument();
-    expect(screen.getByText("Score prediction is unavailable. Refresh to try again.")).toBeInTheDocument();
+    expect(screen.getByText("Keep practising")).toBeInTheDocument();
+    expect(screen.getByText("Subjects to revise")).toBeInTheDocument();
   });
 
   it("retries failed analytics and reports when the refresh finishes", async () => {
