@@ -13,6 +13,8 @@ beforeAll(async () => {
     ["Maths", "What is 2 + 2?", ["3", "4", "5", "6"], 1, "Add the two values."],
     ["Physics", "What is speed?", ["Distance/time", "Mass", "Force", "Energy"], 0, "Speed is distance divided by time."],
   ]);
+  // Test fixtures represent questions already approved by a human reviewer.
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   const session = await signUp(server.baseUrl, "materials@example.com");
   userId = session.userId;
   api = bindSession(server.baseUrl, session.cookie);

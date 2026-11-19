@@ -82,6 +82,7 @@ describe("versioned exam management", () => {
         explanation: "A queue follows first-in, first-out order.",
         source: "Exam route test",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "exam-route-question-fifo-unique",
       },
     });

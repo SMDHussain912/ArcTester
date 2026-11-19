@@ -45,6 +45,7 @@ describe("question administration route contracts", () => {
         explanation: "Dequeue removes the front item.",
         source: "Question admin route tests",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "question-admin-route-base-unique",
       },
     });
