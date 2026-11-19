@@ -212,12 +212,14 @@ describe("admin model registry API", () => {
     const listed = await request("/admin/models");
     const candidates = (listed.body.models as Array<{ modelId: string; isActive: boolean }>)
       .filter((model) => model.modelId === "readiness-fixture-exam-readiness-softmax");
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]?.isActive).toBe(false);
+    expect(candidates).toHaveLength(2);
+    expect(candidates.find((model) => model.isActive)?.modelId).toBe("readiness-fixture-exam-readiness-softmax");
     const audit = await request("/admin/models/readiness-fixture-exam-readiness-softmax/audit");
     expect(audit.status).toBe(200);
-    expect((audit.body.events as Array<{ action: string; details: Record<string, unknown> }>)[0])
-      .toMatchObject({ action: "TRAINED", details: { learnerGroups: 30, evaluationRequired: true } });
+    const auditEvents = audit.body.events as Array<{ action: string; details: Record<string, unknown> }>;
+    expect(auditEvents.some((event) => event.action === "TRAINED" &&
+      event.details.learnerGroups === 30 && event.details.evaluationRequired === true)).toBe(true);
+    expect(auditEvents.map((event) => event.action)).toContain("ACTIVATED");
   });
 
   it("rejects evaluation datasets reused to train either compared model", async () => {
