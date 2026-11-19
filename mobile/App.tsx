@@ -613,12 +613,7 @@ export default function App() {
       const freshBank = await api<Bank>("/bank");
       setBank(freshBank);
       const availableSubjects = freshBank.subjects.filter((item) => item.count > 0);
-      if (subject && !availableSubjects.some((item) => item.subject === subject)) {
-        throw new Error(`No practice questions are currently available for ${subject}. The question bank was refreshed; ask an administrator to check that subject's published questions.`);
-      }
-      if (!subject && availableSubjects.length === 0) {
-        throw new Error("The server question bank currently contains no practice questions. Ask an administrator to import questions, then refresh this screen.");
-      }
+      if (availableSubjects.length === 0) throw new Error("The question bank currently has no practice questions.");
       const created = await api<Test>("/tests", {
         method: "POST",
         body: JSON.stringify({ mode: "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: config.count }),
@@ -787,7 +782,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={[styles.safe, darkMode && { backgroundColor: "#0b1220" }]}>
-      <StatusBar style={startupVisible ? "light" : "auto"} />
+      <StatusBar style={startupVisible || darkMode ? "light" : "dark"} />
       <ScrollView style={[styles.dashboardScroll, darkMode && { backgroundColor: "#0b1220" }]} contentContainerStyle={styles.container}>
         <View style={styles.brandRow}>
           <View style={styles.logo}>
@@ -958,7 +953,7 @@ export default function App() {
                   },
                 ]}
               >
-                <Text style={styles.questionTitle}>{test.questions[currentQuestionIndex].text}</Text>
+                <Text style={[styles.questionTitle, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
                 <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>
                 {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
                   const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
@@ -973,7 +968,7 @@ export default function App() {
                         <View style={[styles.optionLetter, selected && styles.optionLetterSelected]}>
                           <Text style={[styles.optionLetterText, selected && styles.optionLetterTextSelected]}>{String.fromCharCode(65 + optionIndex)}</Text>
                         </View>
-                        <Text style={[styles.optionText, { flex: 1 }]}>{option}</Text>
+                        <Text style={[styles.optionText, { flex: 1 }, darkMode && { color: "#e2e8f0" }]}>{option}</Text>
                         {selected && <MaterialCommunityIcons name="check-circle" size={20} color="#2563eb" />}
                       </View>
                     </TouchableOpacity>
@@ -1016,16 +1011,12 @@ export default function App() {
              {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
              {bank ? <StudentPracticeBuilder subjects={bank.subjects} total={bank.total} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onRefresh={() => void refreshQuestionBank()} onStart={(config) => void startPractice(config)} /> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading subject and topic catalogue…</Text>}
            </Animated.View>
-) : activeTab === "learn" ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
-            <StudentLearningHub api={api} userId={String(user.id)} darkMode={darkMode} onStartPractice={(subject) => { setActiveTab("practice"); void startPractice(subject); }} />
-          </Animated.View>
-         ) : activeTab === "settings" ? (
+) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
-            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={styles.secondaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
@@ -1149,7 +1140,7 @@ export default function App() {
         <Text style={styles.footer}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
       {user && !test && !showExams && (
-        <Animated.View style={[styles.bottomNav, animatedEntrance(entrance)]}>
+        <Animated.View style={[styles.bottomNav, animatedEntrance(entrance), darkMode && { backgroundColor: "#111c2e", borderColor: "#334155" }]}>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "home" }} accessibilityLabel="Home tab" style={styles.navItem} onPress={() => setActiveTab("home")}>
             <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
             <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
@@ -1158,10 +1149,6 @@ export default function App() {
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="Assigned exams tab" style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
             <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
             <Text style={styles.navLabel}>Exams</Text>
-          </TouchableOpacity>
-          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "learn" }} accessibilityLabel="Learn tab" style={styles.navItem} onPress={() => setActiveTab("learn")}>
-            <MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} />
-            <Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
