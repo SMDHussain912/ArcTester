@@ -112,6 +112,25 @@ describe("buildRuleBasedRecommendations", () => {
     expect(practicePlans.some((item) => item.topic === "Queues")).toBe(false);
   });
 
+  it("keeps a separate subject-level gap visible when another subject has weak topic evidence", () => {
+    const result = buildRuleBasedRecommendations({
+      ...config,
+      topics: [
+        { subject: "CSE", topic: "Trees", seen: 10, correct: 3, wrong: 7, accuracy: 0.3 },
+        { subject: "Mathematics", topic: null, seen: 8, correct: 2, wrong: 6, accuracy: 0.25 },
+      ],
+      subjects: [
+        { subject: "CSE", topic: null, seen: 10, correct: 3, wrong: 7, accuracy: 0.3 },
+        { subject: "Mathematics", topic: null, seen: 8, correct: 2, wrong: 6, accuracy: 0.25 },
+      ],
+      recentActivity: [],
+    });
+    expect(result.recommendations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "revise-topic-CSE%3ATrees", subject: "CSE", topic: "Trees" }),
+      expect.objectContaining({ id: "revise-subject-Mathematics", subject: "Mathematics", topic: null }),
+    ]));
+  });
+
   it("does not recommend an area before the minimum answered sample is reached", () => {
     const result = buildRuleBasedRecommendations({
       ...config,
