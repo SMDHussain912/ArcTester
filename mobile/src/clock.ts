@@ -1,23 +1,30 @@
 // Monotonic clock for offline exam timing.
 //
-// React Native does not expose a guaranteed-monotonic timer (there is no
-// performance.now() equivalent in core). Date.now() is wall-clock time and can
-// jump backward when the device clock is corrected (NTP sync, manual change,
-// timezone change). For an offline exam timer we must never let the remaining
-// time go backward, otherwise a student could gain time by having their clock
-// adjusted.
+// Anchor a monotonic runtime clock to wall time once per JS process. This
+// prevents manual/NTP wall-clock changes while the app is running from
+// extending or prematurely expiring an attempt. On runtimes without
+// performance.now(), fall back to a non-decreasing wall clock.
 //
-// monotonicNow() returns Date.now() but clamps it so it never decreases within
-// the lifetime of the process. A fresh baseline is captured when an offline
-// attempt starts so elapsed time is measured relative to that stable point.
+// The persisted attempt checkpoint bridges process restarts: after a restart,
+// getRemainingSeconds() never moves behind the last saved checkpoint. Offline
+// code cannot know the true elapsed time if the device clock is changed while
+// the app is not running; the checkpoint deliberately fails closed on rollback.
 
-let lastValue = 0;
+const wallClockAtStart = Date.now();
+const hasMonotonicRuntimeClock =
+  typeof performance !== "undefined" &&
+  typeof performance.now === "function";
+const monotonicClockAtStart = hasMonotonicRuntimeClock ? performance.now() : 0;
+
+let lastValue = wallClockAtStart;
 
 export function monotonicNow(): number {
-  const now = Date.now();
-  if (now < lastValue) return lastValue;
-  lastValue = now;
-  return now;
+  const candidate = hasMonotonicRuntimeClock
+    ? wallClockAtStart + Math.max(0, performance.now() - monotonicClockAtStart)
+    : Date.now();
+  if (candidate < lastValue) return lastValue;
+  lastValue = candidate;
+  return candidate;
 }
 
 export function wallNow(): number {
