@@ -284,7 +284,7 @@ export default function App() {
         setUser(result.user);
       })
       .catch(async () => {
-        await SecureStore.deleteItemAsync("arctester-token");
+        await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
         setToken(null);
       });
   }, [token]);
@@ -346,7 +346,7 @@ export default function App() {
           void deleteLocalValue(practiceRecoveryKey(user.id));
         }
       } catch {
-        void SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        void deleteLocalValue(practiceRecoveryKey(user.id));
       }
     }).catch(() => undefined).finally(() => {
       if (isCurrentSession()) setCheckingPracticeRecovery(false);
@@ -533,7 +533,7 @@ export default function App() {
       try {
         recovery = JSON.parse(raw) as PracticeRecovery;
       } catch {
-        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        await deleteLocalValue(practiceRecoveryKey(user.id));
         setHasSavedPracticeAttempt(false);
         throw new Error("The saved practice recovery record was corrupted and has been cleared.");
       }
@@ -542,7 +542,7 @@ export default function App() {
         !recovery.answers || typeof recovery.answers !== "object" ||
         !Number.isInteger(recovery.currentQuestionIndex)
       ) {
-        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        await deleteLocalValue(practiceRecoveryKey(user.id));
         setHasSavedPracticeAttempt(false);
         throw new Error("The saved practice recovery record was invalid and has been cleared.");
       }
@@ -570,7 +570,7 @@ export default function App() {
     } catch (cause) {
       if (sessionIdentityRef.current !== requestIdentity) return;
       if (cause instanceof ApiRequestError && cause.status === 404) {
-        await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+        await deleteLocalValue(practiceRecoveryKey(user.id));
         setHasSavedPracticeAttempt(false);
       } else if (cause instanceof ApiRequestError && cause.status === 409 && recoveryAttemptId !== null) {
         // The submit may have reached the server before the app lost its response.
@@ -578,7 +578,7 @@ export default function App() {
         try {
           const completed = await api<PracticeResult>(`/tests/${recoveryAttemptId}/result`);
           if (sessionIdentityRef.current === requestIdentity) {
-            await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+            await deleteLocalValue(practiceRecoveryKey(user.id));
             setHasSavedPracticeAttempt(false);
             setResult(completed);
             setError("");
@@ -738,7 +738,7 @@ export default function App() {
           }),
         },
       );
-      await SecureStore.deleteItemAsync(practiceRecoveryKey(user.id));
+      await deleteLocalValue(practiceRecoveryKey(user.id));
       setHasSavedPracticeAttempt(false);
       setTest(null);
       setCurrentQuestionIndex(0);
@@ -761,7 +761,7 @@ export default function App() {
   async function signOut() {
     sessionIdentityRef.current = null;
     setBusy(false);
-    await SecureStore.deleteItemAsync("arctester-token");
+    await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
     setToken(null);
     setUser(null);
     setBank(null);
@@ -893,7 +893,7 @@ export default function App() {
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
             <Text style={styles.examHint}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
-            <View style={styles.navigator}>
+            <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={styles.navigatorTitle}>JUMP TO QUESTION</Text>
               <View style={styles.navigatorGrid}>
                 {test.questions.map((question, index) => {
@@ -961,7 +961,7 @@ export default function App() {
                     <TouchableOpacity
                       key={optionIndex}
                       onPress={() => updatePracticeAnswer(test.questions[currentQuestionIndex].id, optionIndex)}
-                      style={[styles.option, selected && styles.optionSelected]}
+                      style={[styles.option, darkMode && { borderColor: "#475569" }, selected && styles.optionSelected]}
                       activeOpacity={0.78}
                     >
                       <View style={styles.optionRow}>
@@ -1021,12 +1021,12 @@ export default function App() {
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
         ) : activeTab === "profile" ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={styles.profileAvatar}>
               <MaterialCommunityIcons name="account" size={34} color="#ffffff" />
             </View>
-            <Text style={[styles.heading, { textAlign: "center" }]}>Your profile</Text>
-            <Text style={[styles.muted, { textAlign: "center" }]}>{user.email}</Text>
+            <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your profile</Text>
+            <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
               <Text style={styles.profileLabel}>ACCOUNT ID</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.id}</Text>
@@ -1042,7 +1042,7 @@ export default function App() {
           </Animated.View>
         ) : (
           <>
-            <Animated.View style={[styles.hero, animatedEntrance(entrance)]}>
+            <Animated.View style={[styles.hero, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
               <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>SIGNED IN AS</Text>
               <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text>
               <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your next focused session starts here.</Text>
