@@ -68,7 +68,7 @@ const DatasetSampleSchema = z.object({
 
 const DatasetRegistrationSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  task: z.enum(["regression", "binary-classification"]),
+  task: z.enum(["regression", "binary-classification", "multiclass-classification"]),
   targetColumn: z.string().trim().min(1).max(120),
   featureSchema: z.array(FeatureSchema).min(1).max(100),
   samples: z.array(DatasetSampleSchema).min(10).max(5000),
@@ -207,6 +207,14 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           return next(badRequest("Classification evaluation datasets must contain both classes."));
         }
       }
+      if (input.task === "multiclass-classification") {
+        if (input.samples.some((sample) => !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2)) {
+          return next(badRequest("Readiness classification targets must be encoded as 0, 1 or 2."));
+        }
+        if ([0, 1, 2].some((label) => input.samples.filter((sample) => sample.target === label).length < 10)) {
+          return next(badRequest("Readiness datasets require at least 10 examples of each readiness class."));
+        }
+      }
       const fingerprint = createHash("sha256").update(canonicalJson(payload)).digest("hex");
       const created = await db.modelDataset.create({
         data: {
@@ -302,6 +310,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const input = TrainingSchema.parse(req.body);
       const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
       if (!dataset) return next(notFound("Registered training dataset was not found."));
+      if (dataset.task === "multiclass-classification") return next(badRequest("Use the readiness classifier training workflow for multiclass datasets."));
       const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
       const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
       const trained = trainRegisteredDataset(samples, featureSchema, dataset.task as "regression" | "binary-classification", input.seed);
@@ -382,6 +391,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const input = TrainingSchema.parse(req.body);
       const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
       if (!dataset) return next(notFound("Registered readiness dataset was not found."));
+      if (dataset.task !== "multiclass-classification") return next(badRequest("Readiness training requires a multiclass-classification dataset with labels 0, 1 and 2."));
       if (dataset.datasetKind !== "real-anonymized" || !dataset.sourceAttested) {
         return next(badRequest("Readiness training requires an attested real-anonymized learner dataset."));
       }
