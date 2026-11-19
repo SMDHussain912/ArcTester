@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./learningStore";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -15,6 +15,7 @@ type Overview = {
 type Recommendation = { id: string; title: string; reason: string; priority: string; questionCount: number; mode: string; subject?: string; topic?: string };
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
+type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 
 export default function StudentLearningHub({ api, userId }: Props) {
   const apiRef = useRef(api);
@@ -23,6 +24,8 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [preferences, setPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
+  const [savingPreference, setSavingPreference] = useState(false);
   const [offlinePackage, setOfflinePackage] = useState<OfflineLearningPackage | null>(null);
   const [downloadingBank, setDownloadingBank] = useState(false);
   const [showOfflineBank, setShowOfflineBank] = useState(false);
@@ -36,22 +39,25 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const [performanceResult, recommendationResult, conceptResult, predictionResult] = await Promise.allSettled([
+    const [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult] = await Promise.allSettled([
       apiRef.current<Overview>("/analytics/overview"),
       apiRef.current<Recommendations>("/analytics/recommendations"),
       apiRef.current<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
       apiRef.current<Prediction>("/analytics/score-prediction"),
+      apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences"),
     ]);
     if (performanceResult.status === "fulfilled") setOverview(performanceResult.value);
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
-    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult].filter((item) => item.status === "rejected");
-    if (failures.length === 4) setError("Learning data could not be loaded. Check your connection and try again.");
+    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult].filter((item) => item.status === "rejected");
+    if (failures.length === 5) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
   }, []);
 
   useEffect(() => { void load(); void getOfflineLearningPackage(userId).then(setOfflinePackage).catch(() => setOfflinePackage(null)); }, [load, userId]);
+  const updatePreference = useCallback(async (key: keyof NotificationPreferences, value: boolean) => { const previous = preferences; const next = { ...previous, [key]: value }; setPreferences(next); setSavingPreference(true); try { const result = await apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) }); setPreferences(result.preferences); } catch (cause) { setPreferences(previous); setError(cause instanceof Error ? cause.message : "Could not save notification preferences."); } finally { setSavingPreference(false); } }, [preferences]);
+
   const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [api, userId]);
 
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
@@ -107,6 +113,13 @@ export default function StudentLearningHub({ api, userId }: Props) {
         </View>
       )) : <Text style={styles.empty}>More completed practice will unlock personalized recommendations.</Text>}
 
+      <Text style={styles.sectionTitle}>Notification preferences</Text>
+      <View style={styles.card}>
+        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Exam assignments</Text><Text style={styles.meta}>Notify me when an exam is assigned to me.</Text></View><Switch value={preferences.examAssignments} disabled={savingPreference} onValueChange={(value) => void updatePreference("examAssignments", value)} /></View>
+        <View style={styles.preferenceDivider} />
+        <View style={styles.preferenceRow}><View style={{ flex: 1 }}><Text style={styles.cardTitle}>Exam results</Text><Text style={styles.meta}>Notify me when a result or reviewed submission is available.</Text></View><Switch value={preferences.examResults} disabled={savingPreference} onValueChange={(value) => void updatePreference("examResults", value)} /></View>
+        {savingPreference ? <Text style={styles.meta}>Saving preference…</Text> : null}
+      </View>
       <Text style={styles.sectionTitle}>Offline question bank</Text>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{offlinePackage ? offlinePackage.total.toLocaleString() + " questions saved on this device" : "No offline question bank yet"}</Text>
@@ -168,6 +181,8 @@ const styles = StyleSheet.create({
   muted: { color: "#64748b", lineHeight: 20 },
   refresh: { alignSelf: "flex-start", paddingVertical: 7 },
   refreshText: { color: "#2563eb", fontWeight: "800" },
+  preferenceRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
+  preferenceDivider: { height: 1, backgroundColor: "#e2e8f0", marginVertical: 4 },
   downloadButton: { backgroundColor: "#2563eb", borderRadius: 10, padding: 12, alignItems: "center", marginTop: 6 },
   downloadButtonText: { color: "#ffffff", fontWeight: "900" },
   notice: { backgroundColor: "#fff7ed", borderRadius: 12, padding: 12 },
