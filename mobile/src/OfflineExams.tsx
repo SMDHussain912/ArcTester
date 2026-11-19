@@ -48,10 +48,11 @@ type Props = {
   token: string;
   userId: string;
   darkMode?: boolean;
+  questionTextSize?: 14 | 16 | 18;
   onExit?: () => void;
 };
 
-export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onExit }: Props) {
+export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, questionTextSize = 16, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const mountedRef = useRef(false);
@@ -480,7 +481,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
               },
             ]}
           >
-            <Text style={[styles.questionTitle, darkMode && { color: "#f1f5f9" }]}>
+            <Text style={[styles.questionTitle, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>
               {currentQuestionIndex + 1}. {activePackage.questions[currentQuestionIndex].text}
             </Text>
             {activePackage.questions[currentQuestionIndex].options.map((option, optionIndex) => (
@@ -552,6 +553,7 @@ export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onE
           token={token}
           onBack={() => setViewingResultId(null)}
           darkMode={darkMode}
+          questionTextSize={questionTextSize}
         />
       </View>
     );
