@@ -58,13 +58,13 @@ export default function StudentLearningHub({ api, userId }: Props) {
       apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences"),
       apiRef.current<{ materials: StudyMaterial[] }>("/study-materials"),
     ]);
+    if (generation !== loadGeneration.current) return;
     if (performanceResult.status === "fulfilled") setOverview(performanceResult.value);
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
     if (predictionResult.status === "fulfilled") setPrediction(predictionResult.value);
     if (preferenceResult.status === "fulfilled") setPreferences(preferenceResult.value.preferences);
     if (materialResult.status === "fulfilled") setStudyMaterials(materialResult.value.materials ?? []);
-    if (generation !== loadGeneration.current) return;
     const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
     if (failures.length === 6) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
