@@ -1002,7 +1002,7 @@ export default function App() {
                 style={[styles.examSecondary, currentQuestionIndex === 0 && styles.examButtonDisabled]}
               >
                 <MaterialCommunityIcons name="chevron-left" size={20} color={currentQuestionIndex === 0 ? "#aab2c0" : "#526078"} />
-                <Text style={styles.examSecondaryText}>Previous</Text>
+                <Text style={[styles.examSecondaryText, darkMode && { color: "#cbd5e1" }]}>Previous</Text>
               </TouchableOpacity>
               {currentQuestionIndex < test.questions.length - 1 ? (
                 <TouchableOpacity onPress={() => updatePracticeQuestionIndex(currentQuestionIndex + 1)} style={styles.examNext}>
@@ -1018,11 +1018,11 @@ export default function App() {
             </View>
             {currentQuestionIndex < test.questions.length - 1 && (
               <TouchableOpacity disabled={busy} onPress={confirmSubmit} style={styles.submitLink}>
-                <Text style={styles.secondaryText}>Submit practice now</Text>
+                <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Submit practice now</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={confirmExitPractice} style={styles.secondary}>
-              <Text style={styles.secondaryText}>Exit practice</Text>
+              <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Exit practice</Text>
             </TouchableOpacity>
           </Animated.View>
                    ) : activeTab === "practice" ? (
@@ -1038,7 +1038,7 @@ export default function App() {
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>NOTIFICATIONS</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam assignments</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when a new exam is assigned</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examAssignments} onValueChange={(value) => void updateNotificationPreference("examAssignments", value)} /></View><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam results</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when results or reviews are available</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examResults} onValueChange={(value) => void updateNotificationPreference("examResults", value)} /></View>{savingNotificationPreference ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Saving preferences…</Text> : null}</View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
-            <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={styles.secondaryText}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
         ) : activeTab === "profile" ? (
@@ -1049,11 +1049,11 @@ export default function App() {
             <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your profile</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileLabel}>ACCOUNT ID</Text>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT ID</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.id}</Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileLabel}>QUESTION BANK</Text>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION BANK</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "Loading…"} questions</Text>
             </View>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
@@ -1107,14 +1107,14 @@ export default function App() {
                 <Animated.View key={announcement.id} style={[styles.announcementCard, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                   <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>{announcement.title}</Text>
                   <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{announcement.message}</Text>
-                  <Text style={styles.announcementDate}>
+                  <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>
                     {new Date(announcement.publishedAt).toLocaleString()}
                   </Text>
                   {announcement.seenAt ? (
-                    <Text style={styles.announcementDate}>Seen</Text>
+                    <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>Seen</Text>
                   ) : (
                     <TouchableOpacity onPress={() => void acknowledgeAnnouncement(announcement.id)} style={styles.secondary}>
-                      <Text style={styles.secondaryText}>Mark as seen</Text>
+                      <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Mark as seen</Text>
                     </TouchableOpacity>
                   )}
                 </Animated.View>
@@ -1148,7 +1148,7 @@ export default function App() {
                     {!notification.readAt ? <Text style={styles.notificationBadge}>NEW</Text> : null}
                   </View>
                   <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{notification.message}</Text>
-                  <Text style={styles.announcementDate}>{new Date(notification.createdAt).toLocaleString()}</Text>
+                  <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>{new Date(notification.createdAt).toLocaleString()}</Text>
                 </TouchableOpacity>
               ))
             )}
@@ -1164,7 +1164,7 @@ export default function App() {
               <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
             </TouchableOpacity>
 <TouchableOpacity onPress={signOut} style={styles.secondary}>
-              <Text style={styles.secondaryText}>Sign out</Text>
+              <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Sign out</Text>
             </TouchableOpacity>
           </>
         )}
