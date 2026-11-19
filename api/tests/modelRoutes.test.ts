@@ -49,7 +49,9 @@ describe("admin model registry API", () => {
       targetColumn: "target_ready",
       featureSchema: [{ name: "practice_score", type: "numeric" }],
       samples: evaluationSamples,
-      sourceDescription: "Curated held-out test fixture for model governance tests.",
+      sourceDescription: datasetKind === "real-anonymized"
+        ? "Curated held-out real-anonymized test fixture with privacy-safe learner grouping for model governance tests."
+        : "Curated held-out synthetic test fixture for model governance tests.",
       sourceAttested: true,
       datasetKind,
     });
