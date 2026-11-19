@@ -65,6 +65,25 @@ Each sample has this structure:
 - Synthetic data is for pipeline experiments only. It cannot qualify a model for production.
 - The server performs the actual schema, row, group and task validation. A browser-side preview is not proof of model quality.
 
+## Model registry governance
+
+- The first registered version is the bootstrap baseline. Later versions remain inactive until an administrator evaluates them against a different registered baseline.
+- Evaluation datasets must be attested and must not be the training dataset of either the candidate or baseline model. This prevents direct train/evaluation reuse.
+- A passing metric report alone is not enough for production activation: the evaluation must use a separate, attested `real-anonymized` dataset. Synthetic datasets remain useful for development and regression tests only.
+- Activation and rollback are administrator-only operations and are written to the model registry audit log. Only one version per model ID can be active at a time.
+- Active versions cannot be deleted. Inactive versions can be deleted only when no training job for that model is queued or running.
+- Before production use, verify the dataset consent/provenance, pseudonymous learner grouping, evaluation report, active version and audit history.
+
+API:
+- GET /admin/models — list model versions and production eligibility.
+- POST /admin/models — register a version; later versions are inactive.
+- POST /admin/models/:modelId/:version/evaluate — compare a candidate with a baseline on an independent registered dataset.
+- POST /admin/models/:modelId/:version/activate — promote a candidate only after passing evaluation and production-data checks.
+- POST /admin/models/:modelId/rollback — reactivate the previously activated version.
+- GET /admin/models/:modelId/audit — inspect registry lifecycle events.
+- GET /admin/models/:modelId/evaluations — inspect evaluation reports.
+- DELETE /admin/models/:modelId/:version — delete an eligible inactive version.
+
 API:
 - POST /admin/model-datasets — register a dataset.
 - GET /admin/model-datasets — list dataset metadata and fingerprints.
