@@ -163,32 +163,34 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client tools
+      - name: Rehearse backup and restore using PostgreSQL 16 client tools
+        env:
+          BACKUP_FILE: ${{ runner.temp }}/arctester-rehearsal.dump
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-16
-
-      - name: Prepare isolated source and empty rehearsal target
-        run: |
-          createdb --maintenance-db="$DATABASE_URL" arctester_rehearsal_ci
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          # The postgres:16 image supplies client tools matching the server.
+          # Keep the backup on the runner and run the existing guarded script.
+          docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
+            -e DATABASE_URL -e RESTORE_DATABASE_URL -e PGPASSWORD \
+            -e BACKUP_FILE=/backup/arctester-rehearsal.dump \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$RUNNER_TEMP:/backup" \
+            --workdir /workspace postgres:16 \
+            bash -euo pipefail -c '
+              createdb --maintenance-db="$DATABASE_URL" arctester_rehearsal_ci
+              psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
           CREATE TABLE backup_rehearsal_probe (
             id integer PRIMARY KEY,
             payload text NOT NULL
           );
           INSERT INTO backup_rehearsal_probe (id, payload)
-          VALUES (1, 'restore-check-one'), (2, 'restore-check-two');
+          VALUES (1, '\''restore-check-one'\''), (2, '\''restore-check-two'\'');
           SQL
+              bash scripts/backup-restore-rehearsal.sh --execute
+              restored="$(psql "$RESTORE_DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM backup_rehearsal_probe WHERE payload LIKE '\''restore-check-%'\''")"
+              test "$restored" = "2"
+            '
 
-      - name: Run guarded backup and restore rehearsal
-        env:
-          BACKUP_FILE: ${{ runner.temp }}/arctester-rehearsal.dump
-        run: scripts/backup-restore-rehearsal.sh --execute
-
-      - name: Verify restored application data
-        run: |
-          restored="$(psql "$RESTORE_DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM backup_rehearsal_probe WHERE payload LIKE 'restore-check-%'")"
-          test "$restored" = "2"
   playwright-e2e:
     name: Playwright E2E tests
     runs-on: ubuntu-latest
