@@ -566,6 +566,31 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+
+  router.get("/admin/models/:modelId/evaluations", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const evaluations = await db.modelEvaluation.findMany({
+        where: { modelId }, orderBy: { evaluatedAt: "desc" }, take: 200,
+        select: {
+          id: true, actorId: true, modelId: true, candidateVersion: true,
+          baselineVersion: true, evaluationDataset: true, datasetFingerprint: true,
+          sampleCount: true, metricsJson: true, status: true, evaluatedAt: true,
+        },
+      });
+      res.json({ ok: true, evaluations: evaluations.map((item) => ({
+        id: item.id, actorId: item.actorId, modelId: item.modelId,
+        candidateVersion: item.candidateVersion, baselineVersion: item.baselineVersion,
+        evaluationDataset: item.evaluationDataset, datasetFingerprint: item.datasetFingerprint,
+        sampleCount: item.sampleCount, metrics: JSON.parse(item.metricsJson),
+        status: item.status, evaluatedAt: item.evaluatedAt,
+      })) });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      next(error);
+    }
+  });
+
   router.post("/admin/models/:modelId/:version/evaluate", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = ModelIdSchema.parse(req.params.modelId);
