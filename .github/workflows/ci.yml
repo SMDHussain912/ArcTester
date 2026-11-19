@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: arctester-ci-${{ github.ref }}
@@ -70,18 +70,13 @@ jobs:
       - name: Build web and API
         run: npm run build
 
-      - name: Commit verified npm lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "The committed lockfile is already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: refresh npm lockfile"
-          echo "Lockfile changes prepared for artifact handoff."
+      - name: Upload verified npm lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-npm-lockfile
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 7
 
   mobile:
     name: Mobile typecheck
