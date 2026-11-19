@@ -1,6 +1,12 @@
 import { useState } from "react";
 export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
+export type AdminSemanticMatch = {
+  questionId: number;
+  similarity: number;
+  relation: "SEMANTICALLY_SIMILAR" | "SAME_CONCEPT" | "POSSIBLE_DUPLICATE";
+  question: { id: number; text: string; subject: { name: string }; topic: { name: string } | null } | null;
+};
 type Topic = { id: number; name: string; _count: { questions: number } };
 
 type AdminQuestionBankProps = {
@@ -25,10 +31,14 @@ type AdminQuestionBankProps = {
   onEditQuestion: (question: AdminBankQuestion) => void;
   onUpload: () => void;
   onPageChange: (page: number) => void;
+  semanticResults?: AdminSemanticMatch[];
+  semanticBusy?: boolean;
+  onSemanticSearch?: (query: string) => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange, semanticResults = [], semanticBusy = false, onSemanticSearch = () => {} }: AdminQuestionBankProps) {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [semanticQuery, setSemanticQuery] = useState("");
   const pageCount = Math.max(1, Math.ceil(total / 25));
   function confirmDeleteSelected() {
     if (!selected.length) return;
@@ -44,6 +54,21 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={topic} onChange={(event) => onTopicChange(event.target.value)}><option value="">All topics</option>{filteredTopics.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select>
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
       </div>
+      <section className="admin-panel semantic-search-panel" aria-label="Semantic question search">
+        <div><h2>Semantic similarity &amp; duplicate review</h2><p className="muted">Find questions with similar meaning, even when their wording differs. Similarity is a retrieval score, not a probability.</p></div>
+        <div className="admin-toolbar">
+          <input aria-label="Semantic search query" placeholder="Describe a concept or question…" value={semanticQuery} onChange={(event) => setSemanticQuery(event.target.value)} />
+          <button className="primary" disabled={semanticBusy || semanticQuery.trim().length < 3} onClick={() => onSemanticSearch(semanticQuery.trim())}>{semanticBusy ? "Searching…" : "Find similar questions"}</button>
+        </div>
+        {semanticResults.length > 0 && <div className="semantic-results" aria-live="polite">
+          {semanticResults.map((match) => <article className="bank-question semantic-match" key={match.questionId}>
+            <div className="bank-q-main">
+              <div className="bank-q-meta"><b>Question #{match.questionId}</b><span>{match.question?.subject.name ?? "Unknown subject"}</span><span>{match.question?.topic?.name ?? "General"}</span><span className="difficulty medium">{match.relation.replaceAll("_", " ").toLowerCase()}</span><span>{(match.similarity * 100).toFixed(1)}% similarity</span></div>
+              <p>{match.question?.text ?? "Question details unavailable."}</p>
+            </div>
+          </article>)}
+        </div>}
+      </section>
       <div className="admin-panel table-panel">
         <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="bulk-question-difficulty" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}>Selected question difficulty</label>

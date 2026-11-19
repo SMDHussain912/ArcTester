@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import AdminSubjects, { type AdminCatalogSubject } from "./AdminSubjects";
-import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
+import AdminQuestionBank, { type AdminBankQuestion, type AdminSemanticMatch } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminModelLab, { type ModelDatasetRegistration, type ModelLabDataset, type ModelLabJob, type ModelLabModel, type IntelligenceProviderStatus } from "./AdminModelLab";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
@@ -36,6 +36,7 @@ export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
+ const [semanticResults,setSemanticResults]=useState<AdminSemanticMatch[]>([]),[semanticBusy,setSemanticBusy]=useState(false);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:""});
  const [exam,setExam]=useState<AdminPaperDraft>({title:"",description:"",instructions:"Read each question carefully. Select one correct option.",duration:"180",shuffleQuestions:true,shuffleOptions:false,marks:"1",negative:"0.25",selectionMode:"manual",perSubject:""});
  const [examIds,setExamIds]=useState<number[]>([]),[exams,setExams]=useState<AdminManagedExam[]>([]),[subjectQuotas,setSubjectQuotas]=useState<Record<string,number>>({}),[difficultyMix,setDifficultyMix]=useState<AdminPaperDifficultyMix>({easy:30,medium:50,hard:20}),[subjectScoring,setSubjectScoring]=useState<AdminPaperSubjectScoring>({}),[students,setStudents]=useState<AdminExamStudent[]>([]),[assignmentExam,setAssignmentExam]=useState<string|null>(null),[assignedStudents,setAssignedStudents]=useState<number[]>([]),[availableFrom,setAvailableFrom]=useState(""),[dueAt,setDueAt]=useState(""),[preview,setPreview]=useState<AdminExamPreview|null>(null),[results,setResults]=useState<AdminExamResult[]>([]),[announcements,setAnnouncements]=useState<AdminAnnouncement[]>([]),[announcementTitle,setAnnouncementTitle]=useState(""),[announcementMessage,setAnnouncementMessage]=useState(""),[announcementExpiry,setAnnouncementExpiry]=useState(""),[announcementPublishAt,setAnnouncementPublishAt]=useState("");
@@ -69,6 +70,7 @@ export default function AdminWorkspace(p:Props){
  const selectedSubject=catalog.find(s=>s.name===subject);
  const filteredTopics=selectedSubject?.topics??[];
  async function loadCatalog(){const r=await api<{subjects:AdminCatalogSubject[]}>("/admin/question-catalog");setCatalog(Array.isArray(r.subjects) ? r.subjects : []);}
+ async function searchSimilarQuestions(value:string){setSemanticBusy(true);setError("");try{const params=new URLSearchParams({q:value,limit:"10",candidateLimit:"500"});if(subject)params.set("subject",subject);const r=await api<{matches:AdminSemanticMatch[]}>("/admin/question-embeddings/search?"+params);setSemanticResults(Array.isArray(r.matches)?r.matches:[]);}catch(e){setError((e as Error).message);}finally{setSemanticBusy(false);}}
  async function loadQuestions(nextPage=page){
   const requestId=++questionRequestSequence.current;
   const params=new URLSearchParams({page:String(nextPage),limit:"25"});
@@ -239,6 +241,9 @@ export default function AdminWorkspace(p:Props){
     onEditQuestion={editQuestion}
     onUpload={() => setTab("import")}
     onPageChange={(value) => void loadQuestions(value)}
+    semanticResults={semanticResults}
+    semanticBusy={semanticBusy}
+    onSemanticSearch={(value) => void searchSimilarQuestions(value)}
    />}
    {tab==="add"&&<AdminQuestionEditor form={form} editing={editingId !== null} busy={busy} onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))} onSubmit={(event) => void saveQuestion(event)} onBack={() => { setEditingId(null); setTab("questions"); }} />}
    {tab==="import"&&<AdminQuestionImport

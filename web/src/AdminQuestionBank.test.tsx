@@ -17,6 +17,27 @@ describe("AdminQuestionBank", () => {
     expect(screen.getByText("Page 1 of 1")).toBeTruthy();
   });
 
+
+  it("runs semantic question search and renders similarity relationships", () => {
+    const onSemanticSearch = vi.fn();
+    render(<AdminQuestionBank
+      questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty=""
+      catalog={catalog} filteredTopics={catalog[0].topics} selected={[]} busy={false}
+      onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()}
+      onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()}
+      onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()}
+      semanticResults={[{ questionId: 7, similarity: 0.91, relation: "SAME_CONCEPT", question: {
+        id: 7, text: "What is the sum of two and two?", subject: { name: "Mathematics" }, topic: { name: "Algebra" },
+      } }]}
+      onSemanticSearch={onSemanticSearch}
+    />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Semantic search query" }), { target: { value: "addition" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find similar questions" }));
+    expect(onSemanticSearch).toHaveBeenCalledWith("addition");
+    expect(screen.getByText("91.0% similarity")).toBeTruthy();
+    expect(screen.getByText("What is the sum of two and two?")).toBeTruthy();
+  });
+
   it("renders empty state and disables destructive actions without a selection", () => {
     render(<AdminQuestionBank questions={[]} total={0} page={1} query="" subject="" topic="" difficulty="" catalog={[]} filteredTopics={[]} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
     expect(screen.getByText("No questions match these filters")).toBeTruthy();
