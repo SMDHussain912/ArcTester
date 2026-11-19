@@ -25,9 +25,9 @@ describe("three-class exam readiness model", () => {
   });
 
   it("rejects missing learner pseudonyms and class-imbalanced training sets", () => {
-    expect(() => fitReadinessClassifier(rows.map((row, index) => index === 0 ? { ...row, groupId: "" } : row))
+    expect(() => fitReadinessClassifier(rows.map((row, index) => index === 0 ? { ...row, groupId: "" } : row)))
       .toThrow("HMAC learner group IDs");
-    expect(() => fitReadinessClassifier(rows.filter((row) => row.label !== "READY"))
+    expect(() => fitReadinessClassifier(rows.filter((row) => row.label !== "READY")))
       .toThrow("at least 30 examples of every readiness class");
   });
 });
