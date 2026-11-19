@@ -311,7 +311,11 @@ function getCookie(req: Request, name: string): string | null {
 }
 
 function sessionCookieSameSite(secure: boolean): "Lax" | "None" {
-  return secure && process.env.COOKIE_SAME_SITE?.toLowerCase() === "none" ? "None" : "Lax";
+  // The web app and API are hosted on different sites (Vercel/localhost + Render).
+  // Production cookies therefore need SameSite=None; Secure to accompany CORS credentials.
+  // Set COOKIE_SAME_SITE=lax explicitly only for a same-site deployment.
+  if (!secure || process.env.COOKIE_SAME_SITE?.toLowerCase() === "lax") return "Lax";
+  return "None";
 }
 
 function setSessionCookie(res: Response, token: string): void {
