@@ -22,6 +22,12 @@ describe("AdminModelLab", () => {
     expect(screen.getByRole("button", { name: "Delete version" })).toBeTruthy();
   });
 
+  it("disables TensorFlow.js for binary-classification datasets", () => {
+    render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Queue TensorFlow.js" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/TensorFlow.js requires a regression dataset with numeric-only features/i)).toBeTruthy();
+  });
+
   it("labels the reduced classical training path as a single baseline", () => {
     render(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Train logistic baseline" })).toBeTruthy();
