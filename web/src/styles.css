@@ -875,3 +875,10 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 /* Practice local recovery and connection status */
 .practice-save-status{margin:0 0 14px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));border-radius:10px;background:var(--surface);color:var(--muted);font-size:12px;line-height:1.5}
 .practice-save-status.unavailable{border-color:color-mix(in srgb,#d97706 45%,var(--border));background:color-mix(in srgb,#d97706 8%,var(--surface));color:var(--text)}
+
+
+/* Plain-language guidance in the admin model lab. */
+.model-lab-guide ol { display: grid; gap: 10px; padding-left: 22px; line-height: 1.6; }
+.model-lab-guide li { padding-left: 4px; }
+.model-result-explanation { margin-top: 14px; padding: 14px; border: 1px solid var(--border, #334155); border-radius: 12px; background: var(--surface-muted, rgba(100,116,139,.10)); line-height: 1.55; }
+.model-result-explanation p { margin: 8px 0 0; }
