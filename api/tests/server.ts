@@ -108,6 +108,17 @@ export async function postJson(
   return { status: res.status, json: await res.json() };
 }
 
+export async function putJson(
+  url: string, body: unknown, cookie?: string
+): Promise<{ status: number; json: unknown }> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, json: await res.json() };
+}
+
 export async function getJson(
   url: string,
   cookie?: string
@@ -201,6 +212,7 @@ export function bindSession(baseUrl: string, cookie: string) {
   return {
     baseUrl,
     post: (path: string, body: unknown) => postJson(`${baseUrl}${path}`, body, cookie),
+    put: (path: string, body: unknown) => putJson(`${baseUrl}${path}`, body, cookie),
     get: (path: string) => getJson(`${baseUrl}${path}`, cookie),
   };
 }
