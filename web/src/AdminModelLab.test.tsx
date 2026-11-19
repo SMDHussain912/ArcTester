@@ -76,6 +76,17 @@ describe("AdminModelLab", () => {
     expect(onCancelJob).toHaveBeenCalledWith("job-1");
   });
 
+  it("offers holdout comparison against the previous candidate version", () => {
+    const onEvaluateModel = vi.fn();
+    const registry = [
+      { modelId: "readiness-model", version: 1, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
+      { modelId: "readiness-model", version: 2, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
+    ];
+    render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={registry} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onEvaluateModel={onEvaluateModel} />);
+    fireEvent.click(screen.getByRole("button", { name: "Compare with v1" }));
+    expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, 1, "dataset-1");
+  });
+
   it("registers a JSON dataset with provenance and feature schema", () => {
     const onRegisterDataset = vi.fn();
     render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
