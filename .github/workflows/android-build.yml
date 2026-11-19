@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: arctester-android-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   android-release:
     name: Build Android installable APK
@@ -51,7 +55,19 @@ jobs:
       - name: Build standalone APK
         env:
           EXPO_PUBLIC_API_URL: https://example.invalid
-        run: npm run build:android:release --prefix mobile
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if npm run build:android:release --prefix mobile; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Android release build failed after 3 attempts." >&2
+              exit 1
+            fi
+            echo "Gradle dependency/build attempt $attempt failed; retrying after a short delay." >&2
+            sleep 15
+          done
 
       - name: Upload standalone APK
         uses: actions/upload-artifact@v4
