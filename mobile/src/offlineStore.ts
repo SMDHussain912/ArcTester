@@ -219,7 +219,7 @@ export async function saveExamPackage(
     throw new Error("The exam package has an invalid server timestamp.");
   }
   const db = await database();
-  await db.withExclusiveTransactionAsync(async (transaction) => {
+  await withOfflineTransaction(db, async (transaction) => {
     const existingAttempt = await transaction.getFirstAsync<{ status: string }>(
       "SELECT status FROM offline_attempts WHERE assignment_id = ?",
       examPackage.assignmentId,
@@ -277,7 +277,7 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
     examPackage: OfflineExamPackage;
   } | null = null;
 
-  await db.withExclusiveTransactionAsync(async (transaction) => {
+  await withOfflineTransaction(db, async (transaction) => {
     const row = await transaction.getFirstAsync<{
       payload_json: string;
       server_offset_ms: number;
