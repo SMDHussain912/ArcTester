@@ -8,14 +8,17 @@ const jobs: ModelLabJob[] = [{ id: "job-1", datasetId: "dataset-1", modelId: "ec
 describe("AdminModelLab", () => {
   it("ignores incomplete adaptive analytics payloads without breaking other Model Lab controls", async () => {
     const originalFetch = globalThis.fetch;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    const mockedFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true, summary: {}, byReason: [], daily: [] }),
-    }));
+    });
+    vi.stubGlobal("fetch", mockedFetch);
     try {
       render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
       expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
-      await waitFor(() => expect(screen.queryByText("Questions selected")).toBeNull());
+      await waitFor(() => expect(mockedFetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByText("LAST 30 DAYS")).toBeTruthy());
+      expect(screen.queryByText("Questions selected")).toBeNull();
       expect(screen.getByText("Gradient Boosting")).toBeTruthy();
     } finally {
       vi.stubGlobal("fetch", originalFetch);
