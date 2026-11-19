@@ -17,6 +17,15 @@ describe("offline learning package", () => {
     expect(validateOfflineLearningPackage(validPackage)).toEqual(validPackage);
   });
 
+  it("accepts the new practice-only package schema while retaining version 2 compatibility", () => {
+    const practiceOnly = { ...validPackage, schemaVersion: 3 as const, practiceOnly: true as const };
+    expect(validateOfflineLearningPackage(practiceOnly)).toEqual(practiceOnly);
+  });
+
+  it("rejects version 3 packages that do not declare practice-only content", () => {
+    expect(() => validateOfflineLearningPackage({ ...validPackage, schemaVersion: 3 })).toThrow(/unsupported or incomplete format/i);
+  });
+
   it("rejects a mismatched question count", () => {
     expect(() => validateOfflineLearningPackage({ ...validPackage, total: 3 })).toThrow(/unsupported or incomplete format/i);
   });
