@@ -86,8 +86,8 @@ export default function AdminModelLab({
           : null;
       if (!Array.isArray(samples)) throw new Error("JSON must contain an array of samples or a samples property.");
       setSamplesText(JSON.stringify(samples, null, 2));
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Could not read this JSON file.");
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : "Could not read this JSON file.");
     }
   }
 
