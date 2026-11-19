@@ -86,6 +86,8 @@ export default function App() {
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [practiceLocalSaveAvailable, setPracticeLocalSaveAvailable] = useState(false);
+  const isOnline = useContext(OnlineStatusContext);
   const [practiceClock, setPracticeClock] = useState(0);
   const [practiceServerOffset, setPracticeServerOffset] = useState(0);
   const practiceAutoSubmitRef = useRef(false);
@@ -227,7 +229,9 @@ export default function App() {
             .filter((answer) => answer.selectedIndex !== null)
             .map((answer) => [answer.questionId, answer.selectedIndex as number]),
         );
-        setAnswers({ ...answersFromServer, ...answersFromStorage });
+        const mergedAnswers = { ...answersFromServer, ...answersFromStorage };
+        setAnswers(mergedAnswers);
+        setPracticeLocalSaveAvailable(safeStorage.setItem(practiceAnswersKey(attemptId), JSON.stringify(mergedAnswers)));
         const clientNow = performance.now();
         setPracticeServerOffset(new Date(restored.serverNow).getTime() - clientNow);
         setPracticeClock(clientNow);
@@ -362,7 +366,7 @@ export default function App() {
       setActivePage("practice");
       practiceAutoSubmitRef.current = false;
       safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
-      safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}");
+      setPracticeLocalSaveAvailable(safeStorage.setItem(practiceAnswersKey(created.attemptId), "{}"));
       setAnswers({});
     } catch (cause) {
       setError((cause as Error).message);
@@ -379,8 +383,10 @@ export default function App() {
     if (!test) return;
     const next = { ...answers, [questionId]: selectedIndex };
     setAnswers(next);
-    if (!safeStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next))) {
-      setError("Browser storage is unavailable. Submit your practice test before closing this tab.");
+    const saved = safeStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next));
+    setPracticeLocalSaveAvailable(saved);
+    if (!saved) {
+      setError("Browser storage is unavailable. Keep this tab open and submit your practice test before closing it.");
     }
   }
 
@@ -400,6 +406,7 @@ export default function App() {
       });
       const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
+      setPracticeLocalSaveAvailable(false);
       safeStorage.removeItem("arctester-active-practice-attempt");
       safeStorage.removeItem(practiceAnswersKey(test.attemptId));
       setTest(null);
@@ -407,6 +414,7 @@ export default function App() {
       try {
         const recovered = await request<Result>(`/tests/${test.attemptId}/result`);
         setResult(recovered);
+        setPracticeLocalSaveAvailable(false);
         safeStorage.removeItem("arctester-active-practice-attempt");
         safeStorage.removeItem(practiceAnswersKey(test.attemptId));
         setTest(null);
@@ -490,6 +498,7 @@ export default function App() {
     setTest(null);
     setResult(null);
     setAnswers({});
+    setPracticeLocalSaveAvailable(false);
     clearStudentCommunications();
     setInvitations([]);
     setPracticeSubjects([]);
@@ -594,6 +603,8 @@ export default function App() {
             answers={answers}
             remainingSeconds={practiceRemainingSeconds}
             busy={busy}
+            isOnline={isOnline}
+            localSaveAvailable={practiceLocalSaveAvailable}
             onLeave={() => setActivePage("dashboard")}
             onSelectAnswer={selectPracticeAnswer}
             onSubmit={() => void submitTest()}
