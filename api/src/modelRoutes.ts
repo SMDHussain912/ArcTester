@@ -608,6 +608,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       }
       if (!dataset) return next(notFound("Registered evaluation dataset was not found."));
       if (!dataset.sourceAttested) return next(conflict("Dataset source has not been attested."));
+      if (candidateRow.trainingDatasetId === dataset.id || baselineRow.trainingDatasetId === dataset.id) {
+        return next(conflict("Evaluation data must be separate from both candidate and baseline training datasets."));
+      }
       const candidate = validateRegistryArtifact(JSON.parse(candidateRow.artifactJson));
       const baseline = validateRegistryArtifact(JSON.parse(baselineRow.artifactJson));
       const datasetFeatures = JSON.parse(dataset.featureSchemaJson);
