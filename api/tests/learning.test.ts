@@ -5,6 +5,7 @@ import { bindSession, signUp, startTestServer, type TestServer } from "./server.
 
 let server: TestServer;
 let api: ReturnType<typeof bindSession>;
+let userId: number;
 
 beforeAll(async () => {
   server = await startTestServer(buildApp);
@@ -13,6 +14,7 @@ beforeAll(async () => {
     ["Physics", "What is speed?", ["Distance/time", "Mass", "Force", "Energy"], 0, "Speed is distance divided by time."],
   ]);
   const session = await signUp(server.baseUrl, "materials@example.com");
+  userId = session.userId;
   api = bindSession(server.baseUrl, session.cookie);
 });
 
@@ -64,6 +66,7 @@ describe("offline learning package", () => {
     expect(status).toBe(200);
     const body = json as {
       schemaVersion: number;
+      practiceOnly: boolean;
       exportedAt: string;
       total: number;
       subjects: string[];
@@ -76,7 +79,8 @@ describe("offline learning package", () => {
       }[];
     };
 
-    expect(body.schemaVersion).toBe(2);
+    expect(body.schemaVersion).toBe(3);
+    expect(body.practiceOnly).toBe(true);
     expect(new Date(body.exportedAt).getTime()).toBeGreaterThan(0);
     expect(body.total).toBe(2);
     expect(body.subjects).toEqual(["Maths", "Physics"]);
@@ -88,5 +92,39 @@ describe("offline learning package", () => {
     });
     expect(body.questions[0]).not.toHaveProperty("correctIndex");
     expect(body.questions[0]).not.toHaveProperty("explanation");
+  });
+
+  it("excludes published exam questions from offline practice downloads", async () => {
+    const examQuestion = await server.db.question.findFirstOrThrow({ where: { text: "What is 2 + 2?" } });
+    const exam = await server.db.exam.create({
+      data: {
+        title: "Offline package separation",
+        createdById: userId,
+        versions: { create: {
+          version: 1,
+          durationMinutes: 30,
+          sebKeys: [],
+          publishedAt: new Date(),
+          questions: { create: {
+            sourceQuestionId: examQuestion.id,
+            position: 1,
+            subject: "Maths",
+            topic: "General",
+            text: examQuestion.text,
+            options: examQuestion.options,
+            correctIndex: examQuestion.correctIndex,
+          } },
+        } },
+      },
+    });
+    try {
+      const { status, json } = await api.get("/learning/package");
+      expect(status).toBe(200);
+      const body = json as { schemaVersion: number; practiceOnly: boolean; total: number; questions: { id: number }[] };
+      expect(body).toMatchObject({ schemaVersion: 3, practiceOnly: true, total: 1 });
+      expect(body.questions.some((question) => question.id === examQuestion.id)).toBe(false);
+    } finally {
+      await server.db.exam.delete({ where: { id: exam.id } });
+    }
   });
 });
