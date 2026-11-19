@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Skeleton from "./components/Skeleton";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
@@ -44,6 +44,11 @@ async function loadOverview(): Promise<PerformanceOverview> {
   const response = await fetch(`${API}/analytics/overview`, { credentials: "include" });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || "Unable to load your progress.");
+  if (!body || typeof body !== "object" || !body.practice || !body.formalExams ||
+      !Array.isArray(body.practice.subjects) || !Array.isArray(body.practice.trend) ||
+      !Array.isArray(body.formalExams.subjects)) {
+    throw new Error("The progress response was incomplete. Refresh to try again.");
+  }
   return body as PerformanceOverview;
 }
 
@@ -55,20 +60,28 @@ export default function StudentProgress() {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestGeneration = useRef(0);
 
   const refresh = useCallback(async () => {
+    const generation = ++requestGeneration.current;
     setLoading(true);
     setError("");
     try {
-      setOverview(await loadOverview());
+      const data = await loadOverview();
+      if (generation === requestGeneration.current) setOverview(data);
     } catch (cause) {
-      setError((cause as Error).message);
+      if (generation === requestGeneration.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to load your progress.");
+      }
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => { requestGeneration.current += 1; };
+  }, [refresh]);
 
   return (
     <section className="student-progress">
@@ -80,7 +93,7 @@ export default function StudentProgress() {
         </div>
         <button className="ghost" disabled={loading} onClick={() => void refresh()}>{loading ? "Refreshing…" : "Refresh progress"}</button>
       </div>
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && <p className="error" role="alert">{error} {overview ? "Showing your last successfully loaded results." : ""}</p>}
       {loading && !overview ? (
         <div className="stack" style={{ gap: 10 }}>
           <Skeleton variant="table-row" />
