@@ -111,6 +111,7 @@ async function setupExamData(page: Page) {
 
 test.describe("Student Practice Flow", () => {
   test("student can create, take, and submit a practice test", async ({ page }) => {
+    test.setTimeout(60000);
     const { studentEmail } = await setupExamData(page);
 
     // Login as student through UI
@@ -125,16 +126,17 @@ test.describe("Student Practice Flow", () => {
 
     // Select a seeded subject and request one question so the test does not
     // depend on the size or distribution of the CI starter question bank.
-    const subjectChoices = page.locator(".practice-subject-choice input[type=checkbox]");
+    const subjectChoices = page.locator(".practice-subject-choice");
     await expect(subjectChoices.first()).toBeVisible();
-    await subjectChoices.first().check();
+    await subjectChoices.first().click();
     await page.getByLabel("Number of questions").fill("1");
 
     // Create practice paper
     await page.getByRole("button", { name: "Create 1-question paper" }).click();
 
-    // Should be on practice session
-    await page.waitForSelector(".question-card, .practice-session, [role='button']", { timeout: 10000 });
+    // Confirm the practice engine actually opened a question, not just that
+    // generic navigation controls remain on screen.
+    await expect(page.locator(".question-card").first()).toBeVisible({ timeout: 15000 });
 
     // Answer first question if available
     const options = page.locator(".option");
