@@ -138,16 +138,14 @@ export function submissionRouter(db: PrismaClient): Router {
           },
           data: { readAt: new Date() },
         });
-        await tx.studentNotification.create({
-          data: {
-            userId: submission.assignment.studentId,
-            kind: "EXAM_RESULT",
-            title: "Exam result available",
+        const notificationPreferences = await tx.studentNotificationPreference.findUnique({ where: { userId: submission.assignment.studentId }, select: { examResults: true } });
+        if (notificationPreferences?.examResults !== false) {
+          await tx.studentNotification.create({ data: {
+            userId: submission.assignment.studentId, kind: "EXAM_RESULT", title: "Exam result available",
             message: `Your submission for ${submission.assignment.examVersion.exam.title} has been reviewed and graded. Open the result to see your score.`,
-            href: `/assignments/${submission.assignment.id}/result`,
-            dedupeKey: `exam-review-release:${submission.id}`,
-          },
-        });
+            href: `/assignments/${submission.assignment.id}/result`, dedupeKey: `exam-review-release:${submission.id}`,
+          } });
+        }
         return "released" as const;
       });
       if (released === "conflict") return next(conflict("This submission is no longer awaiting review."));
@@ -226,16 +224,14 @@ export function submissionRouter(db: PrismaClient): Router {
             },
             data: { readAt: now },
           });
-          await tx.studentNotification.create({
-            data: {
-              userId: submission.assignment.studentId,
-              kind: "EXAM_RESULT",
-              title: "Exam result available",
+          const notificationPreferences = await tx.studentNotificationPreference.findUnique({ where: { userId: submission.assignment.studentId }, select: { examResults: true } });
+          if (notificationPreferences?.examResults !== false) {
+            await tx.studentNotification.create({ data: {
+              userId: submission.assignment.studentId, kind: "EXAM_RESULT", title: "Exam result available",
               message: `Your submission for ${submission.assignment.examVersion.exam.title} has been reviewed and graded. Open the result to see your score.`,
-              href: `/assignments/${submission.assignment.id}/result`,
-              dedupeKey: `exam-review-release:${submissionId}`,
-            },
-          });
+              href: `/assignments/${submission.assignment.id}/result`, dedupeKey: `exam-review-release:${submissionId}`,
+            } });
+          }
           results.push({ submissionId, status: "released" });
         });
       }

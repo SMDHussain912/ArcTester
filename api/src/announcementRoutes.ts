@@ -200,6 +200,23 @@ export function announcementRouter(db: PrismaClient): Router {
   });
 
 
+  const NotificationPreferencesSchema = z.object({ examAssignments: z.boolean().optional(), examResults: z.boolean().optional() }).strict().refine((value) => Object.keys(value).length > 0, "Choose at least one preference to update.");
+
+  router.get("/notifications/preferences", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const preferences = await db.studentNotificationPreference.findUnique({ where: { userId: req.user!.id }, select: { examAssignments: true, examResults: true, updatedAt: true } });
+      res.json({ ok: true, preferences: preferences ?? { examAssignments: true, examResults: true, updatedAt: null } });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/notifications/preferences", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = NotificationPreferencesSchema.parse(req.body);
+      const preferences = await db.studentNotificationPreference.upsert({ where: { userId: req.user!.id }, create: { userId: req.user!.id, ...input }, update: input, select: { examAssignments: true, examResults: true, updatedAt: true } });
+      res.json({ ok: true, preferences });
+    } catch (error) { next(error); }
+  });
+
   router.get("/notifications", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const now = new Date();

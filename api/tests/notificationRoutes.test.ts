@@ -134,4 +134,16 @@ describe("student notification API", () => {
     expect(repeated.status).toBe(200);
     expect(repeated.json).toMatchObject({ ok: true, updatedCount: 0 });
   });
+  it("returns default notification preferences and persists partial updates per student", async () => {
+    const defaults = await getJson(`${server.baseUrl}/notifications/preferences`, firstCookie);
+    expect(defaults.status).toBe(200);
+    expect(defaults.json).toMatchObject({ preferences: { examAssignments: true, examResults: true } });
+    const updated = await fetch(`${server.baseUrl}/notifications/preferences`, { method: "PATCH", headers: { "content-type": "application/json", cookie: firstCookie }, body: JSON.stringify({ examAssignments: false }) });
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({ preferences: { examAssignments: false, examResults: true } });
+    const secondDefaults = await getJson(`${server.baseUrl}/notifications/preferences`, secondCookie);
+    expect(secondDefaults.json).toMatchObject({ preferences: { examAssignments: true, examResults: true } });
+    const invalid = await fetch(`${server.baseUrl}/notifications/preferences`, { method: "PATCH", headers: { "content-type": "application/json", cookie: firstCookie }, body: JSON.stringify({ unknown: true }) });
+    expect(invalid.status).toBe(400);
+  });
 });

@@ -423,16 +423,14 @@ export function examRouter(db: PrismaClient): Router {
             },
             select: { id: true, studentId: true, assignedAt: true, dueAt: true },
           });
-          await tx.studentNotification.create({
-            data: {
-              userId: studentId,
-              kind: "EXAM_ASSIGNMENT",
-              title: "New exam assigned",
+          const notificationPreferences = await tx.studentNotificationPreference.findUnique({ where: { userId: studentId }, select: { examAssignments: true } });
+          if (notificationPreferences?.examAssignments !== false) {
+            await tx.studentNotification.create({ data: {
+              userId: studentId, kind: "EXAM_ASSIGNMENT", title: "New exam assigned",
               message: `${exam.title} has been assigned to you. Open your assigned exams for details.`,
-              href: "/assignments",
-              dedupeKey: `exam-assignment:${assignment.id}`,
-            },
-          });
+              href: "/assignments", dedupeKey: `exam-assignment:${assignment.id}`,
+            } });
+          }
           results.push(assignment);
         }
         return results;

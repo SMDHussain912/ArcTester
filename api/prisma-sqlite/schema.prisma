@@ -82,6 +82,7 @@ model User {
   announcementsCreated Announcement[] @relation("AnnouncementCreator")
   announcementReads   AnnouncementRead[]
   notifications       StudentNotification[]
+  notificationPreferences StudentNotificationPreference?
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
   modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
@@ -290,6 +291,16 @@ model AnnouncementRead {
 }
 
  
+
+model StudentNotificationPreference {
+  id              String   @id @default(cuid())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int      @unique
+  examAssignments Boolean  @default(true)
+  examResults     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
 
 model StudentNotification {
   id        String   @id @default(cuid())
