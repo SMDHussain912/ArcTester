@@ -120,13 +120,18 @@ test.describe("Student Practice Flow", () => {
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
 
     // Navigate to practice
-    await page.getByRole("button", { name: "Practice", exact: true }).click();
+    await page.getByRole("navigation", { name: "Student navigation" })
+      .getByRole("button", { name: "Practice", exact: true }).click();
 
-    // Select subject
-    await page.getByText(subjectName, { exact: true }).first().click();
+    // Select a seeded subject and request one question so the test does not
+    // depend on the size or distribution of the CI starter question bank.
+    const subjectChoices = page.locator(".practice-subject-choice input[type=checkbox]");
+    await expect(subjectChoices.first()).toBeVisible();
+    await subjectChoices.first().check();
+    await page.getByLabel("Number of questions").fill("1");
 
     // Create practice paper
-    await page.click('button:has-text("Create")');
+    await page.getByRole("button", { name: "Create 1-question paper" }).click();
 
     // Should be on practice session
     await page.waitForSelector(".question-card, .practice-session, [role='button']", { timeout: 10000 });
@@ -163,7 +168,8 @@ test.describe("Formal Exam Flow", () => {
 
     // Should see assigned exams
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
-    await page.getByRole("button", { name: /Assigned exams/ }).click();
+    await page.getByRole("navigation", { name: "Student navigation" })
+      .getByRole("button", { name: /Assigned exams/ }).click();
     await expect(page.getByText(examTitle)).toBeVisible({ timeout: 10000 });
 
     // Click on assigned exam to start
