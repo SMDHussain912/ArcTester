@@ -1,5 +1,7 @@
-import { runTunedClassifierExperiments, runRegressionExperiment, splitDatasetRows, splitDatasetRowsByGroup } from "./datasetPipeline.js";
+import { runRegressionExperiment, splitDatasetRows, splitDatasetRowsByGroup } from "./datasetPipeline.js";
 import type { DatasetFeatureEncoder } from "./datasetPipeline.js";
+import { evaluateLogisticRegression, fitLogisticRegression } from "./logisticRegression.js";
+import { tuneClassifierHyperparameters } from "./modelValidation.js";
 import { predictLinearRegression } from "./linearRegression.js";
 
 export interface RegisteredTrainingSample {
@@ -10,7 +12,7 @@ export interface RegisteredTrainingSample {
 }
 
 export interface RegisteredTrainingResult {
-  algorithm: "logistic-regression" | "knn" | "decision-tree" | "gaussian-naive-bayes" | "multiple-linear-regression";
+  algorithm: "logistic-regression" | "multiple-linear-regression";
   model: unknown;
   metrics: object;
   crossValidation?: unknown;
@@ -98,17 +100,25 @@ export function trainRegisteredDataset(
     }
   }
   if (task === "binary-classification") {
-    const results = runTunedClassifierExperiments(
-      split.train.map(({ features, target }) => ({ features, target })),
-      split.test.map(({ features, target }) => ({ features, target })),
-      { folds: 5, seed },
-    );
-    return results.map((result) => ({
-      algorithm: result.algorithm as RegisteredTrainingResult["algorithm"],
-      model: result.model,
-      metrics: result.metrics,
-      crossValidation: result.crossValidation,
-      parameters: result.parameters,
+    const trainingSamples = split.train.map(({ features, target }) => ({
+      features,
+      label: target as 0 | 1,
+    }));
+    const testSamples = split.test.map(({ features, target }) => ({
+      features,
+      label: target as 0 | 1,
+    }));
+    const tuned = tuneClassifierHyperparameters(trainingSamples, "logistic-regression", { folds: 5, seed });
+    const model = fitLogisticRegression(trainingSamples, {
+      iterations: tuned.bestParameters.iterations,
+      learningRate: tuned.bestParameters.learningRate,
+    });
+    return [{
+      algorithm: "logistic-regression",
+      model,
+      metrics: evaluateLogisticRegression(model, testSamples),
+      crossValidation: tuned.bestMetrics,
+      parameters: tuned.bestParameters,
       trainRows: split.train.length,
       testRows: split.test.length,
       ...(hasGroupIds ? {
@@ -117,7 +127,7 @@ export function trainRegisteredDataset(
           testGroups: new Set(split.test.map((row) => row.groupId)).size,
         },
       } : {}),
-    }));
+    }];
   }
   const result = runRegressionExperiment(
     split.train.map(({ features, target }) => ({ features, target })),
