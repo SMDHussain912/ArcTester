@@ -34,7 +34,7 @@ const RegisterSchema = z.object({
     "performance-gradient-boosting",
     "performance-random-forest",
   ]),
-  task: z.enum(["regression", "binary-classification"]),
+  task: z.enum(["regression", "binary-classification", "multiclass-classification"]),
   dataset: z.string().trim().min(1).max(120),
   targetColumn: z.string().trim().min(1).max(120),
   featureSchema: z.array(FeatureSchema).min(1).max(100),
