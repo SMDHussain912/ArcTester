@@ -9,8 +9,9 @@
 import { friendlyError, type SubmitAnswer } from "./answers";
 import type { BrowserTensorflowArtifact } from "./tensorflowInference";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ?? "http://localhost:4000";
+export const API_BASE = (
+  import.meta.env.VITE_API_URL || "https://arctester.onrender.com"
+).replace(/\/+$/, "");
 
 export interface PublicQuestion {
   id: number;
