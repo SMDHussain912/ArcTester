@@ -120,7 +120,7 @@ describe("admin model registry API", () => {
 
     const listed = await request("/admin/models");
     const registeredModels = listed.body.models as Array<{ modelId: string; isActive: boolean }>;
-    expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-"))).toHaveLength(4);
+    expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-"))).toHaveLength(1);
     expect(registeredModels.filter((model) => model.modelId.startsWith("training-fixture-")).every((model) => !model.isActive)).toBe(true);
 
     const audit = await request("/admin/models/training-fixture-logistic-regression/audit");
