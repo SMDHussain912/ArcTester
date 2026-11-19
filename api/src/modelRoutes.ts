@@ -12,6 +12,7 @@ import {
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
 import { assessFeatureDrift, driftBucket, expectedDriftCounts } from "./intelligence/modelDrift.js";
 import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
+import { fitReadinessClassifier, type ReadinessClass } from "./intelligence/readinessClassifier.js";
 import { isTensorflowJsArtifactProductionEligible, validateTensorflowJsArtifact } from "./intelligence/tensorflowJsArtifact.js";
 
 const FeatureSchema = z.discriminatedUnion("type", [
@@ -367,6 +368,80 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           note: "Experiment ranking only; this does not approve production promotion.",
         },
         message: "Training completed. Candidates remain inactive until they pass evaluation against an existing baseline.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
+  router.post("/admin/model-datasets/:datasetId/train-readiness", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
+      const input = TrainingSchema.parse(req.body);
+      const dataset = await db.modelDataset.findUnique({ where: { id: datasetId } });
+      if (!dataset) return next(notFound("Registered readiness dataset was not found."));
+      if (dataset.datasetKind !== "real-anonymized" || !dataset.sourceAttested) {
+        return next(badRequest("Readiness training requires an attested real-anonymized learner dataset."));
+      }
+      const featureSchema = JSON.parse(dataset.featureSchemaJson) as Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
+      if (!featureSchema.length || featureSchema.some((feature) => feature.type !== "numeric") ||
+        !featureSchema.some((feature) => feature.name === "completed_attempts")) {
+        return next(badRequest("Readiness training requires numeric features including completed_attempts."));
+      }
+      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
+      if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+        !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2 ||
+        featureSchema.some((feature) => typeof sample.features[feature.name] !== "number" ||
+          !Number.isFinite(sample.features[feature.name])))) {
+        return next(badRequest("Readiness samples need HMAC learner group IDs, finite numeric features and target labels 0, 1 or 2."));
+      }
+      const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
+      const readinessRows = samples.map((sample) => ({
+        features: featureSchema.map((feature) => sample.features[feature.name] as number),
+        label: labels[sample.target] as ReadinessClass,
+        groupId: sample.groupId!,
+      }));
+      const modelArtifact = fitReadinessClassifier(readinessRows);
+      const modelId = `${input.modelId}-exam-readiness-softmax`;
+      const created = await db.$transaction(async (tx) => {
+        const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
+        const version = (latest._max.version ?? 0) + 1;
+        const artifact = validateRegistryArtifact({
+          registrySchemaVersion: 1, modelId, version,
+          algorithm: "exam-readiness-softmax", task: "multiclass-classification",
+          dataset: dataset.name, targetColumn: dataset.targetColumn,
+          featureSchema, model: modelArtifact, createdAt: new Date().toISOString(),
+        });
+        const registered = await tx.registeredModel.create({
+          data: {
+            modelId, version, algorithm: "exam-readiness-softmax", task: "multiclass-classification",
+            dataset: dataset.name, trainingDatasetId: dataset.id,
+            artifactJson: JSON.stringify(artifact), isActive: false, activatedAt: null,
+          },
+          select: { modelId: true, version: true, algorithm: true, task: true, dataset: true, isActive: true, createdAt: true },
+        });
+        await tx.modelRegistryAudit.create({
+          data: {
+            actorId: req.user!.id, modelId, version, action: "TRAINED",
+            details: JSON.stringify({
+              datasetId, datasetFingerprint: dataset.fingerprint,
+              samples: samples.length, learnerGroups: modelArtifact.trainingGroups,
+              classCounts: Object.fromEntries(labels.map((label, index) => [label, readinessRows.filter((row) => row.label === label).length])),
+              targetEncoding: { 0: "NOT_READY", 1: "DEVELOPING", 2: "READY" },
+              policyVersion: modelArtifact.policyVersion,
+              evaluationRequired: true,
+              note: "Candidate only. Run independent group-separated calibration and false-READY evaluation before activation.",
+              seed: input.seed,
+            }),
+          },
+        });
+        return registered;
+      });
+      res.status(201).json({
+        ok: true, model: created, promoted: false,
+        message: "Readiness classifier trained as an inactive candidate. Independent group-separated calibration and false-READY evaluation are still required.",
       });
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
