@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("AdminQuestionBank", () => {
   it("renders question metadata, options and the correct answer marker", () => {
-    render(<AdminQuestionBank questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
+    render(<AdminQuestionBank questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Question bank" })).toBeTruthy();
     expect(screen.getByText("What is 2 + 2?")).toBeTruthy();
     expect(screen.getByText("D. 4 ✓")).toBeTruthy();
@@ -18,7 +18,7 @@ describe("AdminQuestionBank", () => {
   });
 
   it("renders empty state and disables destructive actions without a selection", () => {
-    render(<AdminQuestionBank questions={[]} total={0} page={1} query="" subject="" topic="" difficulty="" catalog={[]} filteredTopics={[]} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
+    render(<AdminQuestionBank questions={[]} total={0} page={1} query="" subject="" topic="" difficulty="" catalog={[]} filteredTopics={[]} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
     expect(screen.getByText("No questions match these filters")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete selected (0)" }).hasAttribute("disabled")).toBe(true);
   });
@@ -27,7 +27,7 @@ describe("AdminQuestionBank", () => {
     const onDeleteSelected = vi.fn();
     const confirmMock = vi.fn().mockReturnValue(false);
     vi.stubGlobal("confirm", confirmMock);
-    render(<AdminQuestionBank questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={onDeleteSelected} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
+    render(<AdminQuestionBank questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={onDeleteSelected} onBulkDifficultyChange={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
     const button = screen.getByRole("button", { name: "Delete selected (1)" });
     fireEvent.click(button);
     expect(confirmMock).toHaveBeenCalledWith("Delete 1 selected question(s)? Questions used in historical attempts will be protected.");
@@ -40,7 +40,7 @@ describe("AdminQuestionBank", () => {
   it("delegates search, filters, selection, edit, upload and pagination", () => {
     const onQueryChange = vi.fn(), onSubjectChange = vi.fn(), onTopicChange = vi.fn(), onDifficultyChange = vi.fn(), onToggleSelected = vi.fn(), onEditQuestion = vi.fn(), onUpload = vi.fn(), onPageChange = vi.fn();
     vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
-    render(<AdminQuestionBank questions={[question]} total={50} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={onQueryChange} onSubjectChange={onSubjectChange} onTopicChange={onTopicChange} onDifficultyChange={onDifficultyChange} onToggleSelected={onToggleSelected} onDeleteSelected={vi.fn()} onEditQuestion={onEditQuestion} onUpload={onUpload} onPageChange={onPageChange} />);
+    render(<AdminQuestionBank questions={[question]} total={50} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={onQueryChange} onSubjectChange={onSubjectChange} onTopicChange={onTopicChange} onDifficultyChange={onDifficultyChange} onToggleSelected={onToggleSelected} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onEditQuestion={onEditQuestion} onUpload={onUpload} onPageChange={onPageChange} />);
     fireEvent.change(screen.getByPlaceholderText(/Search question text/), { target: { value: "force" } });
     fireEvent.change(screen.getByDisplayValue("All subjects"), { target: { value: "Mathematics" } });
     fireEvent.change(screen.getByDisplayValue("All topics"), { target: { value: "Algebra" } });
@@ -58,4 +58,12 @@ describe("AdminQuestionBank", () => {
     expect(onUpload).toHaveBeenCalledTimes(1);
     expect(onPageChange).toHaveBeenCalledWith(2);
   });
+  it("updates the selected questions to the chosen difficulty", () => {
+    const onBulkDifficultyChange = vi.fn();
+    render(<AdminQuestionBank questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty="" catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={onBulkDifficultyChange} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Selected question difficulty" }), { target: { value: "hard" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update difficulty (1)" }));
+    expect(onBulkDifficultyChange).toHaveBeenCalledWith("hard");
+  });
+
 });
