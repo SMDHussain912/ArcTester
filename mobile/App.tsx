@@ -182,14 +182,13 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (mounted) setReduceMotion(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
+    void getLocalValue("arctester-reduce-motion").then(async (saved) => {
+      if (saved === null) {
+        const systemPreference = await AccessibilityInfo.isReduceMotionEnabled();
+        if (mounted) setReduceMotion(systemPreference);
+      }
+    }).catch(() => undefined);
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
