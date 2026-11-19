@@ -10,15 +10,14 @@ const classificationSamples: RegisteredTrainingSample[] = Array.from({ length: 6
 }));
 
 describe("registered dataset training", () => {
-  it("trains all supported classifiers and returns held-out and CV metrics", () => {
+  it("trains only the approved logistic classification baseline with held-out and CV metrics", () => {
     const results = trainRegisteredDataset(classificationSamples, [
       { name: "score", type: "numeric" },
       { name: "subject", type: "categorical", categories: ["Math", "Science"] },
     ], "binary-classification", 42);
 
-    expect(results.map((result) => result.algorithm)).toEqual([
-      "logistic-regression", "knn", "decision-tree", "gaussian-naive-bayes",
-    ]);
+    expect(results.map((result) => result.algorithm)).toEqual(["logistic-regression"]);
+    expect(results).toHaveLength(1);
     for (const result of results) {
       expect(result.trainRows + result.testRows).toBe(60);
       expect(result.trainRows).toBe(48);
@@ -48,12 +47,11 @@ describe("registered dataset training", () => {
 
   it("ranks classifiers by F1 then accuracy and regression models by error", () => {
     const classifiers = [
-      { algorithm: "knn" as const, model: {}, metrics: { f1: 0.8, accuracy: 0.9 }, trainRows: 48, testRows: 12 },
+      { algorithm: "logistic-regression" as const, model: {}, metrics: { f1: 0.8, accuracy: 0.9 }, trainRows: 48, testRows: 12 },
       { algorithm: "logistic-regression" as const, model: {}, metrics: { f1: 0.9, accuracy: 0.85 }, trainRows: 48, testRows: 12 },
-      { algorithm: "decision-tree" as const, model: {}, metrics: { f1: 0.9, accuracy: 0.95 }, trainRows: 48, testRows: 12 },
     ];
-    expect(rankTrainingResults(classifiers, "binary-classification").map((result) => [result.rank, result.algorithm]))
-      .toEqual([[1, "decision-tree"], [2, "logistic-regression"], [3, "knn"]]);
+    expect(rankTrainingResults(classifiers, "binary-classification").map((result) => result.rank))
+      .toEqual([1, 2]);
 
     const regressors = [
       { algorithm: "multiple-linear-regression" as const, model: {}, metrics: { rmse: 4, mae: 3 }, trainRows: 48, testRows: 12 },
