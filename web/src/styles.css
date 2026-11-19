@@ -850,3 +850,12 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .question-bank-empty p{margin:0;font-size:12px}
 @media(max-width:560px){.question-bank-search{align-items:stretch;flex-wrap:wrap;gap:6px}.question-bank-search>span{width:100%}.question-bank-search input{flex-basis:calc(100% - 72px)}.question-bank-search .ghost{padding-inline:10px}}
 @media(prefers-reduced-motion:reduce){.question-bank-search input{scroll-behavior:auto}}
+
+
+/* Student analytics refresh and partial-failure feedback */
+.student-analytics .analytics-toolbar{justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.student-analytics .analytics-errors{padding:12px 14px;border-radius:10px}
+.student-analytics .analytics-errors ul{margin:8px 0;padding-left:20px}
+.student-analytics .analytics-errors li{margin:3px 0}
+.student-analytics .analytics-errors span{display:block;margin-top:8px;font-size:12px}
+@media(max-width:560px){.student-analytics .analytics-toolbar{align-items:stretch}.student-analytics .analytics-toolbar button{width:100%}.student-analytics .stat-grid{grid-template-columns:1fr}.student-analytics .row{flex-wrap:wrap}}
