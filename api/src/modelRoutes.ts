@@ -809,6 +809,19 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           validateRegistryArtifact(JSON.parse(target.artifactJson));
         }
         if (!target.isActive && target.algorithm !== "tensorflow-js-layers") {
+          // A production candidate must have a traceable, authorized real-learner
+          // training dataset as well as an independent real-learner evaluation set.
+          const trainingDataset = target.trainingDatasetId
+            ? await tx.modelDataset.findUnique({
+              where: { id: target.trainingDatasetId },
+              select: { id: true, datasetKind: true, sourceAttested: true },
+            })
+            : null;
+          if (!trainingDataset
+            || trainingDataset.datasetKind !== "real-anonymized"
+            || !trainingDataset.sourceAttested) {
+            return { error: "training-dataset-ineligible" as const };
+          }
           const evaluation = await tx.modelEvaluation.findFirst({
             where: { modelId, candidateVersion: version },
             orderBy: { evaluatedAt: "desc" },
@@ -821,13 +834,16 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           const evaluationDataset = evaluation.datasetId
             ? await tx.modelDataset.findUnique({
               where: { id: evaluation.datasetId },
-              select: { datasetKind: true, sourceAttested: true },
+              select: { id: true, datasetKind: true, sourceAttested: true },
             })
             : null;
           if (!evaluationDataset
             || evaluationDataset.datasetKind !== "real-anonymized"
             || !evaluationDataset.sourceAttested) {
             return { error: "evaluation-dataset-ineligible" as const };
+          }
+          if (trainingDataset.id === evaluationDataset.id) {
+            return { error: "training-evaluation-overlap" as const };
           }
         }
         await tx.registeredModel.updateMany({ where: { modelId }, data: { isActive: false } });
@@ -846,8 +862,14 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         if (activated.error === "tensorflow-production-gate") {
           return next(conflict("TensorFlow.js model cannot be activated until it passes real-anonymized production eligibility."));
         }
+        if (activated.error === "training-dataset-ineligible") {
+          return next(conflict("This candidate must be trained from a registered, attested real-anonymized dataset before production activation."));
+        }
         if (activated.error === "evaluation-dataset-ineligible") {
           return next(conflict("This model version needs a passing evaluation on an attested real-anonymized dataset before production activation."));
+        }
+        if (activated.error === "training-evaluation-overlap") {
+          return next(conflict("Candidate training and evaluation datasets must be independent."));
         }
         return next(conflict("This model version needs a passing evaluation against a baseline before activation."));
       }
@@ -885,7 +907,13 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           if (!evaluation || evaluation.status !== "PASSED") {
             return { error: "previous-evaluation-required" as const };
           }
-          const [evaluationDataset, evaluatedBaseline] = await Promise.all([
+          const [previousTrainingDataset, evaluationDataset, evaluatedBaseline] = await Promise.all([
+            previous.trainingDatasetId
+              ? tx.modelDataset.findUnique({
+                where: { id: previous.trainingDatasetId },
+                select: { id: true, datasetKind: true, sourceAttested: true },
+              })
+              : null,
             evaluation.datasetId
               ? tx.modelDataset.findUnique({
                 where: { id: evaluation.datasetId },
@@ -897,10 +925,15 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               select: { trainingDatasetId: true },
             }),
           ]);
+          if (!previousTrainingDataset
+            || previousTrainingDataset.datasetKind !== "real-anonymized"
+            || !previousTrainingDataset.sourceAttested) {
+            return { error: "previous-training-dataset-ineligible" as const };
+          }
           if (!evaluationDataset
             || evaluationDataset.datasetKind !== "real-anonymized"
             || !evaluationDataset.sourceAttested
-            || previous.trainingDatasetId === evaluationDataset.id
+            || previousTrainingDataset.id === evaluationDataset.id
             || evaluatedBaseline?.trainingDatasetId === evaluationDataset.id) {
             return { error: "previous-evaluation-dataset-ineligible" as const };
           }
@@ -920,6 +953,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         if (outcome.error === "missing-active") return next(notFound("No active model version was found."));
         if (outcome.error === "previous-evaluation-required") {
           return next(conflict("The previous model version needs a passing evaluation before rollback."));
+        }
+        if (outcome.error === "previous-training-dataset-ineligible") {
+          return next(conflict("Rollback requires the previous version to have a registered, attested real-anonymized training dataset."));
         }
         if (outcome.error === "previous-evaluation-dataset-ineligible") {
           return next(conflict("Rollback requires a passing evaluation on an independent, attested real-anonymized dataset."));
