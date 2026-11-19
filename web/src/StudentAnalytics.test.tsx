@@ -27,10 +27,10 @@ describe("StudentAnalytics", () => {
 
   it("keeps successful sections visible when one analytics endpoint fails", async () => {
     vi.mocked(request).mockImplementation(async (path) => {
-      if (path === "/analytics/overview") throw new Error("Overview temporarily unavailable");
-      if (path === "/analytics/weak-topics") return weakTopics;
-      if (path === "/analytics/recommendations") return recommendations;
-      if (path === "/analytics/score-prediction") return prediction;
+      if (path.includes("/analytics/overview")) throw new Error("Overview temporarily unavailable");
+      if (path.includes("/analytics/weak-topics")) return weakTopics;
+      if (path.includes("/analytics/recommendations")) return recommendations;
+      if (path.includes("/analytics/score-prediction")) return prediction;
       throw new Error("Unexpected endpoint");
     });
 
@@ -45,13 +45,13 @@ describe("StudentAnalytics", () => {
   it("retries failed analytics and reports when the refresh finishes", async () => {
     vi.mocked(request).mockRejectedValueOnce(new Error("Network unavailable"));
     vi.mocked(request).mockImplementation(async (path) => {
-      if (path === "/analytics/overview") return {
+      if (path.includes("/analytics/overview")) return {
         practice: { completedAttempts: 3, questions: 30, correct: 20, incorrect: 8, unanswered: 2, accuracy: 0.714 },
         formalExams: { graded: 1, scorePercentage: 70, score: 35, maximumScore: 50, reviewRequired: 0 },
       };
-      if (path === "/analytics/weak-topics") return weakTopics;
-      if (path === "/analytics/recommendations") return recommendations;
-      if (path === "/analytics/score-prediction") return prediction;
+      if (path.includes("/analytics/weak-topics")) return weakTopics;
+      if (path.includes("/analytics/recommendations")) return recommendations;
+      if (path.includes("/analytics/score-prediction")) return prediction;
       throw new Error("Unexpected endpoint");
     });
 
