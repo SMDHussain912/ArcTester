@@ -3,13 +3,14 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "./errors.js";
-import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { createAdaptiveLearnerGroupId, requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import {
   predictWithRegistryArtifact,
   validateRegistryArtifact,
   type RegisterModelInput,
 } from "./intelligence/modelRegistry.js";
 import { evaluateRegistryCandidate } from "./intelligence/modelEvaluation.js";
+import { buildPerformanceDataset, type PerformanceDatasetAttempt, type PerformanceTopicAvailability } from "./intelligence/performanceDataset.js";
 import { assessFeatureDrift, driftBucket, expectedDriftCounts } from "./intelligence/modelDrift.js";
 import { rankTrainingResults, trainRegisteredDataset } from "./intelligence/registeredDatasetTraining.js";
 import { fitReadinessClassifier, type ReadinessClass } from "./intelligence/readinessClassifier.js";
@@ -65,6 +66,8 @@ const DatasetSampleSchema = z.object({
   target: z.number().finite(),
   // Keyed HMAC-SHA-256 pseudonym only; never store a learner name, email or database ID here.
   groupId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  occurredAt: z.string().datetime().optional(),
+  unansweredCount: z.number().int().min(0).optional(),
 }).strict();
 
 const DatasetRegistrationSchema = z.object({
@@ -247,6 +250,133 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+
+  router.post("/admin/model-datasets/build-performance", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({
+        name: z.string().trim().min(1).max(120),
+        sourceDescription: z.string().trim().min(10).max(200),
+        sourceAttested: z.literal(true),
+      }).strict().parse(req.body);
+      const [attempts, subjects, questions] = await Promise.all([
+        db.attempt.findMany({
+          where: { mode: "practice", finishedAt: { not: null } },
+          orderBy: [{ startedAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            userId: true,
+            startedAt: true,
+            finishedAt: true,
+            answers: {
+              select: {
+                chosen: true,
+                isCorrect: true,
+                subjectSnapshot: true,
+                topicSnapshot: true,
+                question: {
+                  select: {
+                    createdAt: true,
+                    subject: { select: { name: true } },
+                    topic: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        db.subject.findMany({ orderBy: { name: "asc" }, select: { name: true } }),
+        db.question.findMany({
+          where: { topicId: { not: null } },
+          select: {
+            createdAt: true,
+            subject: { select: { name: true } },
+            topic: { select: { name: true } },
+          },
+        }),
+      ]);
+      const result = buildPerformanceDataset({
+        attempts: attempts as unknown as PerformanceDatasetAttempt[],
+        subjects: subjects.map((subject) => subject.name),
+        topicAvailability: questions.map((question) => ({
+          createdAt: question.createdAt,
+          subjectName: question.subject.name,
+          topicName: question.topic?.name ?? null,
+        })) as PerformanceTopicAvailability[],
+        learnerGroupId: createAdaptiveLearnerGroupId,
+        maxSamples: 5000,
+      });
+      const { metadata } = result;
+      if (metadata.sampleCount < 500 || metadata.learnerGroupCount < 50 ||
+          metadata.improvingLearnerGroups < 1 || metadata.decliningLearnerGroups < 1) {
+        return res.status(409).json({
+          ok: false,
+          error: "Insufficient authorized learner history for a qualified performance dataset.",
+          qualification: {
+            requiredRows: 500,
+            requiredLearnerGroups: 50,
+            requiredImprovingGroups: 1,
+            requiredDecliningGroups: 1,
+            ...metadata,
+          },
+        });
+      }
+      const subjectSummary = metadata.subjectVocabulary.map((subject) => subject.slice(0, 24)).join(",");
+      const sourceDescription = [
+        "ArcTester point-in-time performance-v1 extraction",
+        input.sourceDescription,
+        `schema=${metadata.featureSchemaVersion}`,
+        `extractedAt=${new Date().toISOString()}`,
+        `rows=${metadata.sampleCount}`,
+        `groups=${metadata.learnerGroupCount}`,
+        `improving=${metadata.improvingLearnerGroups}`,
+        `declining=${metadata.decliningLearnerGroups}`,
+        `excludedNoAnswered=${metadata.excludedNoAnsweredAttempts}`,
+        `unanswered=${metadata.unansweredResponses}`,
+        `subjects=${subjectSummary}`,
+      ].join("; ").slice(0, 500);
+      const payload = {
+        name: input.name,
+        task: "regression",
+        targetColumn: "next_attempt_accuracy",
+        featureSchema: result.featureSchema,
+        samples: result.samples,
+        datasetKind: "real-anonymized",
+      };
+      const fingerprint = createHash("sha256").update(canonicalJson(payload)).digest("hex");
+      const dataset = await db.modelDataset.create({
+        data: {
+          createdById: req.user!.id,
+          name: input.name,
+          task: "regression",
+          targetColumn: "next_attempt_accuracy",
+          featureSchemaJson: JSON.stringify(result.featureSchema),
+          samplesJson: JSON.stringify(result.samples),
+          rowCount: result.samples.length,
+          sourceDescription,
+          sourceAttested: true,
+          datasetKind: "real-anonymized",
+          fingerprint,
+        },
+        select: {
+          id: true, name: true, task: true, targetColumn: true, rowCount: true,
+          sourceDescription: true, sourceAttested: true, datasetKind: true,
+          fingerprint: true, createdById: true, createdAt: true,
+        },
+      });
+      res.status(201).json({
+        ok: true,
+        dataset: { ...dataset, featureSchema: result.featureSchema },
+        qualification: metadata,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error && "code" in error && error.code === "P2002") {
+        return next(conflict("This exact performance dataset version has already been registered."));
+      }
+      if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
 
   router.patch("/admin/model-datasets/:datasetId", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
