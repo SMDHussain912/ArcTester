@@ -1,5 +1,6 @@
 // Mock-test engine service: DB access + Phase 2 selection glued together.
 import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
+import { selectAdaptiveQuestions, type AdaptiveTopicState } from "./intelligence/adaptiveQuestionSelector.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
 import type { PrismaClient } from "@prisma/client";
@@ -193,6 +194,40 @@ export async function createTest(
     candidates.map((c) => c.id)
   );
 
+  // Build topic mastery only from completed attempts. In-progress answers must
+  // not leak into the learner state used to select the next practice set.
+  const completedAnswers = await db.attemptAnswer.findMany({
+    where: { attempt: { is: { userId, finishedAt: { not: null } } } },
+    select: {
+      isCorrect: true,
+      subjectSnapshot: true,
+      topicSnapshot: true,
+      attempt: { select: { finishedAt: true } },
+    },
+    orderBy: { attemptId: "desc" },
+    take: 2000,
+  });
+  const topicBuckets = new Map<string, { subject: string; topic: string; answered: number; correct: number; lastSeenAt: Date | null }>();
+  for (const answer of completedAnswers) {
+    if (!answer.topicSnapshot) continue;
+    const key = `${answer.subjectSnapshot.toLowerCase()}::${answer.topicSnapshot.toLowerCase()}`;
+    const bucket = topicBuckets.get(key) ?? {
+      subject: answer.subjectSnapshot, topic: answer.topicSnapshot,
+      answered: 0, correct: 0, lastSeenAt: null,
+    };
+    bucket.answered += 1;
+    if (answer.isCorrect) bucket.correct += 1;
+    const finishedAt = answer.attempt.finishedAt;
+    if (finishedAt && (!bucket.lastSeenAt || finishedAt > bucket.lastSeenAt)) bucket.lastSeenAt = finishedAt;
+    topicBuckets.set(key, bucket);
+  }
+  const adaptiveTopicStates: AdaptiveTopicState[] = [...topicBuckets.values()].map((bucket) => ({
+    subject: bucket.subject, topic: bucket.topic,
+    accuracy: bucket.answered ? bucket.correct / bucket.answered : null,
+    answered: bucket.answered, exposureCount: bucket.answered,
+    lastSeenAt: bucket.lastSeenAt?.toISOString() ?? null,
+  }));
+
   let selected: AttemptRow[];
   let warnings: string[] = [];
 
@@ -232,7 +267,27 @@ export async function createTest(
       let added = 0;
       for (const entry of active) {
         const available = entry.pool.filter((question) => !selectedById.has(question.id));
-        const picked = selectQuestions(available, stats, Math.min(quota, available.length, remaining - added));
+        const availableIds = available.map((question) => question.id);
+        const adaptive = selectAdaptiveQuestions({
+          candidates: available.map((question) => ({
+            questionId: String(question.id),
+            subject: question.subject,
+            topic: question.topic ?? "Uncategorized",
+            difficulty: question.difficulty === "easy" ? 1 : question.difficulty === "hard" ? 5 : 3,
+            exposureCount: stats[String(question.id)]?.seen ?? 0,
+            lastSeenAt: stats[String(question.id)]?.lastSeen?.toISOString() ?? null,
+          })),
+          topicStates: adaptiveTopicStates,
+          questionCount: Math.min(quota, available.length, remaining - added),
+          now,
+          targetDifficulty: input.difficulty === "easy" ? 2 : input.difficulty === "hard" ? 4 : 3,
+          excludedQuestionIds: [...selectedById].map(String),
+          policyVersion: 1,
+        });
+        const selectedIds = new Set(adaptive.rankedQuestionIds.map(Number));
+        const picked = available.filter((question) => selectedIds.has(question.id));
+        // Keep the existing subject quota and deterministic tie ordering while
+        // using the adaptive policy to rank each eligible subject pool.
         for (const question of picked) { selected.push(question); selectedById.add(question.id); }
         added += picked.length;
       }
