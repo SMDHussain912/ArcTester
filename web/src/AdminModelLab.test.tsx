@@ -9,7 +9,7 @@ describe("AdminModelLab", () => {
   it("renders datasets, training controls and job progress", () => {
     render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "CSE readiness · 120 rows · regression" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "CSE readiness · 120 rows · 1 features · regression" })).toBeTruthy();
     expect(screen.getByText("ecet-readiness-tensorflow")).toBeTruthy();
     expect(screen.getByText("RUNNING")).toBeTruthy();
     expect(screen.getByText("45% complete")).toBeTruthy();
