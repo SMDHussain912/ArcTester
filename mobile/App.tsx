@@ -28,7 +28,7 @@ const API_URL = (() => {
   if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
   return url.replace(/\/+$/, "");
 })();
-type User = { id: number; email: string };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; subjects: { subject: string; count: number }[] };
 type Announcement = {
   id: string;
@@ -250,7 +250,16 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     api<{ user: User }>("/auth/me")
-      .then((result) => setUser(result.user))
+      .then(async (result) => {
+        if (result.user.role !== "STUDENT") {
+          await SecureStore.deleteItemAsync("arctester-token");
+          setToken(null);
+          setUser(null);
+          setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web.");
+          return;
+        }
+        setUser(result.user);
+      })
       .catch(async () => {
         await SecureStore.deleteItemAsync("arctester-token");
         setToken(null);
@@ -436,6 +445,11 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({ email: email.trim(), password }),
         });
+        if (result.user.role !== "STUDENT") {
+          setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web.");
+          setPassword("");
+          return;
+        }
         await SecureStore.setItemAsync("arctester-token", result.token);
         setToken(result.token);
         setUser(result.user);
