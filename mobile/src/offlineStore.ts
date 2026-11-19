@@ -184,29 +184,31 @@ export async function saveExamPackage(
     throw new Error("The exam package has an invalid server timestamp.");
   }
   const db = await database();
-  const existingAttempt = await db.getFirstAsync<{ status: string }>(
-    "SELECT status FROM offline_attempts WHERE assignment_id = ?",
-    examPackage.assignmentId,
-  );
-  if (existingAttempt) {
-    throw new Error("This assignment already has a local attempt and cannot be replaced.");
-  }
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    const existingAttempt = await transaction.getFirstAsync<{ status: string }>(
+      "SELECT status FROM offline_attempts WHERE assignment_id = ?",
+      examPackage.assignmentId,
+    );
+    if (existingAttempt) {
+      throw new Error("This assignment already has a local attempt and cannot be replaced.");
+    }
 
-  await db.runAsync(
-    `INSERT INTO exam_packages
-      (assignment_id, payload_json, sha256, downloaded_at, server_offset_ms)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(assignment_id) DO UPDATE SET
-        payload_json = excluded.payload_json,
-        sha256 = excluded.sha256,
-        downloaded_at = excluded.downloaded_at,
-        server_offset_ms = excluded.server_offset_ms`,
-    examPackage.assignmentId,
-    serialized,
-    actualSha256,
-    downloadedAt.toISOString(),
-    serverTime.getTime() - downloadedAt.getTime(),
-  );
+    await transaction.runAsync(
+      `INSERT INTO exam_packages
+        (assignment_id, payload_json, sha256, downloaded_at, server_offset_ms)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(assignment_id) DO UPDATE SET
+          payload_json = excluded.payload_json,
+          sha256 = excluded.sha256,
+          downloaded_at = excluded.downloaded_at,
+          server_offset_ms = excluded.server_offset_ms`,
+      examPackage.assignmentId,
+      serialized,
+      actualSha256,
+      downloadedAt.toISOString(),
+      serverTime.getTime() - downloadedAt.getTime(),
+    );
+  });
 }
 
 export async function getCachedExamPackage(
@@ -234,58 +236,70 @@ export async function startOfflineAttempt(assignmentId: string): Promise<{
   examPackage: OfflineExamPackage;
 }> {
   const db = await database();
-  const row = await db.getFirstAsync<{
-    payload_json: string;
-    server_offset_ms: number;
-  }>(
-    "SELECT payload_json, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (!row) throw new Error("Download this exam before starting it.");
+  let result: {
+    attemptUuid: string;
+    startedAt: string;
+    examPackage: OfflineExamPackage;
+  } | null = null;
 
-  const examPackage = parsePackage(row.payload_json);
-  const existing = await db.getFirstAsync<AttemptRow>(
-    "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
-    assignmentId,
-  );
-  if (existing) {
-    if (existing.status === "ACTIVE") {
-      // An already-started attempt must remain resumable even after its assignment deadline.
-      return {
-        attemptUuid: existing.attemptUuid,
-        startedAt: existing.startedAt,
-        examPackage,
-      };
+  await db.withExclusiveTransactionAsync(async (transaction) => {
+    const row = await transaction.getFirstAsync<{
+      payload_json: string;
+      server_offset_ms: number;
+    }>(
+      "SELECT payload_json, server_offset_ms FROM exam_packages WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (!row) throw new Error("Download this exam before starting it.");
+
+    const examPackage = parsePackage(row.payload_json);
+    const existing = await transaction.getFirstAsync<AttemptRow>(
+      "SELECT assignment_id AS assignmentId, attempt_uuid AS attemptUuid, started_at AS startedAt, started_at_monotonic_ms AS startedAtMonotonicMs, submitted_at AS submittedAt, answers_json AS answersJson, status, submission_id AS submissionId, last_error AS lastError FROM offline_attempts WHERE assignment_id = ?",
+      assignmentId,
+    );
+    if (existing) {
+      if (existing.status === "ACTIVE") {
+        // An already-started attempt must remain resumable even after its assignment deadline.
+        result = {
+          attemptUuid: existing.attemptUuid,
+          startedAt: existing.startedAt,
+          examPackage,
+        };
+        return;
+      }
+      throw new Error("An attempt for this assignment has already been submitted or synchronized.");
     }
-    throw new Error("An attempt for this assignment has already been submitted or synchronized.");
-  }
 
-  const adjustedNow = Date.now() + row.server_offset_ms;
-  if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
-    throw new Error("This exam is not available yet.");
-  }
-  if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
-    throw new Error("The exam deadline has passed.");
-  }
+    const adjustedNow = Date.now() + row.server_offset_ms;
+    if (examPackage.availableFrom && adjustedNow < new Date(examPackage.availableFrom).getTime()) {
+      throw new Error("This exam is not available yet.");
+    }
+    if (examPackage.dueAt && adjustedNow > new Date(examPackage.dueAt).getTime()) {
+      throw new Error("The exam deadline has passed.");
+    }
 
-  const attemptUuid = Crypto.randomUUID();
-  const startedAtMonotonicMs = monotonicNow();
-  // Use the server-adjusted clock captured when the package was downloaded.
-  // This keeps the local deadline consistent when the device clock is inaccurate.
-  const startedAt = new Date(Date.now() + row.server_offset_ms).toISOString();
-  await db.runAsync(
-    `INSERT INTO offline_attempts
-      (assignment_id, attempt_uuid, started_at, started_at_monotonic_ms, answers_json, status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    assignmentId,
-    attemptUuid,
-    startedAt,
-    startedAtMonotonicMs,
-    JSON.stringify({}),
-    "ACTIVE",
-    new Date(startedAtMonotonicMs).toISOString(),
-  );
-  return { attemptUuid, startedAt, examPackage };
+    const attemptUuid = Crypto.randomUUID();
+    const startedAtMonotonicMs = monotonicNow();
+    // Use the server-adjusted clock captured when the package was downloaded.
+    // This keeps the local deadline consistent when the device clock is inaccurate.
+    const startedAt = new Date(Date.now() + row.server_offset_ms).toISOString();
+    await transaction.runAsync(
+      `INSERT INTO offline_attempts
+        (assignment_id, attempt_uuid, started_at, started_at_monotonic_ms, answers_json, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      assignmentId,
+      attemptUuid,
+      startedAt,
+      startedAtMonotonicMs,
+      JSON.stringify({}),
+      "ACTIVE",
+      new Date(startedAtMonotonicMs).toISOString(),
+    );
+    result = { attemptUuid, startedAt, examPackage };
+  });
+
+  if (!result) throw new Error("The offline attempt could not be started.");
+  return result;
 }
 
 export async function restoreActiveAttempt(assignmentId: string): Promise<{
