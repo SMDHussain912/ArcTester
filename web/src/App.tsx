@@ -91,6 +91,8 @@ export default function App() {
   const [practiceClock, setPracticeClock] = useState(0);
   const [practiceServerOffset, setPracticeServerOffset] = useState(0);
   const practiceAutoSubmitRef = useRef(false);
+  const practiceSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [practiceSyncStatus, setPracticeSyncStatus] = useState<"idle" | "saving" | "saved" | "pending">("idle");
   const submitPracticeTestRef = useRef<() => Promise<void>>(async () => { });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -407,6 +409,7 @@ export default function App() {
       const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
       setPracticeLocalSaveAvailable(false);
+      setPracticeSyncStatus("idle");
       safeStorage.removeItem("arctester-active-practice-attempt");
       safeStorage.removeItem(practiceAnswersKey(test.attemptId));
       setTest(null);
@@ -415,6 +418,7 @@ export default function App() {
         const recovered = await request<Result>(`/tests/${test.attemptId}/result`);
         setResult(recovered);
         setPracticeLocalSaveAvailable(false);
+        setPracticeSyncStatus("idle");
         safeStorage.removeItem("arctester-active-practice-attempt");
         safeStorage.removeItem(practiceAnswersKey(test.attemptId));
         setTest(null);
@@ -427,6 +431,31 @@ export default function App() {
   }
 
   submitPracticeTestRef.current = submitTest;
+
+  // Debounce answer sync and serialize requests so stale snapshots cannot overwrite newer edits.
+  // Offline answers remain in local storage; changing back online automatically retries them.
+  useEffect(() => {
+    if (!test || result || !isOnline || !practiceLocalSaveAvailable) return;
+    const attemptId = test.attemptId;
+    const snapshot = test.questions.map((question) => ({
+      questionId: question.id,
+      selectedIndex: answers[question.id] ?? null,
+    }));
+    const timer = window.setTimeout(() => {
+      setPracticeSyncStatus("saving");
+      practiceSyncQueueRef.current = practiceSyncQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          await request(`/tests/${attemptId}/answers`, {
+            method: "PUT",
+            body: JSON.stringify({ answers: snapshot }),
+          });
+          setPracticeSyncStatus("saved");
+        })
+        .catch(() => setPracticeSyncStatus("pending"));
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [test, result, answers, isOnline, practiceLocalSaveAvailable]);
 
   // Synchronize saved answers when the same practice attempt is open in another tab.
   useEffect(() => {
@@ -605,6 +634,7 @@ export default function App() {
             busy={busy}
             isOnline={isOnline}
             localSaveAvailable={practiceLocalSaveAvailable}
+        syncStatus={practiceSyncStatus}
             onLeave={() => setActivePage("dashboard")}
             onSelectAnswer={selectPracticeAnswer}
             onSubmit={() => void submitTest()}
