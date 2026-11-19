@@ -564,6 +564,21 @@ export default function App() {
     );
   }
 
+  const isDesktopShell = typeof navigator !== "undefined" && /electron/i.test(navigator.userAgent);
+
+  if (user.role === "ADMIN" && isDesktopShell) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card panel" role="alert">
+          <p className="eyebrow">ARCTESTER DESKTOP</p>
+          <h1>Admin access is web-only</h1>
+          <p className="muted">The desktop app is reserved for student accounts. Open ArcTester in your web browser to use the administrator workspace.</p>
+          <button className="primary" onClick={() => void signOut()} disabled={busy}>{busy ? "Signing out…" : "Sign out"}</button>
+        </section>
+      </main>
+    );
+  }
+
   if (user.role === "ADMIN") {
     return <AdminWorkspace
       email={user.email}
