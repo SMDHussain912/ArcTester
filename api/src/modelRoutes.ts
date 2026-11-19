@@ -702,6 +702,44 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       if (candidateRow.trainingDatasetId === dataset.id || baselineRow.trainingDatasetId === dataset.id) {
         return next(conflict("Evaluation data must be separate from both candidate and baseline training datasets."));
       }
+
+      // Distinct dataset IDs are not sufficient evidence of an independent holdout:
+      // the same learner can appear in separately uploaded datasets. Compare keyed
+      // pseudonymous learner groups before computing any evaluation metrics.
+      const trainingDatasetIds = [...new Set(
+        [candidateRow.trainingDatasetId, baselineRow.trainingDatasetId]
+          .filter((id): id is string => Boolean(id)),
+      )];
+      if (trainingDatasetIds.length) {
+        const trainingDatasets = await db.modelDataset.findMany({
+          where: { id: { in: trainingDatasetIds } },
+          select: { id: true, datasetKind: true, samplesJson: true },
+        });
+        const evaluationSamples = JSON.parse(dataset.samplesJson) as Array<{ groupId?: string }>;
+        const evaluationGroups = new Set(
+          evaluationSamples.flatMap((sample) =>
+            typeof sample.groupId === "string" && /^[a-f0-9]{64}$/.test(sample.groupId)
+              ? [sample.groupId]
+              : [],
+          ),
+        );
+        for (const trainingDataset of trainingDatasets) {
+          const trainingSamples = JSON.parse(trainingDataset.samplesJson) as Array<{ groupId?: string }>;
+          const trainingGroups = trainingSamples.flatMap((sample) =>
+            typeof sample.groupId === "string" && /^[a-f0-9]{64}$/.test(sample.groupId)
+              ? [sample.groupId]
+              : [],
+          );
+          if (dataset.datasetKind === "real-anonymized" && trainingDataset.datasetKind === "real-anonymized" &&
+              (trainingGroups.length !== trainingSamples.length || evaluationGroups.size !== evaluationSamples.length)) {
+            return next(conflict("Cannot verify learner separation: real-anonymized training and evaluation datasets must contain keyed pseudonymous learner groups on every row."));
+          }
+          if (trainingGroups.some((groupId) => evaluationGroups.has(groupId))) {
+            return next(conflict("Evaluation data contains learner groups already present in a candidate or baseline training dataset."));
+          }
+        }
+      }
+
       const candidate = validateRegistryArtifact(JSON.parse(candidateRow.artifactJson));
       const baseline = validateRegistryArtifact(JSON.parse(baselineRow.artifactJson));
       const datasetFeatures = JSON.parse(dataset.featureSchemaJson);
