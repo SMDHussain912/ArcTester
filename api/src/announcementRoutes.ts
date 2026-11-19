@@ -264,5 +264,22 @@ export function announcementRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/notifications/read-all", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const now = new Date();
+      const updated = await db.studentNotification.updateMany({
+        where: {
+          userId: req.user!.id,
+          readAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        data: { readAt: now },
+      });
+      res.json({ ok: true, updatedCount: updated.count, readAt: now.toISOString() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return router;
 }
