@@ -103,7 +103,20 @@ export function testRouter(db: PrismaClient): Router {
 
   router.get("/learning/package", requireAuth, async (_req, res, next) => {
     try {
+      // Downloadable learning content is practice-only. Published exam
+      // snapshots remain in the exam delivery path and are not preloaded here.
+      const publishedExamRows = await db.examVersionQuestion.findMany({
+        where: {
+          sourceQuestionId: { not: null },
+          examVersion: { is: { publishedAt: { not: null } } },
+        },
+        select: { sourceQuestionId: true },
+      });
+      const publishedExamQuestionIds = publishedExamRows.flatMap((row) =>
+        row.sourceQuestionId === null ? [] : [row.sourceQuestionId],
+      );
       const rows = await db.question.findMany({
+        where: { id: { notIn: publishedExamQuestionIds } },
         orderBy: [{ subject: { name: "asc" } }, { topic: { name: "asc" } }, { id: "asc" }],
         select: {
           id: true,
@@ -123,7 +136,8 @@ export function testRouter(db: PrismaClient): Router {
         difficulty: row.difficulty,
       }));
       res.json({
-        schemaVersion: 2,
+        schemaVersion: 3,
+        practiceOnly: true,
         exportedAt: new Date().toISOString(),
         total: questions.length,
         subjects: [...new Set(questions.map((question) => question.subject))],
