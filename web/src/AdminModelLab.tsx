@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type ModelLabDataset = { id: string; name: string; task: string; rowCount: number; targetColumn?: string; sourceDescription?: string; datasetKind?: string; featureSchema?: { name: string; type: string }[] };
 export type ModelLabModel = { modelId: string; version: number; algorithm: string; task: string; dataset: string; isActive: boolean; productionEligible?: boolean | null; createdAt?: string };
@@ -10,7 +10,19 @@ export type ModelLabJob = {
   progress: number;
   errorMessage: string;
   result?: unknown;
+  liveMetrics?: {epoch:number;totalEpochs:number;loss:number|null;mae:number|null;updatedAt:string}|null;
 };
+type EpochPoint = {epoch:number;loss:number|null;mae:number|null};
+function TrainingMetricChart({title,points,metric}:{title:string;points:EpochPoint[];metric:"loss"|"mae"}) {
+  const values=points.map(point=>point[metric]).filter((value):value is number=>typeof value==="number"&&Number.isFinite(value));
+  if(values.length===0)return <div className="training-chart-empty">Waiting for first epoch metrics…</div>;
+  const min=Math.min(...values),max=Math.max(...values),range=max-min||1;
+  const coords=points.map((point,index)=>({x:12+(index/Math.max(points.length-1,1))*276,y:88-(((point[metric]??min)-min)/range)*72,value:point[metric]})).filter(point=>point.value!==null);
+  const polyline=coords.map(point=>`${point.x},${point.y}`).join(" ");
+  const latest=values[values.length-1];
+  return <div className="training-chart"><div className="training-chart-head"><strong>{title}</strong><span>{latest.toFixed(5)}</span></div><svg viewBox="0 0 300 112" role="img" aria-label={title+" over training epochs"}><line x1="12" y1="88" x2="288" y2="88" className="training-chart-axis"/><line x1="12" y1="16" x2="12" y2="88" className="training-chart-axis"/><polyline points={polyline} className="training-chart-line"/>{coords.length>0&&<circle cx={coords[coords.length-1].x} cy={coords[coords.length-1].y} r="3.5" className="training-chart-point"/>}</svg><div className="training-chart-foot"><span>Epoch {points[0]?.epoch??"—"}</span><span>{points[points.length-1]?.epoch??"—"} / {points[points.length-1]?.epoch??"—"}</span></div></div>;
+}
+
 export type IntelligenceProviderStatus = { external: { provider: string; configured: boolean }; local: { provider: string; configured: boolean; baseUrl: string }; fallback: string[] };
 export type ModelDatasetRegistration = {
   name: string;
@@ -158,6 +170,8 @@ export default function AdminModelLab({
   const [evaluationHistory,setEvaluationHistory]=useState<ModelEvaluation[]>([]);
   const [historyLoading,setHistoryLoading]=useState(false);
   const [historyError,setHistoryError]=useState("");
+  const [epochHistory,setEpochHistory]=useState<Record<string,EpochPoint[]>>({});
+  useEffect(()=>{setEpochHistory(current=>{let changed=false;const next={...current};for(const job of jobs){const sample=job.liveMetrics;if(!sample||!Number.isFinite(sample.epoch))continue;const points=next[job.id]??[];if(points.some(point=>point.epoch===sample.epoch))continue;next[job.id]=[...points,{epoch:sample.epoch,loss:sample.loss,mae:sample.mae}].slice(-500);changed=true;}return changed?next:current;});},[jobs]);
 
   async function readDatasetFile(file: File) {
     setFormError("");
@@ -341,6 +355,8 @@ export default function AdminModelLab({
             <p className="muted">Job {job.id} · Dataset {job.datasetId}</p>
             <div className="training-progress" role="progressbar" aria-label={job.modelId + " training progress"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, job.progress))}><span style={{ width: Math.max(0, Math.min(100, job.progress)) + "%" }} /></div>
             <p>{job.progress}% complete</p>
+            {job.status==="RUNNING"&&<div className="training-live-metrics"><div className="training-live-heading"><strong>Live training metrics</strong><span>Auto-refreshes every 5 seconds · {job.liveMetrics?.epoch??0}/{job.liveMetrics?.totalEpochs??"—"} epochs</span></div><div className="training-chart-grid"><TrainingMetricChart title="Training loss (MSE)" points={epochHistory[job.id]??[]} metric="loss"/><TrainingMetricChart title="Training MAE" points={epochHistory[job.id]??[]} metric="mae"/></div>{job.liveMetrics?.updatedAt&&<small className="muted">Last metric update: {new Date(job.liveMetrics.updatedAt).toLocaleTimeString()}</small>}</div>}
+            
             {job.errorMessage && <p className="error" role="alert">{job.errorMessage}</p>}
             {job.result !== undefined && job.result !== null && (() => {
               const result = job.result as { productionEligible?: boolean; split?: { trainRows?: number; testRows?: number; trainGroups?: number; testGroups?: number }; candidate?: { mae?: number; rmse?: number; rSquared?: number | null }; baseline?: { mae?: number; rmse?: number; rSquared?: number | null }; reason?: string };
