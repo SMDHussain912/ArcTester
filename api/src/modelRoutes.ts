@@ -428,7 +428,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
             details: JSON.stringify({
               datasetId, datasetFingerprint: dataset.fingerprint,
               samples: samples.length, learnerGroups: modelArtifact.trainingGroups,
-              classCounts: Object.fromEntries(labels.map((label, index) => [label, readinessRows.filter((row) => row.label === label).length])),
+              classCounts: Object.fromEntries(labels.map((label) => [label, readinessRows.filter((row) => row.label === label).length])),
               targetEncoding: { 0: "NOT_READY", 1: "DEVELOPING", 2: "READY" },
               policyVersion: modelArtifact.policyVersion,
               evaluationRequired: true,
