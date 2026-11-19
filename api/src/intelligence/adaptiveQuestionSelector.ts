@@ -65,7 +65,7 @@ export function selectAdaptiveQuestions(request: AdaptiveSelectionRequest): Adap
     const daysSinceSeen = validDate(candidate.lastSeenAt) === null ? Infinity :
       Math.max(0, (now - (validDate(candidate.lastSeenAt) as number)) / 86400000);
     const weak = state?.accuracy !== null && state?.accuracy !== undefined && state.accuracy < 0.65 && state.answered >= 5;
-    const spaced = daysSinceSeen >= 7 || (state?.lastSeenAt && validDate(state.lastSeenAt) !== null &&
+    const spaced = (Number.isFinite(daysSinceSeen) && daysSinceSeen >= 7) || (state?.lastSeenAt && validDate(state.lastSeenAt) !== null &&
       (now - (validDate(state.lastSeenAt) as number)) / 86400000 >= 7);
     const difficultyFit = Math.max(0, 1 - Math.abs(candidate.difficulty - targetDifficulty) / 4);
     const novelty = candidate.exposureCount === 0 && !excluded.has(candidate.questionId);
