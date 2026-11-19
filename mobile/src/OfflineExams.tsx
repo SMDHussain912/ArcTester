@@ -47,10 +47,11 @@ type Props = {
   apiUrl: string;
   token: string;
   userId: string;
+  darkMode?: boolean;
   onExit?: () => void;
 };
 
-export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
+export function OfflineExams({ api, apiUrl, token, userId, darkMode = false, onExit }: Props) {
   const apiRef = useRef(api);
   apiRef.current = api;
   const mountedRef = useRef(false);
@@ -415,27 +416,27 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     const minutes = Math.floor((remainingSeconds ?? 0) / 60);
     const seconds = (remainingSeconds ?? 0) % 60;
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
         {onExit && <TouchableOpacity onPress={onExit} style={styles.backButton}><Text style={styles.link}>‹ Back to dashboard</Text></TouchableOpacity>}
-        <Text style={styles.heading}>{activePackage.title}</Text>
-        <Text style={styles.timer}>
+        <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{activePackage.title}</Text>
+        <Text style={[styles.timer, darkMode && { color: "#93c5fd" }]}>
           Time left: {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
         </Text>
-        <Text style={styles.muted}>
+        <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
         </Text>
-        <Text accessibilityLiveRegion="polite" style={styles.muted}>
+        <Text accessibilityLiveRegion="polite" style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
           {savingAnswers ? "Saving answer changes…" : answerSaveError ? "Answer not saved — select the option again to retry" : "All answer changes saved on this device"}
         </Text>
         {!!answerSaveError && <Text style={styles.error}>{answerSaveError}</Text>}
         <Text style={styles.muted}>
           Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.values(answers).filter((value) => value !== null && value !== undefined).length} answered
         </Text>
-        <View style={styles.progressTrack}>
+        <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
           <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
         </View>
-        <View style={styles.navigator}>
-          <Text style={styles.navigatorTitle}>QUESTION NAVIGATOR</Text>
+        <View style={[styles.navigator, darkMode && { backgroundColor: "#1e293b", borderColor: "#475569" }]}>
+          <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>QUESTION NAVIGATOR</Text>
           <View style={styles.navigatorGrid}>
             {activePackage.questions.map((question, index) => {
               const answered = answers[question.id] !== undefined && answers[question.id] !== null;
@@ -449,6 +450,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
                   onPress={() => setCurrentQuestionIndex(index)}
                   style={[
                     styles.navigatorItem,
+                    darkMode && { backgroundColor: "#26364d", borderColor: "#475569" },
                     answered && styles.navigatorAnswered,
                     current && styles.navigatorCurrent,
                   ]}
@@ -463,7 +465,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
             })}
           </View>
           <View style={styles.navigatorLegend}>
-            <Text style={styles.navigatorLegendText}>● Answered</Text>
+            <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>● Answered</Text>
             <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
           </View>
         </View>
@@ -478,7 +480,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
               },
             ]}
           >
-            <Text style={styles.questionTitle}>
+            <Text style={[styles.questionTitle, darkMode && { color: "#f1f5f9" }]}>
               {currentQuestionIndex + 1}. {activePackage.questions[currentQuestionIndex].text}
             </Text>
             {activePackage.questions[currentQuestionIndex].options.map((option, optionIndex) => (
@@ -490,7 +492,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
                   answers[activePackage.questions[currentQuestionIndex].id] === optionIndex && styles.optionSelected,
                 ]}
               >
-                <Text style={styles.optionText}>
+                <Text style={[styles.optionText, darkMode && { color: "#e2e8f0" }]}>
                   {String.fromCharCode(65 + optionIndex)}. {option}
                 </Text>
               </TouchableOpacity>
@@ -540,7 +542,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
 
   if (viewingResultId) {
     return (
-      <View style={styles.section}>
+      <View style={[styles.section, darkMode && { backgroundColor: "#0b1220" }]}>
         <TouchableOpacity onPress={() => setViewingResultId(null)} style={styles.linkRow}>
           <Text style={styles.link}>‹ Back to assigned exams</Text>
         </TouchableOpacity>
@@ -557,7 +559,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   return (
     <View style={styles.section}>
       <View style={styles.headerRow}>
-        {onExit ? <TouchableOpacity onPress={onExit}><Text style={styles.link}>‹ Dashboard</Text></TouchableOpacity> : <Text style={styles.sectionTitle}>Assigned exams</Text>}
+        {onExit ? <TouchableOpacity onPress={onExit}><Text style={styles.link}>‹ Dashboard</Text></TouchableOpacity> : <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Assigned exams</Text>}
         <TouchableOpacity disabled={syncing} onPress={() => void syncOutbox()}>
           <Text style={styles.link}>{syncing ? "Syncing…" : "Sync now"}</Text>
         </TouchableOpacity>
@@ -569,8 +571,8 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
       </Text>
       {!!syncMessage && <Text style={styles.syncMessage}>{syncMessage}</Text>}
       {activeAttemptIds.length > 0 && (
-        <View style={styles.assignment}>
-          <Text style={styles.assignmentTitle}>Interrupted exam{activeAttemptIds.length === 1 ? "" : "s"} found</Text>
+        <View style={[styles.assignment, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+          <Text style={[styles.assignmentTitle, darkMode && { color: "#f1f5f9" }]}>Interrupted exam{activeAttemptIds.length === 1 ? "" : "s"} found</Text>
           <Text style={styles.muted}>Your unfinished attempts and saved answers are ready to recover.</Text>
           {activeAttemptIds.map((assignmentId) => {
             const examPackage = cachedPackages.find((item) => item.assignmentId === assignmentId);
@@ -591,7 +593,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
         </View>
       )}
       {assignments.length === 0 && cachedPackages.length === 0 ? (
-        <Text style={styles.empty}>No exams have been assigned to this account yet.</Text>
+        <Text style={[styles.empty, darkMode && { color: "#a7b4c8" }]}>No exams have been assigned to this account yet.</Text>
       ) : (
         assignments.map((assignment) => {
           const downloaded = cachedIds.includes(assignment.id);
