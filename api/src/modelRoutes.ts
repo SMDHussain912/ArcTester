@@ -232,6 +232,64 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     }
   });
 
+
+  router.patch("/admin/model-datasets/:datasetId", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
+      const input = z.object({
+        name: z.string().trim().min(1).max(120),
+        sourceDescription: z.string().trim().min(10).max(500),
+      }).strict().parse(req.body);
+      const updated = await db.$transaction(async (tx) => {
+        const dataset = await tx.modelDataset.findUnique({ where: { id: datasetId } });
+        if (!dataset) return null;
+        const [modelCount, jobCount] = await Promise.all([
+          tx.registeredModel.count({ where: { trainingDatasetId: datasetId } }),
+          tx.modelTrainingJob.count({ where: { datasetId } }),
+        ]);
+        if (modelCount || jobCount) return { error: "in-use" as const };
+        const payload = {
+          name: input.name, task: dataset.task, targetColumn: dataset.targetColumn,
+          featureSchema: JSON.parse(dataset.featureSchemaJson),
+          samples: JSON.parse(dataset.samplesJson), datasetKind: dataset.datasetKind,
+        };
+        const fingerprint = createHash("sha256").update(canonicalJson(payload)).digest("hex");
+        return tx.modelDataset.update({
+          where: { id: datasetId },
+          data: { name: input.name, sourceDescription: input.sourceDescription, fingerprint },
+          select: { id: true, name: true, task: true, targetColumn: true, rowCount: true, sourceDescription: true, datasetKind: true, fingerprint: true, createdAt: true },
+        });
+      });
+      if (!updated) return next(notFound("Dataset was not found."));
+      if ("error" in updated) return next(conflict("This dataset is already referenced by a model or training job. Register a new dataset version instead."));
+      res.json({ ok: true, dataset: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof Error && "code" in error && error.code === "P2002") return next(conflict("A dataset with this exact content already exists."));
+      next(error);
+    }
+  });
+
+  router.delete("/admin/model-datasets/:datasetId", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
+      const result = await db.$transaction(async (tx) => {
+        const dataset = await tx.modelDataset.findUnique({ where: { id: datasetId }, select: { id: true } });
+        if (!dataset) return "missing" as const;
+        const [modelCount, jobCount] = await Promise.all([
+          tx.registeredModel.count({ where: { trainingDatasetId: datasetId } }),
+          tx.modelTrainingJob.count({ where: { datasetId } }),
+        ]);
+        if (modelCount || jobCount) return "in-use" as const;
+        await tx.modelDataset.delete({ where: { id: datasetId } });
+        return "deleted" as const;
+      });
+      if (result === "missing") return next(notFound("Dataset was not found."));
+      if (result === "in-use") return next(conflict("This dataset is referenced by a model or training job and cannot be deleted."));
+      res.json({ ok: true, deleted: true, datasetId });
+    } catch (error) { next(error); }
+  });
+
   router.post("/admin/model-datasets/:datasetId/train", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const datasetId = z.string().min(1).max(64).parse(req.params.datasetId);
@@ -461,6 +519,35 @@ export function modelRegistryRouter(db: PrismaClient): Router {
     } catch (error) {
       if (error instanceof z.ZodError) return next(error);
       if (error instanceof Error) return next(badRequest(error.message));
+      next(error);
+    }
+  });
+
+
+  router.delete("/admin/models/:modelId/:version", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const modelId = ModelIdSchema.parse(req.params.modelId);
+      const version = VersionSchema.parse(req.params.version);
+      const outcome = await db.$transaction(async (tx) => {
+        const model = await tx.registeredModel.findUnique({ where: { modelId_version: { modelId, version } } });
+        if (!model) return "missing" as const;
+        if (model.isActive) return "active" as const;
+        const runningJobs = await tx.modelTrainingJob.count({
+          where: { modelId, status: { in: ["QUEUED", "RUNNING"] } },
+        });
+        if (runningJobs) return "training" as const;
+        await tx.registeredModel.delete({ where: { id: model.id } });
+        await tx.modelRegistryAudit.create({
+          data: { actorId: req.user!.id, modelId, version, action: "DELETED", details: JSON.stringify({ reason: "administrator-deleted-inactive-version" }) },
+        });
+        return "deleted" as const;
+      });
+      if (outcome === "missing") return next(notFound("Model version was not found."));
+      if (outcome === "active") return next(conflict("The active production model cannot be deleted. Activate another version or roll back first."));
+      if (outcome === "training") return next(conflict("A model with queued or running training jobs cannot be deleted."));
+      res.json({ ok: true, deleted: true, modelId, version });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
       next(error);
     }
   });
