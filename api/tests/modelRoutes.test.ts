@@ -299,6 +299,63 @@ describe("admin model registry API", () => {
     expect(String(evaluation.body.error ?? evaluation.body.message)).toContain("separate");
   });
 
+  it("rejects evaluation datasets that reuse pseudonymous learners from a different training dataset", async () => {
+    const trainingSamples = Array.from({ length: 60 }, (_, index) => ({
+      features: { practice_score: index },
+      target: Math.floor(index / 2) % 2,
+      groupId: Math.floor(index / 2).toString(16).padStart(64, "0"),
+    }));
+    const trainingDataset = await request("/admin/model-datasets", "POST", {
+      name: "group-overlap-training",
+      task: "binary-classification",
+      targetColumn: "target_ready",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: trainingSamples,
+      sourceDescription: "Attested grouped learner training fixture for leakage prevention.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(trainingDataset.status).toBe(201);
+    const trainingDatasetId = (trainingDataset.body.dataset as { id: string }).id;
+    const trained = await request(`/admin/model-datasets/${trainingDatasetId}/train`, "POST", {
+      modelId: "group-overlap-fixture",
+      seed: 42,
+    });
+    expect(trained.status).toBe(201);
+
+    const modelId = "group-overlap-fixture-logistic-regression";
+    const baseline = await request("/admin/models", "POST", {
+      ...modelInput("independent-baseline"),
+      modelId,
+    });
+    expect(baseline.status).toBe(201);
+
+    const evaluationSamples = Array.from({ length: 30 }, (_, index) => ({
+      features: { practice_score: index + 0.5 },
+      target: index >= 15 ? 1 : 0,
+      groupId: Math.floor(index / 5).toString(16).padStart(64, "0"),
+    }));
+    const evaluationDataset = await request("/admin/model-datasets", "POST", {
+      name: "group-overlap-different-dataset",
+      task: "binary-classification",
+      targetColumn: "target_ready",
+      featureSchema: [{ name: "practice_score", type: "numeric" }],
+      samples: evaluationSamples,
+      sourceDescription: "Separate upload intentionally reusing learner groups to test leakage protection.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(evaluationDataset.status).toBe(201);
+    const evaluationDatasetId = (evaluationDataset.body.dataset as { id: string }).id;
+
+    const evaluation = await request(`/admin/models/${modelId}/1/evaluate`, "POST", {
+      baselineVersion: 2,
+      datasetId: evaluationDatasetId,
+    });
+    expect(evaluation.status).toBe(409);
+    expect(String(evaluation.body.error ?? evaluation.body.message)).toContain("learner groups already present");
+  });
+
   it("serves no TensorFlow artifact unless an eligible active version exists", async () => {
     expect((await request("/models/tensorflow-fixture/active/tensorflow", "GET", undefined, "")).status).toBe(403);
     const missing = await request("/models/tensorflow-fixture/active/tensorflow");
