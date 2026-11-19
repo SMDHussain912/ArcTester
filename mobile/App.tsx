@@ -131,6 +131,7 @@ export default function App() {
   const progress = useRef(new Animated.Value(0)).current;
   const practiceSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const practiceRestoreLock = useRef(false);
+  const questionSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [error, setError] = useState("");
   const [startupVisible, setStartupVisible] = useState(true);
   const startupFade = useRef(new Animated.Value(1)).current;
@@ -890,6 +891,21 @@ export default function App() {
             {test.questions[currentQuestionIndex] && (
               <Animated.View
                 key={test.questions[currentQuestionIndex].id}
+                onTouchStart={(event) => {
+                  questionSwipeStart.current = {
+                    x: event.nativeEvent.pageX,
+                    y: event.nativeEvent.pageY,
+                  };
+                }}
+                onTouchEnd={(event) => {
+                  const start = questionSwipeStart.current;
+                  questionSwipeStart.current = null;
+                  if (!start || busy) return;
+                  const dx = event.nativeEvent.pageX - start.x;
+                  const dy = event.nativeEvent.pageY - start.y;
+                  if (Math.abs(dx) < 72 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+                  updatePracticeQuestionIndex(currentQuestionIndex + (dx < 0 ? 1 : -1));
+                }}
                 style={[
                   styles.question,
                   {
@@ -899,6 +915,7 @@ export default function App() {
                 ]}
               >
                 <Text style={styles.questionTitle}>{test.questions[currentQuestionIndex].text}</Text>
+                <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>
                 {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
                   const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
                   return (
@@ -1350,6 +1367,7 @@ const styles = StyleSheet.create({
   examNext: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, backgroundColor: "#2563eb", borderRadius: 12, minHeight: 48, paddingHorizontal: 10 },
   submitLink: { alignItems: "center", marginTop: 8, padding: 6 },
 
+  swipeHint: { color: "#8993a5", fontSize: 10, fontWeight: "600", marginBottom: 10 },
   questionTitle: {
     color: "#172033",
     fontSize: 16,
