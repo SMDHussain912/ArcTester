@@ -902,3 +902,14 @@ button:focus-visible,.button:focus-visible,a:focus-visible,input:focus-visible,s
 .model-test-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin:16px 0}
 .model-result-json{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-size:12px}
 @media(max-width:760px){.model-registry-toolbar,.model-training-options,.model-test-fields{grid-template-columns:1fr}.model-registry-row{align-items:flex-start;flex-direction:column}.model-registry-row .row{justify-content:flex-start}.model-registry-row .row button{flex:1}.admin-model-lab .admin-panel{padding:17px}}
+
+/* Admin Model Lab: practical controls and responsive dataset actions */
+.admin-model-lab .model-dataset-editor{margin-top:16px;box-shadow:none;background:var(--bg)}
+.admin-model-lab .model-dataset-editor h3{margin:0 0 12px}
+.admin-model-lab .model-dataset-editor label{display:grid;gap:7px;margin:12px 0;font-size:13px;font-weight:700}
+.admin-model-lab .model-dataset-editor input,.admin-model-lab .model-dataset-editor textarea{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text)}
+.admin-model-lab .model-registry-row .button-danger{background:color-mix(in srgb,var(--danger) 10%,var(--surface));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 35%,var(--border))}
+.admin-model-lab .model-registry-row .button-danger:hover{background:color-mix(in srgb,var(--danger) 16%,var(--surface))}
+.admin-model-lab .model-training-options{margin:14px 0 18px}
+.admin-model-lab .model-registry-toolbar{margin-top:12px}
+@media(max-width:760px){.admin-model-lab .model-dataset-editor .row{align-items:stretch;flex-direction:column}.admin-model-lab .model-dataset-editor .row button{width:100%}}
