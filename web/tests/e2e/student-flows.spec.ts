@@ -138,26 +138,14 @@ test.describe("Student Practice Flow", () => {
     // generic navigation controls remain on screen.
     await expect(page.locator(".question-card").first()).toBeVisible({ timeout: 15000 });
 
-    // Answer first question if available
-    const options = page.locator(".option");
-    const optionCount = await options.count();
-    if (optionCount > 0) {
-      await options.first().click();
-    }
+    // Answer the first question and submit; missing controls must fail the test.
+    const options = page.locator(".question-card .option");
+    await expect(options.first()).toBeVisible();
+    await options.first().click();
 
-    // Submit test
-    const submitBtn = page.locator('button:has-text("Submit final answers"), button:has-text("Submit")');
-    if (await submitBtn.count() > 0) {
-      // Register before clicking because the confirmation dialog is synchronous.
-      page.on("dialog", async (dialog) => {
-        await dialog.accept();
-      });
-      await submitBtn.first().click();
-
-      // Should see results
-      await page.waitForSelector("text=Result, text=Score, text=result, text=score", { timeout: 10000 });
-      await expect(page.locator("text=Result, text=Score, text=result, text=score")).toBeVisible();
-    }
+    page.on("dialog", async (dialog) => { await dialog.accept(); });
+    await page.getByRole("button", { name: "Submit answers" }).click();
+    await expect(page.getByRole("heading", { name: "Your result" })).toBeVisible({ timeout: 15000 });
   });
 });
 
@@ -177,25 +165,13 @@ test.describe("Formal Exam Flow", () => {
     // Click on assigned exam to start
     await page.click('button:has-text("Start examination")');
 
-    // Should be on exam session
-    await page.waitForSelector(".question-card, .exam-session, h2", { timeout: 10000 });
+    // Confirm the assigned-exam runtime opened and can accept an answer.
+    const examQuestion = page.locator(".assigned-exam-session .question-card").first();
+    await expect(examQuestion).toBeVisible({ timeout: 15000 });
+    await examQuestion.locator(".option").first().click();
 
-    // Answer first question
-    const options = page.locator(".option");
-    const optionCount = await options.count();
-    if (optionCount > 0) {
-      await options.first().click();
-    }
-
-    // Submit exam
-    const submitBtn = page.locator('button:has-text("Submit final answers"), button:has-text("Submit")');
-    if (await submitBtn.count() > 0) {
-      page.on("dialog", async (dialog) => { await dialog.accept(); });
-      await submitBtn.first().click();
-
-      // Should see result or review-required message
-      await page.waitForSelector("text=Result, text=Score, text=Awaiting, text=review", { timeout: 10000 });
-      await expect(page.locator("text=Result, text=Score, text=Awaiting, text=review")).toBeVisible();
-    }
+    page.on("dialog", async (dialog) => { await dialog.accept(); });
+    await page.getByRole("button", { name: "Submit final answers" }).click();
+    await expect(page.getByText(/Awaiting administrator review|Score:/)).toBeVisible({ timeout: 15000 });
   });
 });
