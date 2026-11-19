@@ -1142,28 +1142,7 @@ export default function App() {
             >
               <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
             </TouchableOpacity>
-            <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Practice by subject</Text>
-            {bank?.subjects.map((item) => (
-              <TouchableOpacity
-                key={item.subject}
-                onPress={() => startPractice(item.subject)}
-                style={[styles.subject, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}
-              >
-                <View>
-                  <Text style={styles.subjectName}>{item.subject}</Text>
-                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.count} questions</Text>
-                </View>
-                <Text style={styles.arrow}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              disabled={busy}
-              onPress={() => startPractice()}
-              style={styles.primary}
-            >
-              <Text style={styles.primaryText}>{busy ? "Loading…" : "Start mixed practice"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={signOut} style={styles.secondary}>
+<TouchableOpacity onPress={signOut} style={styles.secondary}>
               <Text style={styles.secondaryText}>Sign out</Text>
             </TouchableOpacity>
           </>
