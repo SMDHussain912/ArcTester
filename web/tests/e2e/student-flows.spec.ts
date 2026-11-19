@@ -35,6 +35,8 @@ async function loginApi(page: Page, email: string, password: string): Promise<st
 
 /** Helper: login via UI */
 async function loginUi(page: Page, email: string, password: string) {
+  // API setup uses the page request context; remove its cookie before exercising the UI login.
+  await page.context().clearCookies();
   await page.goto("/");
   await page.waitForSelector('input[type="email"]', { timeout: 10000 });
   await page.fill('input[type="email"]', email);
@@ -139,12 +141,11 @@ test.describe("Student Practice Flow", () => {
     // Submit test
     const submitBtn = page.locator('button:has-text("Submit final answers"), button:has-text("Submit")');
     if (await submitBtn.count() > 0) {
-      await submitBtn.first().click();
-
-      // Handle confirmation dialog if present
+      // Register before clicking because the confirmation dialog is synchronous.
       page.on("dialog", async (dialog) => {
         await dialog.accept();
       });
+      await submitBtn.first().click();
 
       // Should see results
       await page.waitForSelector("text=Result, text=Score, text=result, text=score", { timeout: 10000 });
