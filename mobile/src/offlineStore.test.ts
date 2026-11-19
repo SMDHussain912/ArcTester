@@ -39,6 +39,7 @@ function makeFakeSqlite() {
   return {
     openDatabaseAsync: vi.fn((): Promise<typeof fakeSqliteRef> => Promise.resolve(fakeSqliteRef)),
     execAsync: vi.fn(async (): Promise<void> => undefined),
+    withExclusiveTransactionAsync: vi.fn(async (task: (transaction: ReturnType<typeof makeFakeSqlite>) => Promise<void>) => task(fakeSqliteRef)),
     getFirstAsync: vi.fn(async (sql: string, ...params: unknown[]): Promise<Record<string, unknown> | null> => {
       const rows = queryTable(tableFor(sql) ?? "", sql, params);
       return rows.length ? rows[0] : null;
@@ -262,6 +263,16 @@ describe("offlineStore", () => {
   it("rejects a package with a mismatched sha256", async () => {
     configureOfflineStore("user-2");
     await expect(saveExamPackage(packagePayload, "wrong-sha256")).rejects.toThrow("integrity check failed");
+  });
+
+  it("uses exclusive SQLite transactions when caching packages and starting attempts", async () => {
+    configureOfflineStore("user-exclusive-transactions");
+    fakeSqliteRef.withExclusiveTransactionAsync.mockClear();
+
+    await saveExamPackage(packagePayload, expectedSha256);
+    await startOfflineAttempt("assignment-1");
+
+    expect(fakeSqliteRef.withExclusiveTransactionAsync).toHaveBeenCalledTimes(2);
   });
 
   it("starts an attempt, saves answers, and tracks remaining seconds", async () => {
