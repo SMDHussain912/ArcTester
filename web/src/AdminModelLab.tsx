@@ -49,7 +49,7 @@ const APPROVED_MODEL_PORTFOLIO = [
   { id: "performance-gradient-boosting", name: "Gradient Boosting", purpose: "Next-attempt performance prediction", inputs: "Point-in-time attempt history and subject/topic mastery", outputs: "Predicted accuracy, interval and local explanation factors", status: "TRAINABLE · CANDIDATE ONLY", gate: "500+ examples · 50+ learner groups · beat MAE and RMSE baselines" },
   { id: "performance-random-forest", name: "Random Forest", purpose: "Performance prediction and feature importance", inputs: "Same versioned performance features and splits as Gradient Boosting", outputs: "Predicted accuracy, interval and stable global feature importance", status: "TRAINABLE · CANDIDATE ONLY", gate: "Paired holdout comparison · stable importance across folds" },
   { id: "exam-readiness-classifier", name: "Readiness Classifier", purpose: "Classify exam readiness", inputs: "Recent practice, subject coverage and prior full mock history", outputs: "Not ready / Developing / Ready probabilities", status: "TRAINABLE · CANDIDATE ONLY", gate: "1,000+ labeled snapshots · 100+ learner groups · calibrated false-READY rate" },
-  { id: "adaptive-question-selector", name: "Adaptive Learning", purpose: "Personalized next-question ranking", inputs: "Learner mastery state, eligible questions and session constraints", outputs: "Ranked question IDs with reason codes", status: "INTEGRATED INTO PRACTICE · LOGGING PENDING", gate: "10,000+ logged decisions · 200+ learner groups · offline policy evaluation" },
+  { id: "adaptive-question-selector", name: "Adaptive Learning", purpose: "Personalized next-question ranking", inputs: "Learner mastery state, eligible questions and session constraints", outputs: "Ranked question IDs with reason codes", status: "INTEGRATED · OUTCOME ANALYTICS", gate: "10,000+ logged decisions · 200+ learner groups · offline policy evaluation" },
   { id: "question-semantic-embeddings", name: "Question Embeddings", purpose: "Semantic search and question relationships", inputs: "Approved question stem and subject/topic context", outputs: "384-dimensional vectors and ranked semantic matches", status: "INDEX BUILT · PRETRAINED ENCODER PENDING", gate: "Human-reviewed pairs · retrieval quality and latency benchmarks" },
   { id: "exam-session-anomaly", name: "Exam Anomaly Detection", purpose: "Flag unusual exam sessions for human review", inputs: "Server-observed session event aggregates and telemetry coverage", outputs: "Anomaly score, severity and evidence reason codes", status: "ISOLATION FOREST BUILT · REVIEW PIPELINE PENDING", gate: "2,000+ sessions · 200+ learner groups · reviewed false-positive rate" },
 ] as const;
@@ -189,11 +189,36 @@ export default function AdminModelLab({
   const [historyLoading,setHistoryLoading]=useState(false);
   const [historyError,setHistoryError]=useState("");
   const [epochHistory,setEpochHistory]=useState<Record<string,EpochPoint[]>>({});
+  const [adaptiveAnalytics,setAdaptiveAnalytics]=useState<{
+    summary:{selected:number;observed:number;pending:number;unanswered:number;averageReward:number|null;averageSelectionScore:number|null;outcomeCoverage:number};
+    byReason:{reasonCode:string;count:number}[];
+    daily:{date:string;selected:number;observed:number;averageReward:number|null}[];
+    windowDays:number;
+    truncated:boolean;
+  }|null>(null);
+  const [adaptiveAnalyticsError,setAdaptiveAnalyticsError]=useState("");
+  const [adaptiveAnalyticsLoading,setAdaptiveAnalyticsLoading]=useState(false);
+
   const selectedDataset = datasets.find((dataset) => dataset.id === selectedDatasetId);
   const readinessEligible = selectedDataset?.task === "multiclass-classification" && selectedDataset.datasetKind === "real-anonymized" && !!selectedDataset.featureSchema?.some((feature) => feature.name === "completed_attempts" && feature.type === "numeric") && !!selectedDataset.featureSchema?.length && selectedDataset.featureSchema.every((feature) => feature.type === "numeric");
   const tensorflowEligible = selectedDataset?.task === "regression" &&
     (selectedDataset.featureSchema?.length ?? 0) > 0 &&
     selectedDataset.featureSchema?.every((feature) => feature.type === "numeric") === true;
+  useEffect(() => {
+    let active = true;
+    setAdaptiveAnalyticsLoading(true);
+    const base = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+    fetch(base + "/admin/adaptive-learning/analytics?days=30&limit=5000", { credentials: "include" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || body.message || "Could not load adaptive learning analytics.");
+        return body;
+      })
+      .then((body) => { if (active) { setAdaptiveAnalytics(body); setAdaptiveAnalyticsError(""); } })
+      .catch((error) => { if (active) setAdaptiveAnalyticsError(error instanceof Error ? error.message : "Could not load adaptive learning analytics."); })
+      .finally(() => { if (active) setAdaptiveAnalyticsLoading(false); });
+    return () => { active = false; };
+  }, []);
   useEffect(()=>{setEpochHistory(current=>{let changed=false;const next={...current};for(const job of jobs){const sample=job.liveMetrics;if(!sample||!Number.isFinite(sample.epoch))continue;const points=next[job.id]??[];if(points.some(point=>point.epoch===sample.epoch))continue;next[job.id]=[...points,{epoch:sample.epoch,loss:sample.loss,mae:sample.mae}].slice(-500);changed=true;}return changed?next:current;});},[jobs]);
 
   async function readDatasetFile(file: File) {
@@ -331,6 +356,40 @@ export default function AdminModelLab({
         <article><span>Training in progress</span><strong>{activeJobs}</strong><small>{jobs.filter((job) => job.status === "QUEUED").length} queued · {jobs.filter((job) => job.status === "RUNNING").length} running</small></article>
         <article><span>Completed jobs</span><strong>{completedJobs}</strong><small>{failedJobs} failed or cancelled</small></article>
         <article><span>Active models</span><strong>{activeModels}</strong><small>{models.length - activeModels} inactive candidates</small></article>
+      </section>
+
+      <section className="admin-panel" aria-labelledby="adaptive-analytics-title">
+        <div className="admin-panel-head">
+          <div><p className="eyebrow">LIVE DECISION TELEMETRY</p><h2 id="adaptive-analytics-title">Adaptive learning outcomes</h2></div>
+          <span className="status status-pending">{adaptiveAnalyticsLoading ? "LOADING" : "LAST 30 DAYS"}</span>
+        </div>
+        {adaptiveAnalyticsError ? <p className="error-text" role="alert">{adaptiveAnalyticsError}</p> : null}
+        {adaptiveAnalytics ? <>
+          <div className="model-lab-health-grid">
+            <article><span>Questions selected</span><strong>{adaptiveAnalytics.summary.selected.toLocaleString()}</strong><small>{adaptiveAnalytics.summary.observed.toLocaleString()} observed outcomes</small></article>
+            <article><span>Average reward</span><strong>{adaptiveAnalytics.summary.averageReward === null ? "—" : (adaptiveAnalytics.summary.averageReward * 100).toFixed(1) + "%"}</strong><small>Correctness across answered questions</small></article>
+            <article><span>Outcome coverage</span><strong>{(adaptiveAnalytics.summary.outcomeCoverage * 100).toFixed(1)}%</strong><small>{adaptiveAnalytics.summary.pending} pending · {adaptiveAnalytics.summary.unanswered} unanswered</small></article>
+            <article><span>Average ranking score</span><strong>{adaptiveAnalytics.summary.averageSelectionScore === null ? "—" : adaptiveAnalytics.summary.averageSelectionScore.toFixed(3)}</strong><small>Deterministic policy score, not a probability</small></article>
+          </div>
+          <div className="admin-two-col">
+            <div><h3>Selection reasons</h3>
+              {adaptiveAnalytics.byReason.length ? <ul>{adaptiveAnalytics.byReason.map((item) => <li key={item.reasonCode}>{item.reasonCode.replaceAll("_", " ")} — {item.count.toLocaleString()}</li>)}</ul> : <p className="muted">No adaptive decisions recorded in this window.</p>}
+            </div>
+            <div><h3>Daily selection volume</h3>
+              {adaptiveAnalytics.daily.length ? <div className="stack" aria-label="Daily adaptive question selections">
+                {adaptiveAnalytics.daily.slice(-14).map((item) => {
+                  const maximum = Math.max(1, ...adaptiveAnalytics.daily.map((day) => day.selected));
+                  return <div key={item.date} style={{display:"grid",gridTemplateColumns:"90px 1fr 48px",gap:"0.5rem",alignItems:"center"}}>
+                    <small>{item.date.slice(5)}</small>
+                    <div style={{height:"9px",background:"var(--surface-muted, #e5e7eb)",borderRadius:"99px",overflow:"hidden"}}><div style={{height:"100%",width:(item.selected/maximum*100)+"%",background:"var(--accent, #64748b)",borderRadius:"99px"}} /></div>
+                    <small>{item.selected}</small>
+                  </div>;
+                })}
+              </div> : <p className="muted">Daily activity will appear after learners complete adaptive practice.</p>}
+            </div>
+          </div>
+          {adaptiveAnalytics.truncated ? <p className="muted">This report reached its 5,000-decision sample limit. Narrow the date window for complete counts.</p> : null}
+        </> : adaptiveAnalyticsLoading ? <p className="muted">Loading decision and outcome telemetry…</p> : <p className="muted">No adaptive analytics are available yet.</p>}
       </section>
 
       <section className="admin-panel" aria-labelledby="approved-model-portfolio-title">
