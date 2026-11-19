@@ -395,7 +395,13 @@ export function trainRegisteredDataset(
   }
   if (options.splitStrategy === "chronological-grouped") {
     if (task !== "regression") throw new Error("Chronological performance training is only supported for regression datasets.");
-    return trainPerformanceModelsChronologically(rows as PerformanceTrainingRow[], seed);
+    const performanceRows: PerformanceTrainingRow[] = rows.map((row) => {
+      if (!row.groupId || !Number.isFinite(row.occurredAt)) {
+        throw new Error("Performance training requires a keyed learner group ID and a valid occurredAt timestamp on every row.");
+      }
+      return { ...row, groupId: row.groupId, occurredAt: row.occurredAt! };
+    });
+    return trainPerformanceModelsChronologically(performanceRows, seed);
   }
   const split = hasGroupIds
     ? splitDatasetRowsByGroup(rows, "groupId", { testFraction: 0.2, seed })
