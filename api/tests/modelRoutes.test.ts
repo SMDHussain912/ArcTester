@@ -454,6 +454,13 @@ describe("admin model registry API", () => {
     expect(activated.status).toBe(200);
     expect(activated.body.model).toMatchObject({ version: 2, isActive: true });
 
+    const previousVersionEvaluation = await request("/admin/models/exam-readiness-demo/1/evaluate", "POST", {
+      baselineVersion: 2,
+      datasetId,
+    });
+    expect(previousVersionEvaluation.status).toBe(200);
+    expect(previousVersionEvaluation.body.report).toMatchObject({ status: "PASSED", candidateVersion: 1, baselineVersion: 2 });
+
     const rollback = await request("/admin/models/exam-readiness-demo/rollback", "POST", { reason: "Rollback after a monitored quality regression." });
     expect(rollback.status).toBe(200);
     expect(rollback.body.model).toMatchObject({ version: 1, isActive: true });
@@ -461,13 +468,32 @@ describe("admin model registry API", () => {
     const audit = await request("/admin/models/exam-readiness-demo/audit");
     expect(audit.status).toBe(200);
     const actions = (audit.body.events as Array<{ action: string; actorId: number | null }>).map((event) => event.action);
-    expect(actions).toHaveLength(6);
+    expect(actions).toHaveLength(7);
     expect(actions).toEqual(expect.arrayContaining(["ROLLED_BACK", "ACTIVATED", "REGISTERED", "EVALUATED"]));
     expect((audit.body.events as Array<{ actorId: number | null }>).every((event) => event.actorId !== null)).toBe(true);
     const rollbackEvent = (audit.body.events as Array<{ action: string; details: { reason?: string } }>).find((event) => event.action === "ROLLED_BACK");
     const activationEvent = (audit.body.events as Array<{ action: string; details: { reason?: string } }>).find((event) => event.action === "ACTIVATED");
     expect(rollbackEvent?.details.reason).toBe("Rollback after a monitored quality regression.");
     expect(activationEvent?.details.reason).toBe("Passed independent real-anonymized holdout evaluation.");
+  });
+
+  it("blocks rollback when the previous version lacks production evaluation evidence", async () => {
+    const modelId = "rollback-evidence-gate";
+    const first = await request("/admin/models", "POST", { ...modelInput("rollback-v1"), modelId });
+    expect(first.status).toBe(201);
+    const second = await request("/admin/models", "POST", { ...modelInput("rollback-v2"), modelId });
+    expect(second.status).toBe(201);
+    const datasetId = await registerEvaluationDataset("rollback-candidate-real", "real-anonymized");
+    const evaluated = await request(`/admin/models/${modelId}/2/evaluate`, "POST", { baselineVersion: 1, datasetId });
+    expect(evaluated.status).toBe(200);
+    expect(evaluated.body.report).toMatchObject({ status: "PASSED" });
+    expect((await request(`/admin/models/${modelId}/2/activate`, "POST", { reason: "Independent holdout passed for the candidate version." })).status).toBe(200);
+
+    const rollback = await request(`/admin/models/${modelId}/rollback`, "POST", { reason: "Attempt rollback without evaluating the old version." });
+    expect(rollback.status).toBe(409);
+    expect(String(rollback.body.error ?? rollback.body.message)).toContain("passing evaluation");
+    const active = await server.db.registeredModel.findMany({ where: { modelId, isActive: true } });
+    expect(active.map((model) => model.version)).toEqual([2]);
   });
 
   it("blocks production activation when a passing evaluation used synthetic data", async () => {
