@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 
 describe("StudentNotificationsInbox", () => {
-  it("renders read and unread notices and forwards open/read actions", () => {
+  it("renders read and unread notices with machine-readable dates and forwards actions", () => {
     const onRead = vi.fn();
     const onOpen = vi.fn();
     const onMarkAllRead = vi.fn();
@@ -22,11 +22,29 @@ describe("StudentNotificationsInbox", () => {
     expect(screen.getByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
     expect(screen.getByText("UNREAD")).toBeInTheDocument();
     expect(screen.getByText("READ")).toBeInTheDocument();
+    expect(screen.getAllByRole("time").map((time) => time.getAttribute("datetime"))).toEqual([
+      "2026-11-10T08:00:00.000Z",
+      "2026-11-10T07:00:00.000Z",
+    ]);
     fireEvent.click(screen.getAllByRole("button", { name: "Open" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
     fireEvent.click(screen.getByRole("button", { name: "Mark all as read" }));
     expect(onOpen).toHaveBeenCalledWith("notice-1");
     expect(onRead).toHaveBeenCalledWith("notice-1");
     expect(onMarkAllRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces the empty inbox state accessibly", () => {
+    render(<StudentNotificationsInbox
+      items={[]}
+      onRefresh={vi.fn()}
+      onRead={vi.fn()}
+      onMarkAllRead={vi.fn()}
+      preferences={{ examAssignments: true, examResults: true }}
+      onPreferenceChange={vi.fn()}
+      onOpen={vi.fn()}
+    />);
+    expect(screen.getByText("No notifications yet").closest('[aria-live="polite"]')).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark all as read" })).not.toBeInTheDocument();
   });
 });
