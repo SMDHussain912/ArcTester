@@ -111,7 +111,7 @@ async function setupExamData(page: Page) {
 
 test.describe("Student Practice Flow", () => {
   test("student can create, take, and submit a practice test", async ({ page }) => {
-    const { studentEmail, subjectName } = await setupExamData(page);
+    const { studentEmail } = await setupExamData(page);
 
     // Login as student through UI
     await loginUi(page, studentEmail, "StudentPass123!");
