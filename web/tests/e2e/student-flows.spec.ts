@@ -26,8 +26,11 @@ async function loginApi(page: Page, email: string, password: string): Promise<st
     headers: { "Content-Type": "application/json" },
     data: JSON.stringify({ email, password }),
   });
+  if (!res.ok()) throw new Error(`E2E login failed for ${email} (${res.status()}): ${await res.text()}`);
   const setCookie = res.headers()["set-cookie"] || res.headers()["Set-Cookie"] || "";
-  return Array.isArray(setCookie) ? setCookie[0]?.split(";")[0] || "" : setCookie.split(";")[0] || "";
+  const cookie = Array.isArray(setCookie) ? setCookie[0]?.split(";")[0] || "" : setCookie.split(";")[0] || "";
+  if (!cookie) throw new Error(`E2E login for ${email} did not return a session cookie.`);
+  return cookie;
 }
 
 /** Helper: login via UI */
@@ -178,12 +181,8 @@ test.describe("Formal Exam Flow", () => {
     // Submit exam
     const submitBtn = page.locator('button:has-text("Submit final answers"), button:has-text("Submit")');
     if (await submitBtn.count() > 0) {
+      page.on("dialog", async (dialog) => { await dialog.accept(); });
       await submitBtn.first().click();
-
-      // Handle confirmation dialog
-      page.on("dialog", async (dialog) => {
-        await dialog.accept();
-      });
 
       // Should see result or review-required message
       await page.waitForSelector("text=Result, text=Score, text=Awaiting, text=review", { timeout: 10000 });
