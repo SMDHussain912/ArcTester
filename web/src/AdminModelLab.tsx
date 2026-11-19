@@ -147,7 +147,7 @@ function getDatasetPreviewSummary(raw: string): { rows: number; features: number
 }
 
 export default function AdminModelLab({
-  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, intelligenceStatus = null, onDatasetChange,
+  datasets, jobs, models, selectedDatasetId, modelPrefix, busy, loading = false, onDatasetChange,
   onModelPrefixChange, onQueueTraining, onTrainClassical, onRefresh, onRegisterDataset, onCancelJob, onEvaluateModel, onEditDataset, onDeleteDataset, onDeleteModel,
 }: AdminModelLabProps) {
   const [datasetName, setDatasetName] = useState("");
