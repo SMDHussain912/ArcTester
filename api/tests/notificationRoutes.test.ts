@@ -83,4 +83,55 @@ describe("student notification API", () => {
     expect((await postJson(`${server.baseUrl}/notifications/${active.id}/read`, {}, secondCookie)).status).toBe(400);
     expect((await postJson(`${server.baseUrl}/notifications/${expired.id}/read`, {}, firstCookie)).status).toBe(400);
   });
+
+  it("marks all active unread notifications as read without touching expired notices or other students", async () => {
+    const activeOne = await server.db.studentNotification.create({
+      data: {
+        userId: firstUserId,
+        kind: "EXAM_ASSIGNMENT",
+        title: "Assignment one",
+        message: "A new assignment is ready.",
+        href: "/assignments",
+        dedupeKey: "notification-read-all-active-one",
+      },
+    });
+    const activeTwo = await server.db.studentNotification.create({
+      data: {
+        userId: firstUserId,
+        kind: "EXAM_RESULT",
+        title: "Result ready",
+        message: "Your result is ready.",
+        href: "/assignments",
+        dedupeKey: "notification-read-all-active-two",
+      },
+    });
+    const expired = await server.db.studentNotification.create({
+      data: {
+        userId: firstUserId,
+        kind: "EXAM_RESULT",
+        title: "Old result",
+        message: "This notice has expired.",
+        href: "/assignments",
+        dedupeKey: "notification-read-all-expired",
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    const response = await postJson(`${server.baseUrl}/notifications/read-all`, {}, firstCookie);
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({ ok: true, updatedCount: 2 });
+
+    const [savedOne, savedTwo, savedExpired] = await Promise.all([
+      server.db.studentNotification.findUniqueOrThrow({ where: { id: activeOne.id } }),
+      server.db.studentNotification.findUniqueOrThrow({ where: { id: activeTwo.id } }),
+      server.db.studentNotification.findUniqueOrThrow({ where: { id: expired.id } }),
+    ]);
+    expect(savedOne.readAt).not.toBeNull();
+    expect(savedTwo.readAt).not.toBeNull();
+    expect(savedExpired.readAt).toBeNull();
+
+    const repeated = await postJson(`${server.baseUrl}/notifications/read-all`, {}, firstCookie);
+    expect(repeated.status).toBe(200);
+    expect(repeated.json).toMatchObject({ ok: true, updatedCount: 0 });
+  });
 });
