@@ -61,7 +61,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
     if (preferenceResult.status === "fulfilled") setPreferences(preferenceResult.value.preferences);
     if (materialResult.status === "fulfilled") setStudyMaterials(materialResult.value.materials ?? []);
     const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
-    if (failures.length === 5) setError("Learning data could not be loaded. Check your connection and try again.");
+    if (failures.length === 6) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
   }, []);
