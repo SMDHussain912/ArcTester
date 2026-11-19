@@ -61,7 +61,7 @@ async function runPendingSubmissionSync(apiUrl: string, token: string): Promise<
         continue;
       }
 
-      if (body.submission.attemptUuid && body.submission.attemptUuid !== attempt.attemptUuid) {
+      if (body.submission.attemptUuid !== attempt.attemptUuid) {
         await keepSubmissionPending(
           attempt.assignmentId,
           "The server returned a different attempt identifier. Manual review is required."
