@@ -26,10 +26,10 @@ export function testRouter(db: PrismaClient): Router {
         select: {
           id: true,
           name: true,
-          _count: { select: { questions: true } },
+          _count: { select: { questions: { where: { reviewStatus: "APPROVED" } } } },
           topics: {
             orderBy: { name: "asc" },
-            select: { id: true, name: true, _count: { select: { questions: true } } },
+            select: { id: true, name: true, _count: { select: { questions: { where: { reviewStatus: "APPROVED" } } } } },
           },
         },
         orderBy: { name: "asc" },
@@ -43,7 +43,7 @@ export function testRouter(db: PrismaClient): Router {
       });
       const examQuestionIds = publishedExamRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]);
       const practiceRows = await db.question.findMany({
-        where: { id: { notIn: examQuestionIds } },
+        where: { reviewStatus: "APPROVED", id: { notIn: examQuestionIds } },
         select: { subjectId: true, topicId: true },
       });
       const practiceSubjectCounts = new Map<number, number>();
@@ -116,7 +116,7 @@ export function testRouter(db: PrismaClient): Router {
         row.sourceQuestionId === null ? [] : [row.sourceQuestionId],
       );
       const rows = await db.question.findMany({
-        where: { id: { notIn: publishedExamQuestionIds } },
+        where: { reviewStatus: "APPROVED", id: { notIn: publishedExamQuestionIds } },
         orderBy: [{ subject: { name: "asc" } }, { topic: { name: "asc" } }, { id: "asc" }],
         select: {
           id: true,

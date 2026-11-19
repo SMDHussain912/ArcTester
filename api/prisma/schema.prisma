@@ -41,6 +41,7 @@ model Question {
   explanation  String    @default("")
   source       String    @default("")
   difficulty   String    @default("medium")
+  reviewStatus String    @default("DRAFT")
   questionHash String    @unique
   createdAt    DateTime  @default(now())
   answers      AttemptAnswer[]
@@ -49,6 +50,7 @@ model Question {
   embedding     QuestionEmbedding?
 
   @@index([subjectId])
+  @@index([reviewStatus, subjectId])
 }
 
 model Attempt {

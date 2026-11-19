@@ -176,6 +176,7 @@ export async function createTest(
   now: Date = new Date()
 ): Promise<CreatedTest> {
   const all = await db.question.findMany({
+    where: { reviewStatus: "APPROVED" },
     select: {
       id: true,
       difficulty: true,
