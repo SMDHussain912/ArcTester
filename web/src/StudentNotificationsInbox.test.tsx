@@ -7,7 +7,7 @@ describe("StudentNotificationsInbox", () => {
     const onRead = vi.fn();
     const onOpen = vi.fn();
     const onMarkAllRead = vi.fn();
-    render(<StudentNotificationsInbox
+    const { container } = render(<StudentNotificationsInbox
       items={[
         { id: "notice-1", kind: "EXAM_ASSIGNMENT", title: "New exam assigned", message: "Open your exams.", href: "/assignments", createdAt: "2026-11-10T08:00:00.000Z", readAt: null, expiresAt: null },
         { id: "notice-2", kind: "EXAM_RESULT", title: "Result available", message: "Your result is ready.", href: "/assignments/a1/result", createdAt: "2026-11-10T07:00:00.000Z", readAt: "2026-11-10T08:00:00.000Z", expiresAt: null },
@@ -22,7 +22,7 @@ describe("StudentNotificationsInbox", () => {
     expect(screen.getByRole("heading", { name: "Notification inbox" })).toBeInTheDocument();
     expect(screen.getByText("UNREAD")).toBeInTheDocument();
     expect(screen.getByText("READ")).toBeInTheDocument();
-    expect(screen.getAllByRole("time").map((time) => time.getAttribute("datetime"))).toEqual([
+    expect(Array.from(container.querySelectorAll("time"), (time) => time.getAttribute("datetime"))).toEqual([
       "2026-11-10T08:00:00.000Z",
       "2026-11-10T07:00:00.000Z",
     ]);
