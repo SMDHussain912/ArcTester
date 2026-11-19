@@ -19,7 +19,7 @@ describe("AdminModelLab", () => {
   it("offers readiness training only for real-anonymized numeric datasets", () => {
     const onTrainReadiness = vi.fn();
     const readinessDataset: ModelLabDataset = {
-      id: "readiness-data", name: "Labeled readiness", task: "regression", rowCount: 180,
+      id: "readiness-data", name: "Labeled readiness", task: "multiclass-classification", rowCount: 180,
       datasetKind: "real-anonymized",
       featureSchema: [
         { name: "mastery_signal", type: "numeric" },
