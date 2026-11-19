@@ -37,7 +37,7 @@ function queryTable(tableName: string, sql: string, params: unknown[]): Record<s
 
 function makeFakeSqlite() {
   return {
-    openDatabaseAsync: vi.fn((): Promise<typeof fakeSqliteRef> => Promise.resolve(fakeSqliteRef)),
+    openDatabaseAsync: vi.fn((_name: string): Promise<typeof fakeSqliteRef> => Promise.resolve(fakeSqliteRef)),
     execAsync: vi.fn(async (): Promise<void> => undefined),
     withExclusiveTransactionAsync: vi.fn(async (task: (transaction: ReturnType<typeof makeFakeSqlite>) => Promise<void>) => task(fakeSqliteRef)),
     withTransactionAsync: vi.fn(async (task: () => Promise<void>) => task()),
