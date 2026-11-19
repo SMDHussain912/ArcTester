@@ -216,7 +216,7 @@ export default function AdminModelLab({
   async function loadModelHistory(modelId:string) {
     setHistoryModelId(modelId);setHistoryLoading(true);setHistoryError("");setAuditEvents([]);setEvaluationHistory([]);
     try {
-      const base=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\\/+$/,"");
+      const base=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"");
       const [auditResponse,evaluationResponse]=await Promise.all([
         fetch(base+`/admin/models/${encodeURIComponent(modelId)}/audit`,{credentials:"include"}),
         fetch(base+`/admin/models/${encodeURIComponent(modelId)}/evaluations`,{credentials:"include"}),
