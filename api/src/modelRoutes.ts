@@ -716,13 +716,12 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           select: { id: true, datasetKind: true, samplesJson: true },
         });
         const evaluationSamples = JSON.parse(dataset.samplesJson) as Array<{ groupId?: string }>;
-        const evaluationGroups = new Set(
-          evaluationSamples.flatMap((sample) =>
-            typeof sample.groupId === "string" && /^[a-f0-9]{64}$/.test(sample.groupId)
-              ? [sample.groupId]
-              : [],
-          ),
+        const evaluationGroupRows = evaluationSamples.flatMap((sample) =>
+          typeof sample.groupId === "string" && /^[a-f0-9]{64}$/.test(sample.groupId)
+            ? [sample.groupId]
+            : [],
         );
+        const evaluationGroups = new Set(evaluationGroupRows);
         for (const trainingDataset of trainingDatasets) {
           const trainingSamples = JSON.parse(trainingDataset.samplesJson) as Array<{ groupId?: string }>;
           const trainingGroups = trainingSamples.flatMap((sample) =>
@@ -731,7 +730,7 @@ export function modelRegistryRouter(db: PrismaClient): Router {
               : [],
           );
           if (dataset.datasetKind === "real-anonymized" && trainingDataset.datasetKind === "real-anonymized" &&
-              (trainingGroups.length !== trainingSamples.length || evaluationGroups.size !== evaluationSamples.length)) {
+              (trainingGroups.length !== trainingSamples.length || evaluationGroupRows.length !== evaluationSamples.length)) {
             return next(conflict("Cannot verify learner separation: real-anonymized training and evaluation datasets must contain keyed pseudonymous learner groups on every row."));
           }
           if (trainingGroups.some((groupId) => evaluationGroups.has(groupId))) {
