@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fitLinearRegression } from "./linearRegression.js";
 import { fitLogisticRegression } from "./logisticRegression.js";
+import { fitGradientBoostingRegressor, fitRandomForestRegressor } from "./treeEnsembles.js";
 import { ModelRegistry, predictWithRegistryArtifact, transformFeatures, validateRegistryArtifact } from "./modelRegistry.js";
 
 describe("ModelRegistry", () => {
@@ -102,6 +103,37 @@ describe("ModelRegistry", () => {
     expect(prediction.task).toBe("regression");
     expect(typeof prediction.prediction).toBe("number");
     expect(prediction.prediction).toBeCloseTo(10, 0);
+  });
+
+  it.each([
+    ["performance-gradient-boosting", fitGradientBoostingRegressor],
+    ["performance-random-forest", fitRandomForestRegressor],
+  ] as const)("validates and predicts with %s artifacts", (algorithm, fit) => {
+    const rows = Array.from({ length: 40 }, (_, index) => ({
+      features: [index / 4, index % 3],
+      target: index < 20 ? index / 2 : index * 1.5,
+    }));
+    const model = fit(rows, { seed: 11 });
+    const artifact = validateRegistryArtifact({
+      registrySchemaVersion: 1,
+      modelId: "performance-ensemble",
+      version: 1,
+      algorithm,
+      task: "regression",
+      dataset: "real-performance-v1",
+      targetColumn: "accuracy",
+      featureSchema: [
+        { name: "attempt", type: "numeric" },
+        { name: "subject_bucket", type: "numeric" },
+      ],
+      model,
+      uncertainty: { residualStdDev: 1, method: "holdout-rmse" },
+      createdAt: new Date().toISOString(),
+    });
+    const prediction = predictWithRegistryArtifact(artifact, { attempt: 2, subject_bucket: 1 });
+    expect(prediction.task).toBe("regression");
+    expect(Number.isFinite(prediction.prediction)).toBe(true);
+    expect(prediction.predictionInterval).toBeDefined();
   });
 
   it("returns a holdout-derived prediction interval for regression artifacts", () => {
