@@ -44,6 +44,7 @@ type Props = {
   assignmentId: string;
   api: <T>(path: string, init?: RequestInit) => Promise<T>;
   token: string;
+  darkMode?: boolean;
   onBack: () => void;
 };
 
@@ -51,6 +52,7 @@ export default function StudentAssignmentResult({
   assignmentId,
   api,
   token,
+  darkMode = false,
   onBack,
 }: Props) {
   const [result, setResult] = useState<AssignmentResult | null>(null);
@@ -84,9 +86,9 @@ export default function StudentAssignmentResult({
 
   if (loading) {
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading result…</Text>
+        <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading result…</Text>
       </View>
     );
   }
@@ -105,7 +107,7 @@ export default function StudentAssignmentResult({
   if (!result) {
     return (
       <View style={styles.card}>
-        <Text style={styles.heading}>Result not available</Text>
+        <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Result not available</Text>
         <Text style={styles.muted}>This exam has not been submitted yet.</Text>
         <TouchableOpacity onPress={onBack} style={styles.linkRow}>
           <Text style={styles.link}>‹ Back</Text>
@@ -115,13 +117,13 @@ export default function StudentAssignmentResult({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} style={styles.scroll}>
+    <ScrollView contentContainerStyle={styles.container} style={[styles.scroll, darkMode && { backgroundColor: "#0b1220" }]}>
       <View style={styles.card}>
         <TouchableOpacity onPress={onBack} style={styles.linkRow}>
           <Text style={styles.link}>‹ Back to assigned exams</Text>
         </TouchableOpacity>
         <Text style={styles.heading}>Exam result</Text>
-        <Text style={styles.subtitle}>{result.submissionId}</Text>
+        <Text style={[styles.subtitle, darkMode && { color: "#a7b4c8" }]}>{result.submissionId}</Text>
         <View style={styles.statusRow}>
           <Text style={[styles.statusLabel, { color: statusColor(result.status) }]}>
             {result.status === "GRADED" ? "Graded" : "Awaiting review"}
@@ -135,8 +137,8 @@ export default function StudentAssignmentResult({
           )}
         </View>
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Submitted</Text>
-          <Text style={styles.metaValue}>{new Date(result.submittedAt).toLocaleString()}</Text>
+          <Text style={[styles.metaLabel, darkMode && { color: "#94a3b8" }]}>Submitted</Text>
+          <Text style={[styles.metaValue, darkMode && { color: "#e2e8f0" }]}>{new Date(result.submittedAt).toLocaleString()}</Text>
         </View>
         {result.receivedAt && (
           <View style={styles.metaRow}>
@@ -146,16 +148,16 @@ export default function StudentAssignmentResult({
         )}
         {released && result.questions.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Answer review</Text>
+            <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Answer review</Text>
             {result.questions.map((question) => (
-              <View key={question.id} style={styles.questionCard}>
+              <View key={question.id} style={[styles.questionCard, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
                 <View style={styles.questionHeader}>
                   <Text style={styles.questionNumber}>Question {question.position + 1}</Text>
                   <Text style={[styles.questionTag, { color: question.isCorrect ? "#167647" : "#b42318" }]}>
                     {question.isCorrect ? "Correct" : "Incorrect"}
                   </Text>
                 </View>
-                <Text style={styles.questionText}>{question.text}</Text>
+                <Text style={[styles.questionText, darkMode && { color: "#f1f5f9" }]}>{question.text}</Text>
                 <View style={styles.options}>
                   {question.options.map((option, optionIndex) => {
                     const isCorrect = optionIndex === question.correctIndex;
@@ -164,6 +166,7 @@ export default function StudentAssignmentResult({
                       <View key={optionIndex} style={styles.optionRow}>
                         <Text style={[
                           styles.optionText,
+                          darkMode && { color: "#cbd5e1" },
                           isCorrect && styles.optionCorrect,
                           isSelected && styles.optionSelected,
                         ]}>
@@ -176,7 +179,7 @@ export default function StudentAssignmentResult({
                   })}
                 </View>
                 <View style={styles.marksRow}>
-                  <Text style={styles.marksText}>
+                  <Text style={[styles.marksText, darkMode && { color: "#f1f5f9" }]}>
                     {question.awardedMarks} / {question.marks} marks
                   </Text>
                   <Text style={styles.muted}>{question.explanation || "No explanation provided."}</Text>
