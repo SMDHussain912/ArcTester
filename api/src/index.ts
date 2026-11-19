@@ -110,7 +110,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.set("trust proxy", 1);
   // Morgan request logs expose route, status, latency and origin without logging
   // cookies, bearer tokens, request bodies or query-string secrets.
-  app.use(morgan(":method :url :status :response-time ms origin=:req[origin]", {
+  morgan.token("route", (req) => req.path);
+  app.use(morgan(":method :route :status :response-time ms origin=:req[origin]", {
     skip: (req) => req.path === "/health" || req.path === "/ready",
   }));
   // helmet sets secure defaults (HSTS, X-Content-Type-Options, CSP, referrer
