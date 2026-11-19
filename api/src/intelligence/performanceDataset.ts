@@ -194,6 +194,7 @@ export function buildPerformanceDataset(
   }
 
   const subjectKeys = new Map(subjectVocabulary.map((subject) => [subject, subjectFeatureKey(subject)]));
+  const featureSchemaVersion = `${FEATURE_SCHEMA_VERSION}:${createHash("sha256").update(JSON.stringify(subjectVocabulary)).digest("hex").slice(0, 12)}`;
   const topicFirstAvailable = new Map<string, number>();
   for (const item of input.topicAvailability) {
     const subject = normalizeName(item.subjectName);
@@ -315,7 +316,7 @@ export function buildPerformanceDataset(
     featureSchema,
     samples: selectedSamples,
     metadata: {
-      featureSchemaVersion: FEATURE_SCHEMA_VERSION,
+      featureSchemaVersion,
       attemptsConsidered: input.attempts.length,
       completedAttemptsWithAnswers: normalized.length,
       excludedNoAnsweredAttempts: input.attempts.length - normalized.length,
