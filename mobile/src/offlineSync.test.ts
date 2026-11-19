@@ -116,4 +116,29 @@ describe("offlineSync", () => {
     expect(result.failed).toBe(1);
     expect(mockedKeepPending).toHaveBeenCalledWith("assignment-1", "Network down");
   });
+  it("shares one in-flight queue drain when sync is triggered concurrently", async () => {
+    mockedGetPending.mockResolvedValue([attempt]);
+    let resolveResponse!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => { resolveResponse = resolve; });
+    (global.fetch as ReturnType<typeof vi.fn>).mockReturnValue(response);
+
+    const first = syncPendingSubmissions("https://api.example.com", "token-abc");
+    const second = syncPendingSubmissions("https://api.example.com", "token-abc");
+
+    expect(second).toBe(first);
+    await Promise.resolve();
+    expect(mockedGetPending).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    resolveResponse({
+      ok: true,
+      json: async () => ({ submission: { id: "sub-concurrent", attemptUuid: "attempt-uuid" } }),
+    } as Response);
+
+    const results = await Promise.all([first, second]);
+    expect(results[0]).toEqual({ uploaded: 1, failed: 0, remaining: 0 });
+    expect(results[1]).toEqual(results[0]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockedMarkSynced).toHaveBeenCalledTimes(1);
+  });
 });
