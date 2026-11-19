@@ -21,6 +21,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { OfflineExams } from "./src/OfflineExams";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
+import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -112,6 +113,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
+  const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
+  const [offlineBankBusy, setOfflineBankBusy] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
   const [savingNotificationPreference, setSavingNotificationPreference] = useState(false);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
@@ -158,6 +161,31 @@ export default function App() {
     setDarkMode(value);
     try { await setLocalValue("arctester-dark-mode", String(value)); }
     catch { /* Keep the selected theme for this session even if persistence is unavailable. */ }
+  }
+
+  async function downloadOfflinePracticeBank() {
+    if (!user) return;
+    setOfflineBankBusy(true);
+    setError("");
+    try {
+      const pack = await api<OfflineLearningPackage>("/learning/package");
+      await saveOfflineLearningPackage(String(user.id), pack);
+      setOfflineLearningPackage(pack);
+    } catch (cause) {
+      setError((cause as Error).message || "Could not download the offline practice bank.");
+    } finally {
+      setOfflineBankBusy(false);
+    }
+  }
+
+  function removeOfflinePracticeBank() {
+    if (!user || !offlineLearningPackage) return;
+    Alert.alert("Remove offline practice bank?", "This removes downloaded practice questions from this device. Your account and exam records are not affected.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => {
+        void clearOfflineLearningPackage(String(user.id)).then(() => setOfflineLearningPackage(null)).catch((cause) => setError((cause as Error).message));
+      } },
+    ]);
   }
 
   async function updateNotificationPreference(key: keyof NotificationPreferences, value: boolean) {
@@ -335,6 +363,7 @@ export default function App() {
       .then((result) => { if (isCurrentSession()) setBank(result); })
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
+    getOfflineLearningPackage(String(user.id)).then((result) => { if (isCurrentSession()) setOfflineLearningPackage(result); }).catch(() => { if (isCurrentSession()) setOfflineLearningPackage(null); });
     api<{ preferences: NotificationPreferences }>("/notifications/preferences").then((result) => { if (isCurrentSession()) setNotificationPreferences(result.preferences); }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
@@ -1037,7 +1066,8 @@ export default function App() {
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>NOTIFICATIONS</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam assignments</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when a new exam is assigned</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examAssignments} onValueChange={(value) => void updateNotificationPreference("examAssignments", value)} /></View><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam results</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when results or reviews are available</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examResults} onValueChange={(value) => void updateNotificationPreference("examResults", value)} /></View>{savingNotificationPreference ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Saving preferences…</Text> : null}</View>
-            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
+             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
