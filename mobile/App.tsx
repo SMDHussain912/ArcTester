@@ -795,7 +795,7 @@ export default function App() {
         </View>
 
         {!user ? (
-          <Animated.View style={[styles.card, animatedEntrance(entrance)]}>
+          <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{register ? "Create your account" : "Welcome back"}</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
               {register
@@ -892,7 +892,7 @@ export default function App() {
             <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
-            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · 20-minute practice</Text>
+            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · timed practiceText>
             <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
               <View style={styles.navigatorGrid}>
@@ -924,7 +924,7 @@ export default function App() {
               </View>
               <View style={styles.navigatorLegend}>
                 <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>● Answered</Text>
-                <Text style={styles.navigatorLegendText}>○ Unanswered</Text>
+                <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>○ Unanswered</Text>
               </View>
             </View>
             {secondsLeft === 0 && <Text style={styles.timerNotice}>Time is up. Submit your answers to finish.</Text>}
@@ -1051,17 +1051,17 @@ export default function App() {
             </Animated.View>
             <Animated.View style={[styles.stats, { opacity: statsEntrance, transform: [{ translateY: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }, { scale: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
               <View style={[styles.stat, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-                <Text style={styles.statValue}>{bank?.total ?? "—"}</Text>
+                <Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "—"}</Text>
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Questions</Text>
               </View>
               <View style={[styles.stat, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-                <Text style={styles.statValue}>{bank?.subjects.length ?? "—"}</Text>
+                <Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{bank?.subjects.length ?? "—"}</Text>
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
             <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
               <View style={styles.dashboardMetricGrid}>
-                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
+                <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
                 <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
                 <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.graded ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Graded exams</Text></View>
                 <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.scorePercentage == null ? "—" : Math.round(learningOverview.formalExams.scorePercentage) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Exam average</Text></View>
@@ -1082,7 +1082,7 @@ export default function App() {
               </View>
             ) : (
               announcements.map((announcement) => (
-                <Animated.View key={announcement.id} style={[styles.announcementCard, animatedEntrance(entrance)]}>
+                <Animated.View key={announcement.id} style={[styles.announcementCard, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                   <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>{announcement.title}</Text>
                   <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{announcement.message}</Text>
                   <Text style={styles.announcementDate}>
@@ -1117,7 +1117,7 @@ export default function App() {
                 <TouchableOpacity
                   key={notification.id}
                   onPress={() => openNotification(notification)}
-                  style={[styles.announcementCard, !notification.readAt && styles.notificationUnread]}
+                  style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }, !notification.readAt && styles.notificationUnread]}
                   accessibilityRole="button"
                   accessibilityLabel={`${notification.readAt ? "Read" : "Unread"} notification: ${notification.title}`}
                 >
@@ -1148,7 +1148,7 @@ export default function App() {
         )}
         {!!error && <Text style={styles.error}>{error}</Text>}
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
-        <Text style={styles.footer}>ArcTester · Your progress, across devices</Text>
+        <Text style={[styles.footer, darkMode && { color: "#64748b" }]}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
       {user && !test && !showExams && (
         <Animated.View style={[styles.bottomNav, animatedEntrance(entrance), darkMode && { backgroundColor: "#111c2e", borderColor: "#334155" }]}>
