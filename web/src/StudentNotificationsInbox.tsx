@@ -4,6 +4,7 @@ interface StudentNotificationsInboxProps {
   items: StudentNotification[];
   onRefresh: () => void;
   onRead: (id: string) => void;
+  onMarkAllRead: () => void;
   onOpen: (id: string) => void;
 }
 
@@ -11,6 +12,7 @@ export default function StudentNotificationsInbox({
   items,
   onRefresh,
   onRead,
+  onMarkAllRead,
   onOpen,
 }: StudentNotificationsInboxProps) {
   return (
@@ -21,7 +23,7 @@ export default function StudentNotificationsInbox({
           <h1>Notification inbox</h1>
           <p className="muted">New exam assignments, graded results and submissions awaiting review.</p>
         </div>
-        <button className="ghost" onClick={onRefresh}>Refresh</button>
+        <div className="row"><button className="ghost" onClick={onRefresh}>Refresh</button>{items.some((item) => !item.readAt) ? <button className="ghost" onClick={onMarkAllRead}>Mark all as read</button> : null}</div>
       </div>
       {items.length === 0 ? (
         <div className="panel empty-state">
