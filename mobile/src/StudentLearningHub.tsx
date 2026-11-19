@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./learningStore";
+import { searchStudyMaterials, studyMaterialFormat, type StudyMaterialSummary } from "./studyMaterialSearch";
 
 type ApiRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 type Props = { api: ApiRequest; userId: string };
@@ -16,7 +17,7 @@ type Recommendation = { id: string; title: string; reason: string; priority: str
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
 type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
-type StudyMaterial = { id: string; title: string; description: string; subject: string; topic: string; fileName: string; mimeType: string; sizeBytes: number; createdAt: string };
+type StudyMaterial = StudyMaterialSummary;
 
 export default function StudentLearningHub({ api, userId }: Props) {
   const apiRef = useRef(api);
@@ -68,7 +69,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
   const downloadQuestionBank = useCallback(async () => { setDownloadingBank(true); setError(""); try { const pack = await apiRef.current<OfflineLearningPackage>("/learning/package"); await saveOfflineLearningPackage(userId, pack); setOfflinePackage(pack); setShowOfflineBank(true); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not download the offline question bank."); } finally { setDownloadingBank(false); } }, [userId]);
 
   const offlineQuestions = useMemo(() => (offlinePackage?.questions ?? []).filter((item) => [item.text, item.subject, item.topic ?? "", ...item.options].join(" ").toLowerCase().includes(offlineQuery.trim().toLowerCase())).slice(0, 30), [offlinePackage, offlineQuery]);
-  const visibleMaterials = useMemo(() => studyMaterials.filter((item) => [item.title, item.description, item.subject, item.topic, item.fileName].join(" ").toLowerCase().includes(materialQuery.trim().toLowerCase())), [studyMaterials, materialQuery]);
+  const visibleMaterials = useMemo(() => searchStudyMaterials(studyMaterials, materialQuery), [studyMaterials, materialQuery]);
   const subjects = useMemo(() => ["All", ...Array.from(new Set(concepts.map((item) => item.subject))).sort()], [concepts]);
   const filtered = useMemo(() => concepts.filter((item) => {
     const matchesSubject = selectedSubject === "All" || item.subject === selectedSubject;
@@ -146,7 +147,7 @@ export default function StudentLearningHub({ api, userId }: Props) {
       {visibleMaterials.map((material) => (
         <View key={material.id} style={styles.card}>
           <Text style={styles.cardTitle}>{material.title}</Text>
-          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {material.mimeType === "application/pdf" ? "PDF" : material.mimeType === "text/markdown" ? "Markdown" : "Text"} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>
+          <Text style={styles.meta}>{material.subject}{material.topic ? " · " + material.topic : ""} · {studyMaterialFormat(material.mimeType)} · {(material.sizeBytes / 1024).toFixed(0)} KB</Text>
           {!!material.description && <Text style={styles.body}>{material.description}</Text>}
         </View>
       ))}
