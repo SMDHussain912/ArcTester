@@ -341,10 +341,10 @@ describe("admin model registry API", () => {
   });
 
   it("rejects evaluation datasets that reuse pseudonymous learners from a different training dataset", async () => {
-    const trainingSamples = Array.from({ length: 60 }, (_, index) => ({
+    const trainingSamples = Array.from({ length: 120 }, (_, index) => ({
       features: { practice_score: index },
-      target: Math.floor(index / 2) % 2,
-      groupId: Math.floor(index / 2).toString(16).padStart(64, "0"),
+      target: index % 2,
+      groupId: index.toString(16).padStart(64, "0"),
     }));
     const trainingDataset = await request("/admin/model-datasets", "POST", {
       name: "group-overlap-training",
