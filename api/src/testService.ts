@@ -283,8 +283,11 @@ export async function createTest(
           excludedQuestionIds: [...selectedById].map(String),
           policyVersion: 1,
         });
-        const selectedIds = new Set(adaptive.rankedQuestionIds.map(Number));
-        const picked = available.filter((question) => selectedIds.has(question.id));
+        const questionById = new Map(available.map((question) => [String(question.id), question]));
+        const picked = adaptive.rankedQuestionIds.flatMap((id) => {
+          const question = questionById.get(id);
+          return question ? [question] : [];
+        });
         // Keep the existing subject quota and deterministic tie ordering while
         // using the adaptive policy to rank each eligible subject pool.
         for (const question of picked) { selected.push(question); selectedById.add(question.id); }
