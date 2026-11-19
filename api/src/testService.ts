@@ -422,6 +422,36 @@ export async function submitTest(
   return { attemptId, score, total: memberIds.size, expired };
 }
 
+/** Persist a practice answer snapshot without grading it; replaying is idempotent. */
+export async function saveTestAnswers(
+  db: PrismaClient, userId: number, attemptId: number, input: z.infer<typeof SubmitTestSchema>,
+): Promise<{ attemptId: number; saved: number; serverNow: string }> {
+  const seen = new Set<number>();
+  for (const answer of input.answers) {
+    if (seen.has(answer.questionId)) throw badRequest("Duplicate answer for a question.");
+    seen.add(answer.questionId);
+  }
+  await db.$transaction(async (tx) => {
+    const attempt = await tx.attempt.findFirst({
+      where: { id: attemptId, userId },
+      select: { id: true, finishedAt: true, answers: { select: { questionId: true } } },
+    });
+    if (!attempt) throw notFound("Test not found.");
+    if (attempt.finishedAt) throw conflict("This test was already submitted.");
+    const memberIds = new Set(attempt.answers.map((answer) => answer.questionId));
+    for (const answer of input.answers) {
+      if (!memberIds.has(answer.questionId)) throw badRequest("An answer is for a question not in this test.");
+    }
+    for (const answer of input.answers) {
+      await tx.attemptAnswer.updateMany({
+        where: { attemptId, questionId: answer.questionId },
+        data: { chosen: answer.selectedIndex },
+      });
+    }
+  });
+  return { attemptId, saved: input.answers.length, serverNow: new Date().toISOString() };
+}
+
 export interface ResultBreakdown {
   subject: string;
   correct: number;
