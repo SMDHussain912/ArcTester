@@ -45,6 +45,7 @@ type Props = {
   api: <T>(path: string, init?: RequestInit) => Promise<T>;
   token: string;
   darkMode?: boolean;
+  questionTextSize?: 14 | 16 | 18;
   onBack: () => void;
 };
 
@@ -53,6 +54,7 @@ export default function StudentAssignmentResult({
   api,
   token,
   darkMode = false,
+  questionTextSize = 16,
   onBack,
 }: Props) {
   const [result, setResult] = useState<AssignmentResult | null>(null);
@@ -157,7 +159,7 @@ export default function StudentAssignmentResult({
                     {question.isCorrect ? "Correct" : "Incorrect"}
                   </Text>
                 </View>
-                <Text style={[styles.questionText, darkMode && { color: "#f1f5f9" }]}>{question.text}</Text>
+                <Text style={[styles.questionText, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>{question.text}</Text>
                 <View style={styles.options}>
                   {question.options.map((option, optionIndex) => {
                     const isCorrect = optionIndex === question.correctIndex;
