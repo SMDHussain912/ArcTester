@@ -63,6 +63,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
   const [activeAttemptUuid, setActiveAttemptUuid] = useState("");
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [savingAnswers, setSavingAnswers] = useState(false);
+  const [answerSaveError, setAnswerSaveError] = useState("");
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const questionTransition = useRef(new Animated.Value(1)).current;
@@ -382,6 +383,7 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     const assignmentId = activePackage.assignmentId;
     // Update the UI immediately, but serialize SQLite read-modify-write operations.
     setAnswers((current) => ({ ...current, [questionId]: selectedIndex }));
+    setAnswerSaveError("");
     setSavingAnswers(true);
     const queuedSave = answerSaveQueue.current
       .catch(() => undefined)
@@ -389,11 +391,16 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
     answerSaveQueue.current = queuedSave;
     void queuedSave.then(
       () => {
-        if (answerSaveQueue.current === queuedSave) setSavingAnswers(false);
+        if (answerSaveQueue.current === queuedSave) {
+          setSavingAnswers(false);
+          setAnswerSaveError("");
+        }
       },
       (cause) => {
-        if (answerSaveQueue.current === queuedSave) setSavingAnswers(false);
-        setError(cause instanceof Error ? cause.message : "Could not save your answer. Select the option again to retry.");
+        if (answerSaveQueue.current === queuedSave) {
+          setSavingAnswers(false);
+          setAnswerSaveError(cause instanceof Error ? cause.message : "Could not save your answer. Select the option again to retry.");
+        }
       },
     );
   };
@@ -412,8 +419,9 @@ export function OfflineExams({ api, apiUrl, token, userId, onExit }: Props) {
           Attempt {activeAttemptUuid.slice(0, 8)} · Answers are saved on this device
         </Text>
         <Text accessibilityLiveRegion="polite" style={styles.muted}>
-          {savingAnswers ? "Saving answer changes…" : "All answer changes saved on this device"}
+          {savingAnswers ? "Saving answer changes…" : answerSaveError ? "Answer not saved — select the option again to retry" : "All answer changes saved on this device"}
         </Text>
+        {!!answerSaveError && <Text style={styles.error}>{answerSaveError}</Text>}
         <Text style={styles.muted}>
           Question {currentQuestionIndex + 1} of {activePackage.questions.length} · {Object.values(answers).filter((value) => value !== null && value !== undefined).length} answered
         </Text>
