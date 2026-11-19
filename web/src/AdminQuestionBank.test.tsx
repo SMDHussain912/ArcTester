@@ -18,6 +18,23 @@ describe("AdminQuestionBank", () => {
   });
 
 
+
+  it("shows embedding coverage and queues a rebuild when requested", () => {
+    const onRebuildEmbeddings = vi.fn();
+    render(<AdminQuestionBank
+      questions={[]} total={0} page={1} query="" subject="" topic="" difficulty=""
+      catalog={[]} filteredTopics={[]} selected={[]} busy={false}
+      onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()}
+      onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()}
+      onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()}
+      embeddingStatus={{ totalQuestions: 120, indexedQuestions: 90, pendingQuestions: 30, activeJob: null }}
+      onRebuildEmbeddings={onRebuildEmbeddings}
+    />);
+    expect(screen.getByText(/90 of 120 questions indexed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Build / refresh semantic index" }));
+    expect(onRebuildEmbeddings).toHaveBeenCalledOnce();
+  });
+
   it("runs semantic question search and renders similarity relationships", () => {
     const onSemanticSearch = vi.fn();
     render(<AdminQuestionBank

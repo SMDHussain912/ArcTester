@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import AdminSubjects, { type AdminCatalogSubject } from "./AdminSubjects";
-import AdminQuestionBank, { type AdminBankQuestion, type AdminSemanticMatch } from "./AdminQuestionBank";
+import AdminQuestionBank, { type AdminBankQuestion, type AdminSemanticMatch, type AdminEmbeddingStatus } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminModelLab, { type ModelDatasetRegistration, type ModelLabDataset, type ModelLabJob, type ModelLabModel, type IntelligenceProviderStatus } from "./AdminModelLab";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
@@ -36,6 +36,7 @@ export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
+ const [embeddingStatus,setEmbeddingStatus]=useState<AdminEmbeddingStatus|null>(null),[embeddingStatusLoading,setEmbeddingStatusLoading]=useState(false),[embeddingRebuildBusy,setEmbeddingRebuildBusy]=useState(false);
  const [semanticResults,setSemanticResults]=useState<AdminSemanticMatch[]>([]),[semanticBusy,setSemanticBusy]=useState(false);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:""});
  const [exam,setExam]=useState<AdminPaperDraft>({title:"",description:"",instructions:"Read each question carefully. Select one correct option.",duration:"180",shuffleQuestions:true,shuffleOptions:false,marks:"1",negative:"0.25",selectionMode:"manual",perSubject:""});
@@ -70,6 +71,8 @@ export default function AdminWorkspace(p:Props){
  const selectedSubject=catalog.find(s=>s.name===subject);
  const filteredTopics=selectedSubject?.topics??[];
  async function loadCatalog(){const r=await api<{subjects:AdminCatalogSubject[]}>("/admin/question-catalog");setCatalog(Array.isArray(r.subjects) ? r.subjects : []);}
+ async function loadEmbeddingStatus(){setEmbeddingStatusLoading(true);try{const r=await api<AdminEmbeddingStatus>("/admin/question-embeddings/status");setEmbeddingStatus(r);}finally{setEmbeddingStatusLoading(false);}}
+ async function rebuildEmbeddingIndex(){setEmbeddingRebuildBusy(true);setError("");try{const r=await api<{job:{id:string;total:number}}>("/admin/question-embeddings/rebuild",{method:"POST",body:JSON.stringify({batchSize:16,force:false})});setNotice(`Question embedding rebuild ${r.job.id} queued for ${r.job.total} questions.`);await loadEmbeddingStatus();}catch(e){setError((e as Error).message);}finally{setEmbeddingRebuildBusy(false);}}
  async function searchSimilarQuestions(value:string){setSemanticBusy(true);setError("");try{const params=new URLSearchParams({q:value,limit:"10",candidateLimit:"500"});if(subject)params.set("subject",subject);const r=await api<{matches:AdminSemanticMatch[]}>("/admin/question-embeddings/search?"+params);setSemanticResults(Array.isArray(r.matches)?r.matches:[]);}catch(e){setError((e as Error).message);}finally{setSemanticBusy(false);}}
  async function loadQuestions(nextPage=page){
   const requestId=++questionRequestSequence.current;
@@ -114,7 +117,8 @@ export default function AdminWorkspace(p:Props){
    setNotice(action==="PAUSE"?"Candidate session paused.":action==="RESUME"?"Candidate session resumed.":"Candidate session terminated.");
   });
  }
- useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]); useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab!=="questions")return;void loadEmbeddingStatus().catch(e=>setError(e.message));const timer=window.setInterval(()=>{void loadEmbeddingStatus().catch(e=>setError(e.message));},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab!=="model-lab")return;const timer=window.setInterval(()=>{void loadModelLab().catch(()=>{});},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab==="attendance")void loadAttendance(1).catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="live-monitor")return;let active=true;const refresh=()=>{if(active)void loadLiveSessions().catch(e=>setError(e.message));};refresh();const timer=window.setInterval(refresh,15000);return()=>{active=false;window.clearInterval(timer);};},[tab]);
@@ -244,6 +248,10 @@ export default function AdminWorkspace(p:Props){
     semanticResults={semanticResults}
     semanticBusy={semanticBusy}
     onSemanticSearch={(value) => void searchSimilarQuestions(value)}
+    embeddingStatus={embeddingStatus}
+    embeddingStatusLoading={embeddingStatusLoading}
+    embeddingRebuildBusy={embeddingRebuildBusy}
+    onRebuildEmbeddings={() => void rebuildEmbeddingIndex()}
    />}
    {tab==="add"&&<AdminQuestionEditor form={form} editing={editingId !== null} busy={busy} onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))} onSubmit={(event) => void saveQuestion(event)} onBack={() => { setEditingId(null); setTab("questions"); }} />}
    {tab==="import"&&<AdminQuestionImport

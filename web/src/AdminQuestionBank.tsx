@@ -1,6 +1,12 @@
 import { useState } from "react";
 export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
+export type AdminEmbeddingStatus = {
+  totalQuestions: number;
+  indexedQuestions: number;
+  pendingQuestions: number;
+  activeJob: { id: string; status: string; progress: number; total: number } | null;
+};
 export type AdminSemanticMatch = {
   questionId: number;
   similarity: number;
@@ -34,9 +40,13 @@ type AdminQuestionBankProps = {
   semanticResults?: AdminSemanticMatch[];
   semanticBusy?: boolean;
   onSemanticSearch?: (query: string) => void;
+  embeddingStatus?: AdminEmbeddingStatus | null;
+  embeddingStatusLoading?: boolean;
+  embeddingRebuildBusy?: boolean;
+  onRebuildEmbeddings?: () => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange, semanticResults = [], semanticBusy = false, onSemanticSearch = () => {} }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange, semanticResults = [], semanticBusy = false, onSemanticSearch = () => {}, embeddingStatus = null, embeddingStatusLoading = false, embeddingRebuildBusy = false, onRebuildEmbeddings = () => {} }: AdminQuestionBankProps) {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [semanticQuery, setSemanticQuery] = useState("");
   const pageCount = Math.max(1, Math.ceil(total / 25));
@@ -54,6 +64,19 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={topic} onChange={(event) => onTopicChange(event.target.value)}><option value="">All topics</option>{filteredTopics.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select>
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
       </div>
+      <section className="admin-panel embedding-index-panel" aria-label="Question embedding index">
+        <div><h2>Semantic index</h2><p className="muted">Build and maintain the question meaning index used by duplicate review.</p></div>
+        {embeddingStatus ? <>
+          <p>{embeddingStatus.indexedQuestions.toLocaleString()} of {embeddingStatus.totalQuestions.toLocaleString()} questions indexed · {embeddingStatus.pendingQuestions.toLocaleString()} pending</p>
+          {embeddingStatus.activeJob && <div aria-live="polite">
+            <p>Rebuild {embeddingStatus.activeJob.status.toLowerCase()}: {embeddingStatus.activeJob.progress} / {embeddingStatus.activeJob.total}</p>
+            <progress max={Math.max(1, embeddingStatus.activeJob.total)} value={embeddingStatus.activeJob.progress} />
+          </div>}
+        </> : <p className="muted">{embeddingStatusLoading ? "Loading index status…" : "Index status is unavailable."}</p>}
+        <button className="ghost" disabled={embeddingRebuildBusy || embeddingStatusLoading || Boolean(embeddingStatus?.activeJob)} onClick={onRebuildEmbeddings}>
+          {embeddingRebuildBusy ? "Queueing rebuild…" : embeddingStatus?.activeJob ? "Rebuild in progress" : "Build / refresh semantic index"}
+        </button>
+      </section>
       <section className="admin-panel semantic-search-panel" aria-label="Semantic question search">
         <div><h2>Semantic similarity &amp; duplicate review</h2><p className="muted">Find questions with similar meaning, even when their wording differs. Similarity is a retrieval score, not a probability.</p></div>
         <div className="admin-toolbar">
