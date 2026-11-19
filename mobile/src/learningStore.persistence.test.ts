@@ -80,7 +80,10 @@ const material = {
 };
 
 describe("offline study material persistence", () => {
-  beforeEach(() => sqlite.reset());
+  beforeEach(() => {
+    sqlite.reset();
+    sqlite.openDatabaseAsync.mockClear();
+  });
 
   it("saves, reloads and removes a downloaded note", async () => {
     const saved = await saveOfflineStudyMaterial("student-1", material);
