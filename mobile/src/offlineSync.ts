@@ -16,16 +16,31 @@ export type OfflineSyncResult = {
   remaining: number;
 };
 
-let activeSync: Promise<OfflineSyncResult> | null = null;
+const activeSyncs = new Map<string, Promise<OfflineSyncResult>>();
 
-export function syncPendingSubmissions(apiUrl: string, token: string): Promise<OfflineSyncResult> {
-  if (activeSync) return activeSync;
-  activeSync = runPendingSubmissionSync(apiUrl, token).finally(() => { activeSync = null; });
-  return activeSync;
+export function syncPendingSubmissions(
+  apiUrl: string,
+  token: string,
+  userId?: string,
+): Promise<OfflineSyncResult> {
+  // Never share a queue drain across accounts: the token and database scope
+  // are part of the identity of an in-flight sync operation.
+  const key = `${userId ?? "default"}:${apiUrl.replace(/\\/+$/, "")}:${token}`;
+  const existing = activeSyncs.get(key);
+  if (existing) return existing;
+  const active = runPendingSubmissionSync(apiUrl, token, userId).finally(() => {
+    if (activeSyncs.get(key) === active) activeSyncs.delete(key);
+  });
+  activeSyncs.set(key, active);
+  return active;
 }
 
-async function runPendingSubmissionSync(apiUrl: string, token: string): Promise<OfflineSyncResult> {
-  const pending = await getPendingSubmissions();
+async function runPendingSubmissionSync(
+  apiUrl: string,
+  token: string,
+  userId?: string,
+): Promise<OfflineSyncResult> {
+  const pending = await getPendingSubmissions(...(userId ? [userId] : []));
   let uploaded = 0;
   let failed = 0;
 
@@ -51,7 +66,8 @@ async function runPendingSubmissionSync(apiUrl: string, token: string): Promise<
       const body = (await response.json().catch(() => ({}))) as SubmissionApiResponse;
       if (!response.ok || !body.submission?.id) {
         const message = body.error || `Submission sync failed with HTTP ${response.status}.`;
-        await keepSubmissionPending(attempt.assignmentId, message);
+        if (userId) await keepSubmissionPending(attempt.assignmentId, message, userId);
+        else await keepSubmissionPending(attempt.assignmentId, message);
         failed += 1;
 
         // Authentication and connectivity failures make subsequent uploads unlikely to work.
@@ -62,26 +78,25 @@ async function runPendingSubmissionSync(apiUrl: string, token: string): Promise<
       }
 
       if (body.submission.attemptUuid !== attempt.attemptUuid) {
-        await keepSubmissionPending(
-          attempt.assignmentId,
-          "The server returned a different attempt identifier. Manual review is required."
-        );
+        const message = "The server returned a different attempt identifier. Manual review is required.";
+        if (userId) await keepSubmissionPending(attempt.assignmentId, message, userId);
+        else await keepSubmissionPending(attempt.assignmentId, message);
         failed += 1;
         continue;
       }
 
-      await markSubmissionSynced(attempt.assignmentId, body.submission.id);
+      if (userId) await markSubmissionSynced(attempt.assignmentId, body.submission.id, userId);
+      else await markSubmissionSynced(attempt.assignmentId, body.submission.id);
       uploaded += 1;
     } catch (error) {
-      await keepSubmissionPending(
-        attempt.assignmentId,
-        error instanceof Error ? error.message : "Network unavailable."
-      );
+      const message = error instanceof Error ? error.message : "Network unavailable.";
+      if (userId) await keepSubmissionPending(attempt.assignmentId, message, userId);
+      else await keepSubmissionPending(attempt.assignmentId, message);
       failed += 1;
       break;
     }
   }
 
-  const remaining = (await getPendingSubmissions()).length;
+  const remaining = (await getPendingSubmissions(...(userId ? [userId] : []))).length;
   return { uploaded, failed, remaining };
 }
