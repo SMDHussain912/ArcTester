@@ -61,7 +61,7 @@ describe("StudentAnalytics", () => {
       .mockResolvedValueOnce(readiness);
     render(<StudentAnalytics setActivePage={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Exam readiness estimate" })).toBeInTheDocument();
-    expect(await screen.findByText("2 / 5", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(readiness.message)).toBeInTheDocument();
     expect(screen.queryByText("READY", { exact: true })).not.toBeInTheDocument();
   });
 
@@ -75,6 +75,7 @@ describe("StudentAnalytics", () => {
       .mockResolvedValueOnce(weakTopics)
       .mockResolvedValueOnce(recommendations)
       .mockResolvedValueOnce(prediction)
+      .mockResolvedValueOnce(readiness)
       .mockResolvedValueOnce(overview)
       .mockResolvedValueOnce(weakTopics)
       .mockResolvedValueOnce(recommendations)
