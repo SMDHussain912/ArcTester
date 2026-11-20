@@ -35,14 +35,9 @@ function validateRows(rows: ReadinessRow[]): number {
     row.features.some((value) => !Number.isFinite(value)) || !READINESS_CLASSES.includes(row.label))) {
     throw new Error("Readiness rows contain invalid features or labels");
   }
-  const groups = new Set(rows.map((row) => row.groupId));
-  if (groups.size < 30) throw new Error("Readiness training requires at least 30 distinct learner groups");
   for (const label of READINESS_CLASSES) {
-    if (rows.filter((row) => row.label === label).length < 30) {
-      throw new Error("Readiness training requires at least 30 examples of every readiness class");
-    }
-    if (new Set(rows.filter((row) => row.label === label).map((row) => row.groupId)).size < 10) {
-      throw new Error("Each readiness class must be represented by at least 10 learner groups");
+    if (rows.filter((row) => row.label === label).length < 100) {
+      throw new Error("Readiness training requires at least 100 examples of every readiness class");
     }
   }
   return featureCount;

@@ -28,6 +28,6 @@ describe("three-class exam readiness model", () => {
     expect(() => fitReadinessClassifier(rows.map((row, index) => index === 0 ? { ...row, groupId: "" } : row)))
       .toThrow("HMAC learner group IDs");
     expect(() => fitReadinessClassifier(rows.filter((row) => row.label !== "READY")))
-      .toThrow("at least 30 examples of every readiness class");
+      .toThrow("at least 100 examples of every readiness class");
   });
 });
