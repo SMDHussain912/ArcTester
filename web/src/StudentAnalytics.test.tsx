@@ -28,6 +28,16 @@ const readiness = {
   requiredCompletedAttempts: 5,
   message: "Complete five practice attempts before requesting a readiness estimate.",
 };
+const readyReadiness = {
+  status: "ready" as const,
+  category: "READY" as const,
+  probabilities: { NOT_READY: 0.05, DEVELOPING: 0.15, READY: 0.8 },
+  confidence: 0.8,
+  modelVersion: 2,
+  completedAttempts: 8,
+  factors: [],
+  message: "Estimate based on completed practice history.",
+};
 
 describe("StudentAnalytics", () => {
   beforeEach(() => vi.mocked(request).mockReset());
@@ -63,6 +73,23 @@ describe("StudentAnalytics", () => {
     expect(await screen.findByRole("heading", { name: "Exam readiness estimate" })).toBeInTheDocument();
     expect(screen.getByText(readiness.message)).toBeInTheDocument();
     expect(screen.queryByText("READY", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("shows a qualified readiness category with confidence and class probabilities", async () => {
+    vi.mocked(request)
+      .mockResolvedValueOnce({
+        practice: { completedAttempts: 8, questions: 80, correct: 68, incorrect: 10, unanswered: 2, accuracy: 0.872 },
+        formalExams: { graded: 0, scorePercentage: null, score: null, maximumScore: null, reviewRequired: 0 },
+      })
+      .mockResolvedValueOnce(weakTopics)
+      .mockResolvedValueOnce(recommendations)
+      .mockResolvedValueOnce(prediction)
+      .mockResolvedValueOnce(readyReadiness);
+    render(<StudentAnalytics setActivePage={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Exam readiness estimate" })).toBeInTheDocument();
+    expect(screen.getByText("READY", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText(/Confidence 80%/)).toBeInTheDocument();
+    expect(screen.getByText("Ready: 80%")).toBeInTheDocument();
   });
 
   it("retries failed analytics and reports when the refresh finishes", async () => {
