@@ -5,6 +5,7 @@ import {
   createAdaptiveLearnerGroupId,
   createReadinessLearnerGroupId,
   signJwt,
+  validateReadinessGroupHmacKey,
   validateJwtSecret,
   verifyJwt,
 } from "../src/auth.js";
@@ -100,6 +101,12 @@ describe("learner group pseudonyms", () => {
     expect(createReadinessLearnerGroupId(12346)).not.toBe(readinessId);
     expect(createAdaptiveLearnerGroupId(12345)).not.toBe(readinessId);
     expect(readinessId).not.toContain("12345");
+  });
+
+  it("requires a stable production-only HMAC secret for readiness pseudonyms", () => {
+    expect(() => validateReadinessGroupHmacKey("short-secret", true)).toThrow("READINESS_GROUP_HMAC_KEY");
+    expect(() => validateReadinessGroupHmacKey("r".repeat(64), true)).not.toThrow();
+    expect(() => validateReadinessGroupHmacKey("", false)).not.toThrow();
   });
 
   it("rejects invalid learner identifiers", () => {
