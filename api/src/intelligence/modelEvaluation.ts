@@ -9,6 +9,8 @@ export interface ModelEvaluationSample {
   target: number;
   /** Required for multiclass readiness evaluation to prove learner-group separation. */
   groupId?: string;
+  /** Snapshot capture time; readiness holdouts must be temporally after training. */
+  occurredAt?: string;
 }
 
 export interface ModelEvaluationMetrics {
@@ -207,6 +209,9 @@ export function evaluateRegistryCandidate(
     }
     if (samples.some((sample) => typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId))) {
       throw new Error("Readiness evaluation requires a keyed HMAC learner group ID on every held-out row.");
+    }
+    if (samples.some((sample) => typeof sample.occurredAt !== "string" || !Number.isFinite(Date.parse(sample.occurredAt)))) {
+      throw new Error("Readiness evaluation requires a valid snapshot timestamp on every held-out row.");
     }
     const groups = new Set(samples.map((sample) => sample.groupId));
     if (groups.size < 100) {

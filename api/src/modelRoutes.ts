@@ -601,12 +601,15 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         !featureSchema.some((feature) => feature.name === "completed_attempts")) {
         return next(badRequest("Readiness training requires numeric features including completed_attempts."));
       }
-      const samples = JSON.parse(dataset.samplesJson) as Array<{ features: Record<string, number | string>; target: number; groupId?: string }>;
+      const samples = JSON.parse(dataset.samplesJson) as Array<{
+        features: Record<string, number | string>; target: number; groupId?: string; occurredAt?: string;
+      }>;
       if (samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
         !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2 ||
+        typeof sample.occurredAt !== "string" || !Number.isFinite(Date.parse(sample.occurredAt)) ||
         featureSchema.some((feature) => typeof sample.features[feature.name] !== "number" ||
           !Number.isFinite(sample.features[feature.name])))) {
-        return next(badRequest("Readiness samples need HMAC learner group IDs, finite numeric features and target labels 0, 1 or 2."));
+        return next(badRequest("Readiness samples need HMAC learner group IDs, valid snapshot timestamps, finite numeric features and target labels 0, 1 or 2."));
       }
       const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
       const readinessRows = samples.map((sample) => ({
@@ -971,17 +974,30 @@ export function modelRegistryRouter(db: PrismaClient): Router {
           typeof value === "string" && /^[a-f0-9]{64}$/.test(value)));
         const trainingDatasets = await db.modelDataset.findMany({
           where: { id: { in: [candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter((id): id is string => Boolean(id)) } },
-          select: { id: true, datasetKind: true, sourceAttested: true },
+          select: { id: true, datasetKind: true, sourceAttested: true, samplesJson: true },
         });
         const expectedTrainingDatasets = new Set([candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter((value): value is string => Boolean(value)));
+        const evaluationTimes = samples.map((sample) =>
+          typeof sample.occurredAt === "string" ? Date.parse(sample.occurredAt) : Number.NaN);
+        const evaluationStart = evaluationTimes.length && evaluationTimes.every(Number.isFinite)
+          ? Math.min(...evaluationTimes)
+          : Number.NaN;
+        const chronologicallyIndependent = Number.isFinite(evaluationStart) && trainingDatasets.every((trainingDataset) => {
+          const trainingSamples = JSON.parse(trainingDataset.samplesJson) as Array<{ occurredAt?: string }>;
+          const trainingTimes = trainingSamples.map((sample) =>
+            typeof sample.occurredAt === "string" ? Date.parse(sample.occurredAt) : Number.NaN);
+          return trainingTimes.length > 0 && trainingTimes.every(Number.isFinite) &&
+            evaluationStart > Math.max(...trainingTimes);
+        });
         if (dataset.task !== "multiclass-classification" || dataset.datasetKind !== "real-anonymized" ||
             !candidateRow.trainingDatasetId || !baselineRow.trainingDatasetId ||
             evaluationGroups.size < 100 ||
             samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
               !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2) ||
             trainingDatasets.length !== expectedTrainingDatasets.size ||
-            trainingDatasets.some((trainingDataset) => trainingDataset.datasetKind !== "real-anonymized" || !trainingDataset.sourceAttested)) {
-          return next(conflict("Readiness evaluation requires an attested real-anonymized holdout across 100+ independent learner groups, separate from eligible real-anonymized training datasets."));
+            trainingDatasets.some((trainingDataset) => trainingDataset.datasetKind !== "real-anonymized" || !trainingDataset.sourceAttested) ||
+            !chronologicallyIndependent) {
+          return next(conflict("Readiness evaluation requires an attested real-anonymized holdout across 100+ independent learner groups, with valid timestamps strictly later than every candidate and baseline training snapshot."));
         }
       }
       if (modelId === "performance-gradient-boosting" || modelId === "performance-random-forest") {

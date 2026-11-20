@@ -191,6 +191,7 @@ describe("admin model registry API", () => {
       const label = Math.floor(index / 400);
       return {
         groupId: group.toString(16).padStart(64, "0"),
+        occurredAt: new Date(Date.UTC(2025, 0, 1) + index * 60 * 60 * 1000).toISOString(),
         features: { mastery_signal: label * 0.45 + (index % 10) * 0.001, completed_attempts: 10 + index % 4 },
         target: label,
       };
@@ -253,6 +254,7 @@ describe("admin model registry API", () => {
       const label = Math.floor(index / 400);
       return {
         groupId: (2000 + Math.floor(index / 10)).toString(16).padStart(64, "0"),
+        occurredAt: new Date(Date.UTC(2025, 3, 1) + index * 60 * 60 * 1000).toISOString(),
         features: {
           mastery_signal: label * 0.45 + (index % 10) * 0.001,
           completed_attempts: 10 + (index % 4),
@@ -260,6 +262,31 @@ describe("admin model registry API", () => {
         target: label,
       };
     });
+    const overlappingDataset = await request("/admin/model-datasets", "POST", {
+      name: "readiness-multiclass-overlapping-time-window",
+      task: "multiclass-classification",
+      targetColumn: "readiness_label",
+      featureSchema: [
+        { name: "mastery_signal", type: "numeric" },
+        { name: "completed_attempts", type: "numeric" },
+      ],
+      samples: evaluationSamples.map((sample) => ({
+        ...sample,
+        occurredAt: new Date(Date.UTC(2025, 1, 1)).toISOString(),
+      })),
+      sourceDescription: "Independent learner holdout with a deliberately overlapping historical collection window.",
+      sourceAttested: true,
+      datasetKind: "real-anonymized",
+    });
+    expect(overlappingDataset.status).toBe(201);
+    const overlappingId = (overlappingDataset.body.dataset as { id: string }).id;
+    const overlappingReport = await request("/admin/models/readiness-fixture-exam-readiness-softmax/2/evaluate", "POST", {
+      baselineVersion: 1,
+      datasetId: overlappingId,
+    });
+    expect(overlappingReport.status).toBe(409);
+    expect(String(overlappingReport.body.error ?? overlappingReport.body.message)).toContain("strictly later");
+
     const evaluationDataset = await request("/admin/model-datasets", "POST", {
       name: "readiness-multiclass-independent-evaluation",
       task: "multiclass-classification",
