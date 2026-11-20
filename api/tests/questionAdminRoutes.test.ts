@@ -113,6 +113,7 @@ describe("question administration route contracts", () => {
         id: questionId,
         text: "Which queue operation removes the front element?",
         difficulty: "medium",
+        reviewStatus: "DRAFT",
       },
     });
 

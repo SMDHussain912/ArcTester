@@ -62,13 +62,15 @@ export function questionAdminRouter(db: PrismaClient): Router {
     try {
       const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500), status: ReviewStatusSchema }).parse(req.body);
       if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
-      const questions = await db.question.findMany({ where: { id: { in: input.ids } }, select: { id: true, source: true } });
-      if (questions.length !== input.ids.length) return next(badRequest("One or more selected questions do not exist."));
-      if (input.status === "APPROVED") {
-        const missingSource = questions.filter((question) => !hasReviewableSource(question.source)).map((question) => question.id);
-        if (missingSource.length) return next(badRequest("Add a real source before approving every selected question. Missing source for: " + missingSource.join(", ") + "."));
-      }
-      const result = await db.question.updateMany({ where: { id: { in: input.ids } }, data: { reviewStatus: input.status } });
+      const result = await db.$transaction(async (tx) => {
+        const questions = await tx.question.findMany({ where: { id: { in: input.ids } }, select: { id: true, source: true } });
+        if (questions.length !== input.ids.length) throw badRequest("One or more selected questions do not exist.");
+        if (input.status === "APPROVED") {
+          const missingSource = questions.filter((question) => !hasReviewableSource(question.source)).map((question) => question.id);
+          if (missingSource.length) throw badRequest("Add a real source before approving every selected question. Missing source for: " + missingSource.join(", ") + ".");
+        }
+        return tx.question.updateMany({ where: { id: { in: input.ids } }, data: { reviewStatus: input.status } });
+      });
       res.json({ ok: true, updated: result.count, reviewStatus: input.status });
     } catch (error) { next(error); }
   });
