@@ -56,6 +56,15 @@ export function createAdaptiveLearnerGroupId(userId: number): string {
     .digest("hex");
 }
 
+/** Purpose-separated pseudonym used only for readiness training/evaluation datasets. */
+export function createReadinessLearnerGroupId(userId: number): string {
+  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("A valid learner ID is required.");
+  return createHmac("sha256", JWT_SECRET)
+    .update("ArcTester:readiness-learner-group:v1:")
+    .update(String(userId))
+    .digest("hex");
+}
+
 export function signJwt(
   payload: Record<string, unknown>,
   ttlSeconds: number = JWT_TTL_SECONDS
