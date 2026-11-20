@@ -233,7 +233,7 @@ describe("admin model registry API", () => {
       ],
       samples: samples.map((sample, index) => ({
         ...sample,
-        groupId: (Math.floor(index / 3) + 100).toString(16).padStart(64, "0"),
+        groupId: (Math.floor(index / 3) + 1000).toString(16).padStart(64, "0"),
         features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 },
       })),
       sourceDescription: "Independent attested real-anonymized learner holdout for minimum sample-size validation.",
@@ -252,7 +252,7 @@ describe("admin model registry API", () => {
     const evaluationSamples = Array.from({ length: 1200 }, (_, index) => {
       const label = Math.floor(index / 400);
       return {
-        groupId: (100 + Math.floor(index / 10)).toString(16).padStart(64, "0"),
+        groupId: (2000 + Math.floor(index / 10)).toString(16).padStart(64, "0"),
         features: {
           mastery_signal: label * 0.45 + (index % 10) * 0.001,
           completed_attempts: 10 + (index % 4),

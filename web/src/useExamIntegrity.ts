@@ -129,13 +129,17 @@ export function useExamIntegrity({
     };
   }, [integrityLevel, flush]);
 
-  // Flush on visibility change (page hide / tab switch).
+  // Record a hidden-tab signal before flushing so the event is included
+  // in the same audit request rather than being stranded until the next flush.
   useEffect(() => {
     if (integrityLevel === "OFF") return;
-    const handler = () => void flush();
+    const handler = () => {
+      if (document.hidden) push("TAB_HIDDEN");
+      void flush();
+    };
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
-  }, [integrityLevel, flush]);
+  }, [integrityLevel, flush, push]);
 
   // Fullscreen tracking.
   useEffect(() => {
@@ -146,16 +150,6 @@ export function useExamIntegrity({
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, [integrityLevel, push]);
-
-  // Tab hidden tracking.
-  useEffect(() => {
-    if (integrityLevel === "OFF") return;
-    const onVisibilityChange = () => {
-      if (document.hidden) push("TAB_HIDDEN");
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [integrityLevel, push]);
 
   // Window blur tracking (debounced 300ms to avoid blur+focus flapping).
