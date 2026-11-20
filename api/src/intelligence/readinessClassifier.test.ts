@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { fitReadinessClassifier, predictReadiness, type ReadinessRow } from "./readinessClassifier.js";
 
-const rows: ReadinessRow[] = Array.from({ length: 180 }, (_, index) => {
-  const group = String(Math.floor(index / 3)).padStart(64, "0");
-  const label = index % 3 === 0 ? "NOT_READY" : index % 3 === 1 ? "DEVELOPING" : "READY";
-  const signal = index % 3;
-  return { groupId: group, label, features: [signal * 0.45 + (index % 5) * 0.002, signal, 1 - signal * 0.2] };
+const rows: ReadinessRow[] = Array.from({ length: 1200 }, (_, index) => {
+  const group = String(Math.floor(index / 10)).padStart(64, "0");
+  const labelIndex = Math.floor(index / 400);
+  const label = labelIndex === 0 ? "NOT_READY" : labelIndex === 1 ? "DEVELOPING" : "READY";
+  return { groupId: group, label, features: [labelIndex * 0.45 + (index % 10) * 0.002, labelIndex, 1 - labelIndex * 0.2] };
 });
 
 describe("three-class exam readiness model", () => {

@@ -186,12 +186,12 @@ describe("admin model registry API", () => {
   });
 
   it("trains a multiclass readiness candidate only from attested grouped learner data", async () => {
-    const samples = Array.from({ length: 90 }, (_, index) => {
-      const group = Math.floor(index / 3);
-      const label = group % 3;
+    const samples = Array.from({ length: 1200 }, (_, index) => {
+      const group = Math.floor(index / 10);
+      const label = Math.floor(index / 400);
       return {
         groupId: group.toString(16).padStart(64, "0"),
-        features: { mastery_signal: label * 0.45 + (index % 3) * 0.001, completed_attempts: 10 + index % 4 },
+        features: { mastery_signal: label * 0.45 + (index % 10) * 0.001, completed_attempts: 10 + index % 4 },
         target: label,
       };
     });
@@ -303,7 +303,7 @@ describe("admin model registry API", () => {
     expect(audit.status).toBe(200);
     const auditEvents = audit.body.events as Array<{ action: string; details: Record<string, unknown> }>;
     expect(auditEvents.some((event) => event.action === "TRAINED" &&
-      event.details.learnerGroups === 30 && event.details.evaluationRequired === true)).toBe(true);
+      event.details.learnerGroups === 120 && event.details.evaluationRequired === true)).toBe(true);
     expect(auditEvents.map((event) => event.action)).toContain("ACTIVATED");
   });
 

@@ -23,7 +23,10 @@ export interface ReadinessPrediction {
 }
 const classIndex = (label: ReadinessClass) => READINESS_CLASSES.indexOf(label);
 function validateRows(rows: ReadinessRow[]): number {
-  if (rows.length < 90) throw new Error("Readiness training requires at least 90 labeled snapshots");
+  if (rows.length < 1000) throw new Error("Readiness training requires at least 1,000 labeled snapshots");
+  if (new Set(rows.map((row) => row.groupId)).size < 100) {
+    throw new Error("Readiness training requires at least 100 distinct learner groups");
+  }
   if (rows.some((row) => !row.groupId || !/^[a-f0-9]{64}$/.test(row.groupId))) {
     throw new Error("Readiness training requires keyed HMAC learner group IDs");
   }
