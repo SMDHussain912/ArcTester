@@ -73,6 +73,17 @@ describe("analytics", () => {
     });
   });
 
+  it("withholds readiness categories until at least five practice attempts are completed", async () => {
+    const response = await api.get("/analytics/readiness");
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({
+      status: "insufficient_data",
+      category: null,
+      completedAttempts: 2,
+      requiredCompletedAttempts: 5,
+    });
+  });
+
   it("does not label a low-sample subject as weak or recommend it as a confirmed gap", async () => {
     const response = await api.get("/analytics/recommendations");
     expect(response.status).toBe(200);
@@ -705,6 +716,28 @@ describe("analytics", () => {
     expect(second.status).toBe(200);
     const body = second.json as { skippedDuplicates: number };
     expect(body.skippedDuplicates).toBeGreaterThan(0);
+  });
+
+  it("does not fabricate a readiness category when no qualified model is active", async () => {
+    for (let index = 0; index < 3; index += 1) {
+      const created = await api.post("/tests", { mode: "practice", subject: index % 2 ? "Physics" : "Maths", count: 1 });
+      expect(created.status).toBe(201);
+      const body = created.json as { attemptId: number; questions: { id: number }[] };
+      const question = await server.db.question.findUniqueOrThrow({
+        where: { id: body.questions[0].id },
+        select: { correctIndex: true },
+      });
+      await api.post(`/tests/${body.attemptId}/submit`, {
+        answers: [{ questionId: body.questions[0].id, selectedIndex: question.correctIndex }],
+      });
+    }
+    const response = await api.get("/analytics/readiness");
+    expect(response.status).toBe(200);
+    expect(response.json).toMatchObject({
+      status: "unavailable",
+      category: null,
+      completedAttempts: 5,
+    });
   });
 
   it("does not repeat a weak-subject recommendation immediately after the student practiced it", async () => {

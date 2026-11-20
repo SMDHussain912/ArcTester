@@ -21,6 +21,15 @@ export interface ReadinessTrainingSample extends BinaryTrainingSample {
   userId: number;
 }
 
+export const READINESS_FEATURE_NAMES = [
+  "completed_attempts",
+  "previous_accuracy",
+  "recent_average_accuracy",
+  "overall_average_accuracy",
+  "previous_question_count",
+  "subject_count",
+] as const;
+
 export interface ReadinessDatasetOptions {
   minimumPriorAttempts?: number;
   readinessThreshold?: number;
