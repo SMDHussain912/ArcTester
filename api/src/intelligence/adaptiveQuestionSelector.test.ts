@@ -29,6 +29,24 @@ describe("adaptive question selection policy", () => {
     expect(selectAdaptiveQuestions(request).fallbackUsed).toBe(true);
   });
 
+  it("rejects duplicate candidates and malformed learner-performance metadata", () => {
+    expect(() => selectAdaptiveQuestions({
+      candidates: [...candidates, candidates[0]!],
+      topicStates: [],
+      questionCount: 2,
+    })).toThrow("candidate question IDs must be unique");
+    expect(() => selectAdaptiveQuestions({
+      candidates,
+      topicStates: [{ subject: "Math", topic: "Matrices", accuracy: 1.2, answered: 10, exposureCount: 3 }],
+      questionCount: 2,
+    })).toThrow("topic states contain invalid performance metadata");
+    expect(() => selectAdaptiveQuestions({
+      candidates: [{ ...candidates[0]!, discrimination: Number.NaN }],
+      topicStates: [],
+      questionCount: 1,
+    })).toThrow("candidates contain invalid metadata");
+  });
+
   it("creates deterministic decision records without storing learner identifiers", () => {
     const record = createAdaptiveDecisionLog({
       learnerGroupId: "a".repeat(64), selectedQuestionId: "q1", eligibleQuestionIds: ["q1", "q2"],

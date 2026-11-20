@@ -45,21 +45,40 @@ export function selectAdaptiveQuestions(request: AdaptiveSelectionRequest): Adap
   const now = validDate(request.now ?? new Date());
   if (now === null) throw new Error("Adaptive selection now must be a valid date");
   const excluded = new Set([...(request.excludedQuestionIds ?? []), ...(request.recentQuestionIds ?? [])]);
-  const subjects = request.subjects?.length ? new Set(request.subjects) : null;
-  const topicState = new Map(request.topicStates.map((state) => [`${state.subject.toLowerCase()}::${state.topic.toLowerCase()}`, state]));
+  const subjects = request.subjects?.length
+    ? new Set(request.subjects.map((subject) => subject.trim().toLowerCase()))
+    : null;
+  const topicState = new Map<string, AdaptiveTopicState>();
+  for (const state of request.topicStates) {
+    const key = `${state.subject.trim().toLowerCase()}::${state.topic.trim().toLowerCase()}`;
+    if (!state.subject.trim() || !state.topic.trim() ||
+      (state.accuracy !== null && (!Number.isFinite(state.accuracy) || state.accuracy < 0 || state.accuracy > 1)) ||
+      !Number.isInteger(state.answered) || state.answered < 0 ||
+      !Number.isInteger(state.exposureCount) || state.exposureCount < 0 ||
+      (state.uncertainty !== undefined && (!Number.isFinite(state.uncertainty) || state.uncertainty < 0)) ||
+      (state.lastSeenAt != null && validDate(state.lastSeenAt) === null)) {
+      throw new Error("Adaptive topic states contain invalid performance metadata");
+    }
+    if (topicState.has(key)) throw new Error("Adaptive topic states must be unique per subject and topic");
+    topicState.set(key, state);
+  }
   const unique = new Map<string, AdaptiveCandidate>();
   for (const candidate of request.candidates) {
-    if (!candidate.questionId || !candidate.subject || !candidate.topic ||
+    if (!candidate.questionId.trim() || !candidate.subject.trim() || !candidate.topic.trim() ||
       !Number.isFinite(candidate.difficulty) || candidate.difficulty < 1 || candidate.difficulty > 5 ||
-      !Number.isInteger(candidate.exposureCount) || candidate.exposureCount < 0) {
+      !Number.isInteger(candidate.exposureCount) || candidate.exposureCount < 0 ||
+      (candidate.discrimination != null && (!Number.isFinite(candidate.discrimination) ||
+        candidate.discrimination < 0 || candidate.discrimination > 1)) ||
+      (candidate.lastSeenAt != null && validDate(candidate.lastSeenAt) === null)) {
       throw new Error("Adaptive candidates contain invalid metadata");
     }
-    if (!unique.has(candidate.questionId)) unique.set(candidate.questionId, candidate);
+    if (unique.has(candidate.questionId)) throw new Error("Adaptive candidate question IDs must be unique");
+    unique.set(candidate.questionId, candidate);
   }
   const eligible = [...unique.values()].filter((candidate) =>
     !excluded.has(candidate.questionId) &&
-    (!subjects || subjects.has(candidate.subject)) &&
-    (!request.topic || candidate.topic.toLowerCase() === request.topic.toLowerCase()));
+    (!subjects || subjects.has(candidate.subject.trim().toLowerCase())) &&
+    (!request.topic || candidate.topic.trim().toLowerCase() === request.topic.trim().toLowerCase()));
   const scored = eligible.map((candidate) => {
     const state = topicState.get(`${candidate.subject.toLowerCase()}::${candidate.topic.toLowerCase()}`);
     const daysSinceSeen = validDate(candidate.lastSeenAt) === null ? Infinity :
