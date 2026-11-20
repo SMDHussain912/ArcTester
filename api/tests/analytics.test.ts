@@ -18,6 +18,8 @@ beforeAll(async () => {
   server = await startTestServer(buildApp);
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(3);
+  // Imported test fixtures model questions that a human reviewer approved.
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   const session = await signUp(server.baseUrl, "analyst@example.com");
   studentId = session.userId;
   api = bindSession(server.baseUrl, session.cookie);
