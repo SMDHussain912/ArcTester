@@ -246,8 +246,8 @@ describe("admin model registry API", () => {
       baselineVersion: 1,
       datasetId: undersizedId,
     });
-    expect(undersizedReport.status).toBe(400);
-    expect(String(undersizedReport.body.error ?? undersizedReport.body.message)).toContain("1,000");
+    expect(undersizedReport.status).toBe(409);
+    expect(String(undersizedReport.body.error ?? undersizedReport.body.message)).toContain("100+");
 
     const evaluationSamples = Array.from({ length: 1200 }, (_, index) => {
       const label = Math.floor(index / 400);

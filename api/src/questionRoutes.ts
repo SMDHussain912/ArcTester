@@ -246,6 +246,9 @@ export function questionRouter(db: PrismaClient): Router {
         },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
+      // Content edits invalidate prior embeddings; queue a fresh index build.
+      await db.questionEmbedding.deleteMany({ where: { questionId: id } });
+      await queueQuestionEmbeddingJob(db, [id]);
       res.json({ ok: true, question: {
         id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
         text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
