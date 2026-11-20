@@ -2,6 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importFromJson } from "../src/importService.js";
 import { MAX_PROGRESS_IMPORT_ANSWERS, RECOMMENDATION_RECENT_PRACTICE_DAYS } from "../src/analytics.js";
 import { buildApp } from "../src/index.js";
+import { fitReadinessClassifier } from "../src/intelligence/readinessClassifier.js";
+import { READINESS_FEATURE_NAMES } from "../src/intelligence/examReadinessDataset.js";
+import { validateRegistryArtifact } from "../src/intelligence/modelRegistry.js";
 import { bindSession, signUp, startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
@@ -738,6 +741,56 @@ describe("analytics", () => {
       category: null,
     });
     expect((response.json as { completedAttempts: number }).completedAttempts).toBeGreaterThanOrEqual(5);
+
+    const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
+    const centers = [
+      [5, 0.2, 0.2, 0.2, 5, 1],
+      [10, 0.5, 0.5, 0.5, 15, 2],
+      [15, 0.8, 0.8, 0.8, 25, 3],
+    ];
+    const trainingRows = Array.from({ length: 1200 }, (_, index) => {
+      const labelIndex = Math.floor(index / 400);
+      return {
+        groupId: Math.floor(index / 10).toString(16).padStart(64, "0"),
+        label: labels[labelIndex],
+        features: centers[labelIndex]!.map((value, featureIndex) =>
+          value + ((index % 10) - 4.5) * (featureIndex === 0 || featureIndex === 4 ? 0.1 : 0.001)),
+      };
+    });
+    const model = fitReadinessClassifier(trainingRows, { iterations: 900 });
+    const artifact = validateRegistryArtifact({
+      registrySchemaVersion: 1,
+      modelId: "student-readiness-integration",
+      version: 1,
+      algorithm: "exam-readiness-softmax",
+      task: "multiclass-classification",
+      dataset: "student-readiness-integration-fixture",
+      targetColumn: "readiness_label",
+      featureSchema: READINESS_FEATURE_NAMES.map((name) => ({ name, type: "numeric" as const })),
+      model,
+      createdAt: new Date().toISOString(),
+    });
+    await server.db.registeredModel.create({
+      data: {
+        modelId: artifact.modelId,
+        version: artifact.version,
+        algorithm: artifact.algorithm,
+        task: artifact.task,
+        dataset: artifact.dataset,
+        artifactJson: JSON.stringify(artifact),
+        isActive: true,
+        activatedAt: new Date(),
+      },
+    });
+    const prediction = await api.get("/analytics/readiness");
+    expect(prediction.status).toBe(200);
+    const result = prediction.json as {
+      status: string; category: string | null; modelVersion: number; confidence: number;
+    };
+    expect(["ready", "fallback"]).toContain(result.status);
+    expect(result.modelVersion).toBe(1);
+    expect(Number.isFinite(result.confidence)).toBe(true);
+    if (result.status === "fallback") expect(result.category).toBeNull();
   });
 
   it("does not repeat a weak-subject recommendation immediately after the student practiced it", async () => {
