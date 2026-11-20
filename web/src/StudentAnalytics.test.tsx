@@ -46,6 +46,7 @@ describe("StudentAnalytics", () => {
     expect(screen.getByRole("heading", { name: "Your next study steps" })).toBeInTheDocument();
     expect(screen.getByText("Keep practising")).toBeInTheDocument();
     expect(screen.getByText("Subjects to revise")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Exam readiness estimate" })).toBeInTheDocument();
   });
 
   it("shows the safe readiness data threshold without inventing a category", async () => {

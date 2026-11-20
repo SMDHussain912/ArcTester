@@ -141,6 +141,31 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
             )}
           </section>
 
+          <section className="panel" aria-labelledby="formal-performance-title">
+            <div className="panel-header">
+              <h2 id="formal-performance-title">Formal exam performance</h2>
+            </div>
+            <div className="stat-grid">
+              <div className="stat-card">
+                <div className="stat-label">Verified graded exams</div>
+                <div className="stat-value">{overview.formalExams.graded}</div>
+                <div className="stat-caption">Review-required exams are excluded</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Score percentage</div>
+                <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
+                <div className="stat-caption">{overview.formalExams.score?.toFixed(2) ?? "—"} / {overview.formalExams.maximumScore?.toFixed(2) ?? "—"} marks</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Needs review</div>
+                <div className="stat-value">{overview.formalExams.reviewRequired}</div>
+                <div className="stat-caption">Not included in verified score totals</div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
           <section className="panel" aria-labelledby="readiness-estimate-title">
             <div className="panel-header">
               <h2 id="readiness-estimate-title">Exam readiness estimate</h2>
@@ -174,31 +199,6 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
               <p className="muted">{readiness.message}</p>
             )}
           </section>
-
-          <section className="panel" aria-labelledby="formal-performance-title">
-            <div className="panel-header">
-              <h2 id="formal-performance-title">Formal exam performance</h2>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card">
-                <div className="stat-label">Verified graded exams</div>
-                <div className="stat-value">{overview.formalExams.graded}</div>
-                <div className="stat-caption">Review-required exams are excluded</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Score percentage</div>
-                <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
-                <div className="stat-caption">{overview.formalExams.score?.toFixed(2) ?? "—"} / {overview.formalExams.maximumScore?.toFixed(2) ?? "—"} marks</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Needs review</div>
-                <div className="stat-value">{overview.formalExams.reviewRequired}</div>
-                <div className="stat-caption">Not included in verified score totals</div>
-              </div>
-            </div>
-          </section>
-        </>
-      )}
 
       {weakTopics && (
         <section className="panel" aria-labelledby="study-recommendations-title">
