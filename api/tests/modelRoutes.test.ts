@@ -233,7 +233,7 @@ describe("admin model registry API", () => {
       ],
       samples: samples.map((sample, index) => ({
         ...sample,
-        groupId: (Math.floor(index / 3) + 1000).toString(16).padStart(64, "0"),
+        groupId: (Math.floor(index / 20) + 1000).toString(16).padStart(64, "0"),
         features: { ...sample.features, mastery_signal: sample.features.mastery_signal + 0.002 },
       })),
       sourceDescription: "Independent attested real-anonymized learner holdout for minimum sample-size validation.",

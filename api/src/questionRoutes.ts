@@ -242,7 +242,7 @@ export function questionRouter(db: PrismaClient): Router {
           subjectId: subject.id, topicId: topic.id, text: input.text,
           options: JSON.stringify(input.options), correctIndex: input.correctIndex,
           explanation: input.explanation, source: input.source,
-          difficulty: input.difficulty, questionHash: hashQuestion(input.text),
+          difficulty: input.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(input.text),
         },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
@@ -250,6 +250,7 @@ export function questionRouter(db: PrismaClient): Router {
         id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
         text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
         explanation: question.explanation, source: question.source, difficulty: question.difficulty,
+        reviewStatus: question.reviewStatus,
       } });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && (error as {code?: string}).code === "P2002") {

@@ -291,12 +291,12 @@ describe("auth — bearer token (native/mobile clients)", () => {
 
   it("authorizes protected routes with a bearer token and no cookie", async () => {
     const token = await signInForToken("mobile@example.com", "secret1234");
-    const res = await fetch(`${server.baseUrl}/tests`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
+    const res = await fetch(`${server.baseUrl}/auth/me`, {
+      headers: { authorization: `Bearer ${token}` },
     });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { user: { email: string } };
+    expect(body.user.email).toBe("mobile@example.com");
   });
 
   it("revokes a bearer token when its owner signs out", async () => {

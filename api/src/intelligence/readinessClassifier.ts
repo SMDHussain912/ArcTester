@@ -146,7 +146,7 @@ const ReadinessModelSchema = z.object({
   scales: z.array(z.number().finite().positive()),
   weights: z.array(z.array(z.number().finite())).length(3),
   intercepts: z.array(z.number().finite()).length(3),
-  trainingGroups: z.number().int().min(30),
+  trainingGroups: z.number().int().min(100),
   policyVersion: z.literal(1),
 }).strict().superRefine((model, context) => {
   if (model.means.length !== model.featureCount || model.scales.length !== model.featureCount ||
