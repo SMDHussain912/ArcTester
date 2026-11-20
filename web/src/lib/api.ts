@@ -145,6 +145,41 @@ export type StudentScorePrediction =
       populationFeatures?: Record<string, number>;
     };
 
+export type StudentReadinessEstimate =
+  | {
+      status: "insufficient_data";
+      category: null;
+      completedAttempts: number;
+      requiredCompletedAttempts: number;
+      message: string;
+    }
+  | {
+      status: "unavailable";
+      category: null;
+      completedAttempts?: number;
+      message: string;
+    }
+  | {
+      status: "fallback";
+      category: null;
+      probabilities: Record<"NOT_READY" | "DEVELOPING" | "READY", number>;
+      confidence: number;
+      modelVersion: number;
+      completedAttempts: number;
+      factors: { featureIndex: number; direction: "positive" | "negative" }[];
+      message: string;
+    }
+  | {
+      status: "ready";
+      category: "NOT_READY" | "DEVELOPING" | "READY";
+      probabilities: Record<"NOT_READY" | "DEVELOPING" | "READY", number>;
+      confidence: number;
+      modelVersion: number;
+      completedAttempts: number;
+      factors: { featureIndex: number; direction: "positive" | "negative" }[];
+      message: string;
+    };
+
 export interface LearningConcept {
   slug: string;
   title: string;

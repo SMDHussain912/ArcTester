@@ -21,6 +21,13 @@ const prediction = {
   requiredCompletedAttempts: 5,
   message: "Complete more practice tests.",
 };
+const readiness = {
+  status: "insufficient_data" as const,
+  category: null,
+  completedAttempts: 2,
+  requiredCompletedAttempts: 5,
+  message: "Complete five practice attempts before requesting a readiness estimate.",
+};
 
 describe("StudentAnalytics", () => {
   beforeEach(() => vi.mocked(request).mockReset());
@@ -30,7 +37,8 @@ describe("StudentAnalytics", () => {
       .mockRejectedValueOnce(new Error("Overview temporarily unavailable"))
       .mockResolvedValueOnce(weakTopics)
       .mockResolvedValueOnce(recommendations)
-      .mockResolvedValueOnce(prediction);
+      .mockResolvedValueOnce(prediction)
+      .mockResolvedValueOnce(readiness);
 
     render(<StudentAnalytics setActivePage={vi.fn()} />);
 
@@ -38,6 +46,22 @@ describe("StudentAnalytics", () => {
     expect(screen.getByRole("heading", { name: "Your next study steps" })).toBeInTheDocument();
     expect(screen.getByText("Keep practising")).toBeInTheDocument();
     expect(screen.getByText("Subjects to revise")).toBeInTheDocument();
+  });
+
+  it("shows the safe readiness data threshold without inventing a category", async () => {
+    vi.mocked(request)
+      .mockResolvedValueOnce({
+        practice: { completedAttempts: 2, questions: 2, correct: 1, incorrect: 1, unanswered: 0, accuracy: 0.5 },
+        formalExams: { graded: 0, scorePercentage: null, score: null, maximumScore: null, reviewRequired: 0 },
+      })
+      .mockResolvedValueOnce(weakTopics)
+      .mockResolvedValueOnce(recommendations)
+      .mockResolvedValueOnce(prediction)
+      .mockResolvedValueOnce(readiness);
+    render(<StudentAnalytics setActivePage={vi.fn()} />);
+    expect(await screen.findByRole("heading", { name: "Exam readiness estimate" })).toBeInTheDocument();
+    expect(await screen.findByText("2 / 5", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText("READY", { exact: true })).not.toBeInTheDocument();
   });
 
   it("retries failed analytics and reports when the refresh finishes", async () => {
@@ -53,7 +77,8 @@ describe("StudentAnalytics", () => {
       .mockResolvedValueOnce(overview)
       .mockResolvedValueOnce(weakTopics)
       .mockResolvedValueOnce(recommendations)
-      .mockResolvedValueOnce(prediction);
+      .mockResolvedValueOnce(prediction)
+      .mockResolvedValueOnce(readiness);
 
     render(<StudentAnalytics setActivePage={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Practice overview: Network unavailable"));
