@@ -17,6 +17,16 @@ type Overview = {
 type Recommendation = { id: string; title: string; reason: string; priority: string; questionCount: number; mode: string; subject?: string; topic?: string };
 type Recommendations = { basedOnAttempts: number; recommendations: Recommendation[]; performanceExplanation: { headline: string; details: string[]; answeredQuestions: number } };
 type Prediction = { status: string; message: string; predictedScorePercent?: number; predictionInterval?: { lowerPercent: number; upperPercent: number }; modelMae?: number; baselineMae?: number };
+type Readiness = {
+  status: "ready" | "fallback" | "insufficient_data" | "unavailable";
+  category: "NOT_READY" | "DEVELOPING" | "READY" | null;
+  completedAttempts?: number;
+  requiredCompletedAttempts?: number;
+  confidence?: number;
+  probabilities?: { NOT_READY: number; DEVELOPING: number; READY: number };
+  modelVersion?: number;
+  message: string;
+};
 type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 type StudyMaterial = StudyMaterialSummary;
 
@@ -30,6 +40,7 @@ export default function StudentLearningHub({ api, userId, darkMode = false, onSt
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
   const [materialQuery, setMaterialQuery] = useState("");
   const [prediction, setPrediction] = useState<Prediction | null>(null);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
   const [savingPreference, setSavingPreference] = useState(false);
   const [offlinePackage, setOfflinePackage] = useState<OfflineLearningPackage | null>(null);
@@ -51,11 +62,12 @@ export default function StudentLearningHub({ api, userId, darkMode = false, onSt
     const generation = ++loadGeneration.current;
     setLoading(true);
     setError("");
-    const [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult] = await Promise.allSettled([
+    const [performanceResult, recommendationResult, conceptResult, predictionResult, readinessResult, preferenceResult, materialResult] = await Promise.allSettled([
       apiRef.current<Overview>("/analytics/overview"),
       apiRef.current<Recommendations>("/analytics/recommendations"),
       apiRef.current<{ total: number; concepts: Concept[] }>("/learning/concepts?limit=50"),
       apiRef.current<Prediction>("/analytics/score-prediction"),
+      apiRef.current<Readiness>("/analytics/readiness"),
       apiRef.current<{ preferences: NotificationPreferences }>("/notifications/preferences"),
       apiRef.current<{ materials: StudyMaterial[] }>("/study-materials"),
     ]);
@@ -64,10 +76,11 @@ export default function StudentLearningHub({ api, userId, darkMode = false, onSt
     if (recommendationResult.status === "fulfilled") setRecommendations(recommendationResult.value);
     if (conceptResult.status === "fulfilled") setConcepts(conceptResult.value.concepts ?? []);
     if (predictionResult.status === "fulfilled") setPrediction(predictionResult.value);
+    if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value);
     if (preferenceResult.status === "fulfilled") setPreferences(preferenceResult.value.preferences);
     if (materialResult.status === "fulfilled") setStudyMaterials(materialResult.value.materials ?? []);
-    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
-    if (failures.length === 6) setError("Learning data could not be loaded. Check your connection and try again.");
+    const failures = [performanceResult, recommendationResult, conceptResult, predictionResult, readinessResult, preferenceResult, materialResult].filter((item) => item.status === "rejected");
+    if (failures.length === 7) setError("Learning data could not be loaded. Check your connection and try again.");
     else if (failures.length) setError("Some learning sections could not be refreshed. Available sections are still shown.");
     setLoading(false);
   }, []);
@@ -182,6 +195,30 @@ export default function StudentLearningHub({ api, userId, darkMode = false, onSt
 
       <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>ECET score outlook</Text>
       {prediction?.status === "ready" ? <View style={[styles.explanation, darkMode && { backgroundColor: "#1e293b" }]}><Text style={styles.predictionValue}>{Math.round(prediction.predictedScorePercent ?? 0)}%</Text><Text style={[styles.cardTitle, darkMode && { color: "#f1f5f9" }]}>Estimated score range: {Math.round(prediction.predictionInterval?.lowerPercent ?? 0)}–{Math.round(prediction.predictionInterval?.upperPercent ?? 0)}%</Text><Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{prediction.message}</Text><Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>Model MAE {prediction.modelMae?.toFixed(1)} · Baseline MAE {prediction.baselineMae?.toFixed(1)}</Text></View> : <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}><Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{prediction?.message ?? "Score prediction is not available yet."}</Text></View>}
+
+      <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Exam readiness</Text>
+      <View style={[styles.card, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+        {readiness?.status === "ready" && readiness.category ? (
+          <>
+            <Text style={styles.predictionValue}>{readiness.category.replace("_", " ")}</Text>
+            <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>{readiness.message}</Text>
+            <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>
+              Confidence {Math.round((readiness.confidence ?? 0) * 100)}% · {readiness.completedAttempts ?? 0} completed attempts · model v{readiness.modelVersion ?? "—"}
+            </Text>
+            {readiness.probabilities ? (
+              <Text style={[styles.meta, darkMode && { color: "#94a3b8" }]}>
+                Not ready {Math.round(readiness.probabilities.NOT_READY * 100)}% · Developing {Math.round(readiness.probabilities.DEVELOPING * 100)}% · Ready {Math.round(readiness.probabilities.READY * 100)}%
+              </Text>
+            ) : null}
+          </>
+        ) : (
+          <Text style={[styles.body, darkMode && { color: "#cbd5e1" }]}>
+            {readiness?.status === "insufficient_data"
+              ? `${readiness.completedAttempts ?? 0} / ${readiness.requiredCompletedAttempts ?? 5} practice attempts. ${readiness.message}`
+              : readiness?.message ?? "Readiness estimation is unavailable. No category is shown until a qualified model and sufficient history are available."}
+          </Text>
+        )}
+      </View>
 
       <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Recommended next steps</Text>
       {recommendations?.performanceExplanation ? (
