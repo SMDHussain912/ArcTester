@@ -31,9 +31,9 @@ describe("three-class exam readiness model", () => {
       index < 301 ? { ...row, label: "DEVELOPING" as const } : row);
     expect(() => fitReadinessClassifier(imbalanced))
       .toThrow("at least 100 examples of every readiness class");
-    const concentratedClass = rows.map((row) => row.label === "READY"
+    const concentratedClass = rows.map((row, index) => row.label === "READY"
       ? { ...row, groupId: String(1000 + (Number.parseInt(row.groupId, 16) % 5)).padStart(64, "0") }
-      : row);
+      : { ...row, groupId: String(2000 + Math.floor(index / 5)).padStart(64, "0") });
     expect(() => fitReadinessClassifier(concentratedClass))
       .toThrow("at least 20 distinct learner groups");
   });
