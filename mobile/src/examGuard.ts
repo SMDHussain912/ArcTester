@@ -23,6 +23,7 @@ const WEIGHTS: Record<string, number> = {
   UNPINNED: 3,
   APP_REOPENED: 2,
   DEVICE_CHANGED: 3,
+  OVERLAY_ATTEMPT: 3,
 } as const;
 
 let guard: any = null;

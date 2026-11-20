@@ -4,8 +4,10 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import expo.modules.kotlin.modules.Module
@@ -21,6 +23,7 @@ class ExamGuardModule : Module() {
   private val handler = Handler(Looper.getMainLooper())
   private var running = false
   private var pinned = false
+  private var hideOverlaysEnabled = false
   private var lastMultiWindow = false
   private var decorView: View? = null
   private var focusListener: ViewTreeObserver.OnWindowFocusChangeListener? = null
@@ -42,6 +45,7 @@ class ExamGuardModule : Module() {
   private fun removeFocusListener() {
     val view = decorView
     val listener = focusListener
+    if (view != null) view.setOnTouchListener(null)
     if (view != null && listener != null) {
       val observer = view.viewTreeObserver
       if (observer.isAlive) {
@@ -56,6 +60,10 @@ class ExamGuardModule : Module() {
     running = false
     handler.removeCallbacks(poll)
     removeFocusListener()
+    if (hideOverlaysEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      try { activity?.window?.setHideOverlayWindows(false) } catch (_: Exception) { }
+      hideOverlaysEnabled = false
+    }
     if (pinned) {
       try {
         activity?.stopLockTask()
@@ -108,6 +116,20 @@ class ExamGuardModule : Module() {
 
         val view = current.window.decorView
         view.filterTouchesWhenObscured = true
+        view.setOnTouchListener { _, event ->
+          val obscured = (event.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED) != 0 ||
+            (event.flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0
+          if (obscured && running) emit("OVERLAY_ATTEMPT", "A touch event was obscured by another window")
+          false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+          try {
+            current.window.setHideOverlayWindows(true)
+            hideOverlaysEnabled = true
+          } catch (error: Exception) {
+            emit("OVERLAY_ATTEMPT", error.message ?: "Android overlay blocking could not be enabled")
+          }
+        }
         decorView = view
         val observer = view.viewTreeObserver
         if (observer.isAlive) {
