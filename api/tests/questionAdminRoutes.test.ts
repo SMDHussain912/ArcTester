@@ -45,6 +45,7 @@ describe("question administration route contracts", () => {
         explanation: "Dequeue removes the front item.",
         source: "Question admin route tests",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "question-admin-route-base-unique",
       },
     });
@@ -112,6 +113,7 @@ describe("question administration route contracts", () => {
         id: questionId,
         text: "Which queue operation removes the front element?",
         difficulty: "medium",
+        reviewStatus: "DRAFT",
       },
     });
 
@@ -130,10 +132,9 @@ describe("question administration route contracts", () => {
       }),
     });
     expect(patched.status).toBe(200);
-    expect(await patched.json()).toMatchObject({
-      ok: true,
-      question: { id: questionId, difficulty: "easy" },
-    });
+    expect(await patched.json()).toMatchObject({ ok: true, question: { id: questionId, difficulty: "easy", reviewStatus: "DRAFT" } });
+    // Later route tests create an exam from this fixture, so explicitly model a second human approval.
+    await server.db.question.update({ where: { id: questionId }, data: { reviewStatus: "APPROVED" } });
     const studentPatch = await fetch(`${server.baseUrl}/admin/questions/${questionId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json", cookie: studentCookie },

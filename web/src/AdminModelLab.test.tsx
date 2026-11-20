@@ -110,7 +110,7 @@ describe("AdminModelLab", () => {
       groupId: (index % 5).toString(16).padStart(64, "0"),
     }));
     fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(rows) } });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByLabelText("I confirm I am authorized to use this data and have removed direct personal identifiers."));
     fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
     expect(screen.getByRole("alert").textContent).toContain("exactly 0 or 1");
     expect(onRegisterDataset).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe("AdminModelLab", () => {
       groupId: (index % 5).toString(16).padStart(64, "0"),
     }));
     fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(rows) } });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByLabelText("I confirm I am authorized to use this data and have removed direct personal identifiers."));
     fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
     expect(screen.getByRole("alert").textContent).toContain("invalid numeric value");
     expect(onRegisterDataset).not.toHaveBeenCalled();
@@ -183,8 +183,8 @@ describe("AdminModelLab", () => {
       { modelId: "readiness-model", version: 2, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
     ];
     render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={registry} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onEvaluateModel={onEvaluateModel} />);
-    fireEvent.click(screen.getByRole("button", { name: "Evaluate vs v1" }));
-    expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, 1, "dataset-1");
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate vs 1" }));
+    expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, "readiness-model", 1, "dataset-1");
   });
 
   it("registers a JSON dataset with provenance and feature schema", () => {
@@ -193,7 +193,7 @@ describe("AdminModelLab", () => {
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "ECET score history" } });
     fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Authorized anonymized historical assessment records." } });
     fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({ features: { completed_attempts: 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 }, target: 0.7, groupId: (index % 5).toString(16).padStart(64, "0") }))) } });
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByLabelText("I confirm I am authorized to use this data and have removed direct personal identifiers."));
     fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
     expect(onRegisterDataset).toHaveBeenCalledTimes(1);
     expect(onRegisterDataset.mock.calls[0][0]).toMatchObject({ name: "ECET score history", task: "regression", targetColumn: "next_score", sourceAttested: true, datasetKind: "synthetic" });

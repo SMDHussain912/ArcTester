@@ -33,7 +33,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  return body as T;
 }
 export default function AdminWorkspace(p:Props){
- const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState(""),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
  const [embeddingStatus,setEmbeddingStatus]=useState<AdminEmbeddingStatus|null>(null),[embeddingStatusLoading,setEmbeddingStatusLoading]=useState(false),[embeddingRebuildBusy,setEmbeddingRebuildBusy]=useState(false);
@@ -71,6 +71,9 @@ export default function AdminWorkspace(p:Props){
  const selectedSubject=catalog.find(s=>s.name===subject);
  const filteredTopics=selectedSubject?.topics??[];
  async function loadCatalog(){const r=await api<{subjects:AdminCatalogSubject[]}>("/admin/question-catalog");setCatalog(Array.isArray(r.subjects) ? r.subjects : []);}
+ async function loadQuestionReviewProgress(){const r=await api<import("./AdminQuestionBank").QuestionReviewProgress>("/admin/question-review/progress");setReviewProgress(r);}
+ async function reviewQuestion(id:number,status:"APPROVED"|"REJECTED",source:string){await run(async()=>{await api(`/admin/questions/${id}/review`,{method:"PATCH",body:JSON.stringify({status,source})});setNotice(status==="APPROVED"?"Question approved for student practice and exams.":"Question rejected.");await Promise.all([loadQuestions(page),loadQuestionReviewProgress()]);});}
+ async function bulkReviewQuestions(status:"APPROVED"|"REJECTED"){if(!selected.length)return;await run(async()=>{const count=selected.length;await api("/admin/questions/review/bulk",{method:"PATCH",body:JSON.stringify({ids:selected,status})});setSelected([]);setNotice(`${count} question(s) ${status.toLowerCase()}.`);await Promise.all([loadQuestions(page),loadQuestionReviewProgress()]);});}
  async function loadEmbeddingStatus(){setEmbeddingStatusLoading(true);try{const r=await api<Partial<AdminEmbeddingStatus>>("/admin/question-embeddings/status");if(Number.isFinite(r.totalQuestions)&&Number.isFinite(r.indexedQuestions)&&Number.isFinite(r.pendingQuestions)){setEmbeddingStatus({totalQuestions:r.totalQuestions!,indexedQuestions:r.indexedQuestions!,pendingQuestions:r.pendingQuestions!,activeJob:r.activeJob??null});}else{setEmbeddingStatus(null);}}finally{setEmbeddingStatusLoading(false);}}
  async function rebuildEmbeddingIndex(){setEmbeddingRebuildBusy(true);setError("");try{const r=await api<{job:{id:string;total:number}}>("/admin/question-embeddings/rebuild",{method:"POST",body:JSON.stringify({batchSize:16,force:false})});setNotice(`Question embedding rebuild ${r.job.id} queued for ${r.job.total} questions.`);await loadEmbeddingStatus();}catch(e){setError((e as Error).message);}finally{setEmbeddingRebuildBusy(false);}}
  async function searchSimilarQuestions(value:string){setSemanticBusy(true);setError("");try{const params=new URLSearchParams({q:value,limit:"10",candidateLimit:"500"});if(subject)params.set("subject",subject);const r=await api<{matches:AdminSemanticMatch[]}>("/admin/question-embeddings/search?"+params);setSemanticResults(Array.isArray(r.matches)?r.matches:[]);}catch(e){setError((e as Error).message);}finally{setSemanticBusy(false);}}
@@ -81,6 +84,7 @@ export default function AdminWorkspace(p:Props){
   if(subject)params.set("subject",subject);
   if(topic)params.set("topic",topic);
   if(difficulty)params.set("difficulty",difficulty);
+  if(reviewStatus)params.set("reviewStatus",reviewStatus);
   try {
    const r=await api<{questions:AdminPaperQuestion[];total:number}>("/admin/questions?"+params);
    if(requestId!==questionRequestSequence.current)return;
@@ -117,7 +121,7 @@ export default function AdminWorkspace(p:Props){
    setNotice(action==="PAUSE"?"Candidate session paused.":action==="RESUME"?"Candidate session resumed.":"Candidate session terminated.");
   });
  }
- useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]); useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
+ useEffect(()=>{if(tab==="questions")void loadQuestionReviewProgress().catch(e=>setError(e.message));if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]); useEffect(()=>{if(tab==="model-lab"){void loadModelLab().catch(()=>{});void loadIntelligenceStatus();}if(tab==="review-queue")void loadReviewQueue().catch(e=>setError(e.message));if(tab==="notifications")void loadNotificationHealth().catch(e=>setError(e.message));if(tab==="study-materials")void loadStudyMaterials().catch(e=>setError(e.message));},[tab]);
  useEffect(()=>{if(tab!=="questions")return;void loadEmbeddingStatus().catch(e=>setError(e.message));const timer=window.setInterval(()=>{void loadEmbeddingStatus().catch(e=>setError(e.message));},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab!=="model-lab")return;const timer=window.setInterval(()=>{void loadModelLab().catch(()=>{});},5000);return()=>window.clearInterval(timer);},[tab]);
  useEffect(()=>{if(tab==="attendance")void loadAttendance(1).catch(e=>setError(e.message));},[tab]);
@@ -133,7 +137,7 @@ export default function AdminWorkspace(p:Props){
  async function cancelModelTrainingJob(jobId:string){await run(async()=>{await api(`/admin/model-training-jobs/${encodeURIComponent(jobId)}/cancel`,{method:"POST",body:JSON.stringify({})});setNotice("Training job cancelled. No candidate from this job will be activated.");await loadModelLab();});}
  async function evaluateModelCandidate(modelId:string,version:number,baselineModelId:string,baselineVersion:number,datasetId:string){await run(async()=>{const response=await api<{report:{status:string;evaluationDataset:string;sampleCount:number;baselineModelId?:string;candidateMetrics:Record<string,number>;baselineMetrics:Record<string,number>;acceptanceRule:string}}>(`/admin/models/${encodeURIComponent(modelId)}/${version}/evaluate`,{method:"POST",body:JSON.stringify({baselineModelId,baselineVersion,datasetId})});const report=response.report;const metric=(value:number|undefined)=>typeof value==="number"&&Number.isFinite(value)?value.toFixed(4):"—";setNotice(`Evaluation ${report.status}: ${modelId} v${version} vs ${report.baselineModelId??baselineModelId} v${baselineVersion} · ${report.sampleCount} holdout samples · Candidate MAE ${metric(report.candidateMetrics.mae)} / baseline MAE ${metric(report.baselineMetrics.mae)} · Candidate RMSE ${metric(report.candidateMetrics.rmse)} / baseline RMSE ${metric(report.baselineMetrics.rmse)}. ${report.acceptanceRule}`);await loadModelLab();});}
  async function releaseReviewItem(id:string){await run(async()=>{await api(`/admin/submissions/${encodeURIComponent(id)}/release`,{method:"POST",body:JSON.stringify({})});await loadReviewQueue();setNotice("Submission approved and released.");});}
- useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty]);
+ useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty,reviewStatus]);
  async function run(action:()=>Promise<void>):Promise<boolean>{setBusy(true);setError("");setNotice("");try{await action();return true;}catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}}
  async function saveQuestion(e:FormEvent){e.preventDefault();await run(async()=>{const payload={subject:form.subject,topic:form.topic,text:form.text,options:[form.a,form.b,form.c,form.d],correctIndex:Number(form.correctIndex),difficulty:form.difficulty,explanation:form.explanation,source:form.source};await api(editingId?"/admin/questions/"+editingId:"/admin/questions",{method:editingId?"PUT":"POST",body:JSON.stringify(payload)});setNotice(editingId?"Question updated.":"Question added to the bank.");setEditingId(null);setForm({...form,text:"",a:"",b:"",c:"",d:"",explanation:""});await Promise.all([loadCatalog(),loadQuestions(1)]);setTab("questions");});}
  function editQuestion(q:Question){setEditingId(q.id);setForm({subject:q.subject,topic:q.topic,text:q.text,a:q.options[0]||"",b:q.options[1]||"",c:q.options[2]||"",d:q.options[3]||"",correctIndex:String(q.correctIndex),difficulty:q.difficulty,explanation:q.explanation,source:q.source});setTab("add");}
@@ -232,6 +236,11 @@ export default function AdminWorkspace(p:Props){
     subject={subject}
     topic={topic}
     difficulty={difficulty}
+    reviewStatus={reviewStatus}
+    reviewProgress={reviewProgress}
+    onReviewStatusChange={setReviewStatus}
+    onReviewQuestion={(id,status,source)=>void reviewQuestion(id,status,source)}
+    onBulkReview={(status)=>void bulkReviewQuestions(status)}
     catalog={catalog}
     filteredTopics={filteredTopics}
     selected={selected}

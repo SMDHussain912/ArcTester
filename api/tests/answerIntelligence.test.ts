@@ -18,6 +18,9 @@ beforeAll(async () => {
   await importFromJson(server.db, [
     ["Computer Science", "Which data structure follows LIFO?", ["Queue", "Stack", "Tree", "Graph"], 1, "A stack removes the most recently added item first."],
   ]);
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
+  // Imported test fixture models a question that a human reviewer approved.
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   const session = await signUp(server.baseUrl, "answer-intelligence@example.com");
   api = bindSession(server.baseUrl, session.cookie);
 });

@@ -65,10 +65,10 @@ describe("point-in-time performance dataset builder", () => {
     expect(fourthAttempt.features).toMatchObject({
       completed_attempts: 3,
       previous_accuracy: 0.3,
-      recent_accuracy_mean_3: 0.2,
+      recent_accuracy_mean_3: expect.closeTo(0.2, 12),
       overall_accuracy_mean: 0.2,
       previous_question_count: 10,
-      recent_accuracy_slope_3: 0.1,
+      recent_accuracy_slope_3: expect.closeTo(0.1, 12),
       topic_coverage_ratio: 1,
       topic_coverage_ratio_missing: 0,
     });

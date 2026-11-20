@@ -44,6 +44,8 @@ const RegisterSchema = z.object({
   model: z.unknown(),
 }).strict();
 
+const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
+
 const PredictionSchema = z.object({
   features: z.record(z.string(), z.union([z.number().finite(), z.string().max(500)])),
 }).strict();
@@ -121,7 +123,6 @@ function validateStudentPopulationDataset(
   }
 }
 
-const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 const VersionSchema = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
 export function modelRegistryRouter(db: PrismaClient): Router {
@@ -505,7 +506,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const created = await db.$transaction(async (tx) => {
         const models = [];
         for (const result of ranked) {
-          const modelId = input.modelId === "performance" ? result.algorithm : `${input.modelId}-${result.algorithm}`;
+          const modelId = input.modelId === "performance"
+            ? (result.algorithm === "multiple-linear-regression" ? "performance-multiple-linear-regression" : result.algorithm)
+            : `${input.modelId}-${result.algorithm}`;
           const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
           const version = (latest._max.version ?? 0) + 1;
           const artifact = validateRegistryArtifact({

@@ -119,11 +119,11 @@ export function examRouter(db: PrismaClient): Router {
       }
 
       const sourceQuestions = await db.question.findMany({
-        where: { id: { in: questionIds } },
+        where: { id: { in: questionIds }, reviewStatus: "APPROVED" },
         include: { subject: true, topic: true },
       });
       if (sourceQuestions.length !== questionIds.length) {
-        return next(badRequest("One or more selected question IDs do not exist."));
+        return next(badRequest("One or more selected question IDs are missing or not approved."));
       }
       const questionById = new Map(sourceQuestions.map((question) => [question.id, question]));
       const snapshots = input.questions.map((selection, position) => {
@@ -476,10 +476,10 @@ export function examRouter(db: PrismaClient): Router {
       if (new Set(ids).size !== ids.length) errors.push("Duplicate questions are not allowed in one paper.");
       if (input.questions.some((question) => question.negativeMarks > question.marks)) errors.push("Negative marks cannot exceed the marks for a correct answer.");
       const source = await db.question.findMany({
-        where: { id: { in: [...new Set(ids)] } },
+        where: { id: { in: [...new Set(ids)] }, reviewStatus: "APPROVED" },
         include: { subject: true },
       });
-      if (source.length !== new Set(ids).size) errors.push("One or more selected questions no longer exist in the question bank.");
+      if (source.length !== new Set(ids).size) errors.push("One or more selected questions are missing or not approved.");
       const byId = new Map(source.map((question) => [question.id, question]));
       const subjects = new Map<string, number>();
       const difficulties = new Map<string, number>();

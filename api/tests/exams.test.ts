@@ -82,6 +82,7 @@ describe("versioned exam management", () => {
         explanation: "A queue follows first-in, first-out order.",
         source: "Exam route test",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "exam-route-question-fifo-unique",
       },
     });
@@ -467,6 +468,7 @@ describe("versioned exam management", () => {
         explanation: "The immutable snapshot must survive source deletion.",
         source: "test",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "exam-route-question-delete-snapshot-unique",
       },
     });
