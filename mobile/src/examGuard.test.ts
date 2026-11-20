@@ -1,10 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 const secureStore = vi.hoisted(() => ({ values: {} as Record<string, string> }));
+const nativeGuard = vi.hoisted(() => {
+  let listener: ((event: { type: string; detail?: string }) => void) | null = null;
+  return {
+    start: vi.fn(async () => true),
+    stop: vi.fn(async () => true),
+    addListener: vi.fn((_name: string, callback: (event: { type: string; detail?: string }) => void) => {
+      listener = callback;
+      return { remove: vi.fn(() => { listener = null; }) };
+    }),
+    emit: (event: { type: string; detail?: string }) => listener?.(event),
+    reset: () => { listener = null; },
+  };
+});
 
-vi.mock("expo", () => ({
-  requireNativeModule: () => { throw new Error("ExamGuard native module is unavailable in unit tests"); },
-}));
+vi.mock("expo", () => ({ requireNativeModule: () => nativeGuard }));
 
 vi.mock("expo-screen-capture", () => ({
   preventScreenCaptureAsync: vi.fn(),
@@ -30,6 +41,7 @@ vi.mock("react-native", () => ({
   },
 }));
 
+import * as ExpoScreenCapture from "expo-screen-capture";
 import {
   startExamGuard,
   stopExamGuard,
@@ -54,6 +66,10 @@ beforeEach(() => {
   capturedApiCalls = [];
   Object.keys(secureStore.values).forEach((key) => delete secureStore.values[key]);
   eventQueueForTest.length = 0;
+  nativeGuard.reset();
+  nativeGuard.start.mockClear();
+  nativeGuard.stop.mockClear();
+  nativeGuard.addListener.mockClear();
   Object.keys(lastRefForTest).forEach((key) => delete lastRefForTest[key]);
 });
 
@@ -200,4 +216,27 @@ describe("examGuard", () => {
   it("isExamInProgress returns false after cleanup", () => {
     expect(isExamInProgress()).toBe(false);
   });
+
+  it("blocks screenshots during an exam and releases protection when the exam stops", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1", usePinning: true });
+    expect(ExpoScreenCapture.preventScreenCaptureAsync).toHaveBeenCalledOnce();
+    expect(nativeGuard.start).toHaveBeenCalledWith(true);
+    await stopExamGuard();
+    expect(nativeGuard.stop).toHaveBeenCalledOnce();
+    expect(ExpoScreenCapture.allowScreenCaptureAsync).toHaveBeenCalledOnce();
+    expect(isExamInProgress()).toBe(false);
+  });
+
+  it("forwards native overlay, multi-window, background and focus signals to the server audit", async () => {
+    await startExamGuard({ api: fakeApi, assignmentId: "assign-1" });
+    for (const type of ["OVERLAY_ATTEMPT", "MULTI_WINDOW", "APP_BACKGROUND", "WINDOW_FOCUS_LOST", "EXTERNAL_DISPLAY", "UNPINNED"]) {
+      nativeGuard.emit({ type, detail: "Native test signal" });
+    }
+    await flushGuardEvents({ api: fakeApi, assignmentId: "assign-1" });
+    expect(capturedApiCalls[0].body.events.map((event: any) => event.type)).toEqual([
+      "OVERLAY_ATTEMPT", "MULTI_WINDOW", "APP_BACKGROUND", "WINDOW_FOCUS_LOST", "EXTERNAL_DISPLAY", "UNPINNED",
+    ]);
+    await stopExamGuard();
+  });
+
 });
