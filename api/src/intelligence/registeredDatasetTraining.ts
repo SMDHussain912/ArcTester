@@ -251,27 +251,31 @@ function trainPerformanceModelsChronologically(
     parameters: Record<string, number>,
   ) => {
     const folds = foldPlans.map((fold, index) => {
-      const model = algorithm === "multiple-linear-regression"
-        ? fitLinearRegression(fold.train, { iterations: 600, learningRate: 0.05 })
-        : algorithm === "performance-gradient-boosting"
-          ? fitGradientBoostingRegressor(fold.train, {
-            trees: Math.min(32, parameters.trees ?? 32),
-            learningRate: parameters.learningRate ?? 0.05,
-            maxDepth: parameters.maxDepth ?? 2,
-            minLeafSize: parameters.minLeafSize ?? 4,
-            seed: seed + index,
-          })
-          : fitRandomForestRegressor(fold.train, {
-            trees: Math.min(32, parameters.trees ?? 32),
-            maxDepth: parameters.maxDepth ?? 6,
-            minLeafSize: parameters.minLeafSize ?? 5,
-            seed: seed + index,
-          });
       const metrics = algorithm === "multiple-linear-regression"
-        ? calculateRegressionMetrics(fold.test, (features) => predictLinearRegression(model, features))
+        ? (() => {
+          const model = fitLinearRegression(fold.train, { iterations: 600, learningRate: 0.05 });
+          return calculateRegressionMetrics(fold.test, (features) => predictLinearRegression(model, features));
+        })()
         : algorithm === "performance-gradient-boosting"
-          ? calculateRegressionMetrics(fold.test, (features) => predictGradientBoosting(model, features))
-          : calculateRegressionMetrics(fold.test, (features) => predictRandomForest(model, features));
+          ? (() => {
+            const model = fitGradientBoostingRegressor(fold.train, {
+              trees: Math.min(32, parameters.trees ?? 32),
+              learningRate: parameters.learningRate ?? 0.05,
+              maxDepth: parameters.maxDepth ?? 2,
+              minLeafSize: parameters.minLeafSize ?? 4,
+              seed: seed + index,
+            });
+            return calculateRegressionMetrics(fold.test, (features) => predictGradientBoosting(model, features));
+          })()
+          : (() => {
+            const model = fitRandomForestRegressor(fold.train, {
+              trees: Math.min(32, parameters.trees ?? 32),
+              maxDepth: parameters.maxDepth ?? 6,
+              minLeafSize: parameters.minLeafSize ?? 5,
+              seed: seed + index,
+            });
+            return calculateRegressionMetrics(fold.test, (features) => predictRandomForest(model, features));
+          })();
       return {
         fold: index + 1,
         trainRows: fold.train.length,
