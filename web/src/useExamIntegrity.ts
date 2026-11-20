@@ -27,7 +27,8 @@ export type IntegrityType =
   | "UNPINNED"
   | "APP_REOPENED"
   | "DEVICE_CHANGED"
-  | "CLOSE_ATTEMPT";
+  | "CLOSE_ATTEMPT"
+  | "OVERLAY_ATTEMPT";
 
 export interface IntegrityEvent {
   type: IntegrityType;
