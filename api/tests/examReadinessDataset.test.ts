@@ -62,8 +62,9 @@ describe("exam readiness dataset", () => {
   });
 
   it("requires ordered class thresholds and valid keyed learner pseudonyms", () => {
-    expect(() => buildReadinessClassificationDataset(practice, exams, () => "bad"))
-      .toThrow("keyed HMAC learner group ID");
+    expect(() => buildReadinessClassificationDataset(practice, exams, () => "bad", {
+      minimumPriorAttempts: 3,
+    })).toThrow("keyed HMAC learner group ID");
     expect(() => buildReadinessClassificationDataset(practice, exams, (id) => String(id).padStart(64, "0"), {
       notReadyThreshold: 0.8,
       readyThreshold: 0.7,
