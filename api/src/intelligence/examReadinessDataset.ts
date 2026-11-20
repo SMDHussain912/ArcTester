@@ -36,6 +36,22 @@ export interface ReadinessDatasetOptions {
   recentWindow?: number;
 }
 
+export type ReadinessClassificationTarget = 0 | 1 | 2;
+
+export interface ReadinessClassificationSample {
+  groupId: string;
+  occurredAt: string;
+  features: Record<(typeof READINESS_FEATURE_NAMES)[number], number>;
+  target: ReadinessClassificationTarget;
+}
+
+export interface ReadinessClassificationDatasetOptions {
+  minimumPriorAttempts?: number;
+  notReadyThreshold?: number;
+  readyThreshold?: number;
+  recentWindow?: number;
+}
+
 function timestamp(value: string | Date, label: string): number {
   const result = value instanceof Date ? value.getTime() : new Date(value).getTime();
   if (!Number.isFinite(result)) throw new Error(`${label} must be a valid date`);
@@ -118,6 +134,96 @@ export function buildExamReadinessDataset(
         subjectCount,
       ],
       label: exam.score / exam.maximumScore >= readinessThreshold ? 1 : 0,
+    });
+  }
+  return result;
+}
+
+/**
+ * Builds the three-class registry dataset expected by fitReadinessClassifier.
+ * Each formal exam becomes a row, with only practice history finished before
+ * that exam started. The callback must return a keyed HMAC pseudonym; raw
+ * learner IDs are never included in the returned samples.
+ *
+ * Targets: 0 = NOT_READY, 1 = DEVELOPING, 2 = READY.
+ */
+export function buildReadinessClassificationDataset(
+  practiceAttempts: ReadinessPracticeAttempt[],
+  formalExams: ReadinessFormalExam[],
+  groupIdForUser: (userId: number) => string,
+  options: ReadinessClassificationDatasetOptions = {},
+): ReadinessClassificationSample[] {
+  const minimumPriorAttempts = options.minimumPriorAttempts ?? 5;
+  const notReadyThreshold = options.notReadyThreshold ?? 0.5;
+  const readyThreshold = options.readyThreshold ?? 0.75;
+  const recentWindow = options.recentWindow ?? 3;
+  if (!Number.isInteger(minimumPriorAttempts) || minimumPriorAttempts < 1) {
+    throw new Error("minimumPriorAttempts must be a positive integer");
+  }
+  if (!Number.isInteger(recentWindow) || recentWindow < 1) {
+    throw new Error("recentWindow must be a positive integer");
+  }
+  if (!Number.isFinite(notReadyThreshold) || notReadyThreshold <= 0 || notReadyThreshold >= 1 ||
+      !Number.isFinite(readyThreshold) || readyThreshold <= 0 || readyThreshold >= 1 ||
+      notReadyThreshold >= readyThreshold) {
+    throw new Error("Readiness class thresholds must satisfy 0 < notReadyThreshold < readyThreshold < 1");
+  }
+  if (typeof groupIdForUser !== "function") throw new Error("A keyed learner group ID function is required");
+
+  const histories = new Map<number, Array<ReadinessPracticeAttempt & { timestamp: number; accuracy: number }>>();
+  practiceAttempts.forEach((attempt, index) => {
+    const finished = validatePracticeAttempt(attempt, index);
+    const history = histories.get(attempt.userId) ?? [];
+    history.push({ ...attempt, timestamp: finished, accuracy: attempt.correct / attempt.total });
+    histories.set(attempt.userId, history);
+  });
+  for (const history of histories.values()) history.sort((a, b) => a.timestamp - b.timestamp);
+
+  const orderedExams = formalExams.map((exam, index) => {
+    if (!Number.isInteger(exam.userId) || exam.userId <= 0) throw new Error(`Formal exam ${index} has an invalid userId`);
+    if (!Number.isFinite(exam.score) || !Number.isFinite(exam.maximumScore) ||
+        exam.maximumScore <= 0 || exam.score < 0 || exam.score > exam.maximumScore) {
+      throw new Error(`Formal exam ${index} has invalid score values`);
+    }
+    const startedAt = timestamp(exam.startedAt, `Formal exam ${index} startedAt`);
+    const submittedAt = timestamp(exam.submittedAt, `Formal exam ${index} submittedAt`);
+    if (submittedAt < startedAt) throw new Error(`Formal exam ${index} was submitted before it started`);
+    return { ...exam, startedTimestamp: startedAt, submittedTimestamp: submittedAt };
+  }).sort((a, b) => a.submittedTimestamp - b.submittedTimestamp);
+
+  const groupIds = new Map<number, string>();
+  const result: ReadinessClassificationSample[] = [];
+  for (const exam of orderedExams) {
+    const prior = (histories.get(exam.userId) ?? []).filter((attempt) => attempt.timestamp < exam.startedTimestamp);
+    if (prior.length < minimumPriorAttempts) continue;
+    let groupId = groupIds.get(exam.userId);
+    if (!groupId) {
+      groupId = groupIdForUser(exam.userId);
+      if (typeof groupId !== "string" || !/^[a-f0-9]{64}$/.test(groupId)) {
+        throw new Error("Readiness datasets require a keyed HMAC learner group ID for every learner");
+      }
+      groupIds.set(exam.userId, groupId);
+    }
+    const recent = prior.slice(-recentWindow);
+    const overallAccuracy = Math.round((prior.reduce((sum, attempt) => sum + attempt.accuracy, 0) / prior.length) * 1e6) / 1e6;
+    const recentAccuracy = Math.round((recent.reduce((sum, attempt) => sum + attempt.accuracy, 0) / recent.length) * 1e6) / 1e6;
+    const subjectCount = new Set(prior.flatMap((attempt) => attempt.subjects)).size;
+    const scoreRatio = exam.score / exam.maximumScore;
+    const target: ReadinessClassificationTarget = scoreRatio < notReadyThreshold ? 0
+      : scoreRatio < readyThreshold ? 1
+      : 2;
+    result.push({
+      groupId,
+      occurredAt: new Date(exam.submittedTimestamp).toISOString(),
+      features: {
+        completed_attempts: prior.length,
+        previous_accuracy: prior[prior.length - 1].accuracy,
+        recent_average_accuracy: recentAccuracy,
+        overall_average_accuracy: overallAccuracy,
+        previous_question_count: prior.reduce((sum, attempt) => sum + attempt.total, 0),
+        subject_count: subjectCount,
+      },
+      target,
     });
   }
   return result;
