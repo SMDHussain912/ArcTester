@@ -566,3 +566,15 @@ Verified commit: `ba3b475122564b9e1193b8f62d20e44dfaff8230` on `main`.
 - The formal-exam client now refreshes the assignment list after submission so the student sees the current submitted/review/graded state.
 
 This verification does not certify real Android/iOS devices, production Vercel/Render configuration, backup/restore, or the remaining acceptance criteria in Phases 6, 10, 11, 12, 14, 15 and 16. No phase is marked fully complete solely from CI success.
+
+## Latest verification — 2026-11-21
+
+Verified commit: `60fab2e8c91f6094f35a3d72fab5151de221b04e` on `main`.
+
+- [Full CI run](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44806232957) — all six jobs passed: tests/lint/web+API build, Playwright E2E, mobile typecheck, TensorFlow dataset preparation, PostgreSQL backup/restore, and SQLite-to-PostgreSQL migration tests.
+- The readiness classifier now requires qualified grouped training data, independent real-anonymized evaluation groups, valid snapshot timestamps, and a holdout period strictly later than all candidate and baseline training snapshots.
+- The student readiness API is integrated into both web Student Analytics and the mobile Student Learning Hub. Insufficient history, unavailable artifacts, and low-confidence predictions do not display a fabricated readiness category.
+- Adaptive question selection now rejects duplicate question IDs and invalid learner/topic/candidate metadata before ranking.
+- [Android APK build workflow](https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44806232797) was still running at the time of this audit; do not count it as passed until the workflow completes.
+
+**Remaining qualification:** real production learner datasets still need to be collected, provenance-attested, trained, and evaluated before any readiness model can be promoted. Real-device release checks and the remaining phase acceptance criteria are also open. These changes add evidence but do not certify any master phase complete; existing phase scores are intentionally unchanged pending a full acceptance review.
