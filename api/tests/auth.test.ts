@@ -93,6 +93,7 @@ describe("auth", () => {
     const report = await importFromJson(server.db, BANK);
     expect(report.added).toBe(2);
     await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
+    await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   });
 
   afterAll(async () => {

@@ -19,6 +19,8 @@ beforeAll(async () => {
   server = await startTestServer(buildApp);
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(3);
+  // Imported fixtures are explicitly human-reviewed so these tests exercise student flows.
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   // Imported test fixtures model questions that a human reviewer approved.
   await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
 
