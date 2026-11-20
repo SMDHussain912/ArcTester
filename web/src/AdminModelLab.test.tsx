@@ -183,7 +183,7 @@ describe("AdminModelLab", () => {
       { modelId: "readiness-model", version: 2, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
     ];
     render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={registry} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onEvaluateModel={onEvaluateModel} />);
-    fireEvent.click(screen.getByRole("button", { name: "Evaluate vs linear baseline v1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate vs v1" }));
     expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, 1, "dataset-1");
   });
 
