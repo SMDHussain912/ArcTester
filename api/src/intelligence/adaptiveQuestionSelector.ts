@@ -80,7 +80,7 @@ export function selectAdaptiveQuestions(request: AdaptiveSelectionRequest): Adap
     (!subjects || subjects.has(candidate.subject.trim().toLowerCase())) &&
     (!request.topic || candidate.topic.trim().toLowerCase() === request.topic.trim().toLowerCase()));
   const scored = eligible.map((candidate) => {
-    const state = topicState.get(`${candidate.subject.toLowerCase()}::${candidate.topic.toLowerCase()}`);
+    const state = topicState.get(`${candidate.subject.trim().toLowerCase()}::${candidate.topic.trim().toLowerCase()}`);
     const daysSinceSeen = validDate(candidate.lastSeenAt) === null ? Infinity :
       Math.max(0, (now - (validDate(candidate.lastSeenAt) as number)) / 86400000);
     const weak = state?.accuracy !== null && state?.accuracy !== undefined && state.accuracy < 0.65 && state.answered >= 5;

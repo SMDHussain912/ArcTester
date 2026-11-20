@@ -29,6 +29,15 @@ describe("adaptive question selection policy", () => {
     expect(selectAdaptiveQuestions(request).fallbackUsed).toBe(true);
   });
 
+  it("matches learner topic state after normalizing candidate whitespace and case", () => {
+    const result = selectAdaptiveQuestions({
+      candidates: [{ ...candidates[0]!, subject: " MATH ", topic: " MATRICES " }],
+      topicStates: [{ subject: "Math", topic: "Matrices", accuracy: 0.4, answered: 10, exposureCount: 10 }],
+      questionCount: 1,
+    });
+    expect(result.reasons[0]?.reasonCode).toBe("WEAK_TOPIC");
+  });
+
   it("rejects duplicate candidates and malformed learner-performance metadata", () => {
     expect(() => selectAdaptiveQuestions({
       candidates: [...candidates, candidates[0]!],
