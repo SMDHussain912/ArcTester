@@ -44,8 +44,6 @@ const RegisterSchema = z.object({
   model: z.unknown(),
 }).strict();
 
-const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
-
 const PredictionSchema = z.object({
   features: z.record(z.string(), z.union([z.number().finite(), z.string().max(500)])),
 }).strict();
@@ -54,6 +52,8 @@ const TrainingSchema = z.object({
   modelId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/),
   seed: z.number().int().min(0).max(0xffffffff).default(42),
 }).strict();
+
+const ModelIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/);
 
 const EvaluationSchema = z.object({
   baselineModelId: ModelIdSchema.optional(),

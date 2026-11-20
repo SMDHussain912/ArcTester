@@ -138,13 +138,13 @@ describe("ModelRegistry", () => {
   });
 
   it("validates and serves a three-class readiness artifact with the history safety gate", () => {
-    const rows = Array.from({ length: 90 }, (_, index) => {
-      const group = Math.floor(index / 3);
-      const labelIndex = group % 3;
+    const rows = Array.from({ length: 1200 }, (_, index) => {
+      const group = Math.floor(index / 10);
+      const labelIndex = Math.floor(index / 400);
       return {
         groupId: String(group).padStart(64, "0"),
         label: (["NOT_READY", "DEVELOPING", "READY"] as const)[labelIndex],
-        features: [labelIndex * 0.45 + (index % 3) * 0.001, 10],
+        features: [labelIndex * 0.45 + (index % 10) * 0.001, 10],
       };
     });
     const model = fitReadinessClassifier(rows, { iterations: 1200 });
