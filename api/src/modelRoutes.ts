@@ -966,6 +966,24 @@ export function modelRegistryRouter(db: PrismaClient): Router {
         occurredAt?: string;
         unansweredCount?: number;
       }>;
+      if (candidate.task === "multiclass-classification") {
+        const evaluationGroups = new Set(samples.map((sample) => sample.groupId).filter((value): value is string =>
+          typeof value === "string" && /^[a-f0-9]{64}$/.test(value)));
+        const trainingDatasets = await db.modelDataset.findMany({
+          where: { id: { in: [candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter((id): id is string => Boolean(id)) } },
+          select: { id: true, datasetKind: true, sourceAttested: true },
+        });
+        const expectedTrainingDatasets = new Set([candidateRow.trainingDatasetId, baselineRow.trainingDatasetId].filter((value): value is string => Boolean(value)));
+        if (dataset.task !== "multiclass-classification" || dataset.datasetKind !== "real-anonymized" ||
+            !candidateRow.trainingDatasetId || !baselineRow.trainingDatasetId ||
+            evaluationGroups.size < 100 ||
+            samples.some((sample) => !sample.groupId || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
+              !Number.isInteger(sample.target) || sample.target < 0 || sample.target > 2) ||
+            trainingDatasets.length !== expectedTrainingDatasets.size ||
+            trainingDatasets.some((trainingDataset) => trainingDataset.datasetKind !== "real-anonymized" || !trainingDataset.sourceAttested)) {
+          return next(conflict("Readiness evaluation requires an attested real-anonymized holdout across 100+ independent learner groups, separate from eligible real-anonymized training datasets."));
+        }
+      }
       if (modelId === "performance-gradient-boosting" || modelId === "performance-random-forest") {
         const evaluationGroups = new Set(samples.map((sample) => sample.groupId).filter((value): value is string =>
           typeof value === "string" && /^[a-f0-9]{64}$/.test(value)));
