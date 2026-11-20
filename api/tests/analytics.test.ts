@@ -311,6 +311,7 @@ describe("analytics", () => {
         correctIndex: 0,
         questionHash: "snapshot-classification-fixture",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
       },
     });
 
@@ -381,6 +382,7 @@ describe("analytics", () => {
         correctIndex: 0,
         questionHash: "question-minimum-sample-fixture",
         difficulty: "medium",
+        reviewStatus: "APPROVED",
       },
     });
 

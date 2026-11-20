@@ -506,7 +506,9 @@ export function modelRegistryRouter(db: PrismaClient): Router {
       const created = await db.$transaction(async (tx) => {
         const models = [];
         for (const result of ranked) {
-          const modelId = input.modelId === "performance" ? result.algorithm : `${input.modelId}-${result.algorithm}`;
+          const modelId = input.modelId === "performance"
+            ? (result.algorithm === "multiple-linear-regression" ? "performance-multiple-linear-regression" : result.algorithm)
+            : `${input.modelId}-${result.algorithm}`;
           const latest = await tx.registeredModel.aggregate({ where: { modelId }, _max: { version: true } });
           const version = (latest._max.version ?? 0) + 1;
           const artifact = validateRegistryArtifact({
