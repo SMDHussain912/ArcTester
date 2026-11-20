@@ -53,7 +53,7 @@ describe("useExamIntegrity event listener lifecycle", () => {
 describe("web exam integrity enforcement", () => {
   it("blocks copy, paste and context-menu actions and records fullscreen, blur and DevTools signals", async () => {
     vi.useFakeTimers();
-    const api = vi.fn(async () => ({
+    const api = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(async () => ({
       ok: true,
       json: async () => ({ violationCount: 6, max: 10, warn: true, flagged: false }),
     } as Response));
