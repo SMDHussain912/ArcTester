@@ -104,4 +104,20 @@ describe("AdminQuestionBank", () => {
     expect(onBulkDifficultyChange).toHaveBeenCalledWith("hard");
   });
 
+
+  it("filters by review status, shows per-subject quota progress and supports source-gated review", () => {
+    const onReviewQuestion = vi.fn();
+    const onBulkReview = vi.fn();
+    const progress = { subjects: [{ subject: "Mathematics", paperQuota: 50, requiredQuota: 150, drafted: 120, approved: 20, rejected: 3, remaining: 10 }], totals: { drafted: 120, approved: 20, rejected: 3, requiredQuota: 150, remaining: 10 } };
+    render(<AdminQuestionBank questions={[{ ...question, reviewStatus: "DRAFT", source: "NEEDS HUMAN REVIEW" }]} total={1} page={1} query="" subject="" topic="" difficulty="" reviewStatus="DRAFT" reviewProgress={progress} catalog={catalog} filteredTopics={catalog[0].topics} selected={[7]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onReviewStatusChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onReviewQuestion={onReviewQuestion} onBulkReview={onBulkReview} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Filter by review status" })).toHaveValue("DRAFT");
+    expect(screen.getByText(/120 drafted · 20 approved \/ 150 required/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Approve" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Source for question 7"), { target: { value: "AP ECET CSE syllabus, Unit 1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onReviewQuestion).toHaveBeenCalledWith(7, "APPROVED", "AP ECET CSE syllabus, Unit 1");
+    fireEvent.click(screen.getByRole("button", { name: "Approve selected" }));
+    expect(onBulkReview).toHaveBeenCalledWith("APPROVED");
+  });
+
 });
