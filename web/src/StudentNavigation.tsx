@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import FeedbackSettings from "./components/FeedbackSettings";
 
 export type StudentPage =
   | "dashboard"
@@ -119,6 +120,7 @@ export default function StudentNavigation({
           <button type="button" className="icon-button" onClick={onToggleTheme} aria-label="Toggle theme">
             {theme === "light" ? "☾" : "☀"}
           </button>
+          <FeedbackSettings />
           <span className="user-email">{email}</span>
           <button type="button" className="ghost" disabled={busy} onClick={onSignOut}>Sign out</button>
         </div>
