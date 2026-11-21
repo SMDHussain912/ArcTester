@@ -810,6 +810,7 @@ export default function App() {
     setRefreshingAnnouncements(false);
     setRefreshingNotifications(false);
     setTest(null);
+    setLessonSession(false);
     setResult(null);
     setHasSavedPracticeAttempt(false);
     setCheckingPracticeRecovery(false);
