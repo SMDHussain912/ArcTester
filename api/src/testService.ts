@@ -10,6 +10,7 @@ import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import {
   nextStat,
+  MOCK_TOTAL,
   selectMockTest,
   selectQuestions,
   type QuestionStat,
@@ -131,12 +132,15 @@ export function minutesFor(mode: TestMode, questionCount: number): number {
   return Math.max(5, Math.round(questionCount * MINUTES_PER_QUESTION));
 }
 
-function shortfallWarning(shortfalls: Shortfall[]): string[] {
-  return shortfalls.map(
-    (s) =>
-      `${s.subject}: only ${s.available} of ${s.requested} questions available. ` +
-      `The test uses what exists.`
-  );
+/** Full AP ECET mock attempts must match the complete official blueprint.
+ * Returning a message (rather than creating a partial attempt) keeps shortage
+ * handling deterministic and straightforward to unit-test. */
+export function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
+  if (selectedCount === MOCK_TOTAL && shortfalls.length === 0) return null;
+  const details = shortfalls.length
+    ? shortfalls.map((item) => item.subject + ': ' + item.available + '/' + item.requested).join('; ')
+    : selectedCount + '/' + MOCK_TOTAL + ' questions selected';
+  return 'A full AP ECET mock requires all ' + MOCK_TOTAL + ' questions. Your approved question bank is short: ' + details + '. Add and approve the missing questions, then try again.';
 }
 
 function toPublicQuestion(row: {
@@ -229,8 +233,10 @@ export async function createTest(
 
   if (input.mode === "mock") {
     const { questions, shortfalls } = selectMockTest(candidates, stats);
+    const readinessIssue = fullMockReadinessIssue(questions.length, shortfalls);
+    if (readinessIssue) throw badRequest(readinessIssue);
     selected = questions;
-    warnings = shortfallWarning(shortfalls);
+    warnings = [];
   } else if (input.mode === "practice" || input.mode === "speedRound") {
     const chosenSubjects = input.subjects ?? (input.subject ? [input.subject] : []);
     const topicFilter = new Set(input.topics ?? []);
