@@ -27,6 +27,7 @@ import ArcTesterMascot from "./src/components/ArcTesterMascot";
 import LearningPathHome from "./src/components/LearningPathHome";
 import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import { triggerHapticFeedback } from "./src/feedback";
+import { filterResultReview } from "./src/resultReview";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -133,6 +134,7 @@ export default function App() {
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [resultReviewFilter, setResultReviewFilter] = useState<"all" | "incorrect">("all");
+  useEffect(() => { if (result) setResultReviewFilter("all"); }, [result?.attemptId]);
 
   const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -143,7 +145,7 @@ export default function App() {
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
   const lastFeedbackAttempt = useRef<number | null>(null);
   const sessionIdentity = token && user ? `${user.id}:${token}` : null;
-  const resultReviewQuestions = result?.questions.filter((question) => resultReviewFilter === "incorrect" ? !question.isCorrect : true) ?? [];
+  const resultReviewQuestions = result ? filterResultReview(result.questions, resultReviewFilter) : [];
   const sessionIdentityRef = useRef<string | null>(sessionIdentity);
   const notificationRequestSequence = useRef(0);
   sessionIdentityRef.current = sessionIdentity;
