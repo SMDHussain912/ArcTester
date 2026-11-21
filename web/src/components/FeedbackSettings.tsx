@@ -11,8 +11,9 @@ export default function FeedbackSettings() {
   }
 
   return (
-    <fieldset className="feedback-settings">
-      <legend>Feedback</legend>
+    <details className="feedback-settings">
+      <summary>Feedback</summary>
+      <div className="feedback-settings-panel">
       <label className="feedback-setting">
         <span><strong>Sound effects</strong><small>Short tones for completed practice</small></span>
         <input type="checkbox" checked={sound} onChange={(event) => update("sound", event.currentTarget.checked)} />
@@ -22,6 +23,7 @@ export default function FeedbackSettings() {
         <input type="checkbox" checked={haptics} onChange={(event) => update("haptics", event.currentTarget.checked)} />
       </label>
       <button type="button" className="ghost feedback-test" onClick={() => playFeedback("complete", { sound, haptics })}>Test feedback</button>
-    </fieldset>
+      </div>
+    </details>
   );
 }
