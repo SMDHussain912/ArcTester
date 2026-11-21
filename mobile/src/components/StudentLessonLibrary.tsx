@@ -94,6 +94,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
 
   useEffect(() => {
     if (!playing || !activeLesson || !scene) return;
+    if (voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.isLoaded) return;
     const timer = setTimeout(() => {
       if (safeIndex >= sceneCount - 1) {
         setPlaying(false);
@@ -169,6 +170,11 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
     }
     setSceneIndex((current) => clampSceneIndex(current + 1, sceneCount));
   };
+  useEffect(() => {
+    if (!playing || !activeLesson || !audioStatus.didJustFinish) return;
+    if (voiceSceneKey === `${activeLesson.id}:${safeIndex}`) nextScene();
+  }, [playing, activeLesson?.id, safeIndex, audioStatus.didJustFinish, voiceSceneKey]);
+
   const previousScene = () => {
     setCompleted(false);
     setSceneIndex((current) => clampSceneIndex(current - 1, sceneCount));
