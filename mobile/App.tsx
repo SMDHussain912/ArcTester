@@ -1065,15 +1065,23 @@ export default function App() {
               <View key={question.questionId} style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                 <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>Question {index + 1} · {question.subject}</Text>
                 <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{question.text}</Text>
-                {question.options.map((option, optionIndex) => (
-                  <Text key={optionIndex} style={{
-                    color: optionIndex === question.correctIndex ? "#15803d" : optionIndex === question.selectedIndex ? "#b42318" : "#526078",
-                    fontWeight: optionIndex === question.correctIndex || optionIndex === question.selectedIndex ? "800" : "400",
-                    marginTop: 6,
-                  }}>
-                    {String.fromCharCode(65 + optionIndex)}. {option}{optionIndex === question.correctIndex ? " · Correct" : optionIndex === question.selectedIndex ? " · Your answer" : ""}
-                  </Text>
-                ))}
+                {question.options.map((option, optionIndex) => {
+                  const correct = question.questionType === "multi_select" && Array.isArray(question.answerData.correctIndices)
+                    ? question.answerData.correctIndices.includes(optionIndex)
+                    : optionIndex === question.correctIndex;
+                  const selected = Array.isArray(question.response)
+                    ? question.response.includes(optionIndex)
+                    : optionIndex === question.selectedIndex;
+                  return (
+                    <Text key={optionIndex} style={{
+                      color: correct ? "#15803d" : selected ? "#b42318" : "#526078",
+                      fontWeight: correct || selected ? "800" : "400",
+                      marginTop: 6,
+                    }}>
+                      {String.fromCharCode(65 + optionIndex)}. {option}{correct ? " · Correct" : selected ? " · Your answer" : ""}
+                    </Text>
+                  );
+                })}
                 <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>{question.explanation || "No explanation provided."}</Text>
               </View>
             ))}
