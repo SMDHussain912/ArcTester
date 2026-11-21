@@ -568,7 +568,7 @@ export default function App() {
         <OnlineStatusBanner />
         {activePage === "path" ? (
           <StudentWebLearningPath onPractice={(subject, topic) => { setPracticeSubjects([subject]); setPracticeTopicKeys(topic ? [JSON.stringify([subject, topic])] : []); setActivePage("practice"); }} />
-        ) : {activePage === "practice" && test ? (
+        ) : activePage === "practice" && test ? (
           <StudentPracticeSession
             test={test}
             answers={answers}
