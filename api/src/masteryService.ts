@@ -20,9 +20,9 @@ export function nextReviewSchedule(
 }
 
 export const DAILY_QUESTS = [
-  { key: "lesson", title: "Finish a lesson", description: "Complete one learning-path lesson.", target: 1 },
+  { key: "lesson", title: "Finish a lesson", description: "Complete one learning-path lesson.", target: 1, rewardXp: 15 },
   { key: "practice", title: "Practice today", description: "Submit one practice paper.", target: 1 },
-  { key: "mistakes", title: "Fix your mistakes", description: "Review three due questions correctly or incorrectly.", target: 3 },
+  { key: "mistakes", title: "Fix your mistakes", description: "Review three due questions correctly or incorrectly.", target: 3, rewardXp: 15 },
 ] as const;
 
 export const BADGES = [
