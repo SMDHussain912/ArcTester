@@ -342,6 +342,44 @@ export default function App() {
     if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
     return body as T;
   }
+  async function refreshGamification() {
+    if (!user || !token) return;
+    try {
+      const snapshot = await api<GamificationSnapshot>("/gamification");
+      setGamification(snapshot);
+      setDailyGoalDraft(String(snapshot.dailyGoalXp));
+    } catch { /* Reward data must not block practice. */ }
+  }
+
+  async function saveDailyGoal() {
+    const dailyGoalXp = Number(dailyGoalDraft);
+    if (!Number.isInteger(dailyGoalXp) || dailyGoalXp < 20 || dailyGoalXp > 200) {
+      setError("Daily XP goal must be a whole number from 20 to 200.");
+      return;
+    }
+    setRewardBusy(true);
+    try {
+      const saved = await api<{ dailyGoalXp: number }>("/gamification/daily-goal", {
+        method: "POST", body: JSON.stringify({ dailyGoalXp }),
+      });
+      setGamification((current) => current ? { ...current, dailyGoalXp: saved.dailyGoalXp } : current);
+      setDailyGoalDraft(String(saved.dailyGoalXp));
+      setError("");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setRewardBusy(false); }
+  }
+
+  async function buyStreakFreeze() {
+    if (!gamification || gamification.xpBalance < 100 || gamification.streakFreezeInventory >= 2) return;
+    setRewardBusy(true);
+    try {
+      await api("/gamification/streak-freeze/buy", { method: "POST", body: JSON.stringify({}) });
+      await refreshGamification();
+      setError("");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setRewardBusy(false); }
+  }
+
 
   async function syncPendingPracticeProgress() {
     if (!user || !token || practiceSyncLock.current) return;
