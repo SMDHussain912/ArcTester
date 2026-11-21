@@ -30,6 +30,7 @@ import StudentAnalytics from "./StudentAnalytics";
 import StudentLearning from "./StudentLearning";
 import StudentWebLearningPath from "./StudentWebLearningPath";
 import StudentWebLessonPlayer from "./StudentWebLessonPlayer";
+import StudentLearningSummary from "./StudentLearningSummary";
 import StudentMaterials from "./StudentMaterials";
 import AppSplash from "./components/AppSplash";
 import { OnlineStatusContext } from "./OnlineStatusContext";
@@ -567,7 +568,9 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "path" ? (
+        {activePage === "learning-summary" ? (
+          <StudentLearningSummary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
+        ) : {activePage === "path" ? (
           <StudentWebLearningPath onPractice={(subject, topic) => { setPracticeSubjects([subject]); setPracticeTopicKeys(topic ? [JSON.stringify([subject, topic])] : []); setActivePage("practice"); }} />
         ) : activePage === "lessons" ? (
           <StudentWebLessonPlayer />
