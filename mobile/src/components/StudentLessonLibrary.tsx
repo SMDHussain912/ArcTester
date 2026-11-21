@@ -146,16 +146,8 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
     }
     setVoiceLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/lessons/${encodeURIComponent(activeLesson.id)}/scenes/${safeIndex}/audio`, {
-        headers: { authorization: `Bearer ${authToken}` },
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error || "Could not generate narration for this scene.");
-      }
-      const audioBlob = await response.blob();
-      const localUrl = URL.createObjectURL(audioBlob);
-      audioPlayer.replace(localUrl);
+      const audioUrl = `${apiBaseUrl}/lessons/${encodeURIComponent(activeLesson.id)}/scenes/${safeIndex}/audio`;
+      audioPlayer.replace({ uri: audioUrl, headers: { authorization: `Bearer ${authToken}` } });
       setVoiceSceneKey(key);
       audioPlayer.play();
     } catch (cause) {
