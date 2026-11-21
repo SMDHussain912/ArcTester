@@ -24,6 +24,7 @@ import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLear
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
+import LearningPathHome from "./src/components/LearningPathHome";
 import { triggerHapticFeedback } from "./src/feedback";
 
 const API_URL = (() => {
@@ -128,6 +129,7 @@ export default function App() {
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
+  const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
 
   const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -1041,7 +1043,7 @@ export default function App() {
                    ) : activeTab === "practice" ? (
            <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
              {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
-             {bank ? <StudentPracticeBuilder subjects={bank.subjects} total={bank.total} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} onRefresh={() => void refreshQuestionBank()} onStart={(config) => void startPractice(config)} /> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading subject and topic catalogue…</Text>}
+             {bank ? <StudentPracticeBuilder key={practicePresetSubject ?? "practice"} subjects={bank.subjects} total={bank.total} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} initialSubject={practicePresetSubject} onRefresh={() => void refreshQuestionBank()} onStart={(config) => void startPractice(config)} /> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading subject and topic catalogue…</Text>}
               {offlineLearningPackage ? <OfflinePracticeLibrary questions={offlineLearningPackage.questions} darkMode={darkMode} /> : null}
            </Animated.View>
 ) : activeTab === "settings" ? (
@@ -1097,7 +1099,17 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
-            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
+            <LearningPathHome
+              subjects={bank?.subjects ?? []}
+              progress={learningOverview?.practice.subjects ?? []}
+              darkMode={darkMode}
+              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
+              onPractice={(subject) => {
+                setPracticePresetSubject(subject);
+                setActiveTab("practice");
+              }}
+            />
+            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>Your performance</Text>
               <View style={styles.dashboardMetricGrid}>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
