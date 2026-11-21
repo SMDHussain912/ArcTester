@@ -15,8 +15,6 @@ type Scene = {
   sceneType: string; title: string; narration: string; onScreenText: string;
   durationMs: number; visual?: { label?: string; items?: string[]; connections?: {from:string;to:string;label?:string}[]; equation?:string; steps?:string[] };
 };
-type Props = { theme?: "light" | "dark" };
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(API + path, {
     ...init,
