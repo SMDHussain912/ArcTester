@@ -38,8 +38,6 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 - **Part 3 — Results, review and profile learning summary:** result counts, All/Mistakes review filters, and server-backed profile metrics. PR #158 merged as `c8410f0f`.
 - **Part 4 — Offline progress queue and safe synchronization (final Phase 5 slice):** persist answer snapshots for an already server-created practice attempt in account-scoped SQLite; replay snapshots through the existing idempotent `PUT /tests/:id/answers` endpoint when connectivity returns; retain newer local revisions during in-flight sync; queue a user-confirmed submit and recover a result if the server accepted it but the response was lost. No offline scoring or answer-key storage.
 
-**Part 4 implementation in progress:** `feature/phase-5-part-4-offline-progress-sync`. A newly started attempt still requires connectivity; downloaded question bank remains practice-only and does not contain correct answers. Exact-head CI and Android build are required before merge.
-
 **Phase 5 complete on main:** PR #159 merged as `dbc23c7e`; Android build on the PR head passed. Device-level offline/reconnect and account-isolation checks remain manual and NOT VERIFIED.
 
 ## Phase 6 delivery slices
