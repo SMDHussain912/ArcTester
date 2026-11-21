@@ -29,6 +29,7 @@ import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
 import StudentLearning from "./StudentLearning";
 import StudentWebLearningPath from "./StudentWebLearningPath";
+import StudentWebLessonPlayer from "./StudentWebLessonPlayer";
 import StudentMaterials from "./StudentMaterials";
 import AppSplash from "./components/AppSplash";
 import { OnlineStatusContext } from "./OnlineStatusContext";
@@ -568,6 +569,8 @@ export default function App() {
         <OnlineStatusBanner />
         {activePage === "path" ? (
           <StudentWebLearningPath onPractice={(subject, topic) => { setPracticeSubjects([subject]); setPracticeTopicKeys(topic ? [JSON.stringify([subject, topic])] : []); setActivePage("practice"); }} />
+        ) : activePage === "lessons" ? (
+          <StudentWebLessonPlayer />
         ) : activePage === "practice" && test ? (
           <StudentPracticeSession
             test={test}
