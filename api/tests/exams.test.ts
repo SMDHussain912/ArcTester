@@ -118,6 +118,8 @@ describe("versioned exam management", () => {
     expect(jsonPreview.status).toBe(200);
     expect(jsonPreview.json.report).toMatchObject({ added: 1, duplicates: 0, total: 1, invalid: [] });
 
+    const previewSubject = await server.db.subject.create({ data: { name: "Preview Subject" } });
+    await server.db.topic.create({ data: { name: "Preview Topic", subjectId: previewSubject.id } });
     const csvContent = [
       "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty",
       "Preview Subject,Preview Topic,Preview-only CSV question,A,B,C,D,1,Preview only,Admin preview regression,easy",

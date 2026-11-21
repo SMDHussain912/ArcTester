@@ -3,7 +3,7 @@ import { canonicalPaperSubject } from "./apEcet2026";
 
 export type AdminPaperDraft = { title: string; description: string; instructions: string; duration: string; shuffleQuestions: boolean; shuffleOptions: boolean; marks: string; negative: string; selectionMode: "manual" | "random"; perSubject: string };
 export type AdminPaperCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
-export type AdminPaperQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string };
+export type AdminPaperQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string; questionType?: string; promptData?: Record<string, unknown>; answerData?: Record<string, unknown> };
 export type AdminPaperDifficultyMix = { easy: number; medium: number; hard: number };
 export type AdminPaperSubjectScoring = Record<string, { marks: number; negativeMarks: number }>;
 type Difficulty = keyof AdminPaperDifficultyMix;

@@ -45,7 +45,16 @@ type Invitation = {
 };
 type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Test = PracticeSessionTest;
-type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null }[] };
+type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null; response?: unknown }[] };
+function validPracticeAnswer(question: PracticeSessionTest["questions"][number], value: unknown): boolean {
+ const type=question.questionType||"mcq";
+ if(type==="mcq"||type==="true_false")return Number.isInteger(value)&&Number(value)>=0&&Number(value)<question.options.length;
+ if(type==="multi_select")return Array.isArray(value)&&value.every(v=>Number.isInteger(v)&&Number(v)>=0&&Number(v)<question.options.length);
+ if(type==="fill_blank")return typeof value==="string";
+ if(type==="numeric")return typeof value==="number"&&Number.isFinite(value);
+ if(type==="matching"){const left=Array.isArray(question.promptData?.left)?question.promptData.left:[],right=Array.isArray(question.promptData?.right)?question.promptData.right:[];return Array.isArray(value)&&value.length===left.length&&value.every(v=>v===null||Number.isInteger(v)&&Number(v)>=0&&Number(v)<right.length);}
+ return false;
+}
 function practiceAnswersKey(attemptId: number | string): string { return `arctester-practice-answers-${attemptId}`; }
 type Result = PracticeResult;
 
@@ -77,7 +86,7 @@ export default function App() {
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<number, unknown>>({});
   const [practiceLocalSaveAvailable, setPracticeLocalSaveAvailable] = useState(false);
   const isOnline = useContext(OnlineStatusContext);
   const [practiceClock, setPracticeClock] = useState(0);
@@ -157,7 +166,7 @@ export default function App() {
       .then((restored) => {
         if (cancelled || !restored || !Array.isArray(restored.questions)) return;
         const savedAnswers = safeStorage.getItem(practiceAnswersKey(attemptId));
-        let answersFromStorage: Record<number, number> = {};
+        let answersFromStorage: Record<number, unknown> = {};
         if (savedAnswers) {
           try {
             const parsed: unknown = JSON.parse(savedAnswers);
@@ -166,10 +175,10 @@ export default function App() {
               answersFromStorage = Object.fromEntries(
                 Object.entries(parsed).flatMap(([questionId, value]) => {
                   const question = validQuestions.get(questionId);
-                  if (!question || !Number.isInteger(value) || Number(value) < 0 || Number(value) >= question.options.length) {
+                  if (!question || !validPracticeAnswer(question, value)) {
                     return [];
                   }
-                  return [[Number(questionId), Number(value)] as const];
+                  return [[Number(questionId), value] as const];
                 }),
               );
             }
@@ -179,8 +188,11 @@ export default function App() {
         }
         const answersFromServer = Object.fromEntries(
           (Array.isArray(restored.saved) ? restored.saved : [])
-            .filter((answer) => answer.selectedIndex !== null)
-            .map((answer) => [answer.questionId, answer.selectedIndex as number]),
+            .flatMap((answer) => {
+              const response = answer.response !== undefined ? answer.response : answer.selectedIndex;
+              const question = restored.questions.find((item) => item.id === answer.questionId);
+              return question && response !== null && validPracticeAnswer(question, response) ? [[answer.questionId, response] as const] : [];
+            }),
         );
         const mergedAnswers = { ...answersFromServer, ...answersFromStorage };
         setAnswers(mergedAnswers);
@@ -323,9 +335,9 @@ export default function App() {
     void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty));
   }
 
-  function selectPracticeAnswer(questionId: number, selectedIndex: number) {
+  function selectPracticeAnswer(questionId: number, response: unknown) {
     if (!test) return;
-    const next = { ...answers, [questionId]: selectedIndex };
+    const next = { ...answers, [questionId]: response };
     setAnswers(next);
     const saved = safeStorage.setItem(practiceAnswersKey(test.attemptId), JSON.stringify(next));
     setPracticeLocalSaveAvailable(saved);
@@ -344,7 +356,7 @@ export default function App() {
         body: JSON.stringify({
           answers: test.questions.map((question) => ({
             questionId: question.id,
-            selectedIndex: answers[question.id] ?? null,
+            response: answers[question.id] ?? null,
           })),
         }),
       });
@@ -381,7 +393,7 @@ export default function App() {
     const attemptId = test.attemptId;
     const snapshot = test.questions.map((question) => ({
       questionId: question.id,
-      selectedIndex: answers[question.id] ?? null,
+      response: answers[question.id] ?? null,
     }));
     const timer = window.setTimeout(() => {
       setPracticeSyncStatus("saving");
@@ -412,7 +424,7 @@ export default function App() {
         const incoming = Object.fromEntries(
           Object.entries(parsed).flatMap(([questionId, value]) => {
             const question = validQuestions.get(questionId);
-            if (!question || !Number.isInteger(value) || Number(value) < 0 || Number(value) >= question.options.length) {
+            if (!question || !validPracticeAnswer(question, value)) {
               return [];
             }
             return [[Number(questionId), Number(value)] as const];

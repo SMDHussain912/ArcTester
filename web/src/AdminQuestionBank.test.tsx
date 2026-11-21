@@ -81,7 +81,7 @@ describe("AdminQuestionBank", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(onReviewQuestion).toHaveBeenCalledWith(7, "APPROVED", "AP ECET CSE syllabus, Unit 1");
     fireEvent.click(screen.getByRole("button", { name: "Approve selected" }));
-    expect(onBulkReview).toHaveBeenCalledWith("APPROVED");
+    expect(onBulkReview).toHaveBeenCalledWith("APPROVED", [{ id: 7, source: "AP ECET CSE syllabus, Unit 1" }]);
   });
 
 });

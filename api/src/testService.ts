@@ -6,11 +6,11 @@ import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
+import { gradeQuestion, type QuestionType } from "./questionTypes.js";
 import {
   nextStat,
   selectMockTest,
   selectQuestions,
-  type AnswerOutcome,
   type QuestionStat,
   type Shortfall,
   type StatsById,
@@ -73,7 +73,8 @@ export const SubmitTestSchema = z.object({
     .array(
       z.object({
         questionId: z.number().int().positive(),
-        selectedIndex: z.number().int().min(0).max(3).nullable(),
+        selectedIndex: z.number().int().min(0).max(3).nullable().optional(),
+        response: z.unknown().optional(),
       })
     )
     .min(1, "at least one answer is required")
@@ -86,6 +87,8 @@ export interface PublicQuestion {
   topic: string | null;
   text: string;
   options: string[];
+  questionType: QuestionType;
+  promptData: Record<string, unknown>;
 }
 
 export interface CreatedTest {
@@ -133,6 +136,8 @@ function toPublicQuestion(row: {
   topic: string | null;
   text: string;
   options: string;
+  questionType: string;
+  promptData: string;
 }): PublicQuestion {
   return {
     id: row.id,
@@ -140,6 +145,8 @@ function toPublicQuestion(row: {
     topic: row.topic,
     text: row.text,
     options: decodeOptions(row.options),
+    questionType: row.questionType as QuestionType,
+    promptData: JSON.parse(row.promptData) as Record<string, unknown>,
   };
 }
 
@@ -159,11 +166,6 @@ async function loadStats(
     stats[String(row.questionId)] = stat;
   }
   return stats;
-}
-
-function outcomeOf(selectedIndex: number | null, correctIndex: number): AnswerOutcome {
-  if (selectedIndex === null) return "unanswered";
-  return selectedIndex === correctIndex ? "correct" : "wrong";
 }
 
 /** Build a test, persist the Attempt + its question links, return sanitized set. */
@@ -350,6 +352,9 @@ export async function createTest(
       options: true,
       correctIndex: true,
       explanation: true,
+      questionType: true,
+      promptData: true,
+      answerData: true,
       difficulty: true,
       subject: { select: { name: true } },
       topic: { select: { name: true } },
@@ -384,6 +389,10 @@ export async function createTest(
           optionsSnapshot: snapshot.options,
           correctIndexSnapshot: snapshot.correctIndex,
           explanationSnapshot: snapshot.explanation,
+          questionTypeSnapshot: snapshot.questionType,
+          promptDataSnapshot: snapshot.promptData,
+          answerDataSnapshot: snapshot.answerData,
+          responseSnapshot: "null",
         };
       }),
     });
@@ -405,6 +414,8 @@ export async function createTest(
           topic: d.topic?.name ?? null,
           text: d.text,
           options: d.options,
+          questionType: d.questionType,
+          promptData: d.promptData,
         })
       ),
     warnings,
@@ -421,7 +432,7 @@ export async function submitTest(
 ): Promise<SubmitSummary> {
   const attempt = await db.attempt.findFirst({
     where: { id: attemptId, userId },
-    include: { answers: { select: { id: true, questionId: true, correctIndexSnapshot: true } } },
+    include: { answers: { select: { id: true, questionId: true, correctIndexSnapshot: true, questionTypeSnapshot: true, answerDataSnapshot: true } } },
   });
   if (!attempt) throw notFound("Test not found.");
   if (attempt.finishedAt) throw conflict("This test was already submitted.");
@@ -436,17 +447,17 @@ export async function submitTest(
     }
   }
 
-  const correctById = new Map(attempt.answers.map((answer) => [answer.questionId, answer.correctIndexSnapshot]));
-  const chosenById = new Map(input.answers.map((a) => [a.questionId, a.selectedIndex]));
+  const answerById = new Map(attempt.answers.map((answer) => [answer.questionId, answer]));
+  const responseById = new Map(input.answers.map((a) => [a.questionId, a.response !== undefined ? a.response : a.selectedIndex ?? null]));
 
   let score = 0;
   const rows = [...memberIds].map((questionId) => {
-    const chosen = chosenById.has(questionId)
-      ? (chosenById.get(questionId) as number | null)
-      : null;
-    const correct = chosen !== null && chosen === correctById.get(questionId);
+    const response = responseById.has(questionId) ? responseById.get(questionId) : null;
+    const snapshot = answerById.get(questionId)!;
+    const chosen = typeof response === "number" ? response : null;
+    const correct = gradeQuestion(snapshot.questionTypeSnapshot as QuestionType, snapshot.correctIndexSnapshot, JSON.parse(snapshot.answerDataSnapshot), response);
     if (correct) score += 1;
-    return { questionId, chosen, isCorrect: correct };
+    return { questionId, chosen, response, isCorrect: correct };
   });
 
   const expired = attempt.deadline ? now.getTime() > attempt.deadline.getTime() : false;
@@ -463,7 +474,7 @@ export async function submitTest(
     for (const row of rows) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: row.questionId },
-        data: { chosen: row.chosen, isCorrect: row.isCorrect },
+        data: { chosen: row.chosen, isCorrect: row.isCorrect, responseSnapshot: JSON.stringify(row.response) },
       });
     }
 
@@ -473,7 +484,7 @@ export async function submitTest(
       });
       const next = nextStat(
         prev ? { seen: prev.seen, wrong: prev.wrong, lastSeen: prev.lastSeen } : undefined,
-        outcomeOf(row.chosen, correctById.get(row.questionId) ?? 0),
+        row.isCorrect ? "correct" : row.response === null ? "unanswered" : "wrong",
         now,
       );
       await tx.stat.upsert({
@@ -513,7 +524,7 @@ export async function saveTestAnswers(
     for (const answer of input.answers) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: answer.questionId },
-        data: { chosen: answer.selectedIndex },
+        data: { chosen: answer.selectedIndex ?? (typeof answer.response === "number" ? answer.response : null), responseSnapshot: JSON.stringify(answer.response !== undefined ? answer.response : answer.selectedIndex ?? null) },
       });
     }
   });
@@ -535,6 +546,10 @@ export interface ResultQuestion {
   relatedConcepts: { slug: string; title: string }[];
   text: string;
   options: string[];
+  questionType: QuestionType;
+  promptData: Record<string, unknown>;
+  answerData: Record<string, unknown>;
+  response: unknown;
   selectedIndex: number | null;
   correctIndex: number;
   isCorrect: boolean;
@@ -572,13 +587,13 @@ export async function getResult(
   let unanswered = 0;
   const questions: ResultQuestion[] = attempt.answers.map((a) => {
     if (a.isCorrect) score += 1;
-    else if (a.chosen === null) unanswered += 1;
+    else if (JSON.parse(a.responseSnapshot) === null && a.chosen === null) unanswered += 1;
     else incorrect += 1;
     const subject = a.subjectSnapshot;
     const entry = breakdown.get(subject) ?? { correct: 0, incorrect: 0, unanswered: 0, total: 0 };
     entry.total += 1;
     if (a.isCorrect) entry.correct += 1;
-    else if (a.chosen === null) entry.unanswered += 1;
+    else if (JSON.parse(a.responseSnapshot) === null && a.chosen === null) entry.unanswered += 1;
     else entry.incorrect += 1;
     breakdown.set(subject, entry);
     return {
@@ -588,6 +603,10 @@ export async function getResult(
       relatedConcepts: getLearningConceptsForTopic(a.topicSnapshot),
       text: a.textSnapshot,
       options: decodeOptions(a.optionsSnapshot),
+      questionType: a.questionTypeSnapshot as QuestionType,
+      promptData: JSON.parse(a.promptDataSnapshot) as Record<string, unknown>,
+      answerData: JSON.parse(a.answerDataSnapshot) as Record<string, unknown>,
+      response: JSON.parse(a.responseSnapshot) ?? a.chosen,
       selectedIndex: a.chosen,
       correctIndex: a.correctIndexSnapshot,
       isCorrect: a.isCorrect,
@@ -615,7 +634,7 @@ export interface AttemptView {
   serverNow: string;
   questions: PublicQuestion[];
   /** Saved selections so a refresh can restore the paper. */
-  saved: { questionId: number; selectedIndex: number | null }[];
+  saved: { questionId: number; selectedIndex: number | null; response: unknown }[];
 }
 
 /** In-progress attempt for restore-on-refresh. 404 if missing, 409 if submitted. */
@@ -647,11 +666,14 @@ export async function getAttemptView(
         topic: answer.topicSnapshot,
         text: answer.textSnapshot,
         options: answer.optionsSnapshot,
+        questionType: answer.questionTypeSnapshot,
+        promptData: answer.promptDataSnapshot,
       })
     ),
     saved: attempt.answers.map((a) => ({
       questionId: a.questionId,
       selectedIndex: a.chosen,
+      response: JSON.parse(a.responseSnapshot),
     })),
   };
 }

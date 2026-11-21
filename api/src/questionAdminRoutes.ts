@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
+import { QuestionInputSchema, QUESTION_TYPES, encodeOptions, hashQuestion } from "./questions.js";
 
 const ListSchema = z.object({
   q: z.string().trim().max(300).optional(),
@@ -16,7 +16,19 @@ const ListSchema = z.object({
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
-const UpdateSchema = QuestionInputSchema.partial().refine((value) => Object.keys(value).length > 0);
+const UpdateSchema = z.object({
+  subject: z.string().trim().min(1).optional(),
+  topic: z.string().trim().min(1).optional(),
+  text: z.string().trim().min(1).optional(),
+  options: z.array(z.string().trim()).optional(),
+  correctIndex: z.number().int().min(0).optional(),
+  explanation: z.string().optional(),
+  source: z.string().optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+  questionType: z.enum(QUESTION_TYPES).optional(),
+  promptData: z.record(z.string(), z.unknown()).optional(),
+  answerData: z.record(z.string(), z.unknown()).optional(),
+}).refine((value) => Object.keys(value).length > 0);
 const BulkSchema = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) });
 const ReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
 const AP_ECET_SUBJECT_QUOTAS: Record<string, number> = { Mathematics: 50, Physics: 25, Chemistry: 25, "Digital Electronics": 6, "Software Engineering": 6, "Computer Organisation and Microprocessors": 8, "Data Structures through C": 10, "Computer Networks": 6, "Operating Systems": 10, DBMS: 8, "Java Programming": 10, "Web Technologies": 8, "Big-data & Cloud Computing": 6, "Android Programming": 6, "Internet Of Things(IoT)": 8, "Python Programming": 8 };
@@ -57,16 +69,34 @@ export function questionAdminRouter(db: PrismaClient): Router {
 
   router.patch("/admin/questions/review/bulk", async (req, res, next) => {
     try {
-      const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500), status: ReviewStatusSchema }).parse(req.body);
+      const input = z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+        status: ReviewStatusSchema,
+        sources: z.array(z.object({ id: z.number().int().positive(), source: z.string().trim().max(500) })).optional(),
+      }).parse(req.body);
       if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
+      const sources = input.sources ?? [];
+      if (new Set(sources.map((item) => item.id)).size !== sources.length) return next(badRequest("Question source entries must have unique IDs."));
+      if (sources.some((item) => !input.ids.includes(item.id))) return next(badRequest("Sources may only be supplied for selected questions."));
+      const sourceById = new Map(sources.map((item) => [item.id, item.source.trim()]));
       const result = await db.$transaction(async (tx) => {
         const questions = await tx.question.findMany({ where: { id: { in: input.ids } }, select: { id: true, source: true } });
         if (questions.length !== input.ids.length) throw badRequest("One or more selected questions do not exist.");
         if (input.status === "APPROVED") {
-          const missingSource = questions.filter((question) => !hasReviewableSource(question.source)).map((question) => question.id);
-          if (missingSource.length) throw badRequest("Add a real source before approving every selected question. Missing source for: " + missingSource.join(", ") + ".");
+          const missingSource = questions.filter((question) => {
+            const source = sourceById.get(question.id) ?? question.source;
+            return !hasReviewableSource(source);
+          }).map((question) => question.id);
+          if (missingSource.length) throw badRequest("Add a real source for every selected question before bulk approval. Missing source for: " + missingSource.join(", ") + ".");
         }
-        return tx.question.updateMany({ where: { id: { in: input.ids } }, data: { reviewStatus: input.status } });
+        for (const question of questions) {
+          const source = sourceById.get(question.id);
+          await tx.question.update({ where: { id: question.id }, data: {
+            reviewStatus: input.status,
+            ...(source === undefined ? {} : { source }),
+          } });
+        }
+        return { count: questions.length };
       });
       res.json({ ok: true, updated: result.count, reviewStatus: input.status });
     } catch (error) { next(error); }
@@ -109,7 +139,8 @@ export function questionAdminRouter(db: PrismaClient): Router {
       ]);
       res.json({ ok: true, total, page: filter.page, limit: filter.limit, pages: Math.ceil(total / filter.limit),
         questions: questions.map((q) => ({ id: q.id, subject: q.subject.name, topic: q.topic?.name ?? "General",
-          text: q.text, options: JSON.parse(q.options), correctIndex: q.correctIndex,
+          text: q.text, options: JSON.parse(q.options), questionType: q.questionType,
+          promptData: JSON.parse(q.promptData), answerData: JSON.parse(q.answerData), correctIndex: q.correctIndex,
           explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, createdAt: q.createdAt })) });
     } catch (error) { next(error); }
   });
@@ -175,6 +206,9 @@ export function questionAdminRouter(db: PrismaClient): Router {
         text: patch.text ?? existing.text,
         options: patch.options ?? JSON.parse(existing.options),
         correctIndex: patch.correctIndex ?? existing.correctIndex,
+        questionType: patch.questionType ?? existing.questionType,
+        promptData: patch.promptData ?? JSON.parse(existing.promptData),
+        answerData: patch.answerData ?? JSON.parse(existing.answerData),
         explanation: patch.explanation ?? existing.explanation,
         source: patch.source ?? existing.source,
         difficulty: patch.difficulty ?? existing.difficulty,
@@ -184,7 +218,9 @@ export function questionAdminRouter(db: PrismaClient): Router {
         create: { subjectId: subject.id, name: merged.topic }, update: {} });
       const updated = await db.question.update({ where: { id }, data: {
         subjectId: subject.id, topicId: topic.id, text: merged.text, options: encodeOptions(merged.options),
-        correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source,
+        correctIndex: merged.correctIndex, questionType: merged.questionType,
+        promptData: JSON.stringify(merged.promptData), answerData: JSON.stringify(merged.answerData),
+        explanation: merged.explanation, source: merged.source,
         difficulty: merged.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(merged.text),
       }, include: { subject: true, topic: true } });
       res.json({ ok: true, question: updated });

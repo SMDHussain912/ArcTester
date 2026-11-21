@@ -81,10 +81,14 @@ describe("question review workflow and student approval boundary", () => {
   });
 
   it("bulk approval is atomic and refuses any question without a real source", async () => {
-    const result = await patchJson(server.baseUrl + "/admin/questions/review/bulk", { ids: [draftId, rejectedId], status: "APPROVED" }, adminCookie);
+    const result = await patchJson(server.baseUrl + "/admin/questions/review/bulk", { ids: [draftId, rejectedId], status: "APPROVED", sources: [{ id: draftId, source: "Verified source for draft fixture" }] }, adminCookie);
     expect(result.status).toBe(400);
+    expect(String(result.json.error)).toContain("every selected question");
     const [draft, rejected] = await Promise.all([server.db.question.findUniqueOrThrow({ where: { id: draftId } }), server.db.question.findUniqueOrThrow({ where: { id: rejectedId } })]);
     expect(draft.reviewStatus).toBe("APPROVED");
     expect(rejected.reviewStatus).toBe("REJECTED");
+    const approved = await patchJson(server.baseUrl + "/admin/questions/review/bulk", { ids: [draftId, rejectedId], status: "APPROVED", sources: [{ id: draftId, source: "Verified source for draft fixture" }, { id: rejectedId, source: "Verified source for rejected fixture" }] }, adminCookie);
+    expect(approved.status).toBe(200);
+    expect(approved.json).toMatchObject({ ok: true, updated: 2, reviewStatus: "APPROVED" });
   });
 });

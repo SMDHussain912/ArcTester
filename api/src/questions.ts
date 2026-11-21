@@ -1,58 +1,15 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-
-// Validated strings instead of Prisma enums: SQLite has no enum type, and
-// keeping these as strings avoids a second source of truth. Zod is the guard.
-
-export const DIFFICULTIES = ["easy", "medium", "hard"] as const;
-export const IMPORT_SOURCES = ["base", "json", "csv"] as const;
-
-export const OptionsSchema = z
-  .array(z.string().trim().min(1, "each option must be non-empty"))
-  .length(4, "exactly 4 options are required");
-
-export const QuestionInputSchema = z.object({
-  subject: z.string().trim().min(1, "subject is required"),
-  topic: z.string().trim().min(1).optional().default("General"),
-  text: z.string().trim().min(1, "question text is required"),
-  options: OptionsSchema,
-  correctIndex: z.number().int().min(0).max(3, "correctIndex must be 0-3"),
-  explanation: z.string().default(""),
-  source: z.string().default(""),
-  difficulty: z.enum(DIFFICULTIES).default("medium"),
-});
-
-export type QuestionInput = z.infer<typeof QuestionInputSchema>;
-
-/** BASE-array row: [subject, text, [4 options], correctIndex, explanation?] */
-export const BaseRowSchema = z
-  .tuple([
-    z.string().trim().min(1),
-    z.string().trim().min(1),
-    OptionsSchema,
-    z.number().int().min(0).max(3),
-    z.string().optional().default(""),
-  ])
-  .rest(z.unknown());
-
-export const JsonImportSchema = z.array(BaseRowSchema).min(1, "JSON must be a non-empty list");
-
-/** Collapse "  extra   spaces " -> "extra spaces", then lowercase. */
-export function normalizeText(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-/** Stable unique key for duplicate detection. */
-export function hashQuestion(text: string): string {
-  return createHash("sha256").update(normalizeText(text)).digest("hex");
-}
-
-/** Storage form: JSON string of the 4 options (SQLite has no array column). */
-export function encodeOptions(options: string[]): string {
-  return JSON.stringify(options);
-}
-
-export function decodeOptions(raw: string): string[] {
-  const parsed: unknown = JSON.parse(raw);
-  return OptionsSchema.parse(parsed);
-}
+export const QUESTION_TYPES = ["mcq", "multi_select", "true_false", "fill_blank", "numeric", "matching"] as const;
+export type QuestionType = typeof QUESTION_TYPES[number];
+export const DIFFICULTIES=["easy","medium","hard"] as const;
+export const IMPORT_SOURCES=["base","json","csv"] as const;
+export const OptionsSchema=z.array(z.string().trim());
+export const QuestionInputSchema=z.object({subject:z.string().trim().min(1,"subject is required"),topic:z.string().trim().min(1).optional().default("General"),text:z.string().trim().min(1,"question text is required"),options:OptionsSchema.default([]),correctIndex:z.number().int().min(0).default(0),explanation:z.string().default(""),source:z.string().default(""),difficulty:z.enum(DIFFICULTIES).default("medium"),questionType:z.enum(QUESTION_TYPES).default("mcq"),promptData:z.record(z.string(),z.unknown()).default({}),answerData:z.record(z.string(),z.unknown()).default({})}).superRefine((v,ctx)=>{const issue=(path:(string|number)[],message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,path,message});if(v.questionType==="mcq"&&(v.options.length!==4||v.options.some(x=>!x)||v.correctIndex>3))issue(["options"],"MCQ requires four non-empty options and correctIndex 0-3.");if(v.questionType==="multi_select"&&(v.options.length!==4||v.options.some(x=>!x)||!Array.isArray(v.answerData.correctIndices)||v.answerData.correctIndices.length<1||!v.answerData.correctIndices.every(x=>Number.isInteger(x)&&Number(x)>=0&&Number(x)<4)||new Set(v.answerData.correctIndices).size!==v.answerData.correctIndices.length))issue(["answerData"],"Multi-select requires four options and unique correctIndices 0-3.");if(v.questionType==="true_false"&&(v.options.length!==2||v.options.some(x=>!x)||v.correctIndex>1))issue(["options"],"True/false requires two options and correctIndex 0-1.");if(v.questionType==="fill_blank"&&(v.options.length!==0||!Array.isArray(v.answerData.acceptedAnswers)||!v.answerData.acceptedAnswers.length||!v.answerData.acceptedAnswers.every(x=>typeof x==="string"&&x.trim())))issue(["answerData"],"Fill blank requires acceptedAnswers and no options.");if(v.questionType==="numeric"&&(v.options.length!==0||typeof v.answerData.value!=="number"||!Number.isFinite(v.answerData.value)||(v.answerData.tolerance!==undefined&&(typeof v.answerData.tolerance!=="number"||!Number.isFinite(v.answerData.tolerance)||v.answerData.tolerance<0))))issue(["answerData"],"Numeric requires a finite answer, non-negative tolerance and no options.");if(v.questionType==="matching"){const l=v.promptData.left,r=v.promptData.right,p=v.answerData.pairs;if(v.options.length!==0||!Array.isArray(l)||!Array.isArray(r)||l.length<2||l.length!==r.length||!l.every(x=>typeof x==="string"&&x.trim())||!r.every(x=>typeof x==="string"&&x.trim())||!Array.isArray(p)||p.length!==l.length||!p.every(x=>Array.isArray(x)&&x.length===2&&Number.isInteger(x[0])&&Number(x[0])>=0&&Number(x[0])<l.length&&Number.isInteger(x[1])&&Number(x[1])>=0&&Number(x[1])<r.length))issue(["promptData"],"Matching requires equal left/right lists and valid answer pairs.");}});
+export type QuestionInput=z.infer<typeof QuestionInputSchema>;
+export const BaseRowSchema=z.tuple([z.string().trim().min(1),z.string().trim().min(1),z.array(z.string().trim().min(1)).length(4),z.number().int().min(0).max(3),z.string().optional().default("")]).rest(z.unknown());
+export const JsonImportSchema=z.array(BaseRowSchema).min(1,"JSON must be a non-empty list");
+export function normalizeText(value:string):string{return value.trim().replace(/\s+/g," ").toLowerCase();}
+export function hashQuestion(text:string):string{return createHash("sha256").update(normalizeText(text)).digest("hex");}
+export function encodeOptions(options:string[]):string{return JSON.stringify(options);}
+export function decodeOptions(raw:string):string[]{const parsed:unknown=JSON.parse(raw);if(!Array.isArray(parsed)||!parsed.every(x=>typeof x==="string"))throw new Error("Question options are invalid.");return parsed;}

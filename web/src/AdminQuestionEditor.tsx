@@ -1,28 +1,16 @@
 import type { FormEvent } from "react";
-
-export type AdminQuestionForm = { subject: string; topic: string; text: string; a: string; b: string; c: string; d: string; correctIndex: string; difficulty: string; explanation: string; source: string };
-export type AdminQuestionFormField = keyof AdminQuestionForm;
-type AdminQuestionEditorProps = {
-  form: AdminQuestionForm;
-  editing: boolean;
-  busy: boolean;
-  onChange: (field: AdminQuestionFormField, value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onBack: () => void;
-};
-
-export default function AdminQuestionEditor({ form, editing, busy, onChange, onSubmit, onBack }: AdminQuestionEditorProps) {
-  return (
-    <>
-      <div className="admin-page-title"><div><p className="eyebrow">QUESTION AUTHORING</p><h1>{editing ? "Edit question" : "Add a question"}</h1><p>Write a complete MCQ, set its answer key and attach it to the right subject and topic.</p></div><button className="ghost" onClick={onBack}>Back to bank</button></div>
-      <form className="admin-panel question-editor" onSubmit={onSubmit}>
-        <div className="builder-fields"><label>Subject<input required value={form.subject} onChange={(event) => onChange("subject", event.target.value)} /></label><label>Topic<input required value={form.topic} onChange={(event) => onChange("topic", event.target.value)} /></label><label>Difficulty<select value={form.difficulty} onChange={(event) => onChange("difficulty", event.target.value)}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label></div>
-        <label>Question text<textarea required value={form.text} onChange={(event) => onChange("text", event.target.value)} placeholder="Enter the full question statement…" /></label>
-        <div className="option-editor-grid">{(["a", "b", "c", "d"] as const).map((key, index) => <label key={key}>Option {String.fromCharCode(65 + index)}<input required value={form[key]} onChange={(event) => onChange(key, event.target.value)} /></label>)}</div>
-        <div className="builder-fields"><label>Correct answer<select value={form.correctIndex} onChange={(event) => onChange("correctIndex", event.target.value)}>{[0, 1, 2, 3].map((index) => <option value={index} key={index}>Option {String.fromCharCode(65 + index)}</option>)}</select></label><label>Source / year<input value={form.source} onChange={(event) => onChange("source", event.target.value)} /></label></div>
-        <label>Explanation<textarea value={form.explanation} onChange={(event) => onChange("explanation", event.target.value)} /></label>
-        <div className="editor-actions"><button type="button" className="ghost" onClick={onBack}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Add to question bank"}</button></div>
-      </form>
-    </>
-  );
+export type AdminQuestionForm = { subject:string;topic:string;text:string;a:string;b:string;c:string;d:string;correctIndex:string;difficulty:string;explanation:string;source:string;questionType:string;promptData:string;answerData:string };
+export type AdminQuestionFormField=keyof AdminQuestionForm;
+type Props={form:AdminQuestionForm;editing:boolean;busy:boolean;onChange:(field:AdminQuestionFormField,value:string)=>void;onSubmit:(event:FormEvent<HTMLFormElement>)=>void;onBack:()=>void};
+export default function AdminQuestionEditor({form,editing,busy,onChange,onSubmit,onBack}:Props){
+ const choice=form.questionType==="mcq"||form.questionType==="multi_select"||form.questionType==="true_false";
+ const optionKeys=(form.questionType==="true_false"?["a","b"]:["a","b","c","d"]) as ("a"|"b"|"c"|"d")[];
+ return <><div className="admin-page-title"><div><p className="eyebrow">QUESTION AUTHORING</p><h1>{editing?"Edit question":"Add a question"}</h1><p>Choose a response format, define the prompt and provide its answer data.</p></div><button className="ghost" onClick={onBack}>Back to bank</button></div>
+ <form className="admin-panel question-editor" onSubmit={onSubmit}>
+ <div className="builder-fields"><label>Subject<input required value={form.subject} onChange={e=>onChange("subject",e.target.value)}/></label><label>Topic<input required value={form.topic} onChange={e=>onChange("topic",e.target.value)}/></label><label>Difficulty<select value={form.difficulty} onChange={e=>onChange("difficulty",e.target.value)}><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label><label>Question type<select value={form.questionType} onChange={e=>onChange("questionType",e.target.value)}><option value="mcq">Single choice</option><option value="multi_select">Multiple select</option><option value="true_false">True / false</option><option value="fill_blank">Fill in the blank</option><option value="numeric">Numeric answer</option><option value="matching">Matching</option></select></label></div>
+ <label>Question text<textarea required value={form.text} onChange={e=>onChange("text",e.target.value)} placeholder="Enter the full question statement…"/></label>
+ {choice?<><div className="option-editor-grid">{optionKeys.map((key,index)=><label key={key}>Option {String.fromCharCode(65+index)}<input required value={form[key]} onChange={e=>onChange(key,e.target.value)}/></label>)}</div>{form.questionType!=="multi_select"?<label>Correct answer<select value={form.correctIndex} onChange={e=>onChange("correctIndex",e.target.value)}>{optionKeys.map((key,index)=><option value={index} key={key}>Option {String.fromCharCode(65+index)}</option>)}</select></label>:<p className="muted">Enter the correct option indexes in Answer data JSON, e.g. {"{ \"correctIndices\": [0, 2] }"}.</p>}</>:null}
+ <div className="builder-fields"><label>Prompt data JSON<textarea value={form.promptData} onChange={e=>onChange("promptData",e.target.value)} placeholder='{"left":["A","B"],"right":["1","2"]}' /></label><label>Answer data JSON<textarea value={form.answerData} onChange={e=>onChange("answerData",e.target.value)} placeholder='{"acceptedAnswers":["..."]}' /></label></div>
+ <div className="builder-fields"><label>Source / year<input value={form.source} onChange={e=>onChange("source",e.target.value)}/></label><label>Explanation<textarea value={form.explanation} onChange={e=>onChange("explanation",e.target.value)}/></label></div>
+ <div className="editor-actions"><button type="button" className="ghost" onClick={onBack}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":editing?"Save changes":"Add to question bank"}</button></div></form></>;
 }

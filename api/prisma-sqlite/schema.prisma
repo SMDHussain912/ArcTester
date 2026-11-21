@@ -37,7 +37,10 @@ model Question {
   topic        Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
   topicId      Int?
   text         String
-  // JSON string of exactly 4 non-empty option strings (validated by Zod).
+  questionType String   @default("mcq")
+  promptData   String   @default("{}")
+  answerData   String   @default("{}")
+  // JSON-encoded options; empty for non-choice questions.
   options      String
   correctIndex Int
   explanation  String    @default("")
@@ -237,6 +240,10 @@ model AttemptAnswer {
   optionsSnapshot   String   @default("[]")
   correctIndexSnapshot Int   @default(0)
   explanationSnapshot String @default("")
+  questionTypeSnapshot String @default("mcq")
+  promptDataSnapshot String @default("{}")
+  answerDataSnapshot String @default("{}")
+  responseSnapshot String @default("null")
 
   @@index([attemptId])
   @@index([questionId])

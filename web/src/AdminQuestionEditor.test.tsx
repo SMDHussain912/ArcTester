@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 
-const form: AdminQuestionForm = { subject: "Mathematics", topic: "Algebra", text: "What is 2 + 2?", a: "1", b: "2", c: "3", d: "4", correctIndex: "3", difficulty: "easy", explanation: "Addition.", source: "Practice" };
+const form: AdminQuestionForm = { subject: "Mathematics", topic: "Algebra", text: "What is 2 + 2?", a: "1", b: "2", c: "3", d: "4", correctIndex: "3", difficulty: "easy", explanation: "Addition.", source: "Practice", questionType: "mcq", promptData: "{}", answerData: "{}" };
 
 describe("AdminQuestionEditor", () => {
   it("renders a complete MCQ form with edit state and answer key", () => {

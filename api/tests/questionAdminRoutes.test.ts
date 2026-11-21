@@ -293,6 +293,8 @@ describe("question administration route contracts", () => {
       content: JSON.stringify(payload),
     }, adminCookie)).json).toMatchObject({ report: { added: 0, duplicates: 1, total: 1, invalid: [] } });
 
+    const csvSubject = await server.db.subject.create({ data: { name: "Imported CSV Subject" } });
+    await server.db.topic.create({ data: { name: "Imported CSV Topic", subjectId: csvSubject.id } });
     const csv = [
       "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty",
       "Imported CSV Subject,Imported CSV Topic,Question imported through the CSV route,A,B,C,D,2,CSV route regression,Question admin route tests,easy",

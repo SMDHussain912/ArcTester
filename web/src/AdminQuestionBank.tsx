@@ -1,5 +1,5 @@
 import { useState } from "react";
-export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string; reviewStatus?: "DRAFT" | "APPROVED" | "REJECTED" };
+export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string; questionType?: string; promptData?: Record<string, unknown>; answerData?: Record<string, unknown>; reviewStatus?: "DRAFT" | "APPROVED" | "REJECTED" };
 export type QuestionReviewProgress = { subjects: Array<{ subject: string; paperQuota: number; requiredQuota: number; drafted: number; approved: number; rejected: number; remaining: number }>; totals: { drafted: number; approved: number; rejected: number; requiredQuota: number; remaining: number } };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
 type Topic = { id: number; name: string; _count: { questions: number } };
@@ -16,7 +16,7 @@ type AdminQuestionBankProps = {
   reviewProgress?: QuestionReviewProgress | null;
   onReviewStatusChange?: (value: string) => void;
   onReviewQuestion?: (id: number, status: "APPROVED" | "REJECTED", source: string) => void;
-  onBulkReview?: (status: "APPROVED" | "REJECTED") => void;
+  onBulkReview?: (status: "APPROVED" | "REJECTED", sources: Array<{ id: number; source: string }>) => void;
   catalog: AdminQuestionCatalogSubject[];
   filteredTopics: Topic[];
   selected: number[];
@@ -37,6 +37,13 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [sourceDrafts, setSourceDrafts] = useState<Record<number, string>>({});
   const pageCount = Math.max(1, Math.ceil(total / 25));
+  const bulkReviewSources = selected.map((id) => {
+    const question = questions.find((item) => item.id === id);
+    return { id, source: (sourceDrafts[id] ?? question?.source ?? "").trim() };
+  });
+  const bulkReviewReady = selected.length > 0 && bulkReviewSources.length === selected.length &&
+    bulkReviewSources.every((item) => item.source.length > 0 && item.source.toUpperCase() !== "NEEDS HUMAN REVIEW");
+
   function confirmDeleteSelected() {
     if (!selected.length) return;
     if (!window.confirm(`Delete ${selected.length} selected question(s)? Questions used in historical attempts will be protected.`)) return;
@@ -65,7 +72,7 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
           <select id="bulk-question-difficulty" aria-label="Selected question difficulty" value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as "easy" | "medium" | "hard")} disabled={!selected.length || busy}>
             <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
           </select>
-          <button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkDifficultyChange(bulkDifficulty)}>Update difficulty ({selected.length})</button><button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkReview("APPROVED")}>Approve selected</button><button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkReview("REJECTED")}>Reject selected</button>
+          <button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkDifficultyChange(bulkDifficulty)}>Update difficulty ({selected.length})</button><button className="ghost" title="Every selected question needs a real source. Select questions on this page and fill their source fields." disabled={!bulkReviewReady || busy} onClick={() => onBulkReview("APPROVED", bulkReviewSources)}>Approve selected</button><button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkReview("REJECTED", bulkReviewSources.filter((item) => item.source))}>Reject selected</button>
           <button className="ghost danger-button" disabled={!selected.length || busy} onClick={confirmDeleteSelected}>Delete selected ({selected.length})</button>
         </div></div>
         {questions.length === 0 ? <div className="empty-state"><b>No questions match these filters</b><span>Upload a question set or add the first question.</span></div> : questions.map((question) => (
