@@ -433,7 +433,7 @@ export default function App() {
                 setPendingSubmitRequested(false);
                 setTest((current) => current?.attemptId === item.attemptId ? null : current);
                 if (item.submitRequested || test?.attemptId === item.attemptId) setResult(completed);
-            void refreshGamification();
+                void refreshGamification();
                 setLessonSession(false);
                 setError("");
                 madeProgress = true;
@@ -467,7 +467,7 @@ export default function App() {
             setPendingSubmitRequested(false);
             setTest((current) => current?.attemptId === item.attemptId ? null : current);
             setResult(completed);
-                void refreshGamification();
+            void refreshGamification();
             setLessonSession(false);
             setError("");
             madeProgress = true;
@@ -1461,7 +1461,7 @@ export default function App() {
                   <Text style={[styles.primaryText, { color: "#ffffff" }]}>Daily challenge</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>10 mixed questions · same set for everyone today (UTC) · 10 XP once per day</Text>
+              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>10 approved questions · rotates daily (UTC) · daily XP reward</Text>
             </View>
             <LessonLaunchCard
               subjects={bank?.subjects ?? []}
