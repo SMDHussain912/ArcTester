@@ -5,7 +5,13 @@
     "primary": "#3159D8",
     "primaryPressed": "#2447B8",
     "primarySoft": "#EAF0FF",
-    "onPrimary": "#FFFFFF"
+    "onPrimary": "#FFFFFF",
+    "dark": {
+      "primary": "#8FB1FF",
+      "primaryPressed": "#B5CAFF",
+      "primarySoft": "#203455",
+      "onPrimary": "#10234A"
+    }
   },
   "colors": {
     "light": {
