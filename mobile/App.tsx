@@ -832,6 +832,7 @@ export default function App() {
       }
     } catch (cause) {
       setLessonSession(false);
+      setSpeedRoundSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -898,7 +899,7 @@ export default function App() {
     const answered = Object.keys(answers).length;
     const unanswered = test.questions.length - answered;
     Alert.alert(
-      "Submit practice?",
+      speedRoundSession ? "Finish speed round?" : "Submit practice?",
       unanswered > 0
         ? `You answered ${answered} of ${test.questions.length} questions. ${unanswered} will be submitted unanswered.`
         : `You answered all ${test.questions.length} questions. Submit your practice now?`,
@@ -1249,7 +1250,7 @@ export default function App() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity disabled={busy} onPress={() => { if (lessonSession) { if (answers[test.questions[currentQuestionIndex]?.id] === undefined) { setError("Choose an answer before checking it."); return; } void submit(); } else confirmSubmit(); }} style={styles.examNext}>
-                  <Text style={styles.primaryText}>{busy ? (lessonSession ? "Checking…" : "Submitting…") : (lessonSession ? "Check answer" : "Submit practice")}</Text>
+                  <Text style={styles.primaryText}>{busy ? (lessonSession ? "Checking…" : "Submitting…") : (lessonSession ? "Check answer" : speedRoundSession ? "Finish speed round" : "Submit practice")}</Text>
                   <MaterialCommunityIcons name="check" size={19} color="#ffffff" />
                 </TouchableOpacity>
               )}
