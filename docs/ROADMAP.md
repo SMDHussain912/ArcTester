@@ -13,7 +13,7 @@
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
-| 7 | Responsive web learning-path/player/progress parity; simple admin | Part 1 in progress: web learning path |
+| 7 | Responsive web learning-path/player/progress parity; simple admin | Part 1 implemented on feature branch; exact-head CI pending |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
 | 10 | Final audit and honest completion/manual verification report | Not started |
