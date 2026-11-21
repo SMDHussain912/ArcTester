@@ -1,12 +1,7 @@
 import { Vibration } from "react-native";
+import { hapticPattern, type HapticKind } from "./feedbackPatterns";
 
-export type HapticKind = "success" | "error" | "complete";
-
-export function hapticPattern(kind: HapticKind): number[] {
-  if (kind === "error") return [0, 35, 25, 35];
-  if (kind === "complete") return [0, 25, 35, 25, 35, 45];
-  return [0, 25, 30, 25];
-}
+export { hapticPattern, type HapticKind } from "./feedbackPatterns";
 
 /** Optional, nonessential mobile vibration. Disabled by default by the caller. */
 export function triggerHapticFeedback(kind: HapticKind, enabled: boolean): boolean {
