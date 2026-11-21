@@ -13,7 +13,7 @@ export function unitTestCompletionScope(unitId: number, attemptKey: string): str
 /** Score only the exact question set for this checkpoint attempt. */
 export function scoreUnitTestAttempt(questionIds: number[], answers: UnitTestAnswerScoreInput[]): UnitTestAttemptScore {
   const required = new Set(questionIds);
-  const current = new Map(answers.filter((answer) => required.has(answer.questionId)).map((answer) => [answer.questionId, answer.isCorrect]));
+  const current = new Map<number, boolean>();\n  for (const answer of answers) if (required.has(answer.questionId)) current.set(answer.questionId, answer.isCorrect);
   const correct = [...required].filter((questionId) => current.get(questionId) === true).length;
   return { answeredCount: current.size, scorePct: required.size ? Math.round((correct / required.size) * 100) : 0 };
 }
