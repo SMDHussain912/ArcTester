@@ -20,7 +20,7 @@ describe("rule-based spaced repetition", () => {
 
   it("defines three actionable daily quests and five durable badges", () => {
     expect(DAILY_QUESTS.map((quest) => quest.key)).toEqual(["lesson", "practice", "mistakes"]);
-    expect(DAILY_QUESTS.every((quest) => quest.target > 0)).toBe(true);
+    expect(DAILY_QUESTS.every((quest) => quest.target > 0 && quest.rewardXp === 15)).toBe(true);
     expect(BADGES.map((badge) => badge.key)).toEqual(["first-lesson", "xp-100", "streak-7", "topic-master", "review-10"]);
   });
 });
