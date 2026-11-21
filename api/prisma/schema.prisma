@@ -98,6 +98,8 @@ model User {
   gamification UserGamification?
   xpEvents XpLedger[]
   gamificationDays GamificationDay[]
+  questionReviews UserQuestionReview[]
+  badges UserBadge[]
 }
 
 model Invitation {
@@ -584,4 +586,36 @@ model GamificationDay {
 
   @@unique([userId, date])
   @@index([userId, date])
+}
+
+
+// Per-user spaced repetition state. The interval is rule-based and never uses ML.
+model UserQuestionReview {
+  id              Int      @id @default(autoincrement())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId      Int
+  lastReviewedAt  DateTime?
+  nextReviewAt    DateTime @default(now())
+  intervalDays    Int      @default(0)
+  repetitions     Int      @default(0)
+  lastWasCorrect Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, lastReviewedAt])
+}
+
+model UserBadge {
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  badgeKey   String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, badgeKey])
+  @@index([userId, unlockedAt])
 }
