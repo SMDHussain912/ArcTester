@@ -28,6 +28,31 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     message: { error: "Lesson generation limit reached. Try again later." },
   });
 
+  router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      if (req.user?.role !== "STUDENT") {
+        return res.status(403).json({ error: "Published lessons are available to student accounts." });
+      }
+      const published = await db.lessonDraft.findMany({
+        where: { status: "PUBLISHED" },
+        orderBy: { updatedAt: "desc" },
+        take: 100,
+        select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true },
+      });
+      const lessons = published.flatMap((draft) => {
+        try {
+          const script = LessonScriptSchema.parse(JSON.parse(draft.scriptJson) as unknown);
+          const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
+          return [{ id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, script, storyboard }];
+        } catch {
+          // Never send malformed or unvalidated lesson data to student devices.
+          return [];
+        }
+      });
+      res.json({ ok: true, lessons });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/lesson-drafts", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const drafts = await db.lessonDraft.findMany({
