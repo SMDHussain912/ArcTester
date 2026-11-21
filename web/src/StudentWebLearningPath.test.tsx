@@ -11,7 +11,8 @@ describe("StudentWebLearningPath", () => {
     mockedRequest.mockReset();
     mockedRequest.mockImplementation(async (path) => {
       if (path === "/bank") return { total: 12, subjects: [{ subject: "Data Structures", count: 12, practiceCount: 12, topics: [{ topic: "Arrays", count: 5 }, { topic: "Trees", count: 7 }] }] };
-      return { practice: { subjects: [{ subject: "Data Structures", topic: "Arrays", seen: 2, correct: 1, wrong: 1, accuracy: 0.5 }] } };
+      if (path === "/analytics/weak-topics") return { subjects: [], topics: [{ subject: "Data Structures", topic: "Arrays", seen: 2, correct: 1, wrong: 1, accuracy: 0.5 }] };
+      return { practice: { subjects: [{ subject: "Data Structures", topic: null, seen: 2, correct: 1, wrong: 1, accuracy: 0.5 }] } };
     });
   });
 
