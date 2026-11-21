@@ -1193,7 +1193,7 @@ export default function App() {
                             <View style={[styles.optionLetter, selected && styles.optionLetterSelected, { borderRadius: 6 }]}>
                               <Text style={[styles.optionLetterText, selected && styles.optionLetterTextSelected]}>{selected ? "✓" : String.fromCharCode(65 + optionIndex)}</Text>
                             </View>
-                            <Text style={[styles.optionText, { flex: 1 }, darkMode && { color: "#e2e8f0" }]}>{option}</Text>
+                            <Text style={[styles.optionText, { flex: 1 }, selected && styles.optionTextSelected, darkMode && !selected && { color: "#e2e8f0" }]}>{option}</Text>
                             {selected && <MaterialCommunityIcons name="check-circle" size={20} color="#2563eb" />}
                           </View>
                         </TouchableOpacity>
@@ -1213,7 +1213,7 @@ export default function App() {
                         <View style={[styles.optionLetter, selected && styles.optionLetterSelected]}>
                           <Text style={[styles.optionLetterText, selected && styles.optionLetterTextSelected]}>{String.fromCharCode(65 + optionIndex)}</Text>
                         </View>
-                        <Text style={[styles.optionText, { flex: 1 }, darkMode && { color: "#e2e8f0" }]}>{option}</Text>
+                        <Text style={[styles.optionText, { flex: 1 }, selected && styles.optionTextSelected, darkMode && !selected && { color: "#e2e8f0" }]}>{option}</Text>
                         {selected && <MaterialCommunityIcons name="check-circle" size={20} color="#2563eb" />}
                       </View>
                     </TouchableOpacity>
@@ -1695,6 +1695,7 @@ const styles = StyleSheet.create({
   },
   optionSelected: { borderColor: mobilePalette.light.primary, backgroundColor: "#eff6ff" },
   optionText: { color: "#293449", lineHeight: 21 },
+  optionTextSelected: { color: "#1e3a8a", fontWeight: "700" },
   error: { color: "#b42318", marginTop: 16, lineHeight: 21 },
   footer: { textAlign: "center", color: "#9aa3b2", fontSize: 12, marginTop: 30 },
   bottomNav: {
