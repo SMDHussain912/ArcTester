@@ -19,7 +19,7 @@ describe("StudentWebLearningPath", () => {
   it("shows authoritative path progress and expands topic progress", async () => {
     render(<StudentWebLearningPath onPractice={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Your learning path" })).toBeTruthy();
-    expect(await screen.findByText(/\\/ 12 questions explored/)).toBeTruthy();
+    expect(await screen.findByText("/ 12 questions explored", { exact: false })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Explore topics" }));
     expect(await screen.findByText("Arrays")).toBeTruthy();
     expect(screen.getByText("2 / 5 explored")).toBeTruthy();
