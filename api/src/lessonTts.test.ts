@@ -6,6 +6,7 @@ const previous = {
   language: process.env.NVIDIA_TTS_LANGUAGE,
   voice: process.env.NVIDIA_TTS_VOICE,
   apiKey: process.env.NVIDIA_TTS_API_KEY,
+  nvidiaApiKey: process.env.NVIDIA_API_KEY,
 };
 
 function makeWav() {
@@ -37,6 +38,8 @@ afterEach(() => {
 describe("NVIDIA lesson TTS", () => {
   it("requires a configured server-side endpoint", () => {
     delete process.env.NVIDIA_TTS_BASE_URL;
+    delete process.env.NVIDIA_TTS_API_KEY;
+    delete process.env.NVIDIA_API_KEY;
     expect(() => getLessonTtsConfig()).toThrowError(new LessonTtsError("LESSON_TTS_NOT_CONFIGURED"));
   });
 
