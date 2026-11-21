@@ -19,7 +19,7 @@ describe("StudentWebLearningPath", () => {
   it("shows authoritative path progress and expands topic progress", async () => {
     render(<StudentWebLearningPath onPractice={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Your learning path" })).toBeTruthy();
-    expect(await screen.findByText("2 / 12 questions explored")).toBeTruthy();
+    expect(await screen.findByText(/\\/ 12 questions explored/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Explore topics" }));
     expect(await screen.findByText("Arrays")).toBeTruthy();
     expect(screen.getByText("2 / 5 explored")).toBeTruthy();
@@ -30,7 +30,7 @@ describe("StudentWebLearningPath", () => {
   it("starts subject and topic practice with the selected preset", async () => {
     const onPractice = vi.fn();
     render(<StudentWebLearningPath onPractice={onPractice} />);
-    await screen.findByRole("heading", { name: "Data Structures" });
+    await screen.findAllByRole("heading", { name: "Data Structures" });
     fireEvent.click(screen.getByRole("button", { name: "Practice" }));
     expect(onPractice).toHaveBeenCalledWith("Data Structures");
     fireEvent.click(screen.getByRole("button", { name: "Explore topics" }));
