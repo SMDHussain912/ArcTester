@@ -7,6 +7,7 @@ import { badRequest, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import { awardXp } from "./gamificationService.js";
+import { scoreUnitTestAttempt, unitTestAttemptScope, unitTestCompletionScope } from "./unitTestAttempt.js";
 
 const Id = z.coerce.number().int().positive();
 const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict();
@@ -165,7 +166,7 @@ export function learningPathRouter(db: PrismaClient): Router {
       const q = await db.question.findFirst({ where: { id: input.questionId, reviewStatus: "APPROVED" } });
       if (!q) throw notFound("Question not found.");
       const response = normalizeResponse(input.response), correct = gradeQuestion(q.questionType as QuestionType, q.correctIndex, JSON.parse(q.answerData), response);
-      const scopeKey = "unit:" + id + ":" + input.attemptKey;
+      const scopeKey = unitTestAttemptScope(id, input.attemptKey);
       await db.pathAnswer.upsert({ where: { userId_scopeKey_questionId: { userId, scopeKey, questionId: q.id } },
         create: { userId, lessonId: null, unitId: id, scopeKey, questionId: q.id, response: JSON.stringify(response), isCorrect: correct },
         update: { response: JSON.stringify(response), isCorrect: correct } });
@@ -177,7 +178,7 @@ export function learningPathRouter(db: PrismaClient): Router {
     try {
       const { id } = z.object({ id: Id }).parse(req.params);
       const { attemptKey } = z.object({ attemptKey: z.string().uuid() }).strict().parse(req.body);
-      const userId = req.user!.id, scopeKey = "unit:" + id + ":" + attemptKey, completionKey = scopeKey + ":complete";
+      const userId = req.user!.id, scopeKey = unitTestAttemptScope(id, attemptKey), completionKey = unitTestCompletionScope(id, attemptKey);
       const unit = await ensureUnitTestUnlocked(db, userId, id), links = unit.lessons.flatMap((l) => l.questions).slice(0, 10);
       if (links.length !== 10) throw badRequest("Unit test is not fully built yet.");
       // PathAnswer has a real Question foreign key; use the first test question
@@ -187,8 +188,9 @@ export function learningPathRouter(db: PrismaClient): Router {
         const existing = await tx.pathAnswer.findUnique({ where: markerWhere! });
         if (existing) return JSON.parse(existing.response) as { passed: boolean; scorePct: number; passScorePct: number; progress: unknown };
         const answers = await tx.pathAnswer.findMany({ where: { userId, unitId: id, lessonId: null, scopeKey } });
-        if (answers.filter((a) => links.some((q) => q.questionId === a.questionId)).length < 10) throw badRequest("Answer all 10 unit-test questions.");
-        const score = Math.round(answers.filter((a) => a.isCorrect && links.some((q) => q.questionId === a.questionId)).length / 10 * 100);
+        const scored = scoreUnitTestAttempt(links.map((q) => q.questionId), answers);
+        if (scored.answeredCount < 10) throw badRequest("Answer all 10 unit-test questions.");
+        const score = scored.scorePct;
         const old = await tx.userUnitTestProgress.findUnique({ where: { userId_unitId: { userId, unitId: id } } });
         const isPassed = score >= 70;
         const progress = await tx.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
