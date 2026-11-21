@@ -4,6 +4,7 @@ import AdminSubjects, { type AdminCatalogSubject } from "./AdminSubjects";
 import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
+import AdminLessonStudio from "./AdminLessonStudio";
 import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamStudent, type AdminExamPreview } from "./AdminExamManagement";
@@ -129,7 +130,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"]];
+ const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"]];
  return <div className="admin-shell">
   <aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
    <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>setTab(id)}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
@@ -169,6 +170,7 @@ export default function AdminWorkspace(p:Props){
     onRelease={(id) => void releaseReviewItem(id)}
    />}
    {tab==="study-materials"&&<AdminStudyMaterials materials={studyMaterials} busy={busy} onUpload={(payload) => uploadStudyMaterial(payload)} onUpdate={(id,payload) => updateStudyMaterial(id,payload)} onStatusChange={(id,status) => void changeStudyMaterialStatus(id,status)} onDelete={(id) => void deleteStudyMaterial(id)} onRefresh={() => void loadStudyMaterials()} />}
+   {tab==="lesson-studio"&&<AdminLessonStudio />}
    {tab==="notifications"&&<section className="admin-panel">
     <div className="admin-panel-head"><div><p className="eyebrow">COMMUNICATION OPERATIONS</p><h2>In-app notification health</h2><p>Recipient-scoped inbox records and student preference coverage. External push/email delivery is not configured by this report.</p></div><button className="ghost" disabled={notificationHealthLoading} onClick={()=>void loadNotificationHealth().catch(e=>setError(e.message))}>{notificationHealthLoading?"Refreshing…":"Refresh"}</button></div>
     {notificationHealth ? <>
