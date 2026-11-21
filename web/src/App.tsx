@@ -570,7 +570,7 @@ export default function App() {
         <OnlineStatusBanner />
         {activePage === "learning-summary" ? (
           <StudentLearningSummary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
-        ) : {activePage === "path" ? (
+        ) : activePage === "path" ? (
           <StudentWebLearningPath onPractice={(subject, topic) => { setPracticeSubjects([subject]); setPracticeTopicKeys(topic ? [JSON.stringify([subject, topic])] : []); setActivePage("practice"); }} />
         ) : activePage === "lessons" ? (
           <StudentWebLessonPlayer />
