@@ -135,6 +135,14 @@ export function minutesFor(mode: TestMode, questionCount: number): number {
 /** Full AP ECET mock attempts must match the complete official blueprint.
  * Returning a message (rather than creating a partial attempt) keeps shortage
  * handling deterministic and straightforward to unit-test. */
+function shortfallWarning(shortfalls: Shortfall[]): string[] {
+  return shortfalls.map(
+    (item) =>
+      `${item.subject}: only ${item.available} of ${item.requested} questions available. ` +
+      `The test uses what exists.`
+  );
+}
+
 export function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
   if (selectedCount === MOCK_TOTAL && shortfalls.length === 0) return null;
   const details = shortfalls.length
