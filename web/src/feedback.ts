@@ -36,6 +36,7 @@ export function playFeedback(kind: FeedbackKind, preferences = readFeedbackPrefe
   if (typeof AudioContextConstructor !== "function") return;
   try {
     const context = new AudioContextConstructor();
+    if (context.state === "suspended") void context.resume().catch(() => undefined);
     const now = context.currentTime;
     let remaining = TONES[kind].length;
     TONES[kind].forEach((frequency, index) => {
