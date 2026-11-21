@@ -220,6 +220,7 @@ export default function AdminLessonStudio() {
     </div>
     {selectedId && <section className="admin-panel lesson-editor-panel">
       <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · REVIEW & PUBLISH</p><h2>Review lesson draft</h2><p>Edits are schema-validated by the API. Scene JSON is data only—not code.</p><span className="status status-pending">{selectedStatus}</span></div><div className="row wrap">{selectedStatus === "DRAFT" ? <><button className="primary" disabled={busy || !title.trim()} onClick={() => void saveDraft()}>Save draft</button><button className="button button-secondary" disabled={busy || !!parsedStoryboard.error || !parsedStoryboard.scenes.length} onClick={() => void publishDraft()}>Publish lesson</button><button className="button button-danger" disabled={busy} onClick={() => void deleteDraft()}>Delete draft</button></> : <strong className="status status-used">Published · Student visible</strong>}</div></div>
+      <fieldset disabled={selectedStatus !== "DRAFT"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <label>Lesson title<input value={title} onChange={e => setTitle(e.target.value)}/></label>
       <div className="admin-two-col lesson-editors">
         <label>Teaching script JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={scriptText} onChange={e => setScriptText(e.target.value)}/></label>
@@ -241,6 +242,7 @@ export default function AdminLessonStudio() {
             <label>Steps (one per line)<textarea aria-label={`Scene ${index + 1} steps`} rows={3} value={scene.visual?.steps?.join("\n") || ""} onChange={e => updateSceneVisual(index, { steps: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></label>
           </article>)}</div>}
       </div>
+      </fieldset>
     </section>}
   </div>;
 }
