@@ -1,0 +1,17 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Web Technologies,HTML,Which HTML element creates a hyperlink?,<table>,<a>,<p>,<img>,1,The anchor element creates hyperlinks using href.,NEEDS HUMAN REVIEW,medium
+Web Technologies,CSS,Which CSS property controls text color?,background-image,display,color,font-style,2,The color property sets foreground text color.,NEEDS HUMAN REVIEW,medium
+Web Technologies,XML,What must an XML document have exactly one of?,DOCTYPE declaration,CDATA section,Namespace prefix,Root element,3,A well-formed XML document has exactly one document element.,NEEDS HUMAN REVIEW,medium
+Web Technologies,JavaScript,Which operator checks strict equality without type coercion?,===,==,=,!==,0,=== compares value and type without coercion.,NEEDS HUMAN REVIEW,medium
+Web Technologies,AJAX,AJAX enables a page to…,run SQL in the browser,exchange data asynchronously without full reload,compile CSS,replace HTML with XML only,1,AJAX requests and updates data asynchronously.,NEEDS HUMAN REVIEW,medium
+Web Technologies,jQuery,Which jQuery method attaches an event handler?,appendFile(),querySelectorAll(),on(),push(),2,jQuery on() binds event handlers.,NEEDS HUMAN REVIEW,medium
+Web Technologies,HTTP,What does HTTP status 404 indicate?,Unauthorized,Internal Server Error,Created,Not Found,3,404 means the requested resource was not found.,NEEDS HUMAN REVIEW,medium
+Web Technologies,PHP,Which symbol begins a PHP variable name?,$,#,@,&,0,PHP variable names begin with a dollar sign.,NEEDS HUMAN REVIEW,medium
+Web Technologies,HTML,Which HTML element groups form controls for submission?,<aside>,<form>,<section>,<canvas>,1,The form element groups controls and defines submission behavior.,NEEDS HUMAN REVIEW,medium
+Web Technologies,CSS,Which CSS declaration creates a flexible layout container?,display: flex,position: static,font-weight: bold,list-style: none,0,display:flex activates the Flexbox layout model.,NEEDS HUMAN REVIEW,medium
+Web Technologies,XML,"In well-formed XML, attribute values must be…",unquoted,numeric only,declared as CSS,quoted,3,XML attribute values must be enclosed in quotes.,NEEDS HUMAN REVIEW,medium
+Web Technologies,JavaScript,Which JavaScript declaration is block-scoped and can be reassigned?,const only,define,let,var only,2,let declares a block-scoped variable that may be reassigned.,NEEDS HUMAN REVIEW,medium
+Web Technologies,AJAX,Which browser API is commonly used to make asynchronous HTTP requests in modern JavaScript?,document.write(),fetch(),alert(),localStorage only,1,fetch performs asynchronous network requests and returns a Promise.,NEEDS HUMAN REVIEW,medium
+Web Technologies,jQuery,Which jQuery expression selects all elements with class 'item'?,$('.item'),$('#item'),$('item'),$('*.item'),0,The dot prefix selects elements by class in jQuery selectors.,NEEDS HUMAN REVIEW,medium
+Web Technologies,HTTP,Which HTTP status code indicates that a resource was successfully created?,200,204,404,201,3,201 Created indicates successful resource creation.,NEEDS HUMAN REVIEW,medium
+Web Technologies,PHP,Which PHP construct outputs text to the response?,include_once only,require_once only,echo,print_r only,2,echo outputs one or more strings.,NEEDS HUMAN REVIEW,medium

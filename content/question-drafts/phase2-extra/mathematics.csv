@@ -1,0 +1,101 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Mathematics,Algebra,Solve 2x + 3 = 5.,3,1,2,0,1,Subtract 3 then divide by 2: x=(5−3)/2=1.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[3, 4], [2, 3]].",0,3,1,2,2,"For a 2×2 matrix, determinant = ad − bc = 3×3 − 4×2 = 1.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"If sin θ=3/5 and θ is acute, find cos θ.",3/5,5/4,4/3,4/5,3,"Using the 3-4-5 triangle, cosθ=4/5.",NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 5 and common difference 4. Find its 8th term.,33,34,32,35,0,aₙ = a₁ + (n−1)d = 5+(8−1)×4 = 33.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 6 of 6^6.,8,6,7,5,1,"log_b(b^k)=k, so the value is 6.",NEEDS HUMAN REVIEW,medium
+Mathematics,Quadratic Equations,Which pair gives the roots of x² − 13x + 42 = 0?,x = 6 or 9,x = -1 or 7,x = 6 or 7,x = 7 or 8,2,Factor the quadratic as (x−6)(x−7)=0. The roots are 6 and 7.,NEEDS HUMAN REVIEW,medium
+Mathematics,Coordinate Geometry,"Find the slope of the line through (6, 12) and (13, 20).",2.143,0.143,3.143,1.143,3,Slope = (y₂−y₁)/(x₂−x₁) = 8/7 = 1.143.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differentiation,"If y = 3x^2, find dy/dx at x = 3.",18,19,17,20,0,dy/dx = 3×2×x^1; substituting x=3 gives 18.,NEEDS HUMAN REVIEW,medium
+Mathematics,Integration,Evaluate ∫ 4x^4 dx.,x^4 + C,(4/5)x^5 + C,4x^5 + C,(4/4)x^4 + C,1,Apply the power rule: ∫axⁿdx = a xⁿ⁺¹/(n+1)+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Limits,Evaluate lim x→10 of (x²−100)/(x−10).,19,22,20,21,2,"Factor x²−a²=(x−a)(x+a); after cancellation, substitute x=a to get 2a=20.",NEEDS HUMAN REVIEW,medium
+Mathematics,Applications of Integration,Find the area under y=2x from 0 to 3.,9,6,12,18,0,∫₀³2x dx=9.,NEEDS HUMAN REVIEW,medium
+Mathematics,Linear Equations,Solve 2x+3=11. What is x?,7,4,3,5,1,"2x=8, so x=4.",NEEDS HUMAN REVIEW,medium
+Mathematics,Probability,A fair die is rolled. What is the probability of an even result?,2/3,1/6,1/2,1/3,2,Three of six outcomes are even.,NEEDS HUMAN REVIEW,medium
+Mathematics,Statistics,"Find the mean of 2, 4, 6 and 8.",4,6,7,5,3,The sum 20 divided by 4 is 5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Permutations,Evaluate 5P2.,20,10,25,60,0,5P2=5×4=20.,NEEDS HUMAN REVIEW,medium
+Mathematics,Combinations,Evaluate 5C2.,25,10,20,5,1,5C2=10.,NEEDS HUMAN REVIEW,medium
+Mathematics,Vectors,"Find the dot product of (2,3) and (4,1).",7,14,11,8,2,2×4+3×1=11.,NEEDS HUMAN REVIEW,medium
+Mathematics,Complex Numbers,Find the modulus of 3+4i.,7,1,25,5,3,√(3²+4²)=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differential Equations,What is the order of d²y/dx²+y=0?,2,1,3,0,0,The highest derivative is second order.,NEEDS HUMAN REVIEW,medium
+Mathematics,Algebra,Solve 3x + 11 = 26.,5,6,4,7,0,Subtract 11 then divide by 3: x=(26−11)/3=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[4, 9], [1, 6]].",17,15,16,14,1,"For a 2×2 matrix, determinant = ad − bc = 4×6 − 9×1 = 15.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"If cos θ=5/13 and θ is acute, find sin θ.",8/13,12/13,5/12,13/12,1,sinθ=√(169−25)/13=12/13.,NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 7 and common difference 7. Find its 12th term.,85,83,86,84,3,aₙ = a₁ + (n−1)d = 7+(12−1)×7 = 84.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 9 of 9^7.,7,8,6,9,0,"log_b(b^k)=k, so the value is 7.",NEEDS HUMAN REVIEW,medium
+Mathematics,Quadratic Equations,Which pair gives the roots of x² − 11x + 28 = 0?,x = 3 or 4,x = 7 or 4,x = 8 or 5,x = 7 or 6,1,Factor the quadratic as (x−7)(x−4)=0. The roots are 7 and 4.,NEEDS HUMAN REVIEW,medium
+Mathematics,Coordinate Geometry,"Find the slope of the line through (3, 11) and (8, 14).",-0.4,2.6,0.6,1.6,2,Slope = (y₂−y₁)/(x₂−x₁) = 3/5 = 0.6.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differentiation,"If y = 4x^7, find dy/dx at x = 2.",1793,1791,1794,1792,3,dy/dx = 4×7×x^6; substituting x=2 gives 1792.,NEEDS HUMAN REVIEW,medium
+Mathematics,Integration,Evaluate ∫ 5x^3 dx.,(5/4)x^4 + C,5x^4 + C,(5/3)x^3 + C,x^3 + C,0,Apply the power rule: ∫axⁿdx = a xⁿ⁺¹/(n+1)+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Limits,Evaluate lim x→5 of (x²−25)/(x−5).,12,10,11,9,1,"Factor x²−a²=(x−a)(x+a); after cancellation, substitute x=a to get 2a=10.",NEEDS HUMAN REVIEW,medium
+Mathematics,Applications of Integration,Evaluate ∫₀²x dx.,1,8,2,4,2,[x²/2]₀²=2.,NEEDS HUMAN REVIEW,medium
+Mathematics,Linear Equations,Solve 3x−4=14.,5,7,4,6,3,"3x=18, so x=6.",NEEDS HUMAN REVIEW,medium
+Mathematics,Probability,A fair coin is tossed twice. Probability of two heads?,1/4,1/2,3/4,1/8,0,One of four equally likely outcomes is HH.,NEEDS HUMAN REVIEW,medium
+Mathematics,Statistics,"Find the median of 1, 3, 7, 9 and 11.",6,7,3,9,1,The middle value of the ordered list is 7.,NEEDS HUMAN REVIEW,medium
+Mathematics,Permutations,Evaluate 6P3.,60,720,120,20,2,6P3=6×5×4=120.,NEEDS HUMAN REVIEW,medium
+Mathematics,Combinations,Evaluate 6C3.,120,18,6,20,3,6C3=20.,NEEDS HUMAN REVIEW,medium
+Mathematics,Vectors,"Find the magnitude of vector (3,4).",5,7,12,4,0,√(3²+4²)=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Complex Numbers,Find the conjugate of 5−2i.,2+5i,5+2i,−5+2i,−5−2i,1,The conjugate changes the sign of the imaginary part.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differential Equations,Solve dy/dx=4.,y=x⁴+C,y=4/x+C,y=4x+C,y=4+C,2,Integrating 4 gives 4x+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Algebra,Solve 4x + 8 = 44.,10,8,11,9,3,Subtract 8 then divide by 4: x=(44−8)/4=9.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[5, 7], [5, 9]].",10,11,9,12,0,"For a 2×2 matrix, determinant = ad − bc = 5×9 − 7×5 = 10.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"If tan θ=3/4 and θ is acute, find sin θ.",4/5,3/4,5/3,3/5,3,A 3-4-5 triangle gives sinθ=3/5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 9 and common difference 2. Find its 16th term.,38,41,39,40,2,aₙ = a₁ + (n−1)d = 9+(16−1)×2 = 39.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 4 of 4^2.,3,1,4,2,3,"log_b(b^k)=k, so the value is 2.",NEEDS HUMAN REVIEW,medium
+Mathematics,Quadratic Equations,Which pair gives the roots of x² − 19x + 88 = 0?,x = 8 or 11,x = 9 or 12,x = 8 or 13,x = -3 or 11,0,Factor the quadratic as (x−8)(x−11)=0. The roots are 8 and 11.,NEEDS HUMAN REVIEW,medium
+Mathematics,Coordinate Geometry,"Find the slope of the line through (0, 10) and (3, 16).",4,2,3,1,1,Slope = (y₂−y₁)/(x₂−x₁) = 6/3 = 2.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differentiation,"If y = 5x^5, find dy/dx at x = 1.",24,27,25,26,2,dy/dx = 5×5×x^4; substituting x=1 gives 25.,NEEDS HUMAN REVIEW,medium
+Mathematics,Integration,Evaluate ∫ 6x^2 dx.,6x^3 + C,(6/2)x^2 + C,x^2 + C,(6/3)x^3 + C,3,Apply the power rule: ∫axⁿdx = a xⁿ⁺¹/(n+1)+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Limits,Evaluate lim x→12 of (x²−144)/(x−12).,24,25,23,26,0,"Factor x²−a²=(x−a)(x+a); after cancellation, substitute x=a to get 2a=24.",NEEDS HUMAN REVIEW,medium
+Mathematics,Applications of Integration,Area under y=3 from x=1 to 5 is…,12,15,4,8,0,Rectangle area=3×4=12.,NEEDS HUMAN REVIEW,medium
+Mathematics,Linear Equations,Solve 5x+2=27.,7,5,4,6,1,"5x=25, so x=5.",NEEDS HUMAN REVIEW,medium
+Mathematics,Probability,A card is drawn from 52 cards. Probability it is an ace?,4/13,1/52,1/13,1/4,2,4/52 simplifies to 1/13.,NEEDS HUMAN REVIEW,medium
+Mathematics,Statistics,"Find the mode of 2, 3, 3, 4, 5.",2,4,5,3,3,3 occurs most frequently.,NEEDS HUMAN REVIEW,medium
+Mathematics,Permutations,How many arrangements of 4 distinct objects are possible?,24,16,12,8,0,4!=24.,NEEDS HUMAN REVIEW,medium
+Mathematics,Combinations,Evaluate 7C2.,7,21,42,14,1,7C2=7×6/2=21.,NEEDS HUMAN REVIEW,medium
+Mathematics,Vectors,"Find (1,2,3)·(2,0,1).",6,1,5,3,2,1×2+2×0+3×1=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Complex Numbers,What is i²?,1,i,−i,−1,3,By definition i²=−1.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differential Equations,What is the order of dy/dx+y=x?,1,2,3,0,0,The highest derivative is first order.,NEEDS HUMAN REVIEW,medium
+Mathematics,Algebra,Solve 5x + 5 = 70.,12,15,13,14,2,Subtract 5 then divide by 5: x=(70−5)/5=13.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[6, 5], [4, 4]].",5,3,6,4,3,"For a 2×2 matrix, determinant = ad − bc = 6×4 − 5×4 = 4.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"Review variant 4: If sin θ=3/5 and θ is acute, find cos θ.",4/3,4/5,3/5,5/4,1,"Using the 3-4-5 triangle, cosθ=4/5.",NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 11 and common difference 5. Find its 5th term.,33,31,32,30,1,aₙ = a₁ + (n−1)d = 11+(5−1)×5 = 31.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 7 of 7^3.,2,5,3,4,2,"log_b(b^k)=k, so the value is 3.",NEEDS HUMAN REVIEW,medium
+Mathematics,Quadratic Equations,Which pair gives the roots of x² − 17x + 72 = 0?,x = 10 or 9,x = 9 or 10,x = 1 or 8,x = 9 or 8,3,Factor the quadratic as (x−9)(x−8)=0. The roots are 9 and 8.,NEEDS HUMAN REVIEW,medium
+Mathematics,Coordinate Geometry,"Find the slope of the line through (8, 9) and (9, 18).",9,10,8,11,0,Slope = (y₂−y₁)/(x₂−x₁) = 9/1 = 9.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differentiation,"If y = 6x^3, find dy/dx at x = 5.",452,450,451,449,1,dy/dx = 6×3×x^2; substituting x=5 gives 450.,NEEDS HUMAN REVIEW,medium
+Mathematics,Integration,Evaluate ∫ 7x^1 dx.,(7/1)x^1 + C,x^1 + C,(7/2)x^2 + C,7x^2 + C,2,Apply the power rule: ∫axⁿdx = a xⁿ⁺¹/(n+1)+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Limits,Evaluate lim x→7 of (x²−49)/(x−7).,15,13,16,14,3,"Factor x²−a²=(x−a)(x+a); after cancellation, substitute x=a to get 2a=14.",NEEDS HUMAN REVIEW,medium
+Mathematics,Applications of Integration,Review variant 4: Find the area under y=2x from 0 to 3.,12,18,9,6,2,∫₀³2x dx=9.,NEEDS HUMAN REVIEW,medium
+Mathematics,Linear Equations,Review variant 4: Solve 2x+3=11. What is x?,3,5,7,4,3,"2x=8, so x=4.",NEEDS HUMAN REVIEW,medium
+Mathematics,Probability,Review variant 4: A fair die is rolled. What is the probability of an even result?,1/2,1/3,2/3,1/6,0,Three of six outcomes are even.,NEEDS HUMAN REVIEW,medium
+Mathematics,Statistics,"Review variant 4: Find the mean of 2, 4, 6 and 8.",7,5,4,6,1,The sum 20 divided by 4 is 5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Permutations,Review variant 4: Evaluate 5P2.,25,60,20,10,2,5P2=5×4=20.,NEEDS HUMAN REVIEW,medium
+Mathematics,Combinations,Review variant 4: Evaluate 5C2.,20,5,25,10,3,5C2=10.,NEEDS HUMAN REVIEW,medium
+Mathematics,Vectors,"Review variant 4: Find the dot product of (2,3) and (4,1).",11,8,7,14,0,2×4+3×1=11.,NEEDS HUMAN REVIEW,medium
+Mathematics,Complex Numbers,Review variant 4: Find the modulus of 3+4i.,25,5,7,1,1,√(3²+4²)=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differential Equations,Review variant 4: What is the order of d²y/dx²+y=0?,3,0,2,1,2,The highest derivative is second order.,NEEDS HUMAN REVIEW,medium
+Mathematics,Algebra,Solve 6x + 13 = 25.,4,2,3,1,1,Subtract 13 then divide by 6: x=(25−13)/6=2.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[7, 3], [3, 7]].",39,42,40,41,2,"For a 2×2 matrix, determinant = ad − bc = 7×7 − 3×3 = 40.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"Review variant 5: If cos θ=5/13 and θ is acute, find sin θ.",5/12,13/12,8/13,12/13,3,sinθ=√(169−25)/13=12/13.,NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 13 and common difference 8. Find its 9th term.,77,78,76,79,0,aₙ = a₁ + (n−1)d = 13+(9−1)×8 = 77.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 2 of 2^4.,6,4,5,3,1,"log_b(b^k)=k, so the value is 4.",NEEDS HUMAN REVIEW,medium
+Mathematics,Quadratic Equations,Which pair gives the roots of x² − 6x + 5 = 0?,x = 1 or 7,x = -4 or 5,x = 1 or 5,x = 2 or 6,2,Factor the quadratic as (x−1)(x−5)=0. The roots are 1 and 5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Coordinate Geometry,"Find the slope of the line through (5, 8) and (11, 12).",1.667,-0.333,2.667,0.667,3,Slope = (y₂−y₁)/(x₂−x₁) = 4/6 = 0.667.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differentiation,"If y = 7x^8, find dy/dx at x = 4.",917504,917505,917503,917506,0,dy/dx = 7×8×x^7; substituting x=4 gives 917504.,NEEDS HUMAN REVIEW,medium
+Mathematics,Integration,Evaluate ∫ 2x^5 dx.,x^5 + C,(2/6)x^6 + C,2x^6 + C,(2/5)x^5 + C,1,Apply the power rule: ∫axⁿdx = a xⁿ⁺¹/(n+1)+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Limits,Evaluate lim x→2 of (x²−4)/(x−2).,3,6,4,5,2,"Factor x²−a²=(x−a)(x+a); after cancellation, substitute x=a to get 2a=4.",NEEDS HUMAN REVIEW,medium
+Mathematics,Applications of Integration,Review variant 5: Evaluate ∫₀²x dx.,2,4,1,8,0,[x²/2]₀²=2.,NEEDS HUMAN REVIEW,medium
+Mathematics,Linear Equations,Review variant 5: Solve 3x−4=14.,4,6,5,7,1,"3x=18, so x=6.",NEEDS HUMAN REVIEW,medium
+Mathematics,Probability,Review variant 5: A fair coin is tossed twice. Probability of two heads?,3/4,1/8,1/4,1/2,2,One of four equally likely outcomes is HH.,NEEDS HUMAN REVIEW,medium
+Mathematics,Statistics,"Review variant 5: Find the median of 1, 3, 7, 9 and 11.",3,9,6,7,3,The middle value of the ordered list is 7.,NEEDS HUMAN REVIEW,medium
+Mathematics,Permutations,Review variant 5: Evaluate 6P3.,120,20,60,720,0,6P3=6×5×4=120.,NEEDS HUMAN REVIEW,medium
+Mathematics,Combinations,Review variant 5: Evaluate 6C3.,6,20,120,18,1,6C3=20.,NEEDS HUMAN REVIEW,medium
+Mathematics,Vectors,"Review variant 5: Find the magnitude of vector (3,4).",12,4,5,7,2,√(3²+4²)=5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Complex Numbers,Review variant 5: Find the conjugate of 5−2i.,−5+2i,−5−2i,2+5i,5+2i,3,The conjugate changes the sign of the imaginary part.,NEEDS HUMAN REVIEW,medium
+Mathematics,Differential Equations,Review variant 5: Solve dy/dx=4.,y=4x+C,y=4+C,y=x⁴+C,y=4/x+C,0,Integrating 4 gives 4x+C.,NEEDS HUMAN REVIEW,medium
+Mathematics,Algebra,Solve 7x + 10 = 52.,6,7,5,8,0,Subtract 10 then divide by 7: x=(52−10)/7=6.,NEEDS HUMAN REVIEW,medium
+Mathematics,Matrices,"Find the determinant of [[8, 8], [2, 2]].",2,0,1,-1,1,"For a 2×2 matrix, determinant = ad − bc = 8×2 − 8×2 = 0.",NEEDS HUMAN REVIEW,medium
+Mathematics,Trigonometry,"Review variant 6: If tan θ=3/4 and θ is acute, find sin θ.",5/3,3/5,4/5,3/4,1,A 3-4-5 triangle gives sinθ=3/5.,NEEDS HUMAN REVIEW,medium
+Mathematics,Sequences,An arithmetic progression has first term 15 and common difference 3. Find its 13th term.,52,50,53,51,3,aₙ = a₁ + (n−1)d = 15+(13−1)×3 = 51.,NEEDS HUMAN REVIEW,medium
+Mathematics,Logarithms,Evaluate log base 5 of 5^5.,5,6,4,7,0,"log_b(b^k)=k, so the value is 5.",NEEDS HUMAN REVIEW,medium

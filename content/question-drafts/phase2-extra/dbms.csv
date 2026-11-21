@@ -1,0 +1,17 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+DBMS,Relational Model,A row in a relational table is also called a…,view,tuple,domain,schema,1,A row is a tuple; a column is an attribute.,NEEDS HUMAN REVIEW,medium
+DBMS,Normalization,Which normal form removes partial dependency on part of a composite key?,3NF,BCNF,2NF,1NF,2,Second normal form removes partial key dependencies.,NEEDS HUMAN REVIEW,medium
+DBMS,SQL,Which SQL command retrieves rows from a table?,UPDATE,DROP,ALTER,SELECT,3,SELECT queries data.,NEEDS HUMAN REVIEW,medium
+DBMS,SQL Aggregation,Which SQL function returns the number of rows?,COUNT,SUM,AVG,MAX,0,COUNT returns a row count.,NEEDS HUMAN REVIEW,medium
+DBMS,Transactions,Which ACID property means all transaction operations succeed or none do?,Durability,Atomicity,Consistency,Isolation,1,Atomicity is all-or-nothing execution.,NEEDS HUMAN REVIEW,medium
+DBMS,NoSQL and MongoDB,Which MongoDB structure stores documents?,Foreign key,Trigger,Collection,Table row,2,MongoDB collections contain documents.,NEEDS HUMAN REVIEW,medium
+DBMS,PL/SQL,Which PL/SQL attribute derives a variable's type from a column?,%ROWTYPE,%INDEX,%TABLE,%TYPE,3,%TYPE copies the referenced column or variable type.,NEEDS HUMAN REVIEW,medium
+DBMS,Relational Model,Which key uniquely identifies each row and cannot contain NULL? (variant 2),Primary key,Foreign key,Non-key attribute,View name,0,A primary key uniquely identifies a row and is non-null.,NEEDS HUMAN REVIEW,medium
+DBMS,Normalization,Which normal form removes transitive dependencies of non-key attributes on a key?,0NF,3NF,1NF,2NF only,1,Third normal form removes transitive non-key dependencies.,NEEDS HUMAN REVIEW,medium
+DBMS,SQL,Which SQL statement adds a new row to a table?,INSERT,SELECT,ALTER,GRANT,0,INSERT adds rows to a table.,NEEDS HUMAN REVIEW,medium
+DBMS,SQL Aggregation,Which SQL aggregate returns the arithmetic mean of a numeric column?,COUNT,MIN,SUM,AVG,3,AVG calculates the mean of non-null values.,NEEDS HUMAN REVIEW,medium
+DBMS,Transactions,Which ACID property prevents concurrent transactions from interfering improperly?,Durability,Consistency only,Isolation,Atomicity,2,Isolation controls the visibility of concurrent transaction effects.,NEEDS HUMAN REVIEW,medium
+DBMS,NoSQL and MongoDB,MongoDB stores documents using which binary JSON-like format?,XML only,BSON,CSV,HTML,1,"MongoDB uses BSON, a binary representation of JSON-like documents.",NEEDS HUMAN REVIEW,medium
+DBMS,PL/SQL,Which PL/SQL construct fetches query rows one at a time?,cursor,trigger,sequence,index,0,A cursor represents a query result for row-by-row processing.,NEEDS HUMAN REVIEW,medium
+DBMS,Relational Model,Which key uniquely identifies each row and cannot contain NULL? (variant 3),Foreign key,Non-key attribute,View name,Primary key,3,A primary key uniquely identifies a row and is non-null.,NEEDS HUMAN REVIEW,medium
+DBMS,Normalization,Which normal form removes transitive dependencies of non-key attributes on a key? (variant 3),2NF only,0NF,3NF,1NF,2,Third normal form removes transitive non-key dependencies.,NEEDS HUMAN REVIEW,medium

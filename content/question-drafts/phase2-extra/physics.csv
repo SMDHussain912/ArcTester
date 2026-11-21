@@ -1,0 +1,51 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Physics,Units and Measurements,What is the SI unit of electric current?,candela,mole,ampere,kelvin,2,Electric current is measured in amperes.,NEEDS HUMAN REVIEW,medium
+Physics,Motion,A body starts at 3 m/s and accelerates at 2 m/s² for 3 s. Find its final velocity.,8,11,9,10,2,v=u+at=3+2×3=9 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Newton's Laws,A 4 kg object accelerates at 3 m/s². Find the net force.,13,11,14,12,3,Newton's second law: F=ma=4×3=12 N.,NEEDS HUMAN REVIEW,medium
+Physics,Momentum,Find the momentum of a 5 kg body moving at 6 m/s.,30,31,29,32,0,Momentum p=mv=5×6=30 kg·m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Work and Energy,A constant force of 30 N moves an object 6 m in its direction. Find the work done.,182,180,181,179,1,W=Fs=30×6=180 J.,NEEDS HUMAN REVIEW,medium
+Physics,Power,A machine performs 294 J of work in 7 s. Find its power.,41,44,42,43,2,P=W/t=294/7=42 W.,NEEDS HUMAN REVIEW,medium
+Physics,Properties of Matter,A sample has mass 80 kg and volume 80 m³. Find its density.,2,0,3,1,3,Density = mass/volume = 80/80 = 1 kg/m³.,NEEDS HUMAN REVIEW,medium
+Physics,Elasticity,A spring with k=90 N/m is stretched by 0.09 m. Find the restoring force magnitude.,8.1,9.1,7.1,10.1,0,Hooke's law F=kx=90×0.09=8.1 N.,NEEDS HUMAN REVIEW,medium
+Physics,Waves,A wave has frequency 11 Hz and wavelength 10 m. Find its speed.,112,110,111,109,1,Wave speed v=fλ=11×10=110 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Sound,A wave has frequency 12 Hz and wavelength 2 m. Find its speed.,23,26,24,25,2,Wave speed v=fλ=12×2=24 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Oscillations,An oscillator has frequency 5 Hz. Find its period.,5 s,2 s,10 s,0.2 s,3,T=1/f=0.2 s.,NEEDS HUMAN REVIEW,medium
+Physics,Optics,A convex lens has f=20 cm and an object at 60 cm. Image distance magnitude is…,30 cm,20 cm,40 cm,60 cm,0,Lens formula gives 1/v=1/20−1/60=1/30.,NEEDS HUMAN REVIEW,medium
+Physics,Electricity,A 12 V source is across a 4 Ω resistor. Current is…,0.33 A,3 A,48 A,8 A,1,I=V/R=12/4=3 A.,NEEDS HUMAN REVIEW,medium
+Physics,Magnetism,A 2 m wire carrying 3 A is perpendicular to a 4 T field. Force is…,6 N,9 N,24 N,12 N,2,F=BIL=4×3×2=24 N.,NEEDS HUMAN REVIEW,medium
+Physics,Electromagnetic Induction,A 100-turn coil's flux per turn changes 0.02 Wb in 0.1 s. Induced emf is…,2 V,0.2 V,200 V,20 V,3,ε=NΔΦ/Δt=20 V.,NEEDS HUMAN REVIEW,medium
+Physics,Units and Measurements,What is the SI unit of luminous intensity?,candela,ampere,lux,watt,0,Candela is the SI base unit of luminous intensity.,NEEDS HUMAN REVIEW,medium
+Physics,Motion,A body starts at 18 m/s and accelerates at 3 m/s² for 9 s. Find its final velocity.,47,45,46,44,1,v=u+at=18+3×9=45 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Newton's Laws,A 7 kg object accelerates at 4 m/s². Find the net force.,27,30,28,29,2,Newton's second law: F=ma=7×4=28 N.,NEEDS HUMAN REVIEW,medium
+Physics,Momentum,Find the momentum of a 8 kg body moving at 6 m/s.,49,47,50,48,3,Momentum p=mv=8×6=48 kg·m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Work and Energy,A constant force of 54 N moves an object 3 m in its direction. Find the work done.,162,163,161,164,0,W=Fs=54×3=162 J.,NEEDS HUMAN REVIEW,medium
+Physics,Power,A machine performs 280 J of work in 4 s. Find its power.,72,70,71,69,1,P=W/t=280/4=70 W.,NEEDS HUMAN REVIEW,medium
+Physics,Properties of Matter,A sample has mass 110 kg and volume 50 m³. Find its density.,1.2,4.2,2.2,3.2,2,Density = mass/volume = 110/50 = 2.2 kg/m³.,NEEDS HUMAN REVIEW,medium
+Physics,Elasticity,A spring with k=240 N/m is stretched by 0.06 m. Find the restoring force magnitude.,15.4,13.4,16.4,14.4,3,Hooke's law F=kx=240×0.06=14.4 N.,NEEDS HUMAN REVIEW,medium
+Physics,Waves,A wave has frequency 11 Hz and wavelength 7 m. Find its speed.,77,78,76,79,0,Wave speed v=fλ=11×7=77 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Sound,A wave has frequency 12 Hz and wavelength 8 m. Find its speed.,98,96,97,95,1,Wave speed v=fλ=12×8=96 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Oscillations,"In SHM, acceleration is directed…",randomly,toward the mean position,away from the mean position,along constant velocity,1,"a=−ω²x, so acceleration points toward equilibrium.",NEEDS HUMAN REVIEW,medium
+Physics,Optics,Which mirror gives a wider field of view for vehicle rear-view mirrors?,plane mirror only,cylindrical mirror,convex mirror,concave mirror,2,A convex mirror gives a wider field of view.,NEEDS HUMAN REVIEW,medium
+Physics,Electricity,Two 6 Ω resistors in parallel have equivalent resistance…,12 Ω,6 Ω,1 Ω,3 Ω,3,Equal parallel resistors have R/2=3 Ω.,NEEDS HUMAN REVIEW,medium
+Physics,Magnetism,The SI unit of magnetic flux density is…,tesla,weber,henry,ampere,0,Magnetic flux density is measured in tesla.,NEEDS HUMAN REVIEW,medium
+Physics,Electromagnetic Induction,Which law states induced current opposes the change in magnetic flux?,Snell's law,Lenz's law,Ohm's law,Hooke's law,1,Lenz's law gives the direction of induced effects.,NEEDS HUMAN REVIEW,medium
+Physics,Units and Measurements,What is the SI unit of amount of substance?,litre,kelvin,mole,gram,2,Amount of substance is measured in moles.,NEEDS HUMAN REVIEW,medium
+Physics,Motion,A body starts at 15 m/s and accelerates at 4 m/s² for 6 s. Find its final velocity.,39,40,38,41,0,v=u+at=15+4×6=39 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Newton's Laws,A 10 kg object accelerates at 5 m/s². Find the net force.,52,50,51,49,1,Newton's second law: F=ma=10×5=50 N.,NEEDS HUMAN REVIEW,medium
+Physics,Momentum,Find the momentum of a 11 kg body moving at 6 m/s.,65,68,66,67,2,Momentum p=mv=11×6=66 kg·m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Work and Energy,A constant force of 84 N moves an object 9 m in its direction. Find the work done.,757,755,758,756,3,W=Fs=84×9=756 J.,NEEDS HUMAN REVIEW,medium
+Physics,Power,A machine performs 130 J of work in 10 s. Find its power.,13,14,12,15,0,P=W/t=130/10=13 W.,NEEDS HUMAN REVIEW,medium
+Physics,Properties of Matter,A sample has mass 20 kg and volume 20 m³. Find its density.,3,1,2,0,1,Density = mass/volume = 20/20 = 1 kg/m³.,NEEDS HUMAN REVIEW,medium
+Physics,Elasticity,A spring with k=90 N/m is stretched by 0.03 m. Find the restoring force magnitude.,1.7,4.7,2.7,3.7,2,Hooke's law F=kx=90×0.03=2.7 N.,NEEDS HUMAN REVIEW,medium
+Physics,Waves,A wave has frequency 11 Hz and wavelength 4 m. Find its speed.,45,43,46,44,3,Wave speed v=fλ=11×4=44 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Sound,A wave has frequency 12 Hz and wavelength 5 m. Find its speed.,60,61,59,62,0,Wave speed v=fλ=12×5=60 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Oscillations,Review variant 3: An oscillator has frequency 5 Hz. Find its period.,5 s,2 s,10 s,0.2 s,3,T=1/f=0.2 s.,NEEDS HUMAN REVIEW,medium
+Physics,Optics,Review variant 3: A convex lens has f=20 cm and an object at 60 cm. Image distance magnitude is…,30 cm,20 cm,40 cm,60 cm,0,Lens formula gives 1/v=1/20−1/60=1/30.,NEEDS HUMAN REVIEW,medium
+Physics,Electricity,Review variant 3: A 12 V source is across a 4 Ω resistor. Current is…,0.33 A,3 A,48 A,8 A,1,I=V/R=12/4=3 A.,NEEDS HUMAN REVIEW,medium
+Physics,Magnetism,Review variant 3: A 2 m wire carrying 3 A is perpendicular to a 4 T field. Force is…,6 N,9 N,24 N,12 N,2,F=BIL=4×3×2=24 N.,NEEDS HUMAN REVIEW,medium
+Physics,Electromagnetic Induction,Review variant 3: A 100-turn coil's flux per turn changes 0.02 Wb in 0.1 s. Induced emf is…,2 V,0.2 V,200 V,20 V,3,ε=NΔΦ/Δt=20 V.,NEEDS HUMAN REVIEW,medium
+Physics,Units and Measurements,What is the SI unit of pressure?,pascal,joule,newton,watt,0,Pressure is measured in pascals.,NEEDS HUMAN REVIEW,medium
+Physics,Motion,A body starts at 12 m/s and accelerates at 5 m/s² for 3 s. Find its final velocity.,28,26,29,27,3,v=u+at=12+5×3=27 m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Newton's Laws,A 13 kg object accelerates at 6 m/s². Find the net force.,78,79,77,80,0,Newton's second law: F=ma=13×6=78 N.,NEEDS HUMAN REVIEW,medium
+Physics,Momentum,Find the momentum of a 2 kg body moving at 6 m/s.,14,12,13,11,1,Momentum p=mv=2×6=12 kg·m/s.,NEEDS HUMAN REVIEW,medium
+Physics,Work and Energy,A constant force of 3 N moves an object 6 m in its direction. Find the work done.,17,20,18,19,2,W=Fs=3×6=18 J.,NEEDS HUMAN REVIEW,medium

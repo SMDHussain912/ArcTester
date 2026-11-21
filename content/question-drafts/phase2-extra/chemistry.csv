@@ -1,0 +1,51 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Chemistry,Atomic Structure,An isotope has atomic number 6 and mass number 12. How many neutrons does it contain?,8,6,7,5,1,Neutrons = mass number − atomic number = 12−6=6.,NEEDS HUMAN REVIEW,medium
+Chemistry,Periodic Table,"For a neutral magnesium atom in its main-group family, how many valence electrons does it have?",1,4,2,3,2,The main-group valence electron count for magnesium is 2.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Bonding,What is the predominant bond type in Cu?,ionic,covalent,coordinate,metallic,3,Cu is classified as having predominantly metallic bonding.,NEEDS HUMAN REVIEW,medium
+Chemistry,Mole Concept,What is the approximate molar mass of CH₄ in g/mol?,16,17,15,18,0,Add the atomic masses in CH₄; the molar mass is 16 g/mol.,NEEDS HUMAN REVIEW,medium
+Chemistry,Acids and Bases,"For a strong monoprotic acid with [H⁺]=10⁻1 mol/L, find the pH.",3,1,2,0,1,pH=−log₁₀[H⁺]=−log₁₀(10⁻1)=1.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Kinetics,Concentration changes by 7 mol/L in 6 s. Find the average rate magnitude.,0.167,3.167,1.167,2.167,2,Average rate = change/time = 7/6 = 1.167 mol L⁻¹ s⁻¹.,NEEDS HUMAN REVIEW,medium
+Chemistry,Thermochemistry,A reaction releases 16 kJ of heat to the surroundings. What is the sign of ΔH for the reaction?,positive,zero,cannot be determined,negative,3,"Heat is released in an exothermic reaction, so the system's enthalpy change is negative.",NEEDS HUMAN REVIEW,medium
+Chemistry,Redox Reactions,Find the oxidation number of chlorine in NaCl.,-2,-1,1,0,1,"In NaCl, sodium is +1 and the neutral compound requires chlorine to be −1.",NEEDS HUMAN REVIEW,medium
+Chemistry,Electrochemistry,At which electrode does reduction occur in an electrochemical cell?,electrolyte,cathode,anode,salt bridge,1,Reduction always occurs at the cathode (Red Cat).,NEEDS HUMAN REVIEW,medium
+Chemistry,Organic Chemistry,Which functional group characterizes an alcohol?,–NH₂,–OH,–CHO,–COOH,1,Alcohols contain the hydroxyl group.,NEEDS HUMAN REVIEW,medium
+Chemistry,Polymers,Which monomer forms polyethylene?,ethanol,ethanoic acid,ethene,ethyne,2,Ethene polymerizes to polyethylene.,NEEDS HUMAN REVIEW,medium
+Chemistry,Corrosion,Rust is mainly described as…,iron sulfide,calcium carbonate,sodium oxide,hydrated iron(III) oxide,3,Rust is hydrated iron(III) oxide.,NEEDS HUMAN REVIEW,medium
+Chemistry,Water Chemistry,Temporary hardness is mainly caused by…,calcium and magnesium bicarbonates,sodium chloride,dissolved nitrogen,sugar,0,Bicarbonates cause temporary hardness.,NEEDS HUMAN REVIEW,medium
+Chemistry,Atomic Structure,An isotope has atomic number 19 and mass number 28. How many neutrons does it contain?,8,11,9,10,2,Neutrons = mass number − atomic number = 28−19=9.,NEEDS HUMAN REVIEW,medium
+Chemistry,Periodic Table,"For a neutral chlorine atom in its main-group family, how many valence electrons does it have?",8,6,9,7,3,The main-group valence electron count for chlorine is 7.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Bonding,What is the predominant bond type in NaCl?,ionic,covalent,metallic,coordinate,0,NaCl is classified as having predominantly ionic bonding.,NEEDS HUMAN REVIEW,medium
+Chemistry,Mole Concept,What is the approximate molar mass of CaCO₃ in g/mol?,102,100,101,99,1,Add the atomic masses in CaCO₃; the molar mass is 100 g/mol.,NEEDS HUMAN REVIEW,medium
+Chemistry,Acids and Bases,"For a strong monoprotic acid with [H⁺]=10⁻2 mol/L, find the pH.",1,4,2,3,2,pH=−log₁₀[H⁺]=−log₁₀(10⁻2)=2.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Kinetics,Concentration changes by 2 mol/L in 1 s. Find the average rate magnitude.,3,1,4,2,3,Average rate = change/time = 2/1 = 2 mol L⁻¹ s⁻¹.,NEEDS HUMAN REVIEW,medium
+Chemistry,Thermochemistry,A reaction releases 29 kJ of heat to the surroundings. What is the sign of ΔH for the reaction?,negative,positive,zero,cannot be determined,0,"Heat is released in an exothermic reaction, so the system's enthalpy change is negative.",NEEDS HUMAN REVIEW,medium
+Chemistry,Redox Reactions,Find the oxidation number of oxygen in H₂O.,0,-3,-2,-1,2,"In water, hydrogen is +1; two hydrogens balance oxygen at −2.",NEEDS HUMAN REVIEW,medium
+Chemistry,Electrochemistry,Practice variant 2 for Electrochemistry: At which electrode does reduction occur in an electrochemical cell?,salt bridge,electrolyte,cathode,anode,2,Reduction always occurs at the cathode (Red Cat).,NEEDS HUMAN REVIEW,medium
+Chemistry,Organic Chemistry,Which functional group characterizes an aldehyde?,–COOH,–CHO,–CO–,–OH,1,Aldehydes contain the –CHO group.,NEEDS HUMAN REVIEW,medium
+Chemistry,Polymers,Which monomer forms PVC?,propene,glucose,vinyl chloride,styrene,2,PVC is poly(vinyl chloride).,NEEDS HUMAN REVIEW,medium
+Chemistry,Corrosion,Galvanization coats iron with…,copper,silver,lead,zinc,3,Zinc coating protects iron.,NEEDS HUMAN REVIEW,medium
+Chemistry,Water Chemistry,Permanent hardness is commonly caused by calcium/magnesium…,sulfates and chlorides,bicarbonates only,sodium salts only,oxygen,0,Sulfates and chlorides cause permanent hardness.,NEEDS HUMAN REVIEW,medium
+Chemistry,Atomic Structure,An isotope has atomic number 12 and mass number 24. How many neutrons does it contain?,13,11,14,12,3,Neutrons = mass number − atomic number = 24−12=12.,NEEDS HUMAN REVIEW,medium
+Chemistry,Periodic Table,"For a neutral oxygen atom in its main-group family, how many valence electrons does it have?",6,7,5,8,0,The main-group valence electron count for oxygen is 6.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Bonding,What is the predominant bond type in MgO?,coordinate,ionic,hydrogen,metallic,1,MgO is classified as having predominantly ionic bonding.,NEEDS HUMAN REVIEW,medium
+Chemistry,Mole Concept,What is the approximate molar mass of C₆H₁₂O₆ in g/mol?,179,182,180,181,2,Add the atomic masses in C₆H₁₂O₆; the molar mass is 180 g/mol.,NEEDS HUMAN REVIEW,medium
+Chemistry,Acids and Bases,"For a strong monoprotic acid with [H⁺]=10⁻3 mol/L, find the pH.",4,2,5,3,3,pH=−log₁₀[H⁺]=−log₁₀(10⁻3)=3.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Kinetics,Concentration changes by 6 mol/L in 2 s. Find the average rate magnitude.,3,4,2,5,0,Average rate = change/time = 6/2 = 3 mol L⁻¹ s⁻¹.,NEEDS HUMAN REVIEW,medium
+Chemistry,Thermochemistry,A reaction releases 42 kJ of heat to the surroundings. What is the sign of ΔH for the reaction?,cannot be determined,negative,positive,zero,1,"Heat is released in an exothermic reaction, so the system's enthalpy change is negative.",NEEDS HUMAN REVIEW,medium
+Chemistry,Redox Reactions,Find the oxidation number of sulfur in H₂SO₄.,4,5,7,6,3,"For neutral H₂SO₄, 2(+1)+S+4(−2)=0, so S=+6.",NEEDS HUMAN REVIEW,medium
+Chemistry,Electrochemistry,Practice variant 3 for Electrochemistry: At which electrode does reduction occur in an electrochemical cell?,anode,salt bridge,electrolyte,cathode,3,Reduction always occurs at the cathode (Red Cat).,NEEDS HUMAN REVIEW,medium
+Chemistry,Organic Chemistry,Which functional group characterizes a ketone?,–O–,–CO–,–CHO,–COOH,1,Ketones contain a carbonyl group within the carbon chain.,NEEDS HUMAN REVIEW,medium
+Chemistry,Polymers,Which monomer forms polystyrene?,vinyl chloride,formaldehyde,styrene,ethene,2,Polystyrene is made from styrene.,NEEDS HUMAN REVIEW,medium
+Chemistry,Corrosion,"During corrosion, iron primarily undergoes…",reduction,polymerization,neutralization,oxidation,3,Iron loses electrons and is oxidized.,NEEDS HUMAN REVIEW,medium
+Chemistry,Water Chemistry,Which method removes temporary hardness?,boiling,adding sugar,freezing only,filter paper only,0,Boiling decomposes bicarbonates.,NEEDS HUMAN REVIEW,medium
+Chemistry,Atomic Structure,An isotope has atomic number 25 and mass number 40. How many neutrons does it contain?,15,16,14,17,0,Neutrons = mass number − atomic number = 40−25=15.,NEEDS HUMAN REVIEW,medium
+Chemistry,Periodic Table,"For a neutral sodium atom in its main-group family, how many valence electrons does it have?",3,1,2,0,1,The main-group valence electron count for sodium is 1.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Bonding,What is the predominant bond type in H₂?,metallic,coordinate,covalent,ionic,2,H₂ is classified as having predominantly covalent bonding.,NEEDS HUMAN REVIEW,medium
+Chemistry,Mole Concept,What is the approximate molar mass of NH₃ in g/mol?,18,16,19,17,3,Add the atomic masses in NH₃; the molar mass is 17 g/mol.,NEEDS HUMAN REVIEW,medium
+Chemistry,Acids and Bases,"For a strong monoprotic acid with [H⁺]=10⁻4 mol/L, find the pH.",4,5,3,6,0,pH=−log₁₀[H⁺]=−log₁₀(10⁻4)=4.,NEEDS HUMAN REVIEW,medium
+Chemistry,Chemical Kinetics,Concentration changes by 10 mol/L in 3 s. Find the average rate magnitude.,5.333,3.333,4.333,2.333,1,Average rate = change/time = 10/3 = 3.333 mol L⁻¹ s⁻¹.,NEEDS HUMAN REVIEW,medium
+Chemistry,Thermochemistry,A reaction releases 55 kJ of heat to the surroundings. What is the sign of ΔH for the reaction?,zero,cannot be determined,negative,positive,2,"Heat is released in an exothermic reaction, so the system's enthalpy change is negative.",NEEDS HUMAN REVIEW,medium
+Chemistry,Redox Reactions,Find the oxidation number of carbon in CO₂.,4,2,3,6,0,"For neutral CO₂, C+2(−2)=0, so carbon is +4.",NEEDS HUMAN REVIEW,medium
+Chemistry,Electrochemistry,Practice variant 4 for Electrochemistry: At which electrode does reduction occur in an electrochemical cell?,cathode,anode,salt bridge,electrolyte,0,Reduction always occurs at the cathode (Red Cat).,NEEDS HUMAN REVIEW,medium
+Chemistry,Organic Chemistry,Which functional group characterizes a carboxylic acid?,–CHO,–COOH,–OH,–NH₂,1,Carboxylic acids contain the carboxyl group.,NEEDS HUMAN REVIEW,medium
+Chemistry,Polymers,Which is a natural polymer?,"nylon-6,6",polystyrene,cellulose,PVC,2,Cellulose is a natural polysaccharide.,NEEDS HUMAN REVIEW,medium
