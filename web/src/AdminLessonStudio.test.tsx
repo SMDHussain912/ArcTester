@@ -68,6 +68,6 @@ describe("AdminLessonStudio", () => {
       expect.objectContaining({ method: "PATCH", credentials: "include" }),
     ));
     const patchCall = fetchMock.mock.calls.find((call) => (call[1] as RequestInit | undefined)?.method === "PATCH");
-    expect(JSON.parse(String(patchCall?.[1]?.body))).toMatchObject({ title: "Stack operations", storyboard });
+    expect(JSON.parse(String((patchCall?.[1] as RequestInit | undefined)?.body))).toMatchObject({ title: "Stack operations", storyboard });
   });
 });
