@@ -12,7 +12,7 @@
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
-| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Part 1 in progress: mobile multi-select practice |
+| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Part 2 in progress: speed round |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Not started |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
@@ -42,7 +42,8 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 
 ## Phase 6 delivery slices
 
-- **Part 1 — Mobile multi-select practice:** render multi-select choices from the existing approved-question payload; persist response arrays through local recovery and account-scoped offline queue; submit through the existing server-owned grader; show correct and selected options in authoritative result review. No API/schema change.
+- **Part 1 — Mobile multi-select practice:** render multi-select choices from the existing approved-question payload; persist response arrays through local recovery and account-scoped offline queue; submit through the existing server-owned grader; show correct and selected options in authoritative result review. No API/schema change. Complete on main via PR #160.
+- **Part 2 — Speed round:** dedicated server-created 10-question attempt with a server-enforced five-minute deadline; distinct mobile flow and automatic submit on expiry; reuse server grading and offline submit recovery. No local scoring or new schema. In progress on `feature/phase-6-part-2-speed-round`.
 - **Part 2 — Speed round:** short, server-created practice set with a distinct time-boxed mobile flow; server remains responsible for attempt and score.
 - **Part 3 — Retryable unit test:** unit-end checkpoint using existing question selection and authoritative results; allow retry without duplicate progress/XP.
 - **Part 4 — Mistakes and daily challenge:** explicit mistake practice entry and a daily challenge using existing practice infrastructure.
