@@ -132,15 +132,15 @@ export function masteryRouter(db: PrismaClient): Router {
         if (!answer.isCorrect) current.wrong += 1;
         statMap.set(answer.questionId, current);
       }
-      const topicTotals = new Map<number, { attempts: number; correct: number }>();
+      const topicTotals = new Map<number, { attempts: number; correct: number; answeredQuestions: number }>();
       for (const q of mastery) {
         if (q.topicId === null) continue;
-        const row = topicTotals.get(q.topicId) ?? { attempts: 0, correct: 0 };
+        const row = topicTotals.get(q.topicId) ?? { attempts: 0, correct: 0, answeredQuestions: 0 };
         const st = statMap.get(q.id);
-        if (st) { row.attempts += st.seen; row.correct += Math.max(0, st.seen - st.wrong); }
+        if (st && st.seen > 0) { row.answeredQuestions += 1; row.attempts += st.seen; row.correct += Math.max(0, st.seen - st.wrong); }
         topicTotals.set(q.topicId, row);
       }
-      const topicMaster = [...topicTotals.values()].some((v) => v.attempts >= 10 && Math.round(v.correct / v.attempts * 100) >= 80);
+      const topicMaster = [...topicTotals.values()].some((v) => v.answeredQuestions >= 10 && Math.round(v.correct / v.attempts * 100) >= 80);
       const conditions: Record<string, boolean> = {
         "first-lesson": lessons >= 1, "xp-100": state.totalXp >= 100,
         "streak-7": Math.max(state.currentStreak, state.longestStreak) >= 7,
