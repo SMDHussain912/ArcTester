@@ -13,6 +13,7 @@ import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { studyMaterialRouter } from "./studyMaterialRoutes.js";
+import { lessonGenerationRouter } from "./lessonGenerationRoutes.js";
 import { learningPathRouter } from "./learningPathRoutes.js";
 import { gamificationRouter } from "./gamificationRoutes.js";
 import { masteryRouter } from "./masteryRoutes.js";
@@ -155,6 +156,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(questionAdminRouter(database));
   app.use(announcementRouter(database));
   app.use(studyMaterialRouter(database));
+  app.use(lessonGenerationRouter(database));
   app.use(learningPathRouter(database));
   app.use(gamificationRouter(database));
   app.use(masteryRouter(database));
