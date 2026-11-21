@@ -30,7 +30,8 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
 
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      if (req.user?.role !== "STUDENT") {
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      if (account?.role !== "STUDENT") {
         return res.status(403).json({ error: "Published lessons are available to student accounts." });
       }
       const published = await db.lessonDraft.findMany({
