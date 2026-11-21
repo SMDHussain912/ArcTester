@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { request, API } from "./apiClient";
 
 type Scene = {
@@ -30,6 +30,7 @@ export default function StudentWebLessonPlayer() {
   const [audioError, setAudioError] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const audioUrlRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -44,7 +45,11 @@ export default function StudentWebLessonPlayer() {
     }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => () => { audio?.pause(); }, [audio]);
+  useEffect(() => () => {
+    audio?.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+  }, [audio]);
 
   const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons]);
   const filtered = useMemo(() => lessons.filter((lesson) =>
@@ -75,8 +80,12 @@ export default function StudentWebLessonPlayer() {
         throw new Error(typeof body.error === "string" ? body.error : "Narration is unavailable.");
       }
       const url = URL.createObjectURL(await response.blob());
+      audioUrlRef.current = url;
       const player = new Audio(url);
-      player.onended = () => URL.revokeObjectURL(url);
+      player.onended = () => {
+        URL.revokeObjectURL(url);
+        if (audioUrlRef.current === url) audioUrlRef.current = null;
+      };
       setAudio(player);
       await player.play();
     } catch (cause) {
