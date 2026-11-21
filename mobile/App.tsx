@@ -1121,7 +1121,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : speedRoundSession ? "Speed round complete" : dailyChallengeSession ? "Daily challenge result" : mistakesSession ? "Mistakes practice result" : "Practice result"}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : result.mode === "speedRound" ? "Speed round complete" : result.mode === "dailyChallenge" ? "Daily challenge result" : result.mode === "mistakes" ? "Mistakes practice result" : "Practice result"}</Text>
                 <Text style={[styles.statValue, { marginTop: 4 }]}>{result.score} / {result.total}</Text>
               </View>
               <ArcTesterMascot size={64} />
