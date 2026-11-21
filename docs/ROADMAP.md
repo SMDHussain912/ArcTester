@@ -33,17 +33,11 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 
 ## Phase 5 delivery slices
 
-- **Part 1 — Mobile learning home and subject path:** add a guided path to the mobile home using existing bank and practice analytics; show overall explored-question progress, next subject, topic/question counts, per-subject progress and accuracy; launch practice with the chosen subject preselected. Keep this client-only and preserve existing auth, practice recovery, announcements, results, and account flows.
-- Part 2 — Lesson player and immediate feedback.
-- **Part 3 — Results, review and profile learning summary:** add a result score summary, answer-review filters (all/mistakes), and account-scoped learning metrics on profile using the existing server overview. Keep the review backed by authoritative result data; do not create local progress claims.
-- **Part 4 — Offline progress queue and safe synchronization:** remains the final Phase 5 slice after Part 3.
+- **Part 1 — Mobile learning home and subject path:** guided path using existing bank and practice analytics; subject/topic progress and practice launch preset. PR #156 merged.
+- **Part 2 — Quick lesson and immediate feedback:** one-question lesson launcher backed by a server-created practice attempt and server submission/result. PR #157 merged.
+- **Part 3 — Results, review and profile learning summary:** result counts, All/Mistakes review filters, and server-backed profile metrics. PR #158 merged as `c8410f0f`.
+- **Part 4 — Offline progress queue and safe synchronization (final Phase 5 slice):** persist answer snapshots for an already server-created practice attempt in account-scoped SQLite; replay snapshots through the existing idempotent `PUT /tests/:id/answers` endpoint when connectivity returns; retain newer local revisions during in-flight sync; queue a user-confirmed submit and recover a result if the server accepted it but the response was lost. No offline scoring or answer-key storage.
 
-**Part 1 complete:** PR #156 merged; exact-head CI #44945658948 and Android build #44945658979 passed.
-
-**Part 2 complete:** PR #157 merged as `5324c45a`; mobile quick lesson starts a server-created one-question attempt and uses server submission/result feedback.
-
-**Part 3 in progress:** Results, answer-review filtering, and server-backed profile learning summary are being implemented on `feature/phase-5-part-3-results-profile`.
-
-**Part 4 planned:** Offline progress queue and safe synchronization.
+**Part 4 implementation in progress:** `feature/phase-5-part-4-offline-progress-sync`. A newly started attempt still requires connectivity; downloaded question bank remains practice-only and does not contain correct answers. Exact-head CI and Android build are required before merge.
 
 Phase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
