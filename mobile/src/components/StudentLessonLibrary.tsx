@@ -33,7 +33,9 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   const scene = activeLesson?.storyboard.scenes[safeIndex] ?? null;
   const totalDuration = activeLesson ? getLessonDurationMs(activeLesson.storyboard) : 0;
   const elapsed = activeLesson ? getElapsedBeforeScene(activeLesson.storyboard, safeIndex) : 0;
-  const progressStart = totalDuration > 0 ? Math.min(1, elapsed / totalDuration) : 0;\n  const progressEnd = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;\n  const progressWidth = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [`${progressStart * 100}%`, `${progressEnd * 100}%`] });
+  const progressStart = totalDuration > 0 ? Math.min(1, elapsed / totalDuration) : 0;
+  const progressEnd = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;
+  const progressWidth = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [`${progressStart * 100}%`, `${progressEnd * 100}%`] });
 
   const refresh = async () => {
     setLoading(true);
