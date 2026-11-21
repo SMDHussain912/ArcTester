@@ -44,7 +44,6 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 
 - **Part 1 — Mobile multi-select practice:** render multi-select choices from the existing approved-question payload; persist response arrays through local recovery and account-scoped offline queue; submit through the existing server-owned grader; show correct and selected options in authoritative result review. No API/schema change. Complete on main via PR #160.
 - **Part 2 — Speed round:** dedicated server-created 10-question attempt with a server-enforced five-minute deadline; distinct mobile flow and automatic submit on expiry; reuse server grading and offline submit recovery. No local scoring or new schema. In progress on `feature/phase-6-part-2-speed-round`.
-- **Part 2 — Speed round:** short, server-created practice set with a distinct time-boxed mobile flow; server remains responsible for attempt and score.
 - **Part 3 — Retryable unit test:** unit-end checkpoint using existing question selection and authoritative results; allow retry without duplicate progress/XP.
 - **Part 4 — Mistakes and daily challenge:** explicit mistake practice entry and a daily challenge using existing practice infrastructure.
 - **Part 5 — Rewards and optional social/settings polish:** surface existing server-backed rewards and opt-in leaderboard/settings only where account privacy and controls are clear.
