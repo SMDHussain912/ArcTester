@@ -13,7 +13,8 @@ CREATE TABLE "LessonDraft" (
   "status" TEXT NOT NULL DEFAULT 'DRAFT',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" TIMESTAMP(3) NOT NULL,
-  CONSTRAINT "LessonDraft_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "LessonDraft_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "LessonDraft_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX "LessonDraft_status_updatedAt_idx" ON "LessonDraft"("status", "updatedAt");
 CREATE INDEX "LessonDraft_createdById_idx" ON "LessonDraft"("createdById");
