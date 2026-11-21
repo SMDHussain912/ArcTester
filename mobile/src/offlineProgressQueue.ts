@@ -1,6 +1,6 @@
 import * as SQLite from "expo-sqlite";
 
-export type PendingPracticeAnswer = { questionId: number; selectedIndex: number | null };
+export type PendingPracticeAnswer = { questionId: number; response?: unknown; selectedIndex?: number | null };
 export type PendingPracticeProgress = {
   attemptId: number;
   answers: PendingPracticeAnswer[];
@@ -54,7 +54,19 @@ function validateInput(input: QueueInput): void {
   const seen = new Set<number>();
   for (const answer of input.answers) {
     if (!Number.isSafeInteger(answer.questionId) || answer.questionId <= 0 || seen.has(answer.questionId)) throw new Error("Pending answers contain an invalid or duplicate question.");
-    if (!(answer.selectedIndex === null || (Number.isInteger(answer.selectedIndex) && answer.selectedIndex >= 0 && answer.selectedIndex <= 3))) throw new Error("Pending answer choice is invalid.");
+    if (Object.prototype.hasOwnProperty.call(answer, "response")) {
+      const response = answer.response;
+      const validScalar = response === null
+        || (typeof response === "string" && response.length <= 2000)
+        || (typeof response === "number" && Number.isFinite(response));
+      const validMulti = Array.isArray(response)
+        && response.length <= 4
+        && response.every((value) => Number.isInteger(value) && value >= 0 && value <= 3)
+        && new Set(response).size === response.length;
+      if (!validScalar && !validMulti) throw new Error("Pending answer response is invalid.");
+    } else if (!(answer.selectedIndex === null || (Number.isInteger(answer.selectedIndex) && answer.selectedIndex >= 0 && answer.selectedIndex <= 3))) {
+      throw new Error("Pending answer choice is invalid.");
+    }
     seen.add(answer.questionId);
   }
 }
