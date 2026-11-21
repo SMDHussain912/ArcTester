@@ -399,9 +399,13 @@ export default function App() {
       }
       const remaining = await getPendingPracticeProgress(String(user.id));
       setPendingSyncCount(remaining.length);
+      setPendingSubmitRequested(remaining.some((item) => item.submitRequested));
     } catch {
       const remaining = await getPendingPracticeProgress(String(user.id)).catch(() => []);
-      if (sessionIdentityRef.current === requestIdentity) setPendingSyncCount(remaining.length);
+      if (sessionIdentityRef.current === requestIdentity) {
+        setPendingSyncCount(remaining.length);
+        setPendingSubmitRequested(remaining.some((item) => item.submitRequested));
+      }
     } finally {
       practiceSyncLock.current = false;
     }
