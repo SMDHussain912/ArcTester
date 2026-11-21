@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "brand": {
+    "name": "ArcTester",
+    "primary": "#3159D8",
+    "primaryPressed": "#2447B8",
+    "primarySoft": "#EAF0FF",
+    "onPrimary": "#FFFFFF"
+  },
+  "colors": {
+    "light": {
+      "canvas": "#F5F7FB",
+      "surface": "#FFFFFF",
+      "surfaceRaised": "#FFFFFF",
+      "text": "#172033",
+      "muted": "#64748B",
+      "border": "#E2E8F0",
+      "success": "#15803D",
+      "successSoft": "#EAF7EF",
+      "warning": "#B45309",
+      "warningSoft": "#FFF4E5",
+      "danger": "#B91C1C",
+      "dangerSoft": "#FDECEC",
+      "info": "#0369A1",
+      "infoSoft": "#E7F5FC",
+      "focus": "#93C5FD"
+    },
+    "dark": {
+      "canvas": "#0D1424",
+      "surface": "#141F33",
+      "surfaceRaised": "#1A2940",
+      "text": "#E8EEF8",
+      "muted": "#A0AEC0",
+      "border": "#2C3B53",
+      "success": "#4ADE80",
+      "successSoft": "#17382B",
+      "warning": "#FBBF24",
+      "warningSoft": "#3C301A",
+      "danger": "#FCA5A5",
+      "dangerSoft": "#432327",
+      "info": "#7DD3FC",
+      "infoSoft": "#183449",
+      "focus": "#60A5FA"
+    }
+  },
+  "spacing": {
+    "0": 0,
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48,
+    "16": 64
+  },
+  "radius": {
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 20,
+    "2xl": 24,
+    "pill": 999
+  },
+  "typography": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    "size": {
+      "xs": 12,
+      "sm": 14,
+      "md": 16,
+      "lg": 18,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 28,
+      "4xl": 32,
+      "display": 40
+    },
+    "lineHeight": {
+      "tight": 1.2,
+      "normal": 1.5,
+      "relaxed": 1.65
+    },
+    "weight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700,
+      "extrabold": 800
+    }
+  },
+  "motion": {
+    "durationMs": {
+      "instant": 0,
+      "fast": 120,
+      "normal": 200,
+      "slow": 320
+    },
+    "easing": {
+      "standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "emphasized": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    }
+  },
+  "breakpoints": {
+    "compact": 560,
+    "medium": 800,
+    "wide": 1120
+  }
+}
