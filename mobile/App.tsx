@@ -328,10 +328,10 @@ export default function App() {
   async function syncPendingPracticeProgress() {
     if (!user || !token || practiceSyncLock.current) return;
     const requestIdentity = sessionIdentityRef.current;
-    const connection = await NetInfo.fetch().catch(() => null);
-    if (connection?.isConnected !== true || connection.isInternetReachable === false) return;
     practiceSyncLock.current = true;
     try {
+      const connection = await NetInfo.fetch().catch(() => null);
+      if (connection?.isConnected !== true || connection.isInternetReachable === false) return;
       for (let pass = 0; pass < 12; pass += 1) {
         if (sessionIdentityRef.current !== requestIdentity) return;
         const pendingItems = await getPendingPracticeProgress(String(user.id));
