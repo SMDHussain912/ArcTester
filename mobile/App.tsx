@@ -124,6 +124,7 @@ export default function App() {
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
   const [networkConnected, setNetworkConnected] = useState<boolean | null>(null);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [pendingSubmitRequested, setPendingSubmitRequested] = useState(false);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
@@ -620,7 +621,7 @@ export default function App() {
     }
   }
 
-  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number) {
+  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number, queueForSync = false) {
     if (!user) return;
     const requestIdentity = sessionIdentityRef.current;
     const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
@@ -629,6 +630,16 @@ export default function App() {
       .then(() => setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload)));
     try {
       await practiceSaveQueue.current;
+      if (queueForSync && test?.attemptId === attemptId) {
+        const queued = await queuePracticeProgress(String(user.id), {
+          attemptId,
+          answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: nextAnswers[question.id] ?? null })),
+          currentQuestionIndex: nextIndex,
+        });
+        setPendingSyncCount((count) => Math.max(count, 1));
+        if (queued.submitRequested) setPendingSubmitRequested(true);
+        if (networkConnected === true) void syncPendingPracticeProgress();
+      }
       if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(true);
     } catch (cause) {
       if (sessionIdentityRef.current === requestIdentity) {
@@ -638,14 +649,14 @@ export default function App() {
   }
 
   function updatePracticeAnswer(questionId: number, selectedIndex: number) {
-    if (!test) return;
+    if (!test || pendingSubmitRequested) return;
     const nextAnswers = { ...answers, [questionId]: selectedIndex };
     setAnswers(nextAnswers);
-    void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex);
+    void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex, true);
   }
 
   function updatePracticeQuestionIndex(nextIndex: number) {
-    if (!test) return;
+    if (!test || pendingSubmitRequested) return;
     const safeIndex = Math.max(0, Math.min(test.questions.length - 1, nextIndex));
     setCurrentQuestionIndex(safeIndex);
     void savePracticeRecovery(test.attemptId, answers, safeIndex);
@@ -859,37 +870,31 @@ export default function App() {
   }
 
   async function submit() {
-    if (!test || !user) return;
+    if (!test || !user || pendingSubmitRequested) return;
     setBusy(true);
+    setError("");
     try {
       await practiceSaveQueue.current;
-      const summary = await api<{ attemptId: number; score: number; total: number; expired: boolean }>(
-        `/tests/${test.attemptId}/submit`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            answers: test.questions.map((question) => ({
-              questionId: question.id,
-              selectedIndex: answers[question.id] ?? null,
-            })),
-          }),
-        },
-      );
-      await deleteLocalValue(practiceRecoveryKey(user.id));
-      setHasSavedPracticeAttempt(false);
-      setTest(null);
-      setCurrentQuestionIndex(0);
-      try {
-        const review = await api<PracticeResult>(`/tests/${test.attemptId}/result`);
-        setResult(review);
-        setError("");
-      } catch {
-        setError(`Practice submitted: ${summary.score}/${summary.total}. Full review could not be loaded; retry from the web app.`);
+      await queuePracticeProgress(String(user.id), {
+        attemptId: test.attemptId,
+        answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: answers[question.id] ?? null })),
+        currentQuestionIndex,
+        submitRequested: true,
+      });
+      setPendingSubmitRequested(true);
+      setPendingSyncCount((count) => Math.max(count, 1));
+      await syncPendingPracticeProgress();
+      const remaining = await getPendingPracticeProgress(String(user.id));
+      setPendingSyncCount(remaining.length);
+      if (remaining.some((item) => item.attemptId === test.attemptId)) {
+        setTest(null);
+        setHasSavedPracticeAttempt(true);
+        setError(networkConnected === false
+          ? "Submit request saved on this device. It is not submitted yet; reconnect to send it safely."
+          : "Submit request is saved locally and waiting for synchronization. Do not start another attempt.");
       }
-      const fresh = await api<Bank>("/bank");
-      setBank(fresh);
     } catch (cause) {
-      setError((cause as Error).message);
+      setError("Your answers remain saved on this device. " + ((cause as Error).message || "Synchronization will retry when online."));
     } finally {
       setBusy(false);
     }
