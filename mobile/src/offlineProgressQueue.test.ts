@@ -60,6 +60,14 @@ describe("offline practice progress queue", () => {
     await clearPendingPracticeProgress("student-a", sample.attemptId);
     expect(await getPendingPracticeProgress("student-a")).toEqual([]);
   });
+  it("persists a multi-select response without flattening it to one index", async () => {
+    const typed = { ...sample, answers: [{ questionId: 7, response: [0, 2] }, { questionId: 8, response: null }] };
+    await queuePracticeProgress("student-a", typed);
+    expect((await getPendingPracticeProgress("student-a"))[0].answers).toEqual(typed.answers);
+  });
+  it("rejects duplicate indices in a multi-select response", async () => {
+    await expect(queuePracticeProgress("student-a", { ...sample, answers: [{ questionId: 7, response: [1, 1] }] })).rejects.toThrow(/response is invalid/i);
+  });
   it("rejects invalid and duplicate question answers", async () => {
     await expect(queuePracticeProgress("student-a", { ...sample, answers: [{ questionId: 7, selectedIndex: 1 }, { questionId: 7, selectedIndex: 0 }] })).rejects.toThrow(/duplicate/i);
   });
