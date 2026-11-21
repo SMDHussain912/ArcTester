@@ -26,6 +26,7 @@ import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
 import LearningPathHome from "./src/components/LearningPathHome";
+import UnitTestCheckpoint from "./src/components/UnitTestCheckpoint";
 import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import StudentLessonLibrary from "./src/components/StudentLessonLibrary";
 import type { PublishedLesson } from "./src/lessonPlayer";
@@ -1382,6 +1383,11 @@ export default function App() {
                 setPracticePresetSubject(subject);
                 setActiveTab("practice");
               }}
+            />
+            <UnitTestCheckpoint
+              darkMode={darkMode}
+              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
+              api={api}
             />
             <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
               <View style={styles.dashboardMetricGrid}>
