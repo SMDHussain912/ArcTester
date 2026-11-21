@@ -54,6 +54,7 @@ model Question {
   examSnapshots ExamVersionQuestion[]
   lessonLinks LessonQuestion[]
   pathAnswers PathAnswer[]
+  reviews UserQuestionReview[]
   @@index([subjectId])
   @@index([reviewStatus, subjectId])
 }
