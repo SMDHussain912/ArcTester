@@ -22,7 +22,7 @@
 - Server-side lesson schema validation before publication.
 
 ## Verification
-- Final-slice exact-head GitHub Actions CI: pending.
+- Final-slice exact-head GitHub Actions CI #2590 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44962714956.
 - Phase 7 Part 1 PR #168 exact-head CI #2583 passed (run link recorded in PR #168).
 - Phase 7 Part 2 PR #169 exact-head CI #2587 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44961899319
 - Keyboard-only and screen-reader review: NOT VERIFIED.
