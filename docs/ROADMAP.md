@@ -12,8 +12,8 @@
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
-| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 4+5 in progress together: mistakes, daily challenge and rewards/settings |
-| 7 | Responsive web learning-path/player/progress parity; simple admin | Not started |
+| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
+| 7 | Responsive web learning-path/player/progress parity; simple admin | Part 1 implemented on feature branch; exact-head CI pending |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
 | 10 | Final audit and honest completion/manual verification report | Not started |
@@ -49,3 +49,13 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 - **Part 5 — Rewards and optional social/settings polish:** surface server-backed XP/level/streak/week, editable daily XP goal, and streak-freeze purchase; reuse existing reduce-motion/haptics settings. No leaderboard added: there is no current privacy-safe leaderboard endpoint/opt-in contract, so social ranking is deferred rather than exposing account data.
 
 Phase 6 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
+
+
+## Phase 7 delivery slices
+
+- **Part 1 — Responsive web learning path:** add a dedicated student web path page matching the mobile subject journey; use existing `/bank` and `/analytics/overview` data for question availability and explored counts; show overall/subject/topic progress; expose subject and topic practice presets through the existing practice builder. No new API, schema, local scoring, or progress writes. In progress on `feature/phase-7-part-1-web-learning-path`.
+- **Part 2 — Web lesson player parity:** reuse published lesson feed and safe scene data; responsive browser lesson timeline/player.
+- **Part 3 — Web progress and learning summary parity:** consolidate existing progress, mastery and rewards into clear responsive student views using authoritative APIs.
+- **Part 4 — Simple web admin parity:** focused admin workflows needed to review/publish learning content; admin-only endpoints and server authorization remain authoritative.
+
+Phase 7 slices must remain additive and reuse existing authenticated APIs. Do not create duplicate progress/scoring logic in the browser.
