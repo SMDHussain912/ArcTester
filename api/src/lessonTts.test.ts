@@ -28,11 +28,15 @@ function makeWav() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const [key, value] of Object.entries(previous)) {
-    const envKey = ({ baseUrl: "NVIDIA_TTS_BASE_URL", language: "NVIDIA_TTS_LANGUAGE", voice: "NVIDIA_TTS_VOICE", apiKey: "NVIDIA_TTS_API_KEY" } as const)[key as keyof typeof previous];
-    if (value === undefined) delete process.env[envKey];
-    else process.env[envKey] = value;
-  }
+  const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+  restore("NVIDIA_TTS_BASE_URL", previous.baseUrl);
+  restore("NVIDIA_TTS_LANGUAGE", previous.language);
+  restore("NVIDIA_TTS_VOICE", previous.voice);
+  restore("NVIDIA_TTS_API_KEY", previous.apiKey);
+  restore("NVIDIA_API_KEY", previous.nvidiaApiKey);
 });
 
 describe("NVIDIA lesson TTS", () => {
