@@ -29,7 +29,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceSceneKey, setVoiceSceneKey] = useState("");
   const [voiceError, setVoiceError] = useState("");
-  const audioPlayer = useAudioPlayer(null);
+  const audioPlayer = useAudioPlayer(null, { downloadFirst: true });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const loadLessonsRef = useRef(loadLessons);
   loadLessonsRef.current = loadLessons;
@@ -215,8 +215,8 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
           ) : null}
           <Text style={[styles.narration, { color: palette.text }]}>{scene.narration}</Text>
           <TouchableOpacity onPress={() => void listenToScene()} disabled={voiceLoading} accessibilityRole="button" accessibilityLabel={audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "Pause narration" : "Listen to scene narration"} style={[styles.voiceButton, { borderColor: palette.border, backgroundColor: palette.surface }]}>
-            <MaterialCommunityIcons name={voiceLoading ? "loading" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "pause-circle" : "volume-high"} size={22} color={palette.primary} />
-            <Text style={[styles.voiceButtonText, { color: palette.text }]}>{voiceLoading ? "Generating voice…" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "Pause narration" : voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.didJustFinish ? "Replay narration" : "Listen to narration"}</Text>
+            <MaterialCommunityIcons name={voiceLoading || audioStatus.isBuffering ? "loading" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "pause-circle" : "volume-high"} size={22} color={palette.primary} />
+            <Text style={[styles.voiceButtonText, { color: palette.text }]}>{voiceLoading || audioStatus.isBuffering ? "Generating voice…" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "Pause narration" : voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.didJustFinish ? "Replay narration" : "Listen to narration"}</Text>
           </TouchableOpacity>
           {voiceError ? <Text style={[styles.voiceError, { color: palette.danger }]}>{voiceError}</Text> : null}
           {scene.sceneType === "checkpoint" ? <View style={[styles.checkpoint, { backgroundColor: palette.successSoft }]}><MaterialCommunityIcons name="check-circle" size={20} color={palette.success} /><Text style={[styles.checkpointText, { color: palette.text }]}>{completed ? "Lesson completed. You can replay or return to the library." : "Pause and recall the key idea before finishing."}</Text></View> : null}
