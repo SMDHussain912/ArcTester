@@ -433,6 +433,7 @@ export default function App() {
                 setPendingSubmitRequested(false);
                 setTest((current) => current?.attemptId === item.attemptId ? null : current);
                 if (item.submitRequested || test?.attemptId === item.attemptId) setResult(completed);
+            void refreshGamification();
                 setLessonSession(false);
                 setError("");
                 madeProgress = true;
@@ -1406,6 +1407,28 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
+            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your rewards</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "Level " + gamification.level + " · " + gamification.totalXp + " total XP" : "Loading XP and streak…"}</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "🔥 " + gamification.currentStreak + " day streak · " + (gamification.today?.xpEarned ?? 0) + "/" + gamification.dailyGoalXp + " XP today" : "Keep learning to build your streak."}</Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab("settings")} style={styles.secondary}><Text style={styles.secondaryText}>Goals</Text></TouchableOpacity>
+              </View>
+              <View style={{ height: 8, borderRadius: 8, backgroundColor: darkMode ? "#26364d" : "#e2e8f0", overflow: "hidden", marginTop: 10 }}>
+                <View style={{ height: 8, width: ((gamification?.xpIntoLevel ?? 0) + "%") as any, backgroundColor: "#2563eb" }} />
+              </View>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                  <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review mistakes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                  <Text style={[styles.primaryText, { color: "#ffffff" }]}>Daily challenge</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>10 mixed questions · same set for everyone today (UTC) · 10 XP once per day</Text>
+            </View>
             <LessonLaunchCard
               subjects={bank?.subjects ?? []}
               darkMode={darkMode}
