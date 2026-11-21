@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const MAX_SOURCE_CHARS = 30_000;
 const MAX_FILE_BYTES = 120 * 1024;
 
@@ -64,7 +64,11 @@ export default function AdminLessonStudio() {
     finally { setBusy(false); }
   }
 
-  useEffect(() => {\n    let active = true;\n    void request<{drafts:DraftSummary[]}>("/admin/lesson-drafts").then(result => { if (active) setDrafts(result.drafts || []); }).catch(e => { if (active) setError((e as Error).message); });\n    return () => { active = false; };\n  }, []);
+  useEffect(() => {
+    let active = true;
+    void request<{drafts:DraftSummary[]}>("/admin/lesson-drafts").then(result => { if (active) setDrafts(result.drafts || []); }).catch(e => { if (active) setError((e as Error).message); });
+    return () => { active = false; };
+  }, []);
 
   async function readFile(file: File) {
     setError(""); setNotice("");
@@ -104,7 +108,7 @@ export default function AdminLessonStudio() {
         method: "POST",
         body: JSON.stringify({
           subject: subject.trim(), topic: topic.trim(), titleHint: titleHint.trim() || undefined,
-          learningObjectives: objectivesText.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean),
+          learningObjectives: objectivesText.split(/\r?\n/).map(x => x.trim()).filter(Boolean),
           sourceTitle: sourceTitle.trim(), sourceText: sourceText.trim(),
         }),
       });
