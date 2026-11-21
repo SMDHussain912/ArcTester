@@ -101,6 +101,7 @@ model User {
   gamificationDays GamificationDay[]
   questionReviews UserQuestionReview[]
   badges UserBadge[]
+  lessonDrafts LessonDraft[]
 }
 
 model Invitation {
@@ -625,6 +626,7 @@ model UserBadge {
 // AI-generated lesson drafts are private until an admin reviews and publishes them.
 model LessonDraft {
   id             String   @id @default(cuid())
+  createdBy       User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdById     Int
   title           String
   subject         String
