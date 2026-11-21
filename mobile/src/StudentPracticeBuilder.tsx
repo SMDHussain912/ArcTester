@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
@@ -14,12 +14,14 @@ type Props = {
   total: number;
   darkMode: boolean;
   disabled: boolean;
+  initialSubject?: string;
   onRefresh: () => void;
   onStart: (config: PracticePaperConfig) => void;
 };
 
-export default function StudentPracticeBuilder({ subjects, total, darkMode, disabled, onRefresh, onStart }: Props) {
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+export default function StudentPracticeBuilder({ subjects, total, darkMode, disabled, initialSubject, onRefresh, onStart }: Props) {
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>(() => initialSubject ? [initialSubject] : []);
+  useEffect(() => { if (initialSubject) setSelectedSubjects([initialSubject]); }, [initialSubject]);
   const [selectedTopics, setSelectedTopics] = useState<Record<string, string[]>>({});
   const [difficulty, setDifficulty] = useState<PracticePaperConfig["difficulty"]>("any");
   const [count, setCount] = useState("20");
