@@ -8,7 +8,7 @@ import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionT
 
 const Id = z.coerce.number().int().positive();
 const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict();
-const publicQuestion = (q: any) => ({
+export const toPathPublicQuestion = (q: any) => ({
   id: q.id, subject: q.subject.name, topic: q.topic?.name ?? null,
   text: q.text, options: decodeOptions(q.options), questionType: q.questionType,
   promptData: JSON.parse(q.promptData),
@@ -99,7 +99,7 @@ export function learningPathRouter(db: PrismaClient): Router {
       const questions = await db.question.findMany({ where: { id: { in: lesson.questions.map((x) => x.questionId) }, reviewStatus: "APPROVED" },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } } });
       const byId = new Map(questions.map((q) => [q.id, q]));
-      res.json({ lessonId: id, questions: lesson.questions.map((link) => byId.get(link.questionId)).filter(Boolean).map(publicQuestion) });
+      res.json({ lessonId: id, questions: lesson.questions.map((link) => byId.get(link.questionId)).filter(Boolean).map(toPathPublicQuestion) });
     } catch (e) { next(e); }
   });
   router.post("/path/lessons/:id/answer", requireAuth, async (req: AuthedRequest, res, next) => {
@@ -139,7 +139,7 @@ export function learningPathRouter(db: PrismaClient): Router {
       const rows = await db.question.findMany({ where: { id: { in: links.map((x) => x.questionId) }, reviewStatus: "APPROVED" },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } } });
       const map = new Map(rows.map((q) => [q.id, q]));
-      res.json({ unitId: id, questions: links.map((x) => map.get(x.questionId)).filter(Boolean).map(publicQuestion) });
+      res.json({ unitId: id, questions: links.map((x) => map.get(x.questionId)).filter(Boolean).map(toPathPublicQuestion) });
     } catch (e) { next(e); }
   });
   router.post("/path/units/:id/test/answer", requireAuth, async (req: AuthedRequest, res, next) => {
