@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { mobilePalette, radius, spacing, typeScale } from "../design/tokens";
+import { allUnitCheckpointAnswersSaved } from "../unitTestCheckpoint";
 
 type PathQuestion = {
   id: number; subject: string; topic: string | null; text: string; options: string[];
@@ -70,8 +71,10 @@ export default function UnitTestCheckpoint({ darkMode, disabled = false, api }: 
 
   const finish = async () => {
     if (!session || busy) return;
-    const missing = session.questions.some((question) => answers[question.id] === undefined || saved[question.id] !== true);
-    if (missing) { setError("Save an answer for all 10 questions before submitting."); return; }
+    const questionIds = session.questions.map((question) => question.id);
+    if (!allUnitCheckpointAnswersSaved(questionIds, saved) || session.questions.some((question) => answers[question.id] === undefined)) {
+      setError("Save an answer for all 10 questions before submitting."); return;
+    }
     setBusy(true); setError("");
     try {
       const completed = await api<TestResult>(`/path/units/${session.unitId}/test/complete`, {
