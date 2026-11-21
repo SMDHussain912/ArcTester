@@ -1,6 +1,6 @@
 # Phase 4 Part 2 Report — Original brand assets
 
-**Status:** Implemented in PR #152; implementation-head CI passed. Phase 4 remains in progress.
+**Status:** Merged into the Phase 4 integration branch via PR #152. Phase 4 remains in progress; integration to main follows after all Phase 4 slices are verified.
 
 ## Delivered
 
@@ -18,7 +18,9 @@
 - Phase 4 Part 1 integration head: `56565f7fa67ed9e27ccbf80d7ca267db24d1ed48`; CI run #2476 passed.
 - Part 2 implementation head: `7f3506cb2ecc22d7ddae5452b2291aee233e1d73`.
 - GitHub Actions run #2478 passed on the exact Part 2 implementation head: tests/lint/build, Playwright E2E, mobile typecheck/tests, PostgreSQL backup/restore, and SQLite migration utility tests.
-- PR-triggered run #2479 is revalidating the same implementation head. A documentation-only report update follows; the latest PR-head checks must remain green before merge.
+- PR-triggered run #2479 was superseded by the report update and cancelled.
+- Final PR-head run #2481 passed on exact head `c22cde5568230c6f081827419c7c16a44c2f4840` across all five jobs: tests/lint/build, Playwright E2E, mobile typecheck/tests, PostgreSQL backup/restore, and SQLite migration utility tests.
+- PR #152 was merged after exact-head CI passed. Merge commit: `dbe1540d29fd7c14ea24515544d0b3e878b7c933`.
 
 ## Not verified / manual checks
 
@@ -28,6 +30,6 @@
 
 ## Handoff
 
-- PR #152 is stacked on the Phase 3/Phase 4 Part 1 integration branch.
+- PR #152 is merged into the Phase 3/Phase 4 Part 1 integration branch.
 - Keep Part 2 focused on original artwork and its integration.
 - Phase 4 Part 3 remains motion, sound, and haptics; Part 4 remains the asset/interaction gallery.
