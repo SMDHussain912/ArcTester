@@ -173,33 +173,35 @@ export function learningPathRouter(db: PrismaClient): Router {
     } catch (e) { next(e); }
   });
   router.post("/path/units/:id/test/complete", requireAuth, async (req: AuthedRequest, res, next) => {
-    const { id } = z.object({ id: Id }).parse(req.params);
-    const { attemptKey } = z.object({ attemptKey: z.string().uuid() }).strict().parse(req.body);
-    const userId = (req as AuthedRequest).user!.id;
-    const scopeKey = "unit:" + id + ":" + attemptKey;
-    const completionKey = scopeKey + ":complete";
-    const markerWhere = { userId_scopeKey_questionId: { userId, scopeKey: completionKey, questionId: 0 } };
+    let markerWhere: { userId_scopeKey_questionId: { userId: number; scopeKey: string; questionId: number } } | null = null;
     try {
+      const { id } = z.object({ id: Id }).parse(req.params);
+      const { attemptKey } = z.object({ attemptKey: z.string().uuid() }).strict().parse(req.body);
+      const userId = req.user!.id, scopeKey = "unit:" + id + ":" + attemptKey, completionKey = scopeKey + ":complete";
       const unit = await ensureUnitTestUnlocked(db, userId, id), links = unit.lessons.flatMap((l) => l.questions).slice(0, 10);
       if (links.length !== 10) throw badRequest("Unit test is not fully built yet.");
-      const existing = await db.pathAnswer.findUnique({ where: markerWhere });
-      if (existing) { res.json(JSON.parse(existing.response)); return; }
-      const answers = await db.pathAnswer.findMany({ where: { userId, unitId: id, lessonId: null, scopeKey } });
-      if (answers.filter((a) => links.some((q) => q.questionId === a.questionId)).length < 10) throw badRequest("Answer all 10 unit-test questions.");
-      const score = Math.round(answers.filter((a) => a.isCorrect && links.some((q) => q.questionId === a.questionId)).length / 10 * 100);
-      const old = await db.userUnitTestProgress.findUnique({ where: { userId_unitId: { userId, unitId: id } } });
-      const isPassed = score >= 70;
-      const progress = await db.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
-        create: { userId, unitId: id, passedAt: isPassed ? new Date() : null, bestScorePct: score, attempts: 1 },
-        update: { passedAt: isPassed ? new Date() : old?.passedAt ?? null, bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
-      const response = { passed: isPassed, scorePct: score, passScorePct: 70, progress };
-      await db.pathAnswer.create({ data: { userId, lessonId: null, unitId: id, scopeKey: completionKey, questionId: 0, response: JSON.stringify(response), isCorrect: isPassed } });
-      if (isPassed && !old?.passedAt) await db.$transaction((tx) => awardXp(tx, userId, "unit-test-passed:" + id, "unit-test"));
+      // PathAnswer has a real Question foreign key; use the first test question
+      // as the completion marker's key, in a separate scope namespace.
+      markerWhere = { userId_scopeKey_questionId: { userId, scopeKey: completionKey, questionId: links[0]!.questionId } };
+      const response = await db.$transaction(async (tx) => {
+        const existing = await tx.pathAnswer.findUnique({ where: markerWhere! });
+        if (existing) return JSON.parse(existing.response) as { passed: boolean; scorePct: number; passScorePct: number; progress: unknown };
+        const answers = await tx.pathAnswer.findMany({ where: { userId, unitId: id, lessonId: null, scopeKey } });
+        if (answers.filter((a) => links.some((q) => q.questionId === a.questionId)).length < 10) throw badRequest("Answer all 10 unit-test questions.");
+        const score = Math.round(answers.filter((a) => a.isCorrect && links.some((q) => q.questionId === a.questionId)).length / 10 * 100);
+        const old = await tx.userUnitTestProgress.findUnique({ where: { userId_unitId: { userId, unitId: id } } });
+        const isPassed = score >= 70;
+        const progress = await tx.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
+          create: { userId, unitId: id, passedAt: isPassed ? new Date() : null, bestScorePct: score, attempts: 1 },
+          update: { passedAt: isPassed ? new Date() : old?.passedAt ?? null, bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
+        const result = { passed: isPassed, scorePct: score, passScorePct: 70, progress };
+        await tx.pathAnswer.create({ data: { userId, lessonId: null, unitId: id, scopeKey: completionKey, questionId: links[0]!.questionId, response: JSON.stringify(result), isCorrect: isPassed } });
+        if (isPassed && !old?.passedAt) await awardXp(tx, userId, "unit-test-passed:" + id, "unit-test");
+        return result;
+      });
       res.json(response);
     } catch (e) {
-      // If the same attempt is completed concurrently, the unique completion
-      // marker makes the progress increment/XP transaction idempotent.
-      if ((e as { code?: unknown })?.code === "P2002") {
+      if ((e as { code?: unknown })?.code === "P2002" && markerWhere) {
         const existing = await db.pathAnswer.findUnique({ where: markerWhere }).catch(() => null);
         if (existing) { res.json(JSON.parse(existing.response)); return; }
       }
