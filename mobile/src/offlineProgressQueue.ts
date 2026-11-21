@@ -64,7 +64,7 @@ function validateInput(input: QueueInput): void {
         && response.every((value) => Number.isInteger(value) && value >= 0 && value <= 3)
         && new Set(response).size === response.length;
       if (!validScalar && !validMulti) throw new Error("Pending answer response is invalid.");
-    } else if (!(answer.selectedIndex === null || (Number.isInteger(answer.selectedIndex) && answer.selectedIndex >= 0 && answer.selectedIndex <= 3))) {
+    } else if (!(answer.selectedIndex === null || answer.selectedIndex === undefined || (Number.isInteger(answer.selectedIndex) && answer.selectedIndex >= 0 && answer.selectedIndex <= 3))) {
       throw new Error("Pending answer choice is invalid.");
     }
     seen.add(answer.questionId);
