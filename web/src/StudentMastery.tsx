@@ -104,7 +104,7 @@ export default function StudentMastery() {
           ) : current.questionType === "multi_select" && current.options.length ? (
             <div className="stack">{current.options.map((option, optionIndex) => {
               const selected = Array.isArray(response) && response.includes(optionIndex);
-              return <label key={optionIndex} className="review-option"><input type="checkbox" checked={selected} disabled={busy} onChange={(event) => setResponse((old) => {
+              return <label key={optionIndex} className="review-option"><input type="checkbox" checked={selected} disabled={busy} onChange={(event) => setResponse((old: unknown) => {
                 const values = Array.isArray(old) ? old as number[] : [];
                 return event.target.checked ? [...values, optionIndex] : values.filter((v) => v !== optionIndex);
               })} /> {option}</label>;
