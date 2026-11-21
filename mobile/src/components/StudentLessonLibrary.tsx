@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getLocalValue, setLocalValue } from "../localSettings";
 import { clampSceneIndex, formatLessonTime, getElapsedBeforeScene, getLessonDurationMs, type PublishedLesson } from "../lessonPlayer";
@@ -33,7 +33,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   const scene = activeLesson?.storyboard.scenes[safeIndex] ?? null;
   const totalDuration = activeLesson ? getLessonDurationMs(activeLesson.storyboard) : 0;
   const elapsed = activeLesson ? getElapsedBeforeScene(activeLesson.storyboard, safeIndex) : 0;
-  const progress = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;
+  const progressStart = totalDuration > 0 ? Math.min(1, elapsed / totalDuration) : 0;\n  const progressEnd = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;\n  const progressWidth = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [`${progressStart * 100}%`, `${progressEnd * 100}%`] });
 
   const refresh = async () => {
     setLoading(true);
@@ -57,8 +57,9 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
       sceneProgress.setValue(1);
       return;
     }
-    Animated.timing(sceneProgress, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [activeLesson?.id, safeIndex, reduceMotion, sceneProgress]);
+    const duration = playing && scene ? Math.max(2500, scene.durationMs) : 520;
+    Animated.timing(sceneProgress, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [activeLesson?.id, safeIndex, reduceMotion, sceneProgress, playing, scene?.durationMs]);
 
   useEffect(() => {
     diagramMotion.setValue(0);
@@ -142,7 +143,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
           </View>
         </View>
         <View style={[styles.progressTrack, { backgroundColor: palette.border }]}>
-          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%`, backgroundColor: palette.primary }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: palette.primary }]} />
         </View>
         <Text style={[styles.progressLabel, { color: palette.muted }]}>Scene {safeIndex + 1} of {sceneCount} · {formatLessonTime(elapsed)} / {formatLessonTime(totalDuration)}</Text>
         <Animated.View style={[styles.sceneCard, { backgroundColor: palette.surface, borderColor: palette.border, opacity: sceneOpacity, transform: [{ translateY: sceneTranslate }] }]}>
