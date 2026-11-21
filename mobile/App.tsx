@@ -110,6 +110,16 @@ class ApiRequestError extends Error {
   }
 }
 const practiceRecoveryKey = (userId: number) => `arctester-practice-recovery:${userId}`;
+async function clearPracticeRecoveryIfMatches(userId: number, attemptId: number): Promise<boolean> {
+  const raw = await getLocalValue(practiceRecoveryKey(userId));
+  if (!raw) return false;
+  try {
+    const recovery = JSON.parse(raw) as Partial<PracticeRecovery>;
+    if (recovery.attemptId !== attemptId) return false;
+  } catch { return false; }
+  await deleteLocalValue(practiceRecoveryKey(userId));
+  return true;
+}
 
 export default function App() {
   const [email, setEmail] = useState("");
@@ -340,10 +350,11 @@ export default function App() {
               try {
                 const completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result");
                 await clearPendingPracticeProgress(String(user.id), item.attemptId);
-                await deleteLocalValue(practiceRecoveryKey(user.id));
-                setHasSavedPracticeAttempt(false);
+                const recoveryCleared = await clearPracticeRecoveryIfMatches(user.id, item.attemptId);
+                if (recoveryCleared) setHasSavedPracticeAttempt(false);
+                setPendingSubmitRequested(false);
                 setTest((current) => current?.attemptId === item.attemptId ? null : current);
-                setResult(completed);
+                if (item.submitRequested || test?.attemptId === item.attemptId) setResult(completed);
                 setLessonSession(false);
                 setError("");
                 madeProgress = true;
@@ -365,8 +376,9 @@ export default function App() {
             try { completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result"); }
             catch { return; }
             await clearPendingPracticeProgress(String(user.id), item.attemptId);
-            await deleteLocalValue(practiceRecoveryKey(user.id));
+            await clearPracticeRecoveryIfMatches(user.id, item.attemptId);
             setHasSavedPracticeAttempt(false);
+            setPendingSubmitRequested(false);
             setTest((current) => current?.attemptId === item.attemptId ? null : current);
             setResult(completed);
             setLessonSession(false);
@@ -462,6 +474,7 @@ export default function App() {
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
     getOfflineLearningPackage(String(user.id)).then((result) => { if (isCurrentSession()) setOfflineLearningPackage(result); }).catch(() => { if (isCurrentSession()) setOfflineLearningPackage(null); });
+    getPendingPracticeProgress(String(user.id)).then((items) => { if (isCurrentSession()) { setPendingSyncCount(items.length); setPendingSubmitRequested(items.some((item) => item.submitRequested)); } }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
@@ -663,7 +676,7 @@ export default function App() {
   }
 
   async function resumePractice() {
-    if (!user || busy || practiceRestoreLock.current) return;
+    if (!user || busy || practiceRestoreLock.current || pendingSubmitRequested) return;
     practiceRestoreLock.current = true;
     const requestIdentity = sessionIdentityRef.current;
     setBusy(true);
@@ -752,6 +765,7 @@ export default function App() {
       return;
     }
     setLessonSession(lesson);
+    setPendingSubmitRequested(false);
     setBusy(true);
     setError("");
     try {
@@ -916,6 +930,8 @@ export default function App() {
     setLessonSession(false);
     setResult(null);
     setHasSavedPracticeAttempt(false);
+    setPendingSyncCount(0);
+    setPendingSubmitRequested(false);
     setCheckingPracticeRecovery(false);
     setAnswers({});
     setCurrentQuestionIndex(0);
