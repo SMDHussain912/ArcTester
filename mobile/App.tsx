@@ -635,7 +635,6 @@ export default function App() {
   }
 
   async function startPractice(config: PracticePaperConfig, lesson = false) {
-    setLessonSession(lesson);
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -644,6 +643,7 @@ export default function App() {
       setError("Resume or submit your saved practice before starting another one.");
       return;
     }
+    setLessonSession(lesson);
     setBusy(true);
     setError("");
     try {
@@ -674,6 +674,7 @@ export default function App() {
         setHasSavedPracticeAttempt(true);
       }
     } catch (cause) {
+      setLessonSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
