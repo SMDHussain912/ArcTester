@@ -24,6 +24,7 @@ import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLear
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
+import { triggerHapticFeedback } from "./src/feedback";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -134,6 +135,8 @@ export default function App() {
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
   const [busy, setBusy] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(false);
+  const lastFeedbackAttempt = useRef<number | null>(null);
   const sessionIdentity = token && user ? `${user.id}:${token}` : null;
   const sessionIdentityRef = useRef<string | null>(sessionIdentity);
   const notificationRequestSequence = useRef(0);
@@ -153,7 +156,7 @@ export default function App() {
   const entrance = useRef(new Animated.Value(0)).current;
   const statsEntrance = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
+  useEffect(() => { void getLocalValue("arctester-dark-mode").then((value) => setDarkMode(value === "true")).catch(() => undefined); void getLocalValue("arctester-reduce-motion").then((value) => { if (value !== null) setReduceMotion(value === "true"); }).catch(() => undefined); void getLocalValue("arctester-haptics-enabled").then((value) => setHapticsEnabled(value === "true")).catch(() => undefined); void getLocalValue("arctester-question-text-size").then((value) => { if (value === "14" || value === "16" || value === "18") setQuestionTextSize(Number(value) as 14 | 16 | 18); }).catch(() => undefined); }, []);
 
   async function toggleDarkMode(value: boolean) {
     setDarkMode(value);
@@ -193,6 +196,12 @@ export default function App() {
     catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    if (!result || lastFeedbackAttempt.current === result.attemptId) return;
+    lastFeedbackAttempt.current = result.attemptId;
+    triggerHapticFeedback(result.score > 0 ? "success" : "error", hapticsEnabled);
+  }, [result, hapticsEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -1042,7 +1051,7 @@ export default function App() {
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
-             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
+             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>FEEDBACK</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Haptic feedback</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Optional vibration on practice completion</Text></View><Switch value={hapticsEnabled} onValueChange={(value) => { setHapticsEnabled(value); void setLocalValue("arctester-haptics-enabled", String(value)).catch(() => undefined); }} accessibilityLabel="Enable haptic feedback" /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
