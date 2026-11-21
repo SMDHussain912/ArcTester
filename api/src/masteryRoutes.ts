@@ -115,15 +115,23 @@ export function masteryRouter(db: PrismaClient): Router {
   router.get("/gamification/badges", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const userId = req.user!.id;
-      const [state, lessons, reviewCount, mastery, existing] = await Promise.all([
+      const [state, lessons, reviewCount, mastery, existing, stats, pathAnswers] = await Promise.all([
         db.userGamification.upsert({ where: { userId }, create: { userId }, update: {} }),
         db.userLessonProgress.count({ where: { userId, completedAt: { not: null } } }),
         db.userQuestionReview.aggregate({ where: { userId }, _sum: { reviewCount: true } }),
         db.question.findMany({ where: { reviewStatus: "APPROVED", topicId: { not: null } }, select: { id: true, topicId: true } }),
         db.userBadge.findMany({ where: { userId }, select: { badgeKey: true, unlockedAt: true } }),
+        db.stat.findMany({ where: { userId }, select: { questionId: true, seen: true, wrong: true } }),
+        db.pathAnswer.findMany({ where: { userId }, select: { questionId: true, isCorrect: true } }),
       ]);
-      const stats = await db.stat.findMany({ where: { userId }, select: { questionId: true, seen: true, wrong: true } });
-      const statMap = new Map(stats.map((s) => [s.questionId, s]));
+      const statMap = new Map<number, { seen: number; wrong: number }>();
+      for (const stat of stats) statMap.set(stat.questionId, { seen: stat.seen, wrong: stat.wrong });
+      for (const answer of pathAnswers) {
+        const current = statMap.get(answer.questionId) ?? { seen: 0, wrong: 0 };
+        current.seen += 1;
+        if (!answer.isCorrect) current.wrong += 1;
+        statMap.set(answer.questionId, current);
+      }
       const topicTotals = new Map<number, { attempts: number; correct: number }>();
       for (const q of mastery) {
         if (q.topicId === null) continue;
