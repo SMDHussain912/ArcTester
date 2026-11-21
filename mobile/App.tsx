@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import NetInfo from "@react-native-community/netinfo";
 import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
@@ -28,6 +29,7 @@ import LearningPathHome from "./src/components/LearningPathHome";
 import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
+import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -120,6 +122,8 @@ export default function App() {
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
   const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
+  const [networkConnected, setNetworkConnected] = useState<boolean | null>(null);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
@@ -152,6 +156,7 @@ export default function App() {
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const practiceSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const practiceSyncLock = useRef(false);
   const practiceRestoreLock = useRef(false);
   const questionSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [error, setError] = useState("");
@@ -308,6 +313,94 @@ export default function App() {
     if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
     return body as T;
   }
+
+  async function syncPendingPracticeProgress() {
+    if (!user || !token || practiceSyncLock.current) return;
+    const requestIdentity = sessionIdentityRef.current;
+    const connection = await NetInfo.fetch().catch(() => null);
+    if (connection?.isConnected !== true || connection.isInternetReachable === false) return;
+    practiceSyncLock.current = true;
+    try {
+      for (let pass = 0; pass < 12; pass += 1) {
+        if (sessionIdentityRef.current !== requestIdentity) return;
+        const pendingItems = await getPendingPracticeProgress(String(user.id));
+        setPendingSyncCount(pendingItems.length);
+        if (!pendingItems.length) break;
+        let madeProgress = false;
+        for (const item of pendingItems) {
+          if (sessionIdentityRef.current !== requestIdentity) return;
+          try {
+            await api("/tests/" + item.attemptId + "/answers", {
+              method: "PUT",
+              body: JSON.stringify({ answers: item.answers }),
+            });
+          } catch (cause) {
+            if (cause instanceof ApiRequestError && cause.status === 409) {
+              try {
+                const completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result");
+                await clearPendingPracticeProgress(String(user.id), item.attemptId);
+                await deleteLocalValue(practiceRecoveryKey(user.id));
+                setHasSavedPracticeAttempt(false);
+                setTest((current) => current?.attemptId === item.attemptId ? null : current);
+                setResult(completed);
+                setLessonSession(false);
+                setError("");
+                madeProgress = true;
+                continue;
+              } catch { /* Keep local data until a completed result can be verified. */ }
+            }
+            return;
+          }
+          if (item.submitRequested) {
+            try {
+              await api("/tests/" + item.attemptId + "/submit", {
+                method: "POST",
+                body: JSON.stringify({ answers: item.answers }),
+              });
+            } catch (cause) {
+              if (!(cause instanceof ApiRequestError && cause.status === 409)) return;
+            }
+            let completed: PracticeResult;
+            try { completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result"); }
+            catch { return; }
+            await clearPendingPracticeProgress(String(user.id), item.attemptId);
+            await deleteLocalValue(practiceRecoveryKey(user.id));
+            setHasSavedPracticeAttempt(false);
+            setTest((current) => current?.attemptId === item.attemptId ? null : current);
+            setResult(completed);
+            setLessonSession(false);
+            setError("");
+            madeProgress = true;
+          } else {
+            const removed = await markPracticeProgressSynced(String(user.id), item.attemptId, item.revision);
+            madeProgress = true;
+            if (!removed) continue;
+          }
+        }
+        if (!madeProgress) break;
+      }
+      const remaining = await getPendingPracticeProgress(String(user.id));
+      setPendingSyncCount(remaining.length);
+    } catch {
+      const remaining = await getPendingPracticeProgress(String(user.id)).catch(() => []);
+      if (sessionIdentityRef.current === requestIdentity) setPendingSyncCount(remaining.length);
+    } finally {
+      practiceSyncLock.current = false;
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    const applyConnection = (state: { isConnected: boolean | null; isInternetReachable: boolean | null }) => {
+      if (!active) return;
+      const connected = state.isConnected === true && state.isInternetReachable !== false;
+      setNetworkConnected(connected);
+      if (connected) void syncPendingPracticeProgress();
+    };
+    const unsubscribe = NetInfo.addEventListener(applyConnection);
+    NetInfo.fetch().then(applyConnection).catch(() => { if (active) setNetworkConnected(false); });
+    return () => { active = false; unsubscribe(); };
+  }, [token, user?.id]);
 
   useEffect(() => {
     SecureStore.getItemAsync("arctester-token").then((saved) => {
