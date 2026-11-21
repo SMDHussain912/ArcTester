@@ -16,6 +16,7 @@ model Subject {
   name      String     @unique
   topics    Topic[]
   questions Question[]
+  pathUnits PathUnit[]
 }
 
 model Topic {
@@ -24,6 +25,7 @@ model Topic {
   subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId Int
   questions Question[]
+  pathUnits PathUnit[]
 
   @@unique([subjectId, name])
 }
@@ -50,6 +52,8 @@ model Question {
   answers      AttemptAnswer[]
   stats        Stat[]
   examSnapshots ExamVersionQuestion[]
+  lessonLinks LessonQuestion[]
+  pathAnswers PathAnswer[]
   @@index([subjectId])
   @@index([reviewStatus, subjectId])
 }
@@ -88,6 +92,9 @@ model User {
   notificationPreferences StudentNotificationPreference?
   examSessions      ExamSession[]
   examSessionEvents ExamSessionEvent[] @relation("ExamSessionEventActor")
+  lessonProgress UserLessonProgress[]
+  unitTestProgress UserUnitTestProgress[]
+  pathAnswers PathAnswer[]
 }
 
 model Invitation {
@@ -436,3 +443,96 @@ model StudyMaterial {
   @@index([uploadedById, createdAt])
 }
 
+
+
+model PathUnit {
+  id        Int      @id @default(autoincrement())
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId Int
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId   Int
+  position  Int
+  title     String
+  lessons   PathLesson[]
+  testProgress UserUnitTestProgress[]
+  answers PathAnswer[]
+
+  @@unique([subjectId, topicId])
+  @@unique([subjectId, position])
+  @@index([subjectId])
+}
+
+model PathLesson {
+  id        Int      @id @default(autoincrement())
+  unit      PathUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId    Int
+  position  Int
+  title     String
+  questions LessonQuestion[]
+  progress  UserLessonProgress[]
+  answers   PathAnswer[]
+
+  @@unique([unitId, position])
+  @@index([unitId])
+}
+
+model LessonQuestion {
+  id         Int        @id @default(autoincrement())
+  lesson     PathLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId   Int
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId Int
+  position   Int
+
+  @@unique([lessonId, position])
+  @@unique([questionId])
+  @@index([lessonId])
+}
+
+model UserLessonProgress {
+  id           Int        @id @default(autoincrement())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int
+  lesson       PathLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId     Int
+  completedAt  DateTime?
+  bestScorePct Int        @default(0)
+  attempts     Int        @default(0)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+}
+
+model UserUnitTestProgress {
+  id           Int       @id @default(autoincrement())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int
+  unit         PathUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId       Int
+  passedAt     DateTime?
+  bestScorePct Int       @default(0)
+  attempts     Int       @default(0)
+
+  @@unique([userId, unitId])
+  @@index([userId])
+}
+
+model PathAnswer {
+  id         Int        @id @default(autoincrement())
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId Int
+  lesson     PathLesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId   Int?
+  unit       PathUnit?  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId     Int?
+  scopeKey   String
+  response   String     @default("null")
+  isCorrect  Boolean    @default(false)
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([userId, scopeKey, questionId])
+  @@index([userId, lessonId])
+  @@index([userId, unitId])
+}
