@@ -27,6 +27,8 @@ import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
 import LearningPathHome from "./src/components/LearningPathHome";
 import LessonLaunchCard from "./src/components/LessonLaunchCard";
+import StudentLessonLibrary from "./src/components/StudentLessonLibrary";
+import type { PublishedLesson } from "./src/lessonPlayer";
 import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
 import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
@@ -1326,6 +1328,15 @@ export default function App() {
               onStart={(subject, topic) => {
                 setPracticePresetSubject(subject);
                 void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1 }, true);
+              }}
+            />
+            <StudentLessonLibrary
+              darkMode={darkMode}
+              reduceMotion={reduceMotion}
+              userId={user.id}
+              loadLessons={async () => {
+                const response = await api<{ lessons: PublishedLesson[] }>("/lessons");
+                return response.lessons;
               }}
             />
             <LearningPathHome
