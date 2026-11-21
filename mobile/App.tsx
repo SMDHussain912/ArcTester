@@ -1084,6 +1084,7 @@ export default function App() {
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
             <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · {lessonSession ? "learn at your pace" : "timed practice"}</Text>
+            {networkConnected === false ? <Text style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>Offline · your answers are saved on this device and will sync when you reconnect.</Text> : pendingSyncCount > 0 ? <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>Syncing saved progress…</Text> : null}
             {test.warnings?.map((warning, index) => <Text key={index} style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>{warning}</Text>)}
             {!lessonSession && <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
