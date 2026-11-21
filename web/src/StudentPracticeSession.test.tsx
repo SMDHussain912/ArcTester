@@ -64,4 +64,20 @@ describe("StudentPracticeSession", () => {
   render(<StudentPracticeSession test={{ ...test, deadline: null }} answers={{}} remainingSeconds={null} busy onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={vi.fn()} />);
   expect(screen.getByRole("button", { name: "Submitting…" }).hasAttribute("disabled")).toBe(true); expect(screen.getByRole("button", { name: "Leave session" })).toBeDisabled(); expect(screen.queryByText(/\d{2}:\d{2} remaining/)).toBeNull();
  });
+
+ it("requires a final review confirmation before submitting a full mock", () => {
+  const onSubmit=vi.fn();
+  render(<StudentPracticeSession test={{...test,mode:"mock"}} answers={{1:1}} remainingSeconds={700} busy={false} onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={onSubmit} />);
+  expect(screen.getByRole("heading",{name:"Full mock test"})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Review and submit full mock"}));
+  expect(screen.getByRole("dialog",{name:"Submit your full mock?"})).toBeInTheDocument();
+  expect(screen.getByRole("dialog")).toHaveTextContent("You answered 1 of 2 questions.");
+  expect(screen.getByRole("dialog")).toHaveTextContent("1 question is unanswered");
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button",{name:"Continue reviewing"}));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"Review and submit full mock"}));
+  fireEvent.click(screen.getByRole("button",{name:"Submit full mock"}));
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+ });
 });
