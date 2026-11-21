@@ -14,7 +14,7 @@
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Parts 1–2 merged via PRs #168/#169; exact-head CI #2583/#2587 passed. Final summary + admin publish slice implemented; exact-head CI #2590 passed, PR #170 merge pending |
-| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
+| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Part 1 in progress on `feature/phase-8-part-1-full-length-mock`; strict 200-question readiness implemented, CI pending |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
 | 10 | Final audit and honest completion/manual verification report | Not started |
 
@@ -59,3 +59,13 @@ Phase 6 slices must remain additive and use existing server-owned scoring/progre
 - **Part 4 — Simple web admin parity:** added review-confirmed publishing to the existing admin Lesson Studio; server validates script/storyboard and conditionally publishes only the exact reviewed DRAFT snapshot. Draft edits/deletes are status-conditioned; published lessons are read-only and student feed remains published-only. Implemented in the Phase 7 final slice; exact-head CI pending.
 
 Phase 7 slices must remain additive and reuse existing authenticated APIs. Do not create duplicate progress/scoring logic in the browser. Final slice report: docs/PHASE_7_FINAL_REPORT.md. Phase 7 is not complete until the final slice exact-head CI passes, its PR is merged, and manual verification items are reported.
+
+
+## Phase 8 delivery slices
+
+- **Part 1 — Full-length mock readiness and authoritative duration:** enforce the official 200-question CSE blueprint at attempt creation; if any subject quota is short, reject the start with a subject-by-subject approved-bank shortage instead of silently creating a partial paper. Keep the server-owned 180-minute deadline. Add unit tests for exact readiness and duration. Implemented on `feature/phase-8-part-1-full-length-mock`; exact-head CI and PR merge pending.
+- **Part 2 — Timed mock experience and answer review:** integrate the student-facing full mock flow with clear time remaining, save/restore behavior and post-submit review, reusing server-owned attempt snapshots and grading.
+- **Part 3 — Subject/topic performance analytics:** summarize completed full mocks by blueprint subject and topic with clear denominator and unanswered handling.
+- **Part 4 — Rule-based next-step recommendations:** suggest targeted practice from verified mock outcomes and existing mastery/statistics; no model training or fabricated readiness scores.
+
+Phase 8 parts must not expose answer keys before submission, calculate official scores in the browser, or begin a full mock with fewer than 200 questions. Full phase completion requires exact-head CI, merge, report and explicit manual verification status.
