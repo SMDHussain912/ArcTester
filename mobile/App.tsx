@@ -157,6 +157,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
+  const [speedRoundSession, setSpeedRoundSession] = useState(false);
   const [resultReviewFilter, setResultReviewFilter] = useState<"all" | "incorrect">("all");
   useEffect(() => { if (result) setResultReviewFilter("all"); }, [result?.attemptId]);
 
@@ -739,7 +740,7 @@ export default function App() {
       recoveryAttemptId = recovery.attemptId;
       const restored = await api<Test>(`/tests/${recovery.attemptId}`);
       if (sessionIdentityRef.current !== requestIdentity) return;
-      if (restored.mode !== "practice" || !restored.questions.length) {
+      if ((restored.mode !== "practice" && restored.mode !== "speedRound") || !restored.questions.length) {
         throw new Error("This saved item is not a resumable practice attempt.");
       }
       const serverAnswers = Object.fromEntries(
@@ -749,6 +750,8 @@ export default function App() {
       );
       const localAnswers = recovery.answers && typeof recovery.answers === "object" ? recovery.answers : {};
       setTest(restored);
+      setSpeedRoundSession(restored.mode === "speedRound");
+      setLessonSession(false);
       setResult(null);
       setAnswers({ ...serverAnswers, ...localAnswers });
       setCurrentQuestionIndex(Math.max(0, Math.min(restored.questions.length - 1, recovery.currentQuestionIndex ?? 0)));
@@ -786,7 +789,7 @@ export default function App() {
     }
   }
 
-  async function startPractice(config: PracticePaperConfig, lesson = false) {
+  async function startPractice(config: PracticePaperConfig, lesson = false, speedRound = false) {
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -796,6 +799,7 @@ export default function App() {
       return;
     }
     setLessonSession(lesson);
+    setSpeedRoundSession(speedRound);
     setPendingSubmitRequested(false);
     setBusy(true);
     setError("");
@@ -808,7 +812,7 @@ export default function App() {
       if (availableSubjects.length === 0) throw new Error("The question bank currently has no practice questions.");
       const created = await api<Test>("/tests", {
         method: "POST",
-        body: JSON.stringify({ mode: "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: config.count }),
+        body: JSON.stringify({ mode: speedRound ? "speedRound" : "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count }),
       });
       setTest(created);
       setResult(null);
@@ -828,6 +832,7 @@ export default function App() {
       }
     } catch (cause) {
       setLessonSession(false);
+      setSpeedRoundSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -854,6 +859,12 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, [test]);
+
+  useEffect(() => {
+    if (test && speedRoundSession && secondsLeft === 0 && !busy && !pendingSubmitRequested) {
+      void submit();
+    }
+  }, [test, speedRoundSession, secondsLeft, busy, pendingSubmitRequested]);
 
   useEffect(() => {
     if (!test) return;
@@ -888,7 +899,7 @@ export default function App() {
     const answered = Object.keys(answers).length;
     const unanswered = test.questions.length - answered;
     Alert.alert(
-      "Submit practice?",
+      speedRoundSession ? "Finish speed round?" : "Submit practice?",
       unanswered > 0
         ? `You answered ${answered} of ${test.questions.length} questions. ${unanswered} will be submitted unanswered.`
         : `You answered all ${test.questions.length} questions. Submit your practice now?`,
@@ -1033,7 +1044,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : "Practice result"}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : speedRoundSession ? "Speed round complete" : "Practice result"}</Text>
                 <Text style={[styles.statValue, { marginTop: 4 }]}>{result.score} / {result.total}</Text>
               </View>
               <ArcTesterMascot size={64} />
@@ -1095,7 +1106,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={styles.examHeader}>
               <View>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Quick lesson" : "Practice session"}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Quick lesson" : speedRoundSession ? "Speed round" : "Practice session"}</Text>
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question {currentQuestionIndex + 1} of {test.questions.length}</Text>
               </View>
               {!lessonSession && <View style={[styles.timerPill, secondsLeft === 0 && styles.timerExpired]}>
@@ -1106,7 +1117,7 @@ export default function App() {
             <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
-            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · {lessonSession ? "learn at your pace" : "timed practice"}</Text>
+            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · {lessonSession ? "learn at your pace" : speedRoundSession ? "5-minute challenge" : "timed practice"}</Text>
             {networkConnected === false ? <Text style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>Offline · your answers are saved on this device and will sync when you reconnect.</Text> : pendingSyncCount > 0 ? <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>Syncing saved progress…</Text> : null}
             {test.warnings?.map((warning, index) => <Text key={index} style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>{warning}</Text>)}
             {!lessonSession && <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
@@ -1239,7 +1250,7 @@ export default function App() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity disabled={busy} onPress={() => { if (lessonSession) { if (answers[test.questions[currentQuestionIndex]?.id] === undefined) { setError("Choose an answer before checking it."); return; } void submit(); } else confirmSubmit(); }} style={styles.examNext}>
-                  <Text style={styles.primaryText}>{busy ? (lessonSession ? "Checking…" : "Submitting…") : (lessonSession ? "Check answer" : "Submit practice")}</Text>
+                  <Text style={styles.primaryText}>{busy ? (lessonSession ? "Checking…" : "Submitting…") : (lessonSession ? "Check answer" : speedRoundSession ? "Finish speed round" : "Submit practice")}</Text>
                   <MaterialCommunityIcons name="check" size={19} color="#ffffff" />
                 </TouchableOpacity>
               )}
@@ -1330,6 +1341,27 @@ export default function App() {
                 void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1 }, true);
               }}
             />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Start 10-question speed round, five minutes"
+              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.subjects.some((subject) => (subject.practiceCount ?? subject.count) > 0)}
+              onPress={() => {
+                const subjects = (bank?.subjects ?? []).filter((subject) => (subject.practiceCount ?? subject.count) > 0).map((subject) => subject.subject);
+                void startPractice({ subjects, topicFilters: [], difficulty: "any", count: 10 }, false, true);
+              }}
+              style={[styles.card, { marginTop: 14, padding: 18, borderColor: "#f59e0b", backgroundColor: darkMode ? "#172235" : "#fffbeb" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: "#fef3c7", alignItems: "center", justifyContent: "center" }}>
+                  <MaterialCommunityIcons name="timer-sand" size={28} color="#b45309" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 4 }, darkMode && { color: "#f1f5f9" }]}>Speed round</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>10 questions · 5 minutes · mixed subjects</Text>
+                  <Text style={{ color: "#b45309", fontWeight: "800", marginTop: 8 }}>Start challenge  →</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
             <StudentLessonLibrary
               darkMode={darkMode}
               reduceMotion={reduceMotion}

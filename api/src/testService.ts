@@ -16,7 +16,7 @@ import {
   type StatsById,
 } from "./selection.js";
 
-export const MODES = ["mock", "practice", "mistakes"] as const;
+export const MODES = ["mock", "practice", "speedRound", "mistakes"] as const;
 export type TestMode = (typeof MODES)[number];
 
 export const CreateTestSchema = z
@@ -33,12 +33,15 @@ export const CreateTestSchema = z
     count: z.number().int().min(1).max(200).optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.mode === "practice" && !(value.subjects?.length || value.subject)) {
+    if ((value.mode === "practice" || value.mode === "speedRound") && !(value.subjects?.length || value.subject)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["subjects"],
         message: "Select at least one subject for practice mode.",
       });
+    }
+    if (value.mode === "speedRound" && (value.count ?? 10) > 10) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Speed rounds are limited to 10 questions." });
     }
     if (value.subjects && new Set(value.subjects).size !== value.subjects.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
@@ -117,8 +120,9 @@ export interface SubmitSummary {
 const MOCK_MINUTES = 180;
 const MINUTES_PER_QUESTION = 0.9;
 
-function minutesFor(mode: TestMode, questionCount: number): number {
+export function minutesFor(mode: TestMode, questionCount: number): number {
   if (mode === "mock") return MOCK_MINUTES;
+  if (mode === "speedRound") return 5;
   return Math.max(5, Math.round(questionCount * MINUTES_PER_QUESTION));
 }
 
@@ -194,7 +198,7 @@ export async function createTest(
   // A question can still be reused when the practice-only pool is exhausted.
   let practiceCandidates = candidates;
   let reusedExamPool = false;
-  if (input.mode === "practice") {
+  if (input.mode === "practice" || input.mode === "speedRound") {
     const publishedExamQuestions = await db.examVersionQuestion.findMany({
       where: {
         sourceQuestionId: { not: null },
@@ -222,7 +226,7 @@ export async function createTest(
     const { questions, shortfalls } = selectMockTest(candidates, stats);
     selected = questions;
     warnings = shortfallWarning(shortfalls);
-  } else if (input.mode === "practice") {
+  } else if (input.mode === "practice" || input.mode === "speedRound") {
     const chosenSubjects = input.subjects ?? (input.subject ? [input.subject] : []);
     const topicFilter = new Set(input.topics ?? []);
     const topicsBySubject = new Map<string, Set<string>>();
@@ -240,7 +244,7 @@ export async function createTest(
       }
       return topicFilter.size === 0 || (question.topic !== null && topicFilter.has(question.topic));
     };
-    const requested = input.count ?? 20;
+    const requested = input.mode === "speedRound" ? Math.min(input.count ?? 10, 10) : input.count ?? 20;
     const baseQuota = Math.floor(requested / chosenSubjects.length);
     const remainderQuota = requested % chosenSubjects.length;
     const requestedBySubject = new Map(chosenSubjects.map((name, index) => [name, baseQuota + (index < remainderQuota ? 1 : 0)]));
