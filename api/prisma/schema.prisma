@@ -47,8 +47,6 @@ model Question {
   answers      AttemptAnswer[]
   stats        Stat[]
   examSnapshots ExamVersionQuestion[]
-  embedding     QuestionEmbedding?
-
   @@index([subjectId])
   @@index([reviewStatus, subjectId])
 }
@@ -63,8 +61,6 @@ model Attempt {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     Int
   answers    AttemptAnswer[]
-  adaptiveDecisions AdaptiveDecisionLog[]
-
   @@index([userId])
 }
 
@@ -89,10 +85,6 @@ model User {
   notificationPreferences StudentNotificationPreference?
   examSessions      ExamSession[]
   examSessionEvents ExamSessionEvent[] @relation("ExamSessionEventActor")
-  modelDatasetsCreated ModelDataset[] @relation("ModelDatasetCreator")
-  modelEvaluations ModelEvaluation[] @relation("ModelEvaluationActor")
-  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
-  modelTrainingJobsCreated ModelTrainingJob[] @relation("ModelTrainingJobCreator")
 }
 
 model Invitation {
@@ -398,117 +390,6 @@ model StudentNotification {
 
 // Model registry and evaluation records. These models must remain represented in
 // the Prisma schema as well as the SQL migrations so generated clients expose them.
-model RegisteredModel {
-  id                String   @id @default(cuid())
-  modelId           String
-  version           Int
-  algorithm         String
-  task              String
-  dataset           String
-  trainingDatasetId String?
-  artifactJson      String
-  isActive          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  activatedAt       DateTime?
-
-  @@unique([modelId, version])
-  @@index([modelId, isActive])
-  @@index([createdAt])
-}
-
-model ModelRegistryAudit {
-  id        String   @id @default(cuid())
-  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId   Int?
-  modelId   String
-  version   Int
-  action    String
-  details   String   @default("{}")
-  createdAt DateTime @default(now())
-
-  @@index([modelId, version, createdAt])
-  @@index([actorId, createdAt])
-}
-
-model ModelEvaluation {
-  id                String   @id @default(cuid())
-  actor             User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId           Int?
-  modelId           String
-  candidateVersion  Int
-  baselineVersion   Int
-  datasetId         String   @default("")
-  evaluationDataset String
-  datasetFingerprint String
-  sampleCount       Int
-  metricsJson       String
-  status            String
-  evaluatedAt       DateTime @default(now())
-
-  @@index([modelId, candidateVersion, evaluatedAt])
-  @@index([actorId, evaluatedAt])
-}
-
-model ModelDataset {
-  id                String   @id @default(cuid())
-  createdBy         User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById       Int?
-  trainingJobs      ModelTrainingJob[]
-  name              String
-  task              String
-  targetColumn      String   @default("target")
-  featureSchemaJson String
-  samplesJson       String
-  rowCount          Int
-  sourceDescription String
-  sourceAttested    Boolean  @default(false)
-  datasetKind       String   @default("synthetic")
-  fingerprint       String   @unique
-  createdAt         DateTime @default(now())
-
-  @@index([name, createdAt])
-  @@index([createdById, createdAt])
-}
-
-model ModelDriftBucket {
-  id          String   @id @default(cuid())
-  modelId     String
-  version     Int
-  featureName String
-  bucket      String
-  periodStart DateTime
-  count       Int      @default(0)
-
-  @@unique([modelId, version, featureName, bucket, periodStart])
-  @@index([modelId, version, periodStart])
-}
-
-model ModelTrainingJob {
-  id             String      @id @default(cuid())
-  dataset        ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
-  datasetId      String
-  createdBy      User?        @relation("ModelTrainingJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById    Int?
-  modelId        String
-  seed           Int       @default(42)
-  epochs         Int       @default(80)
-  batchSize      Int       @default(32)
-  status         String    @default("QUEUED")
-  progress       Int       @default(0)
-  errorMessage   String    @default("")
-  workerId       String    @default("")
-  leaseExpiresAt DateTime?
-  resultJson     String    @default("{}")
-  createdAt      DateTime  @default(now())
-  startedAt      DateTime?
-  completedAt    DateTime?
-  updatedAt      DateTime  @updatedAt
-
-  @@index([status, createdAt])
-  @@index([createdById, createdAt])
-  @@index([datasetId, createdAt])
-}
-
 model IntegrityFlag {
   id              String   @id @default(cuid())
   assignmentId    String
@@ -533,81 +414,18 @@ model IntegrityFlag {
 
 
 model StudyMaterial {
-  id             String   @id @default(cuid())
-  uploadedById   Int?
-  title          String
-  description    String   @default("")
-  subject        String
-  topic          String   @default("")
-  fileName       String
-  mimeType       String
-  sizeBytes      Int
-  contentBase64  String
-  status         String   @default("DRAFT")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  uploadedById Int?
+  title        String
+  description  String   @default("")
+  subject      String
+  topic        String   @default("")
+  url          String   @default("")
+  status       String   @default("DRAFT")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([status, subject, title])
   @@index([uploadedById, createdAt])
 }
 
-
-model AdaptiveDecisionLog {
-  id                      String   @id @default(cuid())
-  attempt                 Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  attemptId               Int
-  learnerGroupId          String
-  selectedQuestionId      Int
-  eligibleQuestionIdsJson String
-  selectionProbability    Float    @default(1)
-  stateFeaturesJson       String
-  policyVersion           Int
-  policyMode              String   @default("deterministic-top-k")
-  reasonCode              String
-  selectionScore          Float
-  selectedAt              DateTime @default(now())
-  reward                  Float?
-  outcomeStatus           String   @default("pending")
-  outcomeAt               DateTime?
-
-  @@unique([attemptId, selectedQuestionId])
-  @@index([learnerGroupId, selectedAt])
-  @@index([outcomeStatus, selectedAt])
-  @@index([selectedQuestionId, selectedAt])
-}
-
-
-model QuestionEmbedding {
-  id              String   @id @default(cuid())
-  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId      Int      @unique
-  embeddingJson   String
-  embeddingModel  String
-  embeddingVersion Int
-  sourceHash      String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([embeddingModel, embeddingVersion])
-  @@index([sourceHash])
-}
-
-model QuestionEmbeddingJob {
-  id              String   @id @default(cuid())
-  status          String   @default("QUEUED")
-  batchSize       Int      @default(16)
-  force           Boolean  @default(false)
-  progress        Int      @default(0)
-  total           Int      @default(0)
-  cursorQuestionId Int     @default(0)
-  questionIdsJson  String?
-  errorMessage    String   @default("")
-  workerId        String   @default("")
-  leaseExpiresAt  DateTime?
-  createdAt       DateTime @default(now())
-  startedAt       DateTime?
-  completedAt     DateTime?
-  updatedAt       DateTime @updatedAt
-
-  @@index([status, createdAt])
-}

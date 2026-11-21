@@ -6,7 +6,6 @@ export type StudentPage =
   | "question-bank"
   | "announcements"
   | "notifications"
-  | "assigned-exams"
   | "progress"
   | "analytics"
   | "learning"
@@ -15,8 +14,6 @@ export type StudentPage =
 interface StudentNavigationProps {
   activePage: StudentPage;
   setActivePage: Dispatch<SetStateAction<StudentPage>>;
-  examActive: boolean;
-  pendingExamCount: number;
   unreadAnnouncementCount: number;
   unreadNotificationCount: number;
   theme: "light" | "dark";
@@ -29,7 +26,6 @@ interface StudentNavigationProps {
 const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN" | "ACCOUNT" }[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "LEARN" },
   { page: "practice", label: "Practice", icon: "✎", group: "LEARN" },
-  { page: "assigned-exams", label: "Assigned exams", icon: "▤", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },
   { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },
   { page: "analytics", label: "Analytics", icon: "▩", group: "LEARN" },
@@ -42,8 +38,6 @@ const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN
 export default function StudentNavigation({
   activePage,
   setActivePage,
-  examActive,
-  pendingExamCount,
   unreadAnnouncementCount,
   unreadNotificationCount,
   theme,
@@ -61,8 +55,7 @@ export default function StudentNavigation({
           type="button"
           className="student-brand brand-home-button"
           onClick={() => setActivePage("dashboard")}
-          disabled={examActive}
-          title={examActive ? "Dashboard navigation is locked while an assigned exam is active" : "Go to student dashboard"}
+          title="Go to student dashboard"
           aria-label="ArcTester dashboard"
         >
           <span className="brand-mark" aria-hidden="true">A</span>
@@ -73,21 +66,17 @@ export default function StudentNavigation({
           <p className="student-nav-label">LEARN</p>
           <nav aria-label="Student navigation">
             {NAV_ITEMS.filter(({ group }) => group === "LEARN").map(({ page, label, icon }) => {
-              const count = page === "assigned-exams" ? pendingExamCount : 0;
               return (
                 <button
                   key={page}
                   type="button"
-                  disabled={examActive}
-                  title={examActive ? "Navigation is locked while an assigned exam is active" : undefined}
                   className={activePage === page ? "student-nav-item active" : "student-nav-item"}
                   aria-current={activePage === page ? "page" : undefined}
-                  aria-label={count > 0 ? `${label} (${count})` : label}
+                  aria-label={label}
                   onClick={() => setActivePage(page)}
                 >
                   <span className="student-nav-icon" aria-hidden="true">{icon}</span>
                   <span>{label}</span>
-                  {count > 0 ? <small aria-hidden="true">{count}</small> : null}
                 </button>
               );
             })}
@@ -100,8 +89,6 @@ export default function StudentNavigation({
                 <button
                   key={page}
                   type="button"
-                  disabled={examActive}
-                  title={examActive ? "Navigation is locked while an assigned exam is active" : undefined}
                   className={activePage === page ? "student-nav-item active" : "student-nav-item"}
                   aria-current={activePage === page ? "page" : undefined}
                   aria-label={count > 0 ? `${label} (${count})` : label}

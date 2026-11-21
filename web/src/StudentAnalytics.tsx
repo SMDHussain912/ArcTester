@@ -2,8 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
 import type {
   PerformanceOverview,
-  StudentScorePrediction,
-  StudentReadinessEstimate,
   StudyRecommendation,
   StudyRecommendationsReport,
   TopicRow,
@@ -19,8 +17,6 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
-  const [prediction, setPrediction] = useState<StudentScorePrediction | null>(null);
-  const [readiness, setReadiness] = useState<StudentReadinessEstimate | null>(null);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const generationRef = useRef(0);
@@ -33,8 +29,6 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
       request<PerformanceOverview>("/analytics/overview"),
       request<WeakTopicsReport>("/analytics/weak-topics"),
       request<StudyRecommendationsReport>("/analytics/recommendations"),
-      request<StudentScorePrediction>("/analytics/score-prediction"),
-      request<StudentReadinessEstimate>("/analytics/readiness"),
     ]);
     if (generation !== generationRef.current) return;
     const failures: string[] = [];
@@ -44,10 +38,6 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
     else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
     if (results[2].status === "fulfilled") setRecommendations(results[2].value);
     else failures.push("Study recommendations: " + (results[2].reason instanceof Error ? results[2].reason.message : "Could not load this section."));
-    if (results[3].status === "fulfilled") setPrediction(results[3].value);
-    else failures.push("Score prediction: " + (results[3].reason instanceof Error ? results[3].reason.message : "Could not load this section."));
-    if (results[4].status === "fulfilled") setReadiness(results[4].value);
-    else failures.push("Exam readiness: " + (results[4].reason instanceof Error ? results[4].reason.message : "Could not load this section."));
     setErrors(failures);
     setLoading(false);
   }, []);
@@ -82,7 +72,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           <span>Other available sections remain visible. Use Refresh analytics to retry.</span>
         </div>
       ) : null}
-      {loading && !overview && !weakTopics && !recommendations && !prediction && !readiness ? (
+      {loading && !overview && !weakTopics && !recommendations ? (
         <div className="stack" style={{ gap: 10 }}>
           <Skeleton variant="stat-tile" className="skeleton-stat" />
           <Skeleton variant="stat-tile" className="skeleton-stat" />
@@ -111,94 +101,8 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
               <div className="stat-caption">Correct answers / answered questions</div>
             </div>
           </section>
-
-          <section className="panel" aria-labelledby="score-prediction-title">
-            <div className="panel-header">
-              <h2 id="score-prediction-title">Next practice score estimate</h2>
-            </div>
-            {prediction === null && loading ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
-            {prediction === null && !loading ? <p className="muted">Score prediction is unavailable. Refresh to try again.</p> : null}
-            {prediction && prediction.status === "ready" && (
-              <div>
-                <div className="big">{prediction.predictedScorePercent}%</div>
-                <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
-                <p className="muted">Prediction range: <strong>{prediction.predictionInterval.lowerPercent}%–{prediction.predictionInterval.upperPercent}%</strong> (walk-forward RMSE {prediction.predictionInterval.estimatedErrorPercent} points).</p>
-                <p className="muted">{prediction.completedAttempts} completed attempts · {prediction.trainingSamples} samples · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}.</p>
-              </div>
-            )}
-            {prediction && prediction.status === "insufficient_data" && (
-              <div>
-                <p className="muted">{prediction.message}</p>
-                <p><strong>{prediction.completedAttempts} / {prediction.requiredCompletedAttempts}</strong> completed practice attempts</p>
-                <p className="muted">{prediction.availableSamples} of {prediction.requiredSamples} required prediction samples available.</p>
-              </div>
-            )}
-            {prediction && prediction.status === "baseline_not_beaten" && (
-              <div>
-                <p className="muted">{prediction.message}</p>
-                <p className="muted">{prediction.completedAttempts} attempts analyzed · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="panel" aria-labelledby="formal-performance-title">
-            <div className="panel-header">
-              <h2 id="formal-performance-title">Formal exam performance</h2>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card">
-                <div className="stat-label">Verified graded exams</div>
-                <div className="stat-value">{overview.formalExams.graded}</div>
-                <div className="stat-caption">Review-required exams are excluded</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Score percentage</div>
-                <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
-                <div className="stat-caption">{overview.formalExams.score?.toFixed(2) ?? "—"} / {overview.formalExams.maximumScore?.toFixed(2) ?? "—"} marks</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Needs review</div>
-                <div className="stat-value">{overview.formalExams.reviewRequired}</div>
-                <div className="stat-caption">Not included in verified score totals</div>
-              </div>
-            </div>
-          </section>
         </>
       )}
-
-          <section className="panel" aria-labelledby="readiness-estimate-title">
-            <div className="panel-header">
-              <h2 id="readiness-estimate-title">Exam readiness estimate</h2>
-            </div>
-            {readiness === null && loading ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
-            {readiness === null && !loading ? <p className="muted">Readiness estimation is unavailable. Refresh to try again.</p> : null}
-            {readiness?.status === "ready" && (
-              <div>
-                <div className="big">{readiness.category.replace("_", " ")}</div>
-                <p className="muted">{readiness.message}</p>
-                <p className="muted">
-                  Confidence {Math.round(readiness.confidence * 100)}% · {readiness.completedAttempts} completed attempts · model v{readiness.modelVersion}
-                </p>
-                <ul className="readiness-probabilities">
-                  <li>Not ready: {Math.round(readiness.probabilities.NOT_READY * 100)}%</li>
-                  <li>Developing: {Math.round(readiness.probabilities.DEVELOPING * 100)}%</li>
-                  <li>Ready: {Math.round(readiness.probabilities.READY * 100)}%</li>
-                </ul>
-              </div>
-            )}
-            {readiness?.status === "insufficient_data" && (
-              <div>
-                <p className="muted">{readiness.message}</p>
-                <p><strong>{readiness.completedAttempts} / {readiness.requiredCompletedAttempts}</strong> completed practice attempts</p>
-              </div>
-            )}
-            {readiness?.status === "fallback" && (
-              <p className="muted">{readiness.message} No readiness category is shown.</p>
-            )}
-            {readiness?.status === "unavailable" && (
-              <p className="muted">{readiness.message}</p>
-            )}
-          </section>
 
       {weakTopics && (
         <section className="panel" aria-labelledby="study-recommendations-title">
@@ -259,7 +163,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
 
       <div className="row">
         <button className="button button-secondary" onClick={() => setActivePage("learning")}>Open concept library</button>
-        <button className="button button-secondary" onClick={() => setActivePage("materials")}>Offline study materials</button>
+        <button className="button button-secondary" onClick={() => setActivePage("materials")}>Study resources</button>
         <button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Back to study dashboard</button>
       </div>
     </div>

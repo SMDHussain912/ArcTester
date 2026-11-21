@@ -6,7 +6,6 @@ import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
 
 export function parseOptions(raw: string): string[] {
   const value: unknown = JSON.parse(raw);
@@ -59,11 +58,6 @@ export function questionRouter(db: PrismaClient): Router {
       const input = QuestionInputSchema.parse(req.body);
       const outcome = await insertQuestion(db, input);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
-      const createdRecord = await db.question.findFirstOrThrow({
-        where: { questionHash: hashQuestion(input.text) },
-        select: { id: true },
-      });
-      await queueQuestionEmbeddingJob(db, [createdRecord.id]);
       const question = await db.question.findFirstOrThrow({
         where: { questionHash: hashQuestion(input.text) },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
@@ -247,8 +241,6 @@ export function questionRouter(db: PrismaClient): Router {
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
       // Content edits invalidate prior embeddings; queue a fresh index build.
-      await db.questionEmbedding.deleteMany({ where: { questionId: id } });
-      await queueQuestionEmbeddingJob(db, [id]);
       res.json({ ok: true, question: {
         id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
         text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,

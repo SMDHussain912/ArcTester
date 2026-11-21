@@ -18,7 +18,6 @@ import {
 import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { OfflineExams } from "./src/OfflineExams";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
 import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
@@ -34,7 +33,6 @@ const API_URL = (() => {
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
-type NotificationPreferences = { examAssignments: boolean; examResults: boolean };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
   id: string;
@@ -116,8 +114,6 @@ export default function App() {
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
   const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({ examAssignments: true, examResults: true });
-  const [savingNotificationPreference, setSavingNotificationPreference] = useState(false);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
@@ -128,7 +124,6 @@ export default function App() {
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
-  const [showExams, setShowExams] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
 
   const [darkMode, setDarkMode] = useState(false);
@@ -189,18 +184,6 @@ export default function App() {
     ]);
   }
 
-  async function updateNotificationPreference(key: keyof NotificationPreferences, value: boolean) {
-    const previous = notificationPreferences;
-    setNotificationPreferences({ ...previous, [key]: value });
-    setSavingNotificationPreference(true);
-    try {
-      const result = await api<{ preferences: NotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify({ [key]: value }) });
-      setNotificationPreferences(result.preferences);
-    } catch (cause) {
-      setNotificationPreferences(previous);
-      setError((cause as Error).message);
-    } finally { setSavingNotificationPreference(false); }
-  }
 
   async function refreshQuestionBank() {
     setBusy(true); setError("");
@@ -291,7 +274,7 @@ export default function App() {
         }),
       ]),
     ]).start();
-  }, [entrance, reduceMotion, statsEntrance, user, test, showExams]);
+  }, [entrance, reduceMotion, statsEntrance, user, test]);
 
   async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
@@ -366,20 +349,16 @@ export default function App() {
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
     getOfflineLearningPackage(String(user.id)).then((result) => { if (isCurrentSession()) setOfflineLearningPackage(result); }).catch(() => { if (isCurrentSession()) setOfflineLearningPackage(null); });
-    api<{ preferences: NotificationPreferences }>("/notifications/preferences").then((result) => { if (isCurrentSession()) setNotificationPreferences(result.preferences); }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
     api<{ notifications: Notification[]; unreadCount?: number }>("/notifications")
       .then((result) => {
         if (!isCurrentSession() || notificationRequestSequence.current !== initialNotificationRequest) return;
-        const items = Array.isArray(result.notifications) ? result.notifications : [];
+        const items = (Array.isArray(result.notifications) ? result.notifications : [])
+          .filter((item) => !["EXAM_ASSIGNMENT", "EXAM_RESULT"].includes(item.kind));
         setNotifications(items);
-        setUnreadNotificationCount(
-          typeof result.unreadCount === "number" && Number.isFinite(result.unreadCount)
-            ? Math.max(0, Math.floor(result.unreadCount))
-            : items.filter((item) => !item.readAt).length,
-        );
+        setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
       })
       .catch(() => undefined);
     setCheckingPracticeRecovery(true);
@@ -421,13 +400,10 @@ export default function App() {
     try {
       const result = await api<{ notifications: Notification[]; unreadCount?: number }>("/notifications");
       if (sessionIdentityRef.current !== requestIdentity || notificationRequestSequence.current !== requestSequence) return;
-      const items = Array.isArray(result.notifications) ? result.notifications : [];
+      const items = (Array.isArray(result.notifications) ? result.notifications : [])
+        .filter((item) => !["EXAM_ASSIGNMENT", "EXAM_RESULT"].includes(item.kind));
       setNotifications(items);
-      setUnreadNotificationCount(
-        typeof result.unreadCount === "number" && Number.isFinite(result.unreadCount)
-          ? Math.max(0, Math.floor(result.unreadCount))
-          : items.filter((item) => !item.readAt).length,
-      );
+      setUnreadNotificationCount(items.filter((item) => !item.readAt).length);
     } catch (cause) {
       if (
         sessionIdentityRef.current === requestIdentity &&
@@ -491,7 +467,7 @@ export default function App() {
   function openNotification(notification: Notification) {
     void markNotificationRead(notification.id);
     if (notification.href === "/assignments" || /^\/assignments\/[^/]+\/result$/.test(notification.href)) {
-      setShowExams(true);
+      setActiveTab("home");
     }
   }
 
@@ -823,7 +799,6 @@ export default function App() {
     setCheckingPracticeRecovery(false);
     setAnswers({});
     setCurrentQuestionIndex(0);
-    setShowExams(false);
     setActiveTab("home");
   }
 
@@ -889,8 +864,6 @@ export default function App() {
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        ) : showExams ? (
-          <OfflineExams api={api} apiUrl={API_URL} token={token ?? ""} userId={String(user.id)} darkMode={darkMode} questionTextSize={questionTextSize} onExit={() => { setShowExams(false); setActiveTab("home"); }} />
         ) : result ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice result</Text>
@@ -1068,7 +1041,6 @@ export default function App() {
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
-            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>NOTIFICATIONS</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam assignments</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when a new exam is assigned</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examAssignments} onValueChange={(value) => void updateNotificationPreference("examAssignments", value)} /></View><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Exam results</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Notify when results or reviews are available</Text></View><Switch disabled={savingNotificationPreference} value={notificationPreferences.examResults} onValueChange={(value) => void updateNotificationPreference("examResults", value)} /></View>{savingNotificationPreference ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Saving preferences…</Text> : null}</View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
              <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
@@ -1115,13 +1087,9 @@ export default function App() {
               <View style={styles.dashboardMetricGrid}>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
-                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.graded ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Graded exams</Text></View>
-                <View style={styles.dashboardMetric}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.formalExams.scorePercentage == null ? "—" : Math.round(learningOverview.formalExams.scorePercentage) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Exam average</Text></View>
               </View>
-              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{learningOverview ? learningOverview.practice.questions + " practice questions attempted · " + learningOverview.practice.correct + " correct · " + learningOverview.practice.incorrect + " incorrect · " + learningOverview.formalExams.reviewRequired + " exam reviews pending" : "Performance data will appear after your first completed paper."}</Text>
               {learningOverview?.practice.trend.length ? <View style={{ marginTop: 14 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>RECENT PRACTICE ACCURACY</Text>{learningOverview.practice.trend.slice(-6).map((item) => { const percent = item.accuracy === null ? 0 : Math.round(item.accuracy * 100); return <View key={item.attemptId} style={{ marginTop: 8 }}><View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{new Date(item.finishedAt).toLocaleDateString()}</Text><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.accuracy === null ? "No answered questions" : percent + "%"}</Text></View><View style={{ height: 7, borderRadius: 8, backgroundColor: darkMode ? "#334155" : "#e9edf5", overflow: "hidden", marginTop: 4 }}><View style={{ height: "100%", width: `${percent}%` as `${number}%`, backgroundColor: "#2563eb", borderRadius: 8 }} /></View></View>; })}</View> : null}
               {learningOverview?.practice.subjects.length ? <View style={{ marginTop: 14 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>SUBJECT ACCURACY · LOWEST FIRST</Text>{learningOverview.practice.subjects.slice(0, 3).map((item) => <View key={item.subject} style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 7 }}><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.accuracy === null ? "—" : Math.round(item.accuracy * 100) + "%"} · {item.seen} answered</Text></View>)}</View> : null}
-              {learningOverview?.formalExams.subjects.length ? <View style={{ marginTop: 14 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>FORMAL EXAM SUBJECTS</Text>{learningOverview.formalExams.subjects.slice(0, 3).map((item) => <View key={item.subject} style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 7 }}><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.accuracy === null ? "—" : Math.round(item.accuracy * 100) + "%"}</Text></View>)}</View> : null}
             </View>
             <View style={styles.announcementHeader}>
               <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Announcements</Text>
@@ -1190,12 +1158,7 @@ export default function App() {
                 <Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              onPress={() => setShowExams(true)}
-              style={[styles.primary, { marginTop: 20 }]}
-            >
-              <Text style={styles.primaryText}>Assigned exams · Offline mode</Text>
-            </TouchableOpacity>
+
 <TouchableOpacity onPress={signOut} style={styles.secondary}>
               <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Sign out</Text>
             </TouchableOpacity>
@@ -1205,17 +1168,14 @@ export default function App() {
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
         <Text style={[styles.footer, darkMode && { color: "#64748b" }]}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
-      {user && !test && !showExams && (
+      {user && !test && (
         <Animated.View style={[styles.bottomNav, animatedEntrance(entrance), darkMode && { backgroundColor: "#111c2e", borderColor: "#334155" }]}>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "home" }} accessibilityLabel="Home tab" style={styles.navItem} onPress={() => setActiveTab("home")}>
             <MaterialCommunityIcons name="view-dashboard" size={23} color={activeTab === "home" ? "#2563eb" : "#8993a5"} />
             <Text style={[styles.navLabel, activeTab === "home" && styles.navLabelActive]}>Home</Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "practice" }} accessibilityLabel="Practice tab" style={styles.navItem} onPress={() => setActiveTab("practice")}><MaterialCommunityIcons name="pencil-box-multiple" size={23} color={activeTab === "practice" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "practice" && styles.navLabelActive]}>Practice</Text></TouchableOpacity>
-          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: false }} accessibilityLabel="Assigned exams tab" style={styles.navItem} onPress={() => { setShowExams(true); setActiveTab("home"); }}>
-            <MaterialCommunityIcons name="clipboard-text" size={23} color="#8993a5" />
-            <Text style={styles.navLabel}>Exams</Text>
-          </TouchableOpacity>
+
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
             <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />

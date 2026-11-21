@@ -19,8 +19,7 @@
       }
     },
     "plugins": [
-      "expo-secure-store",
-      "./modules/exam-guard"
+      "expo-secure-store"
     ],
     "extra": {
       "apiUrl": "",

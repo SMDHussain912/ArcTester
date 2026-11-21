@@ -224,6 +224,7 @@ export function announcementRouter(db: PrismaClient): Router {
       const notifications = await db.studentNotification.findMany({
         where: {
           userId: req.user!.id,
+          kind: { notIn: ["EXAM_ASSIGNMENT", "EXAM_RESULT"] },
           ...(unreadOnly ? { readAt: null } : {}),
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
@@ -243,6 +244,7 @@ export function announcementRouter(db: PrismaClient): Router {
       const unreadCount = await db.studentNotification.count({
         where: {
           userId: req.user!.id,
+          kind: { notIn: ["EXAM_ASSIGNMENT", "EXAM_RESULT"] },
           readAt: null,
           OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },

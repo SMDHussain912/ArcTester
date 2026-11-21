@@ -11,13 +11,8 @@ import { questionRouter } from "./questionRoutes.js";
 import { sessionRouter } from "./sessionRoutes.js";
 import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
-import { startQuestionEmbeddingWorker } from "./intelligence/questionEmbeddingWorker.js";
-import { modelRegistryRouter } from "./modelRoutes.js";
-import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
-import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { studyMaterialRouter } from "./studyMaterialRoutes.js";
-import { answerIntelligenceRouter } from "./answerIntelligenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -33,9 +28,8 @@ const apiRateLimit = rateLimit({
 });
 
 /**
- * Minimal CORS without another dependency. In production only exact configured
- * origins are allowed; localhost/loopback is permitted outside production so
- * local development and the packaged desktop client (file://) can reach the API.
+ * Minimal CORS. In production only exact configured origins are allowed;
+ * localhost/loopback is permitted outside production for local development.
  */
 function localCors(
   _req: express.Request,
@@ -52,10 +46,7 @@ function localCors(
   const isLocalOrigin =
     process.env.NODE_ENV !== "production" &&
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-  // file:// (desktop) sends Origin: "null"; allow it outside production so the
-  // packaged desktop app can reach the API on localhost.
-  const isFileOrigin = process.env.NODE_ENV !== "production" && origin === "null";
-  if (origin && (isLocalOrigin || isFileOrigin || configuredOrigins.has(origin))) {
+  if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -130,9 +121,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
     if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
       return next();
     }
-    const largePayload = req.path.startsWith("/admin/model-datasets") ||
-      req.path.startsWith("/admin/study-materials");
-    express.json({ limit: largePayload ? "12mb" : "1mb" })(req, res, next);
+    express.json({ limit: "1mb" })(req, res, next);
   });
   app.use(localCors);
   app.use(cookieCsrfGuard);
@@ -161,11 +150,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(questionRouter(database));
   app.use(submissionRouter(database));
   app.use(questionAdminRouter(database));
-  app.use(modelRegistryRouter(database));
-  app.use(modelTrainingJobsRouter(database));
   app.use(announcementRouter(database));
   app.use(studyMaterialRouter(database));
-  app.use(answerIntelligenceRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
@@ -179,15 +165,11 @@ if (process.env.NODE_ENV !== "test") {
   const server = app.listen(PORT, () => {
     console.log(`ecet-api listening on http://localhost:${PORT}`);
   });
-  const stopModelTrainingWorker = startModelTrainingWorker(db);
-  const stopQuestionEmbeddingWorker = startQuestionEmbeddingWorker(db);
   let shutdownStarted = false;
   const shutdown = (signal: string) => {
     if (shutdownStarted) return;
     shutdownStarted = true;
-    console.log(`ecet-api received ${signal}; stopping background workers and draining requests`);
-    stopModelTrainingWorker();
-    stopQuestionEmbeddingWorker();
+    console.log(`ecet-api received ${signal}; draining requests`);
     server.close((error) => {
       if (error) {
         console.error("ecet-api HTTP shutdown failed", error);

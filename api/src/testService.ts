@@ -1,7 +1,5 @@
 // Mock-test engine service: DB access + Phase 2 selection glued together.
 import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
-import { createAdaptiveLearnerGroupId } from "./auth.js";
-import { createAdaptiveDecisionLog, selectAdaptiveQuestions, type AdaptiveTopicState } from "./intelligence/adaptiveQuestionSelector.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
 import type { PrismaClient } from "@prisma/client";
@@ -215,46 +213,8 @@ export async function createTest(
     candidates.map((c) => c.id)
   );
 
-  const adaptiveTopicStates: AdaptiveTopicState[] = [];
-  if (input.mode === "practice") {
-    // Build topic mastery only from completed attempts. In-progress answers must
-    // not leak into the learner state used to select the next practice set.
-    const completedAnswers = await db.attemptAnswer.findMany({
-      where: { attempt: { is: { userId, finishedAt: { not: null } } } },
-      select: {
-        isCorrect: true,
-        subjectSnapshot: true,
-        topicSnapshot: true,
-        attempt: { select: { finishedAt: true } },
-      },
-      orderBy: { attemptId: "desc" },
-      take: 2000,
-    });
-    const topicBuckets = new Map<string, { subject: string; topic: string; answered: number; correct: number; lastSeenAt: Date | null }>();
-    for (const answer of completedAnswers) {
-      if (!answer.topicSnapshot) continue;
-      const key = `${answer.subjectSnapshot.toLowerCase()}::${answer.topicSnapshot.toLowerCase()}`;
-      const bucket = topicBuckets.get(key) ?? {
-        subject: answer.subjectSnapshot, topic: answer.topicSnapshot,
-        answered: 0, correct: 0, lastSeenAt: null,
-      };
-      bucket.answered += 1;
-      if (answer.isCorrect) bucket.correct += 1;
-      const finishedAt = answer.attempt.finishedAt;
-      if (finishedAt && (!bucket.lastSeenAt || finishedAt > bucket.lastSeenAt)) bucket.lastSeenAt = finishedAt;
-      topicBuckets.set(key, bucket);
-    }
-    adaptiveTopicStates.push(...[...topicBuckets.values()].map((bucket) => ({
-      subject: bucket.subject, topic: bucket.topic,
-      accuracy: bucket.answered ? bucket.correct / bucket.answered : null,
-      answered: bucket.answered, exposureCount: bucket.answered,
-      lastSeenAt: bucket.lastSeenAt?.toISOString() ?? null,
-    })));
-  }
-
   let selected: AttemptRow[];
   let warnings: string[] = [];
-  const adaptiveDecisionLogs: Array<ReturnType<typeof createAdaptiveDecisionLog>> = [];
 
   if (input.mode === "mock") {
     const { questions, shortfalls } = selectMockTest(candidates, stats);
@@ -305,55 +265,37 @@ export async function createTest(
       let added = 0;
       for (const entry of active) {
         const available = entry.pool.filter((question) => !selectedById.has(question.id));
-        const adaptive = selectAdaptiveQuestions({
-          candidates: available.map((question) => ({
-            questionId: String(question.id),
-            subject: question.subject,
-            topic: question.topic ?? "Uncategorized",
-            difficulty: question.difficulty === "easy" ? 1 : question.difficulty === "hard" ? 5 : 3,
-            exposureCount: stats[String(question.id)]?.seen ?? 0,
-            lastSeenAt: (() => {
-              const lastSeen = stats[String(question.id)]?.lastSeen;
-              return lastSeen == null ? null : lastSeen instanceof Date ? lastSeen.toISOString() : new Date(lastSeen).toISOString();
-            })(),
-          })),
-          topicStates: adaptiveTopicStates,
-          questionCount: Math.min(quota, available.length, remaining - added),
-          now,
-          targetDifficulty: input.difficulty === "easy" ? 2 : input.difficulty === "hard" ? 4 : 3,
-          excludedQuestionIds: [...selectedById].map(String),
-          policyVersion: 1,
-        });
-        const questionById = new Map(available.map((question) => [String(question.id), question]));
-        const picked = adaptive.rankedQuestionIds.flatMap((id) => {
-          const question = questionById.get(id);
-          return question ? [question] : [];
-        });
-        // Persist each selected question's deterministic policy decision before reveal.
-        const scoreById = new Map(adaptive.rankedQuestionIds.map((id, index) => [id, adaptive.scores[index] ?? 0]));
-        const reasonById = new Map(adaptive.reasons.map((item) => [item.questionId, item.reasonCode]));
-        const completedAnswerCount = adaptiveTopicStates.reduce((sum, state) => sum + state.answered, 0);
-        const accuracyStates = adaptiveTopicStates.filter((state) => state.accuracy !== null);
-        const averageAccuracy = accuracyStates.length
-          ? accuracyStates.reduce((sum, state) => sum + (state.accuracy ?? 0), 0) / accuracyStates.length : 0;
-        const weakTopicCount = adaptiveTopicStates.filter((state) => state.answered >= 5 && (state.accuracy ?? 1) < 0.65).length;
-        const overdueTopicCount = adaptiveTopicStates.filter((state) => {
-          if (!state.lastSeenAt) return false;
-          const lastSeenAt = new Date(state.lastSeenAt).getTime();
-          return Number.isFinite(lastSeenAt) && now.getTime() - lastSeenAt >= 7 * 86400000;
-        }).length;
-        const stateFeatures = [completedAnswerCount, averageAccuracy, weakTopicCount, overdueTopicCount,
-          input.difficulty === "easy" ? 2 : input.difficulty === "hard" ? 4 : 3];
-        const learnerGroupId = createAdaptiveLearnerGroupId(userId);
+        const target = Math.min(quota, available.length, remaining - added);
+        // Simple topic-level revision: prioritize the topic with the weakest
+        // historical accuracy, then its total missed answers. This is rule-based
+        // and deliberately does not depend on an ML model or persisted model log.
+        const topicPerformance = new Map<string, { seen: number; wrong: number }>();
+        for (const question of available) {
+          const stat = stats[String(question.id)];
+          if (!stat || stat.seen <= 0) continue;
+          const topic = question.topic ?? "General";
+          const aggregate = topicPerformance.get(topic) ?? { seen: 0, wrong: 0 };
+          aggregate.seen += stat.seen;
+          aggregate.wrong += stat.wrong;
+          topicPerformance.set(topic, aggregate);
+        }
+        const missed = available.filter((question) => (stats[String(question.id)]?.wrong ?? 0) > 0);
+        const missedPicked = [...missed].sort((a, b) => {
+          const aTopic = topicPerformance.get(a.topic ?? "General") ?? { seen: 0, wrong: 0 };
+          const bTopic = topicPerformance.get(b.topic ?? "General") ?? { seen: 0, wrong: 0 };
+          const aAccuracy = aTopic.seen ? aTopic.wrong / aTopic.seen : 0;
+          const bAccuracy = bTopic.seen ? bTopic.wrong / bTopic.seen : 0;
+          return bAccuracy - aAccuracy
+            || bTopic.wrong - aTopic.wrong
+            || (stats[String(b.id)]?.wrong ?? 0) - (stats[String(a.id)]?.wrong ?? 0)
+            || a.id - b.id;
+        }).slice(0, target);
+        const pickedIds = new Set(missedPicked.map((question) => question.id));
+        const picked = [
+          ...missedPicked,
+          ...selectQuestions(available.filter((question) => !pickedIds.has(question.id)), stats, target - missedPicked.length),
+        ];
         for (const question of picked) {
-          const questionId = String(question.id);
-          adaptiveDecisionLogs.push(createAdaptiveDecisionLog({
-            learnerGroupId, selectedQuestionId: questionId,
-            eligibleQuestionIds: available.map((candidate) => String(candidate.id)),
-            selectionProbability: 1, stateFeatures, policyVersion: adaptive.policyVersion,
-            selectionScore: scoreById.get(questionId) ?? 0,
-            reasonCode: reasonById.get(questionId) ?? "MIXED_PRACTICE", selectedAt: now,
-          }));
           selected.push(question);
           selectedById.add(question.id);
         }
@@ -445,20 +387,6 @@ export async function createTest(
         };
       }),
     });
-    if (adaptiveDecisionLogs.length > 0) {
-      await tx.adaptiveDecisionLog.createMany({
-        data: adaptiveDecisionLogs.map((decision) => ({
-          attemptId: created.id, learnerGroupId: decision.learnerGroupId,
-          selectedQuestionId: Number(decision.selectedQuestionId),
-          eligibleQuestionIdsJson: JSON.stringify(decision.eligibleQuestionIds),
-          selectionProbability: decision.selectionProbability,
-          stateFeaturesJson: JSON.stringify(decision.stateFeatures),
-          policyVersion: decision.policyVersion, policyMode: decision.policyMode,
-          reasonCode: decision.reasonCode, selectionScore: decision.selectionScore,
-          selectedAt: new Date(decision.selectedAt), outcomeStatus: decision.outcomeStatus,
-        })),
-      });
-    }
     return created;
   });
 
@@ -557,21 +485,6 @@ export async function submitTest(
       });
     }
 
-    const correctIds = rows.filter((row) => row.isCorrect).map((row) => row.questionId);
-    const wrongIds = rows.filter((row) => row.chosen !== null && !row.isCorrect).map((row) => row.questionId);
-    const unansweredIds = rows.filter((row) => row.chosen === null).map((row) => row.questionId);
-    const updateAdaptiveOutcomes = async (
-      ids: number[], reward: number | null, outcomeStatus: "correct" | "incorrect" | "unanswered",
-    ) => {
-      if (!ids.length) return;
-      await tx.adaptiveDecisionLog.updateMany({
-        where: { attemptId, selectedQuestionId: { in: ids }, outcomeStatus: "pending" },
-        data: { reward, outcomeStatus, outcomeAt: now },
-      });
-    };
-    await updateAdaptiveOutcomes(correctIds, 1, "correct");
-    await updateAdaptiveOutcomes(wrongIds, 0, "incorrect");
-    await updateAdaptiveOutcomes(unansweredIds, null, "unanswered");
   });
 
   return { attemptId, score, total: memberIds.size, expired };

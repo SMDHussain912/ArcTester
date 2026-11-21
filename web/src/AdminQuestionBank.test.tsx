@@ -19,42 +19,6 @@ describe("AdminQuestionBank", () => {
 
 
 
-  it("shows embedding coverage and queues a rebuild when requested", () => {
-    const onRebuildEmbeddings = vi.fn();
-    render(<AdminQuestionBank
-      questions={[]} total={0} page={1} query="" subject="" topic="" difficulty=""
-      catalog={[]} filteredTopics={[]} selected={[]} busy={false}
-      onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()}
-      onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()}
-      onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()}
-      embeddingStatus={{ totalQuestions: 120, indexedQuestions: 90, pendingQuestions: 30, activeJob: null }}
-      onRebuildEmbeddings={onRebuildEmbeddings}
-    />);
-    expect(screen.getByText(/90 of 120 questions indexed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Build / refresh semantic index" }));
-    expect(onRebuildEmbeddings).toHaveBeenCalledOnce();
-  });
-
-  it("runs semantic question search and renders similarity relationships", () => {
-    const onSemanticSearch = vi.fn();
-    render(<AdminQuestionBank
-      questions={[question]} total={1} page={1} query="" subject="" topic="" difficulty=""
-      catalog={catalog} filteredTopics={catalog[0].topics} selected={[]} busy={false}
-      onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()}
-      onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()}
-      onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()}
-      semanticResults={[{ questionId: 7, similarity: 0.91, relation: "SAME_CONCEPT", question: {
-        id: 7, text: "What is the sum of two and two?", subject: { name: "Mathematics" }, topic: { name: "Algebra" },
-      } }]}
-      onSemanticSearch={onSemanticSearch}
-    />);
-    fireEvent.change(screen.getByRole("textbox", { name: "Semantic search query" }), { target: { value: "addition" } });
-    fireEvent.click(screen.getByRole("button", { name: "Find similar questions" }));
-    expect(onSemanticSearch).toHaveBeenCalledWith("addition");
-    expect(screen.getByText("91.0% similarity")).toBeTruthy();
-    expect(screen.getByText("What is the sum of two and two?")).toBeTruthy();
-  });
-
   it("renders empty state and disables destructive actions without a selection", () => {
     render(<AdminQuestionBank questions={[]} total={0} page={1} query="" subject="" topic="" difficulty="" catalog={[]} filteredTopics={[]} selected={[]} busy={false} onQueryChange={vi.fn()} onSubjectChange={vi.fn()} onTopicChange={vi.fn()} onDifficultyChange={vi.fn()} onToggleSelected={vi.fn()} onDeleteSelected={vi.fn()} onBulkDifficultyChange={vi.fn()} onEditQuestion={vi.fn()} onUpload={vi.fn()} onPageChange={vi.fn()} />);
     expect(screen.getByText("No questions match these filters")).toBeTruthy();

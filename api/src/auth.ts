@@ -11,8 +11,6 @@ import type { PrismaClient } from "@prisma/client";
 
 const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
-const READINESS_GROUP_HMAC_KEY = process.env.READINESS_GROUP_HMAC_KEY ??
-  (process.env.NODE_ENV === "production" ? "" : JWT_SECRET);
 const COOKIE_NAME = "ecet_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -27,24 +25,6 @@ export function validateJwtSecret(secret: string, production = process.env.NODE_
   ) {
     throw new Error("JWT_SECRET must be a strong, unique secret of at least 32 bytes in production. Generate one with: openssl rand -hex 32");
   }
-}
-
-export function validateReadinessGroupHmacKey(secret: string, production = process.env.NODE_ENV === "production"): void {
-  if (!production) return;
-  if (
-    Buffer.byteLength(secret, "utf8") < 32 ||
-    /change[_ -]?me|replace[_ -]?me|example|placeholder/i.test(secret)
-  ) {
-    throw new Error("READINESS_GROUP_HMAC_KEY must be a stable, unique secret of at least 32 bytes in production. Generate one with: openssl rand -hex 32");
-  }
-}
-
-function readinessGroupHmacKey(): string {
-  validateReadinessGroupHmacKey(READINESS_GROUP_HMAC_KEY);
-  if (!READINESS_GROUP_HMAC_KEY) {
-    throw new Error("READINESS_GROUP_HMAC_KEY must be configured before generating readiness dataset pseudonyms.");
-  }
-  return READINESS_GROUP_HMAC_KEY;
 }
 
 validateJwtSecret(JWT_SECRET);
@@ -65,24 +45,6 @@ function nowSeconds(): number {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-/** Domain-separated pseudonym; rotating JWT_SECRET intentionally rotates this ID. */
-export function createAdaptiveLearnerGroupId(userId: number): string {
-  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("A valid learner ID is required.");
-  return createHmac("sha256", JWT_SECRET)
-    .update("ArcTester:adaptive-learner-group:v1:")
-    .update(String(userId))
-    .digest("hex");
-}
-
-/** Purpose-separated pseudonym used only for readiness training/evaluation datasets. */
-export function createReadinessLearnerGroupId(userId: number): string {
-  if (!Number.isSafeInteger(userId) || userId <= 0) throw new Error("A valid learner ID is required.");
-  return createHmac("sha256", readinessGroupHmacKey())
-    .update("ArcTester:readiness-learner-group:v1:")
-    .update(String(userId))
-    .digest("hex");
 }
 
 export function signJwt(

@@ -6,9 +6,6 @@ import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
 import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
-import { queueQuestionEmbeddingJob } from "./intelligence/questionEmbeddingQueue.js";
-import { getOnnxQuestionEmbeddingEncoder } from "./intelligence/questionEmbeddingOnnx.js";
-import { searchPersistedQuestionEmbeddings } from "./intelligence/questionEmbeddingSearch.js";
 
 const ListSchema = z.object({
   q: z.string().trim().max(300).optional(),
@@ -88,67 +85,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
       res.json({ ok: true, question });
     } catch (error) { next(error); }
   });
-  router.get("/admin/question-embeddings/search", async (req, res, next) => {
-    try {
-      const input = z.object({
-        q: z.string().trim().min(3).max(1000),
-        subject: z.string().trim().min(1).max(120).optional(),
-        limit: z.coerce.number().int().min(1).max(25).default(10),
-        candidateLimit: z.coerce.number().int().min(1).max(500).default(500),
-      }).parse(req.query);
-      const encoder = await getOnnxQuestionEmbeddingEncoder();
-      const result = await searchPersistedQuestionEmbeddings(db, input.q, encoder, {
-        ...(input.subject ? { subject: input.subject } : {}),
-        limit: input.limit,
-        candidateLimit: input.candidateLimit,
-      });
-      res.json({ ok: true, query: input.q, ...result });
-    } catch (error) { next(error); }
-  });
-
-  router.get("/admin/question-embeddings/status", async (_req, res, next) => {
-    try {
-      const [totalQuestions, indexedQuestions, activeJob] = await Promise.all([
-        db.question.count(),
-        db.questionEmbedding.count(),
-        db.questionEmbeddingJob.findFirst({
-          where: { status: { in: ["QUEUED", "RUNNING"] } },
-          orderBy: { createdAt: "desc" },
-          select: { id: true, status: true, progress: true, total: true, createdAt: true },
-        }),
-      ]);
-      res.json({ ok: true, totalQuestions, indexedQuestions, pendingQuestions: Math.max(0, totalQuestions - indexedQuestions), activeJob });
-    } catch (error) { next(error); }
-  });
-
-  router.post("/admin/question-embeddings/rebuild", async (req, res, next) => {
-    try {
-      const input = z.object({
-        batchSize: z.number().int().min(1).max(32).default(16),
-        force: z.boolean().default(false),
-      }).parse(req.body ?? {});
-      const active = await db.questionEmbeddingJob.findFirst({
-        where: { status: { in: ["QUEUED", "RUNNING"] } },
-        select: { id: true, status: true },
-      });
-      if (active) return res.status(409).json({ error: "A question-embedding rebuild is already active.", job: active });
-      const total = await db.question.count();
-      const job = await db.questionEmbeddingJob.create({
-        data: { status: "QUEUED", batchSize: input.batchSize, force: input.force, total, progress: 0 },
-        select: { id: true, status: true, batchSize: true, force: true, total: true, progress: true, createdAt: true },
-      });
-      res.status(202).json({ ok: true, job, message: "Question embedding rebuild queued. The API worker downloads the pinned ONNX model when processing begins." });
-    } catch (error) { next(error); }
-  });
-
-  router.get("/admin/question-embeddings/jobs/:id", async (req, res, next) => {
-    try {
-      const job = await db.questionEmbeddingJob.findUnique({ where: { id: req.params.id } });
-      if (!job) return next(notFound("Question embedding job not found."));
-      res.json({ ok: true, job });
-    } catch (error) { next(error); }
-  });
-
   router.get("/admin/questions", async (req, res, next) => {
     try {
       const filter = ListSchema.parse(req.query);
@@ -251,8 +187,6 @@ export function questionAdminRouter(db: PrismaClient): Router {
         correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source,
         difficulty: merged.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(merged.text),
       }, include: { subject: true, topic: true } });
-      await db.questionEmbedding.deleteMany({ where: { questionId: id } });
-      await queueQuestionEmbeddingJob(db, [id]);
       res.json({ ok: true, question: updated });
     } catch (error) { next(error); }
   });

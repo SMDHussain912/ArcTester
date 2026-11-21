@@ -2,10 +2,7 @@ import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
 import {
-  createAdaptiveLearnerGroupId,
-  createReadinessLearnerGroupId,
   signJwt,
-  validateReadinessGroupHmacKey,
   validateJwtSecret,
   verifyJwt,
 } from "../src/auth.js";
@@ -90,28 +87,6 @@ describe("JWT secret configuration", () => {
 
   it("does not require production-strength secrets in development or tests", () => {
     expect(() => validateJwtSecret("", false)).not.toThrow();
-  });
-});
-
-describe("learner group pseudonyms", () => {
-  it("creates stable purpose-separated HMAC IDs without exposing raw learner IDs", () => {
-    const readinessId = createReadinessLearnerGroupId(12345);
-    expect(readinessId).toMatch(/^[a-f0-9]{64}$/);
-    expect(createReadinessLearnerGroupId(12345)).toBe(readinessId);
-    expect(createReadinessLearnerGroupId(12346)).not.toBe(readinessId);
-    expect(createAdaptiveLearnerGroupId(12345)).not.toBe(readinessId);
-    expect(readinessId).not.toContain("12345");
-  });
-
-  it("requires a stable production-only HMAC secret for readiness pseudonyms", () => {
-    expect(() => validateReadinessGroupHmacKey("short-secret", true)).toThrow("READINESS_GROUP_HMAC_KEY");
-    expect(() => validateReadinessGroupHmacKey("r".repeat(64), true)).not.toThrow();
-    expect(() => validateReadinessGroupHmacKey("", false)).not.toThrow();
-  });
-
-  it("rejects invalid learner identifiers", () => {
-    expect(() => createReadinessLearnerGroupId(0)).toThrow("valid learner ID");
-    expect(() => createReadinessLearnerGroupId(-1)).toThrow("valid learner ID");
   });
 });
 

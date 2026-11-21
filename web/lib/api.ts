@@ -7,7 +7,6 @@
 // protected route answers 403.
 
 import { friendlyError, type SubmitAnswer } from "./answers";
-import type { BrowserTensorflowArtifact } from "./tensorflowInference";
 
 export const API_BASE = "/api";
 
@@ -145,83 +144,6 @@ export interface AdminExam {
   }[];
 }
 
-export interface PublishedExamCatalogItem {
-  examId: string;
-  title: string;
-  description: string;
-  version: number;
-  durationMinutes: number;
-  questionCount: number;
-  publishedAt: string | null;
-  assignment: { id: string; availableFrom: string | null; dueAt: string | null; submission: { id: string; status: string } | null } | null;
-}
-
-export interface AssignedExam {
-  id: string;
-  status: string;
-  assignedAt: string;
-  availableFrom: string | null;
-  dueAt: string | null;
-  exam: { id: string; title: string; description: string };
-  version: number;
-  durationMinutes: number;
-  questionCount: number;
-  submission: {
-    id: string;
-    status: string;
-    score: number | null;
-    maximumScore: number | null;
-    submittedAt: string;
-  } | null;
-}
-export interface AssignedExamPackage {
-  assignmentId: string;
-  examId: string;
-  title: string;
-  description: string;
-  version: number;
-  instructions: string;
-  durationMinutes: number;
-  availableFrom: string | null;
-  dueAt: string | null;
-  serverTime: string;
-  questions: {
-    id: string;
-    position: number;
-    subject: string;
-    topic: string | null;
-    text: string;
-    options: string[];
-    optionOrder: number[];
-    marks: number;
-    negativeMarks: number;
-  }[];
-}
-export interface AssignedExamResult {
-  submissionId: string;
-  status: string;
-  score: number | null;
-  maximumScore: number | null;
-  submittedAt: string;
-  receivedAt: string;
-  questions: {
-    id: string;
-    position: number;
-    subject: string;
-    topic: string | null;
-    relatedConcepts: { slug: string; title: string }[];
-    text: string;
-    options: string[];
-    correctIndex: number;
-    explanation: string;
-    marks: number;
-    negativeMarks: number;
-    selectedIndex: number | null;
-    isCorrect: boolean;
-    awardedMarks: number;
-  }[];
-}
-
 export interface WeakTopicRow {
   subject: string;
   topic: string | null;
@@ -338,11 +260,6 @@ export interface StudyRecommendation {
     weakAccuracyThreshold: number;
   } | null;
 }
-
-export type StudentScorePrediction =
-  | { status: "insufficient_data"; completedAttempts: number; availableSamples: number; requiredSamples: number; requiredCompletedAttempts: number; message: string; populationFeatures?: Record<string, number> }
-  | { status: "baseline_not_beaten"; completedAttempts: number; evaluationSamples: number; modelMae: number; baselineMae: number; message: string; populationFeatures?: Record<string, number> }
-  | { status: "ready"; completedAttempts: number; trainingSamples: number; evaluationSamples: number; predictedScorePercent: number; predictionInterval: { lowerPercent: number; upperPercent: number; estimatedErrorPercent: number; method: "walk-forward-rmse" }; modelMae: number; baselineMae: number; message: string; populationFeatures?: Record<string, number> };
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
@@ -570,44 +487,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
 
-export interface AdminModelDataset {
-  id: string;
-  name: string;
-  task: "regression" | "binary-classification";
-  targetColumn: string;
-  featureSchema: Array<{ name: string; type: "numeric" | "categorical"; categories?: string[] }>;
-  rowCount: number;
-  sourceDescription: string;
-  sourceAttested: boolean;
-  datasetKind: "synthetic" | "real-anonymized";
-  fingerprint: string;
-  createdAt: string;
-}
-
-export interface AdminRegisteredModel {
-  modelId: string;
-  version: number;
-  algorithm: string;
-  task: string;
-  dataset: string;
-  isActive: boolean;
-  createdAt: string;
-  activatedAt?: string | null;
-  productionEligible?: boolean | null;
-}
-
-export interface TensorflowTrainingReport {
-  ok: true;
-  model: AdminRegisteredModel | null;
-  promoted: false;
-  productionEligible: boolean;
-  split: { trainRows: number; testRows: number; trainGroups: number; testGroups: number };
-  candidate: { rows: number; mae: number; rmse: number; rSquared: number | null };
-  baseline: { rows: number; mae: number; rmse: number; rSquared: number | null };
-  reason: string;
-  message: string;
-}
-
 export const api = {
   bank: () => request<BankInfo>("/bank"),
   offlineLearningPackage: () => request<OfflineLearningPackage>("/learning/package"),
@@ -633,20 +512,6 @@ export const api = {
     request<AuthSession>("/auth/login", json({ email, password })),
   logout: () => request<{ ok: boolean; message: string }>("/auth/logout", { method: "POST" }),
   me: () => request<AuthSession>("/auth/me"),
-  assignedExams: () => request<{ ok: true; assignments: AssignedExam[] }>("/exams/assigned"),
-  publishedExamCatalog: () => request<{ ok: true; catalog: PublishedExamCatalogItem[] }>("/exams/catalog"),
-  assignedExamPackage: (id: string) =>
-    request<{ ok: true; package: AssignedExamPackage; sha256: string }>(
-      `/exams/assignments/${id}/package`
-    ),
-  startAssignedExamSession: (id: string) =>
-    request<{ ok: true; session: { id: string; status: string; startedAt: string; serverTime: string; deadline: string | null } }>(
-      `/exams/assignments/${id}/session/start`, json({})
-    ),
-  heartbeatAssignedExamSession: (id: string, event: "HEARTBEAT" | "FOCUS_LOST" | "FOCUS_RESTORED" | "CONNECTION_RESTORED" = "HEARTBEAT") =>
-    request<{ ok: true; serverTime: string; deadline: string | null; sessionStatus: string }>(
-      `/exams/assignments/${id}/session/heartbeat`, json({ event })
-    ),
   adminLiveSessions: () =>
     request<{ ok: true; serverTime: string; sessions: AdminLiveSession[] }>("/admin/exams/live-sessions"),
   adminExamAttendance: () =>
@@ -657,27 +522,10 @@ export const api = {
     request<{ ok: true; session: { id: string; status: string; endedAt: string | null } }>(
       `/admin/exams/sessions/${id}/action`, json({ action, reason })
     ),
-  submitAssignedExam: (
-    id: string,
-    body: {
-      attemptUuid: string;
-      startedAt: string;
-      submittedAt: string;
-      answers: { examQuestionId: string; selectedIndex: number | null }[];
-    }
-  ) =>
-    request<{ ok: true; duplicate: boolean; submission: { id: string; status: string } }>(
-      `/exams/assignments/${id}/submission`,
-      json(body)
-    ),
-  assignedExamResult: (id: string) =>
-    request<{ ok: true; result: AssignedExamResult }>(`/exams/assignments/${id}/result`),
   performanceOverview: () => request<PerformanceOverview>("/analytics/overview"),
   weakTopics: () => request<WeakTopicsReport>("/analytics/weak-topics"),
   questionPerformance: () => request<QuestionPerformanceReport>("/analytics/question-performance"),
   studyHistory: (page = 1) => request<StudyHistoryPage>(`/analytics/history?page=${page}&limit=10`),
-  studentScorePrediction: () => request<StudentScorePrediction>("/analytics/score-prediction"),
-  activeTensorflowModel: (modelId: string) => request<{ ok: true; artifact: BrowserTensorflowArtifact }>(`/models/${encodeURIComponent(modelId)}/active/tensorflow`),
   studyRecommendations: () =>
     request<StudyRecommendationsReport>("/analytics/recommendations"),
   announcements: () => request<{ ok: true; announcements: Announcement[]; serverTime: string }>("/announcements"),
@@ -697,24 +545,6 @@ export const api = {
   adminSubmission: (id: string) =>
     request<{ ok: true; submission: AdminSubmission }>(`/admin/submissions/${id}`),
   adminOverview: () => request<{ ok: true } & AdminOverview>("/admin/analytics/overview"),
-  adminModelDatasets: () => request<{ ok: true; datasets: AdminModelDataset[] }>("/admin/model-datasets"),
-  adminRegisteredModels: () => request<{ ok: true; models: AdminRegisteredModel[] }>("/admin/models"),
-  activateAdminModelVersion: (modelId: string, version: number) =>
-    request<{ ok: true; model: { modelId: string; version: number; isActive: boolean; activatedAt: string } }>(
-      `/admin/models/${encodeURIComponent(modelId)}/${version}/activate`, json({})
-    ),
-  registerAdminModelDataset: (body: {
-    name: string;
-    task: "regression";
-    targetColumn: string;
-    featureSchema: Array<{ name: string; type: "numeric" }>;
-    samples: Array<{ features: Record<string, number>; target: number; groupId: string }>;
-    sourceDescription: string;
-    sourceAttested: true;
-    datasetKind: "synthetic" | "real-anonymized";
-  }) => request<{ ok: true; dataset: AdminModelDataset }>("/admin/model-datasets", json(body)),
-  trainAdminTensorflowDataset: (datasetId: string, body: { modelId: string; seed?: number; epochs?: number; batchSize?: number }) =>
-    request<TensorflowTrainingReport>(`/admin/model-datasets/${encodeURIComponent(datasetId)}/train-tensorflow`, json(body)),
   adminExams: () => request<{ ok: true; exams: AdminExam[] }>("/admin/exams"),
   adminStudents: () => request<{ ok: true; students: AdminStudent[] }>("/admin/students"),
   adminQuestions: (page = 1, pageSize = 200) => request<{ ok: true; questions: AdminQuestion[]; page: number; pages: number; total: number }>(`/admin/question-bank?page=${page}&pageSize=${pageSize}`),

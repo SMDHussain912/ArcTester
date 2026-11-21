@@ -1,9 +1,8 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { safeStorage } from "./safeStorage";
-import { clearLocalExamBackupsOnLogout } from "./localExamBackup";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
-import StudentPracticeResults, { type AnswerExplanation, type PracticeResult } from "./StudentPracticeResults";
+import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
 import { buildPracticeConfig } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
@@ -24,16 +23,12 @@ import StudentPracticeQuickActions from "./StudentPracticeQuickActions";
 import StudentPracticeSubjectTopicFilters from "./StudentPracticeSubjectTopicFilters";
 import StudentPracticePaperConfiguration from "./StudentPracticePaperConfiguration";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
-import StudentAssignedExamPreview from "./StudentAssignedExamPreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
 import StudentLearning from "./StudentLearning";
 import StudentMaterials from "./StudentMaterials";
-import { useAssignedExamSession } from "./useAssignedExamSession";
-import AssignedExamSession from "./AssignedExamSession";
 import AppSplash from "./components/AppSplash";
 import { OnlineStatusContext } from "./OnlineStatusContext";
-import type { AssignedExam, AssignedExamResult } from "./types/assignedExams";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
@@ -59,7 +54,7 @@ function OnlineStatusBanner() {
   return (
     !isOnline && (
       <div className="error" style={{ padding: "8px 16px", marginBottom: "8px", textAlign: "center" }}>
-        <strong>Offline</strong> &mdash; You are currently offline. Exam results and submissions require a connection.
+        <strong>Offline</strong> &mdash; You are currently offline. Some learning updates require a connection.
       </div>
     )
   );
@@ -75,9 +70,6 @@ export default function App() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
-  const [assignedExams, setAssignedExams] = useState<AssignedExam[]>([]);
-  const [assignmentResult, setAssignmentResult] = useState<AssignedExamResult | null>(null);
-  const [assignmentResultForId, setAssignmentResultForId] = useState<string | null>(null);
   const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
@@ -109,8 +101,6 @@ export default function App() {
     acknowledgeAnnouncement,
     markNotificationRead,
     markAllNotificationsRead,
-    notificationPreferences,
-    updateNotificationPreferences,
     clear: clearStudentCommunications,
   } = useStudentCommunications({
     userRole: user?.role ?? null,
@@ -155,45 +145,6 @@ export default function App() {
       .then(setBank)
       .catch((cause) => setError((cause as Error).message));
   }, [user]);
-
-  useEffect(() => {
-    if (user?.role !== "STUDENT" || !["dashboard", "assigned-exams"].includes(activePage)) return;
-    let cancelled = false;
-    request<{ assignments: AssignedExam[] }>("/exams/assigned")
-      .then(({ assignments }) => {
-        if (!cancelled) setAssignedExams(Array.isArray(assignments) ? assignments : []);
-      })
-      .catch((cause) => {
-        if (!cancelled) setError((cause as Error).message);
-      });
-    return () => { cancelled = true; };
-  }, [user, activePage]);
-
-  const exam = useAssignedExamSession({
-    request,
-    setActivePage: (page) => setActivePage(page as StudentPage),
-    setAssignments: setAssignedExams,
-    onResultLoaded: (result) => {
-      setAssignmentResult(result);
-    },
-  });
-
-  async function reviewAssignedExam(assignmentId: string) {
-    setBusy(true); setError("");
-    try {
-      const response = await request<{ result: AssignedExamResult }>(`/exams/assignments/${encodeURIComponent(assignmentId)}/result`);
-      setAssignmentResult(response.result);
-      setAssignmentResultForId(assignmentId);
-    } catch (cause) { setError((cause as Error).message); }
-    finally { setBusy(false); }
-  }
-
-  async function refreshAssignedExams() {
-    try {
-      const response = await request<{ assignments: AssignedExam[] }>("/exams/assigned");
-      setAssignedExams(Array.isArray(response.assignments) ? response.assignments : []);
-    } catch (cause) { setError((cause as Error).message); }
-  }
 
   // Recover a saved practice attempt after reload. The server remains the source
   // of truth for the attempt; local storage only identifies it and restores answers.
@@ -254,18 +205,7 @@ export default function App() {
   }, [user, test, result]);
 
   async function openStudentNotification(id: string) {
-    const notification = studentNotifications.find((item) => item.id === id);
-    if (!notification) return;
     await markNotificationRead(id);
-    if (notification.href === "/assignments") {
-      setActivePage("assigned-exams");
-      return;
-    }
-    const resultMatch = notification.href.match(/^\/assignments\/([^/]+)\/result$/);
-    if (resultMatch) {
-      setActivePage("assigned-exams");
-      void reviewAssignedExam(resultMatch[1]);
-    }
   }
 
   useEffect(() => {
@@ -521,8 +461,7 @@ export default function App() {
       return;
     }
     setUser(null);
-    clearLocalExamBackupsOnLogout();
-    setBank(null);
+      setBank(null);
     const activePracticeId = safeStorage.getItem("arctester-active-practice-attempt");
     if (activePracticeId) safeStorage.removeItem(practiceAnswersKey(activePracticeId));
     safeStorage.removeItem("arctester-active-practice-attempt");
@@ -564,21 +503,6 @@ export default function App() {
     );
   }
 
-  const isDesktopShell = typeof navigator !== "undefined" && /electron/i.test(navigator.userAgent);
-
-  if (user.role === "ADMIN" && isDesktopShell) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-card panel" role="alert">
-          <p className="eyebrow">ARCTESTER DESKTOP</p>
-          <h1>Admin access is web-only</h1>
-          <p className="muted">The desktop app is reserved for student accounts. Open ArcTester in your web browser to use the administrator workspace.</p>
-          <button className="primary" onClick={() => void signOut()} disabled={busy}>{busy ? "Signing out…" : "Sign out"}</button>
-        </section>
-      </main>
-    );
-  }
-
   if (user.role === "ADMIN") {
     return <AdminWorkspace
       email={user.email}
@@ -600,8 +524,6 @@ export default function App() {
       <StudentNavigation
         activePage={activePage}
         setActivePage={setActivePage}
-        examActive={Boolean(exam.package)}
-        pendingExamCount={assignedExams.filter((item) => !item.submission).length}
         unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length}
         unreadNotificationCount={unreadNotificationCount}
         theme={theme}
@@ -611,7 +533,7 @@ export default function App() {
         onSignOut={signOut}
       />
 
-      {user.role === "STUDENT" && !test && !result && !exam.package && announcements.some((item) => !item.seenAt) ? (() => {
+      {user.role === "STUDENT" && !test && !result && announcements.some((item) => !item.seenAt) ? (() => {
         const notice = announcements.find((item) => !item.seenAt)!;
         return (
           <div className="announcement-overlay">
@@ -629,22 +551,7 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {exam.package ? (
-          <AssignedExamSession
-            package={exam.package}
-            answers={exam.answers}
-            saveStatus={exam.saveStatus}
-            paused={exam.paused}
-            remainingSeconds={exam.remainingSeconds}
-            busy={exam.busy}
-            error={exam.error}
-            selectAssignedAnswer={exam.selectAssignedAnswer}
-            submitAssignedExam={exam.submitAssignedExam}
-            leaveAssignedExam={exam.leaveAssignedExam}
-            studentName={user?.email ?? null}
-            studentId={String(user?.id ?? null)}
-          />
-        ) : activePage === "practice" && test ? (
+        {activePage === "practice" && test ? (
           <StudentPracticeSession
             test={test}
             answers={answers}
@@ -658,28 +565,13 @@ export default function App() {
             onSubmit={() => void submitTest()}
           />
         ) : activePage === "practice" && result ? (
-          <StudentPracticeResults result={result} onBack={() => setResult(null)} onExplain={(questionId) => request<{ explanation: AnswerExplanation }>(`/tests/${result.attemptId}/questions/${questionId}/explanation`, { method: "POST" }).then((response) => response.explanation)} />
-        ) : activePage === "assigned-exams" ? (
-          <section className="assigned-exams-page">
-            <div className="page-heading"><div><p className="eyebrow">EXAM CENTRE</p><h1>Assigned exams</h1><p className="muted">Exams assigned to your account by the administrator.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshAssignedExams()}>Refresh</button></div>
-            {assignedExams.length === 0 ? <div className="panel empty-state"><h2>No assigned exams</h2><p className="muted">When an administrator assigns an exam, it will appear here.</p></div> : assignedExams.map((item) => {
-              const unavailable = item.availableFrom && new Date(item.availableFrom).getTime() > Date.now();
-              const expired = item.dueAt && new Date(item.dueAt).getTime() < Date.now();
-              return <article className="panel assigned-exam-card" key={item.id}>
-                <div className="admin-exam-meta"><div><strong>{item.exam.title}</strong><p className="muted">{item.exam.description || "No description"} · Version {item.version} · {item.questionCount} questions · {item.durationMinutes} min</p></div><span className={item.submission ? "status status-used" : expired ? "status status-expired" : "status status-pending"}>{item.submission ? "SUBMITTED" : expired ? "EXPIRED" : unavailable ? "UPCOMING" : "READY"}</span></div>
-                <div className="assigned-exam-dates"><small>Available: {item.availableFrom ? new Date(item.availableFrom).toLocaleString() : "Immediately"}</small><small>Deadline: {item.dueAt ? new Date(item.dueAt).toLocaleString() : "No deadline"}</small></div>
-                {item.submission ? <><p className="muted">Submitted {new Date(item.submission.submittedAt).toLocaleString()} · {item.submission.status === "REVIEW_REQUIRED" || item.submission.score === null ? "Awaiting administrator review. Your result will appear after approval." : `Score: ${item.submission.score ?? "Pending"} / ${item.submission.maximumScore ?? "—"}`}</p>{item.submission.status !== "REVIEW_REQUIRED" && item.submission.score !== null && <button type="button" className="ghost" disabled={busy} onClick={() => void reviewAssignedExam(item.id)}>Review answers</button>}{assignmentResultForId === item.id && assignmentResult && <div className="assigned-result-review"><h3>Answer review</h3><p>{assignmentResult.score === null ? <strong>Awaiting invigilator review</strong> : <strong>{assignmentResult.score} / {assignmentResult.maximumScore ?? "—"}</strong>} · {assignmentResult.status}</p>{assignmentResult.questions.map((question) => <article className="question-review-row" key={question.id}><strong>Q{question.position + 1}. {question.text}</strong><p className={question.isCorrect ? "success" : "error"}>{question.selectedIndex === null ? "Not answered" : question.isCorrect ? "Correct" : "Incorrect"} · {question.awardedMarks} marks</p><p><strong>Correct answer:</strong> {question.options[question.correctIndex]}</p><p className="muted">{question.explanation || "No explanation provided."}</p></article>)}</div>}</> : <button className="primary" disabled={busy || Boolean(unavailable) || Boolean(expired)} onClick={() => void exam.startAssignedExam(item.id)}>{unavailable ? "Not available yet" : expired ? "Deadline passed" : "Start examination"}</button>}
-              </article>;
-            })}
-          </section>
+          <StudentPracticeResults result={result} onBack={() => setResult(null)}  />
         ) : activePage === "notifications" ? (
           <StudentNotificationsInbox
             items={studentNotifications}
             onRefresh={() => void refreshNotifications().catch((cause) => setError((cause as Error).message))}
             onRead={(id) => void markNotificationRead(id)}
             onMarkAllRead={() => void markAllNotificationsRead()}
-            preferences={notificationPreferences}
-            onPreferenceChange={(patch) => void updateNotificationPreferences(patch)}
             onOpen={(id) => void openStudentNotification(id)}
           />
         ) : activePage === "announcements" ? (
@@ -696,7 +588,7 @@ export default function App() {
           <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
           <>
-            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} pendingExamCount={assignedExams.filter((item) => !item.submission).length} unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length} unreadNotificationCount={unreadNotificationCount} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
+            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length} unreadNotificationCount={unreadNotificationCount} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
             {activePage === "dashboard" && announcements.length > 0 ? (
               <StudentAnnouncementPreview
                 announcement={announcements[0]}
@@ -705,12 +597,6 @@ export default function App() {
               />
             ) : null}
             {activePage === "dashboard" ? <DashboardProgressSummary onOpenProgress={() => setActivePage("progress")} /> : null}
-            {activePage === "dashboard" ? (
-              <StudentAssignedExamPreview
-                assignments={assignedExams}
-                onViewAll={() => setActivePage("assigned-exams")}
-              />
-            ) : null}
             {activePage === "dashboard" && test ? (
               <StudentPracticeResumePreview
                 answeredCount={Object.keys(answers).length}
@@ -764,7 +650,7 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-        {activePage !== "notifications" && !exam.package && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+        {activePage !== "notifications" && !test && !result && studentNotifications.find((item) => !item.readAt) && (
           <StudentNotificationBanner
             notification={studentNotifications.find((item) => !item.readAt)!}
             onRead={(id) => void markNotificationRead(id)}

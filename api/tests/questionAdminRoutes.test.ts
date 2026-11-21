@@ -57,23 +57,6 @@ describe("question administration route contracts", () => {
   });
 
 
-  it("validates semantic search input and blocks student access", async () => {
-    expect((await getJson(`${server.baseUrl}/admin/question-embeddings/search?q=x`, adminCookie)).status).toBe(400);
-    expect((await getJson(`${server.baseUrl}/admin/question-embeddings/search?q=queue%20front`, studentCookie)).status).toBe(403);
-  });
-
-  it("queues an admin-only question embedding rebuild and reports its progress", async () => {
-    const queued = await postJson(`${server.baseUrl}/admin/question-embeddings/rebuild`, { batchSize: 4 }, adminCookie);
-    expect(queued.status).toBe(202);
-    const job = (queued.json as { job: { id: string; status: string; batchSize: number; total: number } }).job;
-    expect(job).toMatchObject({ status: "QUEUED", batchSize: 4, total: expect.any(Number) });
-    const status = await getJson(`${server.baseUrl}/admin/question-embeddings/jobs/${job.id}`, adminCookie);
-    expect(status.status).toBe(200);
-    expect((status.json as { job: { id: string; status: string } }).job).toMatchObject({ id: job.id, status: "QUEUED" });
-    expect((await getJson(`${server.baseUrl}/admin/question-embeddings/status`, adminCookie)).status).toBe(200);
-    expect((await postJson(`${server.baseUrl}/admin/question-embeddings/rebuild`, {}, studentCookie)).status).toBe(403);
-  });
-
   it("lists, filters and paginates the question bank with admin-only access", async () => {
     const response = await getJson(
       `${server.baseUrl}/admin/questions?q=queue&subject=Question%20Admin%20Systems&page=1&limit=10`,

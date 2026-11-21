@@ -1,9 +1,0 @@
-{
-  "platforms": ["android", "apple"],
-  "android": {
-    "modules": ["com.examguard.ExamGuardModule"]
-  },
-  "apple": {
-    "modules": ["ExamGuardModule"]
-  }
-}

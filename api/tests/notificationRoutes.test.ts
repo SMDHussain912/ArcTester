@@ -36,7 +36,7 @@ describe("student notification API", () => {
     const active = await server.db.studentNotification.create({
       data: {
         userId: firstUserId,
-        kind: "EXAM_ASSIGNMENT",
+        kind: "STUDY_UPDATE",
         title: "New exam assigned",
         message: "A mock exam is ready.",
         href: "/assignments",
@@ -46,7 +46,7 @@ describe("student notification API", () => {
     const expired = await server.db.studentNotification.create({
       data: {
         userId: firstUserId,
-        kind: "EXAM_RESULT",
+        kind: "STUDY_UPDATE",
         title: "Expired result notice",
         message: "This notification is expired.",
         href: "/assignments",
@@ -57,7 +57,7 @@ describe("student notification API", () => {
     await server.db.studentNotification.create({
       data: {
         userId: (await server.db.user.findUniqueOrThrow({ where: { email: "notification-second@example.test" } })).id,
-        kind: "EXAM_RESULT",
+        kind: "STUDY_UPDATE",
         title: "Private result",
         message: "Only the second student can see this.",
         href: "/assignments",
@@ -93,7 +93,7 @@ describe("student notification API", () => {
     const activeOne = await server.db.studentNotification.create({
       data: {
         userId: firstUserId,
-        kind: "EXAM_ASSIGNMENT",
+        kind: "STUDY_UPDATE",
         title: "Assignment one",
         message: "A new assignment is ready.",
         href: "/assignments",
@@ -103,7 +103,7 @@ describe("student notification API", () => {
     const activeTwo = await server.db.studentNotification.create({
       data: {
         userId: firstUserId,
-        kind: "EXAM_RESULT",
+        kind: "STUDY_UPDATE",
         title: "Result ready",
         message: "Your result is ready.",
         href: "/assignments",
@@ -113,7 +113,7 @@ describe("student notification API", () => {
     const expired = await server.db.studentNotification.create({
       data: {
         userId: firstUserId,
-        kind: "EXAM_RESULT",
+        kind: "STUDY_UPDATE",
         title: "Old result",
         message: "This notice has expired.",
         href: "/assignments",

@@ -45,41 +45,22 @@ async function loginUi(page: Page, email: string, password: string) {
   await page.getByRole("navigation", { name: "Student navigation" }).waitFor({ state: "visible", timeout: 15000 });
 }
 
-/** Setup test data: create admin, student, questions, exam, assignment */
-async function setupExamData(page: Page) {
+/** Setup a student account against the seeded question bank. */
+async function setupStudent(page: Page) {
   const adminCookie = await loginApi(page, "admin@arctester.test", "ArcTester-CI-Admin-2026!");
   if (!adminCookie) throw new Error("E2E administrator login failed.");
 
-  // Reuse a seeded question instead of inserting fixed IDs or duplicate fixture
-  // content. Each test still creates its own exam, invitation and student.
-  const catalog = await apiRequest(page, "/admin/questions?limit=100", "GET", undefined, adminCookie);
+  // The question-bank endpoint is the supported admin API. The old /admin/questions
+  // route was removed during the API cleanup; this also verifies the CI seed.
+  const catalog = await apiRequest(page, "/admin/question-bank?pageSize=200", "GET", undefined, adminCookie);
   if (catalog.status !== 200 || !Array.isArray(catalog.json.questions) || catalog.json.questions.length === 0) {
-    throw new Error("The seeded question bank is empty or unavailable to the E2E administrator.");
+    throw new Error(`The seeded question bank is empty or unavailable (${catalog.status}): ${JSON.stringify(catalog.json)}`);
   }
   const question = catalog.json.questions[0] as { id: number; subject: string };
   if (!Number.isSafeInteger(question.id) || !question.subject) throw new Error("Seeded question fixture is invalid.");
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const studentEmail = `student-${suffix}@arctester.test`;
-  const examTitle = `ECET ${question.subject} Mock ${suffix}`;
-
-  const examRes = await apiRequest(page, "/admin/exams", "POST", {
-    title: examTitle,
-    description: "A practice examination created by the Playwright suite.",
-    instructions: "Answer all questions.",
-    durationMinutes: 30,
-    shuffleQuestions: false,
-    shuffleOptions: false,
-    questions: [{ questionId: question.id, marks: 2, negativeMarks: 0 }],
-  }, adminCookie);
-  if (examRes.status !== 201 || !examRes.json.exam?.id) {
-    throw new Error(`E2E exam creation failed (${examRes.status}): ${JSON.stringify(examRes.json)}`);
-  }
-  const examId = examRes.json.exam.id as string;
-
-  const publish = await apiRequest(page, `/admin/exams/${examId}/publish`, "POST", {}, adminCookie);
-  if (publish.status < 200 || publish.status >= 300) throw new Error(`E2E exam publish failed: ${JSON.stringify(publish.json)}`);
-
   const inviteRes = await apiRequest(page, "/auth/invitations", "POST", { email: studentEmail }, adminCookie);
   const inviteToken = inviteRes.json.invitation?.token;
   if (inviteRes.status !== 201 || typeof inviteToken !== "string") {
@@ -92,27 +73,14 @@ async function setupExamData(page: Page) {
     invitationToken: inviteToken,
   });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
-
-  const studentCookie = await loginApi(page, studentEmail, "StudentPass123!");
-  if (!studentCookie) throw new Error("E2E student login failed.");
-  const studentSession = await apiRequest(page, "/auth/me", "GET", undefined, studentCookie);
-  const studentId = studentSession.json.user?.id;
-  if (!Number.isSafeInteger(studentId)) throw new Error("Could not resolve E2E student ID.");
-
-  const assignment = await apiRequest(page, `/admin/exams/${examId}/assign`, "POST", {
-    studentIds: [studentId],
-  }, adminCookie);
-  if (assignment.status < 200 || assignment.status >= 300) {
-    throw new Error(`E2E exam assignment failed: ${JSON.stringify(assignment.json)}`);
-  }
-
-  return { examId, studentEmail, subjectName: question.subject, examTitle };
+  await loginApi(page, studentEmail, "StudentPass123!");
+  return { studentEmail, subjectName: question.subject };
 }
 
 test.describe("Student Practice Flow", () => {
   test("student can create, take, and submit a practice test", async ({ page }) => {
     test.setTimeout(60000);
-    const { studentEmail } = await setupExamData(page);
+    const { studentEmail } = await setupStudent(page);
 
     // Login as student through UI
     await loginUi(page, studentEmail, "StudentPass123!");
@@ -149,29 +117,27 @@ test.describe("Student Practice Flow", () => {
   });
 });
 
-test.describe("Formal Exam Flow", () => {
-  test("student can take and submit an assigned exam", async ({ page }) => {
-    const { studentEmail, examTitle } = await setupExamData(page);
-
-    // Login as student through UI
+test.describe("Full Mock Test", () => {
+  test("student can start, see the timer, and submit a full mock test", async ({ page }) => {
+    test.setTimeout(60000);
+    const { studentEmail } = await setupStudent(page);
     await loginUi(page, studentEmail, "StudentPass123!");
 
-    // Should see assigned exams
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
     await page.getByRole("navigation", { name: "Student navigation" })
-      .getByRole("button", { name: /Assigned exams/ }).click();
-    await expect(page.locator(".assigned-exam-card").getByText(examTitle)).toBeVisible({ timeout: 10000 });
+      .getByRole("button", { name: "Practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start mock test" }).click();
 
-    // Click on assigned exam to start
-    await page.click('button:has-text("Start examination")');
+    const question = page.locator(".question-card").first();
+    await expect(question).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(".exam-countdown, .timer-warning").first()).toBeVisible();
 
-    // Confirm the assigned-exam runtime opened and can accept an answer.
-    const examQuestion = page.locator(".assigned-exam-session .question-card").first();
-    await expect(examQuestion).toBeVisible({ timeout: 15000 });
-    await examQuestion.locator(".option").first().click();
+    const option = question.locator(".option").first();
+    await expect(option).toBeVisible();
+    await option.click();
 
     page.on("dialog", async (dialog) => { await dialog.accept(); });
-    await page.getByRole("button", { name: "Submit final answers" }).click();
-    await expect(page.getByText(/Awaiting administrator review|Score:/)).toBeVisible({ timeout: 15000 });
+    await page.getByRole("button", { name: "Submit answers" }).click();
+    await expect(page.getByRole("heading", { name: "Your result" })).toBeVisible({ timeout: 15000 });
   });
 });

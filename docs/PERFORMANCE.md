@@ -49,6 +49,6 @@ npm run ci:lighthouse   # planned
 
 NOT MEASURED — no release APK build or bundle/APK size measurement has been performed. Real-device cold-start time is NOT VERIFIED.
 
-## Desktop baseline
+## Android baseline
 
-NOT MEASURED — the packaged desktop app reuses the web `dist/` output; startup time is unmeasured.
+NOT MEASURED — physical low-end Android startup, memory use and frame rate have not been captured in this document. Treat real-device performance as **NOT VERIFIED** until Phase 9 device checks are completed.

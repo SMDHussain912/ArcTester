@@ -12,7 +12,7 @@ describe("useStudentCommunications", () => {
     const request = vi.fn(async (path: string) => {
       if (path === "/announcements/active") return { announcements: [{ id: "active-1", title: "Exam update", message: "Starts at 10.", createdAt: "2026-11-10T08:00:00.000Z", publishedAt: "2026-11-10T08:00:00.000Z", expiresAt: null }] };
       if (path === "/announcements") return { announcements: [{ id: "history-1", title: "Old update", message: "Read me.", createdAt: "2026-11-10T07:00:00.000Z", publishedAt: "2026-11-10T07:00:00.000Z", expiresAt: null, seenAt: null, acknowledgedAt: null }] };
-      if (path === "/notifications?unread=true") return { notifications: [{ id: "notice-1", kind: "EXAM_ASSIGNMENT", title: "New exam", message: "Assigned.", href: "/assignments", createdAt: "2026-11-10T08:30:00.000Z", readAt: null, expiresAt: null }] };
+      if (path === "/notifications?unread=true") return { notifications: [{ id: "notice-1", kind: "STUDY_UPDATE", title: "New exam", message: "Assigned.", href: "/assignments", createdAt: "2026-11-10T08:30:00.000Z", readAt: null, expiresAt: null }] };
       return { notifications: [] };
     });
     const setError = vi.fn();
@@ -39,7 +39,7 @@ describe("useStudentCommunications", () => {
     const setBusy = vi.fn();
     const request = vi.fn(async (path: string) => {
       if (path === "/announcements/active") return { announcements: [] };
-      if (path === "/notifications") return { notifications: [{ id: "notice-1", kind: "EXAM_RESULT", title: "Result", message: "Ready.", href: "/assignments/a1/result", createdAt: "2026-11-10T08:30:00.000Z", readAt: null, expiresAt: null }] };
+      if (path === "/notifications") return { notifications: [{ id: "notice-1", kind: "STUDY_UPDATE", title: "Result", message: "Ready.", href: "/assignments/a1/result", createdAt: "2026-11-10T08:30:00.000Z", readAt: null, expiresAt: null }] };
       if (path.endsWith("/read")) return { readAt: "2026-11-10T09:00:00.000Z" };
       if (path.endsWith("/acknowledge")) return { seenAt: "2026-11-10T09:00:00.000Z", acknowledgedAt: "2026-11-10T09:00:00.000Z" };
       return { announcements: [] };
@@ -71,7 +71,7 @@ describe("useStudentCommunications", () => {
       if (path === "/notifications?unread=true") return {
         notifications: [{
           id: `notice-user-${currentUserId}`,
-          kind: "EXAM_ASSIGNMENT",
+          kind: "STUDY_UPDATE",
           title: `Notice for user ${currentUserId}`,
           message: "Account-scoped notice.",
           href: "/assignments",
@@ -171,7 +171,7 @@ describe("useStudentCommunications account isolation", () => {
       createdAt: "2026-11-11T08:00:00.000Z", publishedAt: "2026-11-11T08:00:00.000Z", expiresAt: null,
     };
     const oldNotification: StudentNotification = {
-      id: "private-old-notification", kind: "EXAM_RESULT", title: "Old account result",
+      id: "private-old-notification", kind: "STUDY_UPDATE", title: "Old account result",
       message: "Must not leak.", href: "/assignments", createdAt: "2026-11-11T08:00:00.000Z",
       readAt: null, expiresAt: null,
     };
@@ -214,7 +214,7 @@ describe("useStudentCommunications unread totals", () => {
           unreadCount: 147,
           notifications: [{
             id: "latest-notice",
-            kind: "EXAM_RESULT",
+            kind: "STUDY_UPDATE",
             title: "Result available",
             message: "Your result is ready.",
             href: "/assignments",

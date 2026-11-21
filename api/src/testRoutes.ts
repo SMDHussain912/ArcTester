@@ -13,7 +13,7 @@ import type { PrismaClient } from "@prisma/client";
 import { analyticsRouter } from "./analyticsRoutes.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 import { notFound } from "./errors.js";
-import { getLearningConcept, listLearningConcepts } from "./intelligence/conceptKnowledge.js";
+import { getLearningConcept, listLearningConcepts } from "./learningConcepts.js";
 
 const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 

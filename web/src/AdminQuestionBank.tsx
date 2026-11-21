@@ -2,18 +2,6 @@ import { useState } from "react";
 export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string; reviewStatus?: "DRAFT" | "APPROVED" | "REJECTED" };
 export type QuestionReviewProgress = { subjects: Array<{ subject: string; paperQuota: number; requiredQuota: number; drafted: number; approved: number; rejected: number; remaining: number }>; totals: { drafted: number; approved: number; rejected: number; requiredQuota: number; remaining: number } };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
-export type AdminEmbeddingStatus = {
-  totalQuestions: number;
-  indexedQuestions: number;
-  pendingQuestions: number;
-  activeJob: { id: string; status: string; progress: number; total: number } | null;
-};
-export type AdminSemanticMatch = {
-  questionId: number;
-  similarity: number;
-  relation: "SEMANTICALLY_SIMILAR" | "SAME_CONCEPT" | "POSSIBLE_DUPLICATE";
-  question: { id: number; text: string; subject: { name: string }; topic: { name: string } | null } | null;
-};
 type Topic = { id: number; name: string; _count: { questions: number } };
 
 type AdminQuestionBankProps = {
@@ -43,18 +31,10 @@ type AdminQuestionBankProps = {
   onEditQuestion: (question: AdminBankQuestion) => void;
   onUpload: () => void;
   onPageChange: (page: number) => void;
-  semanticResults?: AdminSemanticMatch[];
-  semanticBusy?: boolean;
-  onSemanticSearch?: (query: string) => void;
-  embeddingStatus?: AdminEmbeddingStatus | null;
-  embeddingStatusLoading?: boolean;
-  embeddingRebuildBusy?: boolean;
-  onRebuildEmbeddings?: () => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, reviewStatus = "", reviewProgress = null, onReviewStatusChange = () => {}, onReviewQuestion = () => {}, onBulkReview = () => {}, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange, semanticResults = [], semanticBusy = false, onSemanticSearch = () => {}, embeddingStatus = null, embeddingStatusLoading = false, embeddingRebuildBusy = false, onRebuildEmbeddings = () => {} }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, reviewStatus = "", reviewProgress = null, onReviewStatusChange = () => {}, onReviewQuestion = () => {}, onBulkReview = () => {}, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
-  const [semanticQuery, setSemanticQuery] = useState("");
   const [sourceDrafts, setSourceDrafts] = useState<Record<number, string>>({});
   const pageCount = Math.max(1, Math.ceil(total / 25));
   function confirmDeleteSelected() {
@@ -78,34 +58,6 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
           <div className="admin-stat-grid"><article><span>Drafted</span><b>{reviewProgress.totals.drafted.toLocaleString()}</b></article><article><span>Approved</span><b>{reviewProgress.totals.approved.toLocaleString()}</b></article><article><span>Required bank target</span><b>{reviewProgress.totals.requiredQuota.toLocaleString()}</b></article><article><span>Still needed</span><b>{reviewProgress.totals.remaining.toLocaleString()}</b></article></div>
           <div className="table-panel">{reviewProgress.subjects.map((item) => <div className="coverage-row" key={item.subject}><span>{item.subject}</span><b>{item.drafted} drafted · {item.approved} approved / {item.requiredQuota} required</b><small>{item.rejected} rejected · {item.remaining} still needed</small></div>)}</div>
         </> : <p className="muted">Review progress is loading or unavailable.</p>}
-      </section>
-      <section className="admin-panel embedding-index-panel" aria-label="Question embedding index">
-        <div><h2>Semantic index</h2><p className="muted">Build and maintain the question meaning index used by duplicate review.</p></div>
-        {embeddingStatus ? <>
-          <p>{embeddingStatus.indexedQuestions.toLocaleString()} of {embeddingStatus.totalQuestions.toLocaleString()} questions indexed · {embeddingStatus.pendingQuestions.toLocaleString()} pending</p>
-          {embeddingStatus.activeJob && <div aria-live="polite">
-            <p>Rebuild {embeddingStatus.activeJob.status.toLowerCase()}: {embeddingStatus.activeJob.progress} / {embeddingStatus.activeJob.total}</p>
-            <progress max={Math.max(1, embeddingStatus.activeJob.total)} value={embeddingStatus.activeJob.progress} />
-          </div>}
-        </> : <p className="muted">{embeddingStatusLoading ? "Loading index status…" : "Index status is unavailable."}</p>}
-        <button className="ghost" disabled={embeddingRebuildBusy || embeddingStatusLoading || Boolean(embeddingStatus?.activeJob)} onClick={onRebuildEmbeddings}>
-          {embeddingRebuildBusy ? "Queueing rebuild…" : embeddingStatus?.activeJob ? "Rebuild in progress" : "Build / refresh semantic index"}
-        </button>
-      </section>
-      <section className="admin-panel semantic-search-panel" aria-label="Semantic question search">
-        <div><h2>Semantic similarity &amp; duplicate review</h2><p className="muted">Find questions with similar meaning, even when their wording differs. Similarity is a retrieval score, not a probability.</p></div>
-        <div className="admin-toolbar">
-          <input aria-label="Semantic search query" placeholder="Describe a concept or question…" value={semanticQuery} onChange={(event) => setSemanticQuery(event.target.value)} />
-          <button className="primary" disabled={semanticBusy || semanticQuery.trim().length < 3} onClick={() => onSemanticSearch(semanticQuery.trim())}>{semanticBusy ? "Searching…" : "Find similar questions"}</button>
-        </div>
-        {semanticResults.length > 0 && <div className="semantic-results" aria-live="polite">
-          {semanticResults.map((match) => <article className="bank-question semantic-match" key={match.questionId}>
-            <div className="bank-q-main">
-              <div className="bank-q-meta"><b>Question #{match.questionId}</b><span>{match.question?.subject.name ?? "Unknown subject"}</span><span>{match.question?.topic?.name ?? "General"}</span><span className="difficulty medium">{match.relation.replaceAll("_", " ").toLowerCase()}</span><span>{(match.similarity * 100).toFixed(1)}% similarity</span></div>
-              <p>{match.question?.text ?? "Question details unavailable."}</p>
-            </div>
-          </article>)}
-        </div>}
       </section>
       <div className="admin-panel table-panel">
         <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

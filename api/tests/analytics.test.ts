@@ -2,9 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { importFromJson } from "../src/importService.js";
 import { MAX_PROGRESS_IMPORT_ANSWERS, RECOMMENDATION_RECENT_PRACTICE_DAYS } from "../src/analytics.js";
 import { buildApp } from "../src/index.js";
-import { fitReadinessClassifier } from "../src/intelligence/readinessClassifier.js";
-import { READINESS_FEATURE_NAMES } from "../src/intelligence/examReadinessDataset.js";
-import { validateRegistryArtifact } from "../src/intelligence/modelRegistry.js";
 import { bindSession, signUp, startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
@@ -22,8 +19,6 @@ beforeAll(async () => {
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(3);
   // Imported fixtures are explicitly human-reviewed so these tests exercise student flows.
-  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
-  // Imported test fixtures model questions that a human reviewer approved.
   await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   const session = await signUp(server.baseUrl, "analyst@example.com");
   studentId = session.userId;
@@ -76,16 +71,6 @@ describe("analytics", () => {
     });
   });
 
-  it("withholds readiness categories until at least five practice attempts are completed", async () => {
-    const response = await api.get("/analytics/readiness");
-    expect(response.status).toBe(200);
-    expect(response.json).toMatchObject({
-      status: "insufficient_data",
-      category: null,
-      completedAttempts: 2,
-      requiredCompletedAttempts: 5,
-    });
-  });
 
   it("does not label a low-sample subject as weak or recommend it as a confirmed gap", async () => {
     const response = await api.get("/analytics/recommendations");
@@ -719,78 +704,6 @@ describe("analytics", () => {
     expect(second.status).toBe(200);
     const body = second.json as { skippedDuplicates: number };
     expect(body.skippedDuplicates).toBeGreaterThan(0);
-  });
-
-  it("does not fabricate a readiness category when no qualified model is active", async () => {
-    for (let index = 0; index < 3; index += 1) {
-      const created = await api.post("/tests", { mode: "practice", subject: index % 2 ? "Physics" : "Maths", count: 1 });
-      expect(created.status).toBe(201);
-      const body = created.json as { attemptId: number; questions: { id: number }[] };
-      const question = await server.db.question.findUniqueOrThrow({
-        where: { id: body.questions[0].id },
-        select: { correctIndex: true },
-      });
-      await api.post(`/tests/${body.attemptId}/submit`, {
-        answers: [{ questionId: body.questions[0].id, selectedIndex: question.correctIndex }],
-      });
-    }
-    const response = await api.get("/analytics/readiness");
-    expect(response.status).toBe(200);
-    expect(response.json).toMatchObject({
-      status: "unavailable",
-      category: null,
-    });
-    expect((response.json as { completedAttempts: number }).completedAttempts).toBeGreaterThanOrEqual(5);
-
-    const labels = ["NOT_READY", "DEVELOPING", "READY"] as const;
-    const centers = [
-      [5, 0.2, 0.2, 0.2, 5, 1],
-      [10, 0.5, 0.5, 0.5, 15, 2],
-      [15, 0.8, 0.8, 0.8, 25, 3],
-    ];
-    const trainingRows = Array.from({ length: 1200 }, (_, index) => {
-      const labelIndex = Math.floor(index / 400);
-      return {
-        groupId: Math.floor(index / 10).toString(16).padStart(64, "0"),
-        label: labels[labelIndex],
-        features: centers[labelIndex]!.map((value, featureIndex) =>
-          value + ((index % 10) - 4.5) * (featureIndex === 0 || featureIndex === 4 ? 0.1 : 0.001)),
-      };
-    });
-    const model = fitReadinessClassifier(trainingRows, { iterations: 900 });
-    const artifact = validateRegistryArtifact({
-      registrySchemaVersion: 1,
-      modelId: "student-readiness-integration",
-      version: 1,
-      algorithm: "exam-readiness-softmax",
-      task: "multiclass-classification",
-      dataset: "student-readiness-integration-fixture",
-      targetColumn: "readiness_label",
-      featureSchema: READINESS_FEATURE_NAMES.map((name) => ({ name, type: "numeric" as const })),
-      model,
-      createdAt: new Date().toISOString(),
-    });
-    await server.db.registeredModel.create({
-      data: {
-        modelId: artifact.modelId,
-        version: artifact.version,
-        algorithm: artifact.algorithm,
-        task: artifact.task,
-        dataset: artifact.dataset,
-        artifactJson: JSON.stringify(artifact),
-        isActive: true,
-        activatedAt: new Date(),
-      },
-    });
-    const prediction = await api.get("/analytics/readiness");
-    expect(prediction.status).toBe(200);
-    const result = prediction.json as {
-      status: string; category: string | null; modelVersion: number; confidence: number;
-    };
-    expect(["ready", "fallback"]).toContain(result.status);
-    expect(result.modelVersion).toBe(1);
-    expect(Number.isFinite(result.confidence)).toBe(true);
-    if (result.status === "fallback") expect(result.category).toBeNull();
   });
 
   it("does not repeat a weak-subject recommendation immediately after the student practiced it", async () => {
