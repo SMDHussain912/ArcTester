@@ -740,7 +740,7 @@ export default function App() {
       recoveryAttemptId = recovery.attemptId;
       const restored = await api<Test>(`/tests/${recovery.attemptId}`);
       if (sessionIdentityRef.current !== requestIdentity) return;
-      if (restored.mode !== "practice" || !restored.questions.length) {
+      if ((restored.mode !== "practice" && restored.mode !== "speedRound") || !restored.questions.length) {
         throw new Error("This saved item is not a resumable practice attempt.");
       }
       const serverAnswers = Object.fromEntries(
