@@ -44,6 +44,7 @@ const API_URL = (() => {
   return url.replace(/\/+$/, "");
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
+type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[]; dailyChallengeCompleted: boolean };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
@@ -140,6 +141,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
+  const [gamification, setGamification] = useState<GamificationSnapshot | null>(null);
+  const [dailyGoalDraft, setDailyGoalDraft] = useState("50");
+  const [rewardBusy, setRewardBusy] = useState(false);
   const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
   const [networkConnected, setNetworkConnected] = useState<boolean | null>(null);
@@ -159,6 +163,8 @@ export default function App() {
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
+  const [dailyChallengeSession, setDailyChallengeSession] = useState(false);
+  const [mistakesSession, setMistakesSession] = useState(false);
   const [resultReviewFilter, setResultReviewFilter] = useState<"all" | "incorrect">("all");
   useEffect(() => { if (result) setResultReviewFilter("all"); }, [result?.attemptId]);
 
@@ -336,6 +342,66 @@ export default function App() {
     if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
     return body as T;
   }
+  async function refreshGamification() {
+    if (!user || !token) return;
+    try {
+      const snapshot = await api<GamificationSnapshot>("/gamification");
+      setGamification(snapshot);
+      setDailyGoalDraft(String(snapshot.dailyGoalXp));
+    } catch { /* Reward data must not block practice. */ }
+  }
+
+  async function saveDailyGoal() {
+    const dailyGoalXp = Number(dailyGoalDraft);
+    if (!Number.isInteger(dailyGoalXp) || dailyGoalXp < 20 || dailyGoalXp > 200) {
+      setError("Daily XP goal must be a whole number from 20 to 200.");
+      return;
+    }
+    setRewardBusy(true);
+    try {
+      const saved = await api<{ dailyGoalXp: number }>("/gamification/daily-goal", {
+        method: "POST", body: JSON.stringify({ dailyGoalXp }),
+      });
+      setGamification((current) => current ? { ...current, dailyGoalXp: saved.dailyGoalXp } : current);
+      setDailyGoalDraft(String(saved.dailyGoalXp));
+      setError("");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setRewardBusy(false); }
+  }
+
+  async function buyStreakFreeze() {
+    if (!gamification || gamification.xpBalance < 100 || gamification.streakFreezeInventory >= 2) return;
+    setRewardBusy(true);
+    try {
+      await api("/gamification/streak-freeze/buy", { method: "POST", body: JSON.stringify({}) });
+      await refreshGamification();
+      setError("");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setRewardBusy(false); }
+  }
+
+
+  useEffect(() => {
+    let active = true;
+    if (user?.id == null || !token) {
+      setGamification(null);
+      setDailyGoalDraft("50");
+      return () => { active = false; };
+    }
+    fetch(API_URL + "/gamification", { headers: { authorization: "Bearer " + token } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Gamification unavailable");
+        return response.json() as Promise<GamificationSnapshot>;
+      })
+      .then((snapshot) => {
+        if (active) {
+          setGamification(snapshot);
+          setDailyGoalDraft(String(snapshot.dailyGoalXp));
+        }
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [user?.id, token]);
 
   async function syncPendingPracticeProgress() {
     if (!user || !token || practiceSyncLock.current) return;
@@ -367,6 +433,7 @@ export default function App() {
                 setPendingSubmitRequested(false);
                 setTest((current) => current?.attemptId === item.attemptId ? null : current);
                 if (item.submitRequested || test?.attemptId === item.attemptId) setResult(completed);
+                void refreshGamification();
                 setLessonSession(false);
                 setError("");
                 madeProgress = true;
@@ -400,6 +467,7 @@ export default function App() {
             setPendingSubmitRequested(false);
             setTest((current) => current?.attemptId === item.attemptId ? null : current);
             setResult(completed);
+            void refreshGamification();
             setLessonSession(false);
             setError("");
             madeProgress = true;
@@ -775,6 +843,7 @@ export default function App() {
             await deleteLocalValue(practiceRecoveryKey(user.id));
             setHasSavedPracticeAttempt(false);
             setResult(completed);
+                void refreshGamification();
             setError("");
           }
           return;
@@ -790,7 +859,7 @@ export default function App() {
     }
   }
 
-  async function startPractice(config: PracticePaperConfig, lesson = false, speedRound = false) {
+  async function startPractice(config: PracticePaperConfig, lesson = false, speedRound = false, mistakes = false, dailyChallenge = false) {
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -801,6 +870,8 @@ export default function App() {
     }
     setLessonSession(lesson);
     setSpeedRoundSession(speedRound);
+    setDailyChallengeSession(dailyChallenge);
+    setMistakesSession(mistakes);
     setPendingSubmitRequested(false);
     setBusy(true);
     setError("");
@@ -811,10 +882,13 @@ export default function App() {
       setBank(freshBank);
       const availableSubjects = freshBank.subjects.filter((item) => item.count > 0);
       if (availableSubjects.length === 0) throw new Error("The question bank currently has no practice questions.");
-      const created = await api<Test>("/tests", {
-        method: "POST",
-        body: JSON.stringify({ mode: speedRound ? "speedRound" : "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count }),
-      });
+      const mode = dailyChallenge ? "dailyChallenge" : mistakes ? "mistakes" : speedRound ? "speedRound" : "practice";
+      const request = dailyChallenge
+        ? { mode, count: 10 }
+        : mistakes
+          ? { mode, count: 20 }
+          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count };
+      const created = await api<Test>("/tests", { method: "POST", body: JSON.stringify(request) });
       setTest(created);
       setResult(null);
       setAnswers({});
@@ -834,6 +908,8 @@ export default function App() {
     } catch (cause) {
       setLessonSession(false);
       setSpeedRoundSession(false);
+      setDailyChallengeSession(false);
+      setMistakesSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -1045,7 +1121,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : speedRoundSession ? "Speed round complete" : "Practice result"}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : result.mode === "speedRound" ? "Speed round complete" : result.mode === "dailyChallenge" ? "Daily challenge result" : result.mode === "mistakes" ? "Mistakes practice result" : "Practice result"}</Text>
                 <Text style={[styles.statValue, { marginTop: 4 }]}>{result.score} / {result.total}</Text>
               </View>
               <ArcTesterMascot size={64} />
@@ -1275,6 +1351,18 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
+            <View style={styles.profileInfo}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>DAILY GOAL & STREAK REWARDS</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? gamification.xpBalance + " spendable XP · " + gamification.streakFreezeInventory + "/2 streak freezes" : "Loading your rewards…"}</Text>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 10 }}>
+                <TextInput accessibilityLabel="Daily XP goal, 20 to 200" keyboardType="number-pad" value={dailyGoalDraft} onChangeText={setDailyGoalDraft} maxLength={3} style={[styles.input, { flex: 1, marginBottom: 0 }, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                <TouchableOpacity disabled={rewardBusy} onPress={() => void saveDailyGoal()} style={styles.primary}><Text style={styles.primaryText}>{rewardBusy ? "Saving…" : "Save goal"}</Text></TouchableOpacity>
+              </View>
+              <TouchableOpacity disabled={rewardBusy || !gamification || gamification.xpBalance < 100 || gamification.streakFreezeInventory >= 2} onPress={() => void buyStreakFreeze()} style={[styles.secondary, { marginTop: 10 }, (!gamification || gamification.xpBalance < 100 || gamification.streakFreezeInventory >= 2 || rewardBusy) && { opacity: 0.5 }]}>
+                <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{gamification?.streakFreezeInventory === 2 ? "Streak freeze inventory full" : "Buy streak freeze · 100 XP"}</Text>
+              </TouchableOpacity>
+              <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Daily goal: 20–200 XP. A streak freeze protects one missed day; inventory limit is two.</Text>
+            </View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE & SYNC</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{networkConnected === false ? "Offline · " : networkConnected === true ? "Online · " : "Checking connection · "}{pendingSyncCount ? pendingSyncCount + " pending practice attempt(s)" : "No pending progress"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{pendingSyncCount > 0 ? <TouchableOpacity disabled={networkConnected !== true} onPress={() => void syncPendingPracticeProgress()} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{networkConnected === true ? "Sync pending progress now" : "Reconnect to sync progress"}</Text></TouchableOpacity> : null}{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
@@ -1289,6 +1377,26 @@ export default function App() {
             </View>
             <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your profile</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
+            <View style={styles.profileInfo}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEVEL & REWARDS</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification ? "Lv " + gamification.level : "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Level</Text></View>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification?.totalXp ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Total XP</Text></View>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification?.currentStreak ?? "—"} 🔥</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Streak</Text></View>
+              </View>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "Today " + (gamification.today?.xpEarned ?? 0) + "/" + gamification.dailyGoalXp + " XP · longest streak " + gamification.longestStreak + " days" : "Loading reward summary…"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6, height: 54, marginTop: 8 }}>
+                {(gamification?.week ?? []).map((day) => {
+                  const maxXp = Math.max(1, ...(gamification?.week ?? []).map((entry) => entry.xpEarned));
+                  const height = Math.max(4, Math.round((day.xpEarned / maxXp) * 38));
+                  return <View key={day.date} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                    <View accessibilityLabel={day.date + ": " + day.xpEarned + " XP"} style={{ width: "100%", height, borderRadius: 4, backgroundColor: day.goalReached ? "#16a34a" : "#3b82f6" }} />
+                    <Text style={[styles.muted, { fontSize: 10 }, darkMode && { color: "#94a3b8" }]}>{new Date(day.date + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short" })}</Text>
+                  </View>;
+                })}
+              </View>
+              <TouchableOpacity onPress={() => setActiveTab("settings")} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Manage daily goal & streak freezes</Text></TouchableOpacity>
+            </View>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT ID</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.id}</Text>
@@ -1333,6 +1441,28 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
+            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your rewards</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "Level " + gamification.level + " · " + gamification.totalXp + " total XP" : "Loading XP and streak…"}</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "🔥 " + gamification.currentStreak + " day streak · " + (gamification.today?.xpEarned ?? 0) + "/" + gamification.dailyGoalXp + " XP today" : "Keep learning to build your streak."}</Text>
+                </View>
+                <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab("settings")} style={styles.secondary}><Text style={styles.secondaryText}>Goals</Text></TouchableOpacity>
+              </View>
+              <View style={{ height: 8, borderRadius: 8, backgroundColor: darkMode ? "#26364d" : "#e2e8f0", overflow: "hidden", marginTop: 10 }}>
+                <View style={{ height: 8, width: `${gamification?.xpIntoLevel ?? 0}%`, backgroundColor: "#2563eb" }} />
+              </View>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                  <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review mistakes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                  <Text style={[styles.primaryText, { color: "#ffffff" }]}>{gamification?.dailyChallengeCompleted ? "Challenge completed · replay" : "Daily challenge"}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>{gamification?.dailyChallengeCompleted ? "Completed today · replaying will not duplicate the daily XP reward" : "10 approved questions · rotates daily (UTC) · daily XP reward"}</Text>
+            </View>
             <LessonLaunchCard
               subjects={bank?.subjects ?? []}
               darkMode={darkMode}

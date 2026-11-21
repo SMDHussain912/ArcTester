@@ -16,5 +16,7 @@
 - No database migration, client-side scoring or answer-key exposure.
 
 ## Verification
-- Automated checks are pending on the exact PR head.
+- PR #166 merged to main.
+- Exact-head CI #2565 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44958143230
+- Exact-head Android build #219 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44958143235
 - NOT VERIFIED on a physical device: failed-attempt retry, app background/restore behavior, accessibility/TalkBack, large-font layout and low-end Android performance.

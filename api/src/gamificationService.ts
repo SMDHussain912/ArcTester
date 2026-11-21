@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { dailyChallengeRewardKey } from "./dailyChallenge.js";
 
 export type RewardKind = "lesson" | "unit-test" | "practice";
 export const REWARD_XP: Record<RewardKind, number> = { lesson: 20, "unit-test": 50, practice: 10 };
@@ -108,10 +109,11 @@ export async function awardXp(
 
 export async function gamificationSnapshot(db: PrismaClient, userId: number, now = new Date()) {
   const today = utcDay(now);
-  const [state, days, recentEvents] = await Promise.all([
+  const [state, days, recentEvents, dailyChallengeReward] = await Promise.all([
     db.userGamification.upsert({ where: { userId }, create: { userId }, update: {} }),
     db.gamificationDay.findMany({ where: { userId, date: { gte: new Date(today.getTime() - 6 * 86_400_000), lte: today } }, orderBy: { date: "asc" } }),
     db.xpLedger.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 10, select: { amount: true, reason: true, createdAt: true } }),
+    db.xpLedger.findFirst({ where: { userId, eventKey: dailyChallengeRewardKey(now) }, select: { id: true } }),
   ]);
   const dayMap = new Map(days.map((d) => [d.date.toISOString().slice(0, 10), d]));
   const calendar = Array.from({ length: 7 }, (_, index) => {
@@ -119,7 +121,7 @@ export async function gamificationSnapshot(db: PrismaClient, userId: number, now
     const row = dayMap.get(date.toISOString().slice(0, 10));
     return { date: date.toISOString().slice(0, 10), xpEarned: row?.xpEarned ?? 0, goalReached: Boolean(row?.goalReachedAt), freezeUsed: Boolean(row?.freezeUsed) };
   });
-  return { ...state, ...levelForXp(state.totalXp), today: dayMap.get(today.toISOString().slice(0, 10)) ?? null, week: calendar, recentEvents };
+  return { ...state, ...levelForXp(state.totalXp), today: dayMap.get(today.toISOString().slice(0, 10)) ?? null, week: calendar, recentEvents, dailyChallengeCompleted: Boolean(dailyChallengeReward) };
 }
 
 export const FREEZE_PURCHASE_COST = FREEZE_COST_XP;

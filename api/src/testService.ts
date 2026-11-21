@@ -1,5 +1,6 @@
 // Mock-test engine service: DB access + Phase 2 selection glued together.
 import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js";
+import { dailyChallengeQuestionIds, utcDayKey } from "./dailyChallenge.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
 import type { PrismaClient } from "@prisma/client";
@@ -16,7 +17,7 @@ import {
   type StatsById,
 } from "./selection.js";
 
-export const MODES = ["mock", "practice", "speedRound", "mistakes"] as const;
+export const MODES = ["mock", "practice", "speedRound", "mistakes", "dailyChallenge"] as const;
 export type TestMode = (typeof MODES)[number];
 
 export const CreateTestSchema = z
@@ -39,6 +40,9 @@ export const CreateTestSchema = z
         path: ["subjects"],
         message: "Select at least one subject for practice mode.",
       });
+    }
+    if (value.mode === "dailyChallenge" && (value.count ?? 10) > 10) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Daily challenges are limited to 10 questions." });
     }
     if (value.mode === "speedRound" && (value.count ?? 10) > 10) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Speed rounds are limited to 10 questions." });
@@ -123,6 +127,7 @@ const MINUTES_PER_QUESTION = 0.9;
 export function minutesFor(mode: TestMode, questionCount: number): number {
   if (mode === "mock") return MOCK_MINUTES;
   if (mode === "speedRound") return 5;
+  if (mode === "dailyChallenge") return 10;
   return Math.max(5, Math.round(questionCount * MINUTES_PER_QUESTION));
 }
 
@@ -198,7 +203,7 @@ export async function createTest(
   // A question can still be reused when the practice-only pool is exhausted.
   let practiceCandidates = candidates;
   let reusedExamPool = false;
-  if (input.mode === "practice" || input.mode === "speedRound") {
+  if (input.mode === "practice" || input.mode === "speedRound" || input.mode === "dailyChallenge") {
     const publishedExamQuestions = await db.examVersionQuestion.findMany({
       where: {
         sourceQuestionId: { not: null },
@@ -324,7 +329,7 @@ export async function createTest(
     if (selected.length < requested && warnings.length === 0) {
       warnings.push(`Requested ${requested} questions overall, but only ${selected.length} are available across the selected subjects and filters.`);
     }
-  } else {
+  } else if (input.mode === "mistakes") {
     // "mistakes" only surfaces questions THIS user has got wrong before.
     const wrongIds = new Set(
       (
@@ -341,6 +346,16 @@ export async function createTest(
       warnings = shortfallWarning([
         { subject: input.subject ?? "mistakes", requested: count, available: pool.length },
       ]);
+    }
+  } else {
+    // UTC date seed makes the approved question set identical for all students that day.
+    const count = Math.min(input.count ?? 10, 10);
+    const challengePool = practiceCandidates.length > 0 ? practiceCandidates : candidates;
+    const ids = dailyChallengeQuestionIds(challengePool.map((question) => question.id), utcDayKey(now), count);
+    const byId = new Map(challengePool.map((question) => [question.id, question]));
+    selected = ids.map((id) => byId.get(id)).filter((question): question is AttemptRow => question !== undefined);
+    if (selected.length < count) {
+      warnings = [`Daily challenge: only ${selected.length} approved questions are available; the challenge uses the available questions.`];
     }
   }
 
