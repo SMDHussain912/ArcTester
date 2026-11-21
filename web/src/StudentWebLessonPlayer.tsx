@@ -46,7 +46,7 @@ export default function StudentWebLessonPlayer() {
   useEffect(() => { void refresh(); }, []);
   useEffect(() => () => { audio?.pause(); }, [audio]);
 
-  const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons);
+  const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons]);
   const filtered = useMemo(() => lessons.filter((lesson) =>
     (subjectFilter === "all" || lesson.subject === subjectFilter) &&
     (query.trim() === "" || [lesson.title, lesson.subject, lesson.topic].some((value) => value.toLowerCase().includes(query.trim().toLowerCase())))
