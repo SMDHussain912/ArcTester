@@ -127,6 +127,23 @@ export default function AdminLessonStudio() {
     }
   }, [storyboardText]);
 
+  function updateScene(index: number, patch: Partial<Scene>) {
+    try {
+      const value = JSON.parse(storyboardText) as { scenes: Scene[] };
+      value.scenes[index] = { ...value.scenes[index], ...patch };
+      setStoryboardText(JSON.stringify(value, null, 2));
+    } catch { /* Keep invalid JSON visible in the raw editor until corrected. */ }
+  }
+
+  function updateSceneVisual(index: number, patch: NonNullable<Scene["visual"]>) {
+    try {
+      const value = JSON.parse(storyboardText) as { scenes: Scene[] };
+      const scene = value.scenes[index];
+      value.scenes[index] = { ...scene, visual: { ...scene.visual, ...patch } };
+      setStoryboardText(JSON.stringify(value, null, 2));
+    } catch { /* Keep invalid JSON visible in the raw editor until corrected. */ }
+  }
+
   async function saveDraft() {
     if (!selectedId) return;
     setError(""); setNotice("");
@@ -197,12 +214,14 @@ export default function AdminLessonStudio() {
         {!parsedStoryboard.scenes.length ? <p className="muted">Add valid storyboard JSON to preview scenes.</p> :
           <div className="lesson-scene-grid">{parsedStoryboard.scenes.map((scene, index) => <article className="lesson-scene-card" key={index}>
             <div className="lesson-scene-top"><span className="status status-pending">Scene {index + 1}</span><small>{Math.max(0, Math.round((Number(scene.durationMs) || 0) / 1000))}s · {scene.sceneType}</small></div>
-            <h4>{scene.title || "Untitled scene"}</h4>
-            {scene.onScreenText && <p className="lesson-on-screen">{scene.onScreenText}</p>}
-            {scene.visual?.items?.length ? <div className="lesson-visual-items">{scene.visual.items.map((item, i) => <span key={i}>{item}</span>)}</div> : null}
-            {scene.visual?.equation && <p className="lesson-equation">{scene.visual.equation}</p>}
-            {scene.visual?.steps?.length ? <ol>{scene.visual.steps.map((step, i) => <li key={i}>{step}</li>)}</ol> : null}
-            <p>{scene.narration}</p>
+            <label>Scene title<input aria-label={`Scene ${index + 1} title`} value={scene.title || ""} onChange={e => updateScene(index, { title: e.target.value })}/></label>
+            <label>Scene type<select aria-label={`Scene ${index + 1} type`} value={scene.sceneType} onChange={e => updateScene(index, { sceneType: e.target.value })}><option value="title_card">Title card</option><option value="text_reveal">Text reveal</option><option value="diagram">Diagram</option><option value="equation">Equation</option><option value="step_sequence">Step sequence</option><option value="checkpoint">Checkpoint</option></select></label>
+            <label>On-screen text<input aria-label={`Scene ${index + 1} on-screen text`} value={scene.onScreenText || ""} onChange={e => updateScene(index, { onScreenText: e.target.value })}/></label>
+            <label>Narration<textarea aria-label={`Scene ${index + 1} narration`} rows={4} value={scene.narration || ""} onChange={e => updateScene(index, { narration: e.target.value })}/></label>
+            <label>Duration (ms)<input aria-label={`Scene ${index + 1} duration`} type="number" min={2500} max={45000} step={500} value={scene.durationMs || 2500} onChange={e => updateScene(index, { durationMs: Number(e.target.value) })}/></label>
+            <label>Diagram items (separate with |)<input aria-label={`Scene ${index + 1} diagram items`} value={scene.visual?.items?.join(" | ") || ""} onChange={e => updateSceneVisual(index, { items: e.target.value.split("|").map(x => x.trim()).filter(Boolean) })}/></label>
+            <label>Equation<input aria-label={`Scene ${index + 1} equation`} value={scene.visual?.equation || ""} onChange={e => updateSceneVisual(index, { equation: e.target.value })}/></label>
+            <label>Steps (one per line)<textarea aria-label={`Scene ${index + 1} steps`} rows={3} value={scene.visual?.steps?.join("\n") || ""} onChange={e => updateSceneVisual(index, { steps: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></label>
           </article>)}</div>}
       </div>
     </section>}
