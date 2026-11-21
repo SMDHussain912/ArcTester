@@ -44,7 +44,7 @@ const API_URL = (() => {
   return url.replace(/\/+$/, "");
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[] };
+type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[]; dailyChallengeCompleted: boolean };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
@@ -1458,10 +1458,10 @@ export default function App() {
                   <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review mistakes</Text>
                 </TouchableOpacity>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
-                  <Text style={[styles.primaryText, { color: "#ffffff" }]}>Daily challenge</Text>
+                  <Text style={[styles.primaryText, { color: "#ffffff" }]}>{gamification?.dailyChallengeCompleted ? "Challenge completed · replay" : "Daily challenge"}</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>10 approved questions · rotates daily (UTC) · daily XP reward</Text>
+              <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>{gamification?.dailyChallengeCompleted ? "Completed today · replaying will not duplicate the daily XP reward" : "10 approved questions · rotates daily (UTC) · daily XP reward"}</Text>
             </View>
             <LessonLaunchCard
               subjects={bank?.subjects ?? []}
