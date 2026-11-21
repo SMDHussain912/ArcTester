@@ -58,7 +58,6 @@ async function main() {
         const freeSlots = 10 - lesson.questions.length;
         const selected = available.splice(0, Math.min(freeSlots, available.length));
         await tx.lessonQuestion.createMany({ data: selected.map((questionId, index) => ({ lessonId: lesson!.id, questionId, position: lesson!.questions.length + index + 1 })), skipDuplicates: true });
-        linkedIds.forEach((id) => { if (selected.includes(id)) linkedIds.add(id); });
         addedLinks += selected.length;
         lesson = { ...lesson, questions: [...lesson.questions, ...selected.map((questionId) => ({ questionId }))] };
         lessonList = lessonList.map((item) => item.id === lesson!.id ? lesson! : item);
