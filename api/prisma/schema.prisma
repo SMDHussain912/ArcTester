@@ -95,6 +95,9 @@ model User {
   lessonProgress UserLessonProgress[]
   unitTestProgress UserUnitTestProgress[]
   pathAnswers PathAnswer[]
+  gamification UserGamification?
+  xpEvents XpLedger[]
+  gamificationDays GamificationDay[]
 }
 
 model Invitation {
@@ -535,4 +538,49 @@ model PathAnswer {
   @@unique([userId, scopeKey, questionId])
   @@index([userId, lessonId])
   @@index([userId, unitId])
+}
+
+
+// Student reward state. Dates are stored as UTC calendar-day boundaries.
+model UserGamification {
+  id                   Int      @id @default(autoincrement())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  totalXp              Int      @default(0)
+  currentStreak        Int      @default(0)
+  longestStreak        Int      @default(0)
+  lastActivityDate     DateTime? @db.Date
+  dailyGoalXp         Int      @default(50)
+  streakFreezeInventory Int     @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model XpLedger {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  eventKey  String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventKey])
+  @@index([userId, createdAt])
+}
+
+model GamificationDay {
+  id                  Int      @id @default(autoincrement())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              Int
+  date                DateTime @db.Date
+  xpEarned            Int      @default(0)
+  lessonsCompleted    Int      @default(0)
+  unitTestsPassed     Int      @default(0)
+  practiceTestsDone   Int      @default(0)
+  goalReachedAt       DateTime?
+  freezeUsed          Boolean  @default(false)
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
