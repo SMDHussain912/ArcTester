@@ -146,6 +146,6 @@ export default function StudentWebLessonPlayer() {
       {!loading && !error && lessons.length === 0 ? <div className="notice">No published lessons are available yet. Check back after a lesson has been reviewed and published.</div> : null}
       {!loading && !error && lessons.length > 0 && filtered.length === 0 ? <p className="muted">No lessons match these filters.</p> : null}
     </section>
-    <div className="web-lesson-card-grid">{filtered.map((lesson) => <article className="panel web-lesson-card" key={lesson.id}><div><p className="eyebrow">{lesson.subject} · {lesson.topic}</p><h2>{lesson.title}</h2><p className="muted">{lesson.script.learningObjectives.length} objectives · {lesson.storyboard.scenes.length} scenes</p></div><button type="button" className="primary" onClick={() => chooseLesson(lesson)}>Start lesson →</button></article>)}</div>
+    <div className="web-lesson-card-grid">{filtered.map((lesson) => <article className="panel web-lesson-card" key={lesson.id}><div><p className="eyebrow">{lesson.subject} · {lesson.topic}</p><h2>{lesson.title}</h2><p className="muted">{lesson.script.learningObjectives.length} objectives · {lesson.storyboard.scenes.length} scenes</p></div><button type="button" className="primary" aria-label="Start lesson" onClick={() => chooseLesson(lesson)}>Start lesson →</button></article>)}</div>
   </main>;
 }
