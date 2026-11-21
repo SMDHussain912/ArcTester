@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { request, API } from "./apiClient";
 
 type Scene = {
@@ -31,7 +31,7 @@ export default function StudentWebLessonPlayer() {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [query, setQuery] = useState("");
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -42,8 +42,8 @@ export default function StudentWebLessonPlayer() {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void refresh(); }, []);
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => () => { audio?.pause(); }, [audio]);
 
   const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons]);
@@ -69,7 +69,7 @@ export default function StudentWebLessonPlayer() {
     setAudioBusy(true); setAudioError("");
     try {
       audio?.pause();
-      const response = await fetch(\`\${API}/lessons/\${encodeURIComponent(active.id)}/scenes/\${sceneIndex}/audio\`, { credentials: "include" });
+      const response = await fetch(API + "/lessons/" + encodeURIComponent(active.id) + "/scenes/" + sceneIndex + "/audio", { credentials: "include" });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(typeof body.error === "string" ? body.error : "Narration is unavailable.");
