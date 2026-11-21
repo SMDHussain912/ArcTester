@@ -8,13 +8,14 @@ import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionT
 
 const Id = z.coerce.number().int().positive();
 const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict();
-export const toPathPublicQuestion = (q: any) => ({
+type PathQuestionPublicInput = { id: number; subject: { name: string }; topic: { name: string } | null; text: string; options: string; questionType: string; promptData: string };
+export const toPathPublicQuestion = (q: PathQuestionPublicInput) => ({
   id: q.id, subject: q.subject.name, topic: q.topic?.name ?? null,
   text: q.text, options: decodeOptions(q.options), questionType: q.questionType,
   promptData: JSON.parse(q.promptData),
 });
-const completed = (progress: any) => Boolean(progress?.completedAt);
-const passed = (progress: any) => Boolean(progress?.passedAt);
+const completed = (progress: { completedAt: Date | null } | null | undefined) => Boolean(progress?.completedAt);
+const passed = (progress: { passedAt: Date | null } | null | undefined) => Boolean(progress?.passedAt);
 
 async function lessonState(db: PrismaClient, userId: number, subjectName?: string) {
   const subjects = await db.subject.findMany({
@@ -63,7 +64,7 @@ async function ensureLessonUnlocked(db: PrismaClient, userId: number, lessonId: 
     questions: { orderBy: { position: "asc" } },
   } });
   if (!lesson) throw notFound("Lesson not found.");
-  const unit = lesson.unit, test = unit.testProgress[0];
+  const unit = lesson.unit;
   const priorUnit = await db.pathUnit.findFirst({ where: { subjectId: unit.subjectId, position: { lt: unit.position } }, orderBy: { position: "desc" }, include: { testProgress: { where: { userId } } } });
   if (priorUnit && !passed(priorUnit.testProgress[0])) throw forbidden("This unit is locked.");
   const priorLesson = unit.lessons.find((item) => item.position < lesson.position);
