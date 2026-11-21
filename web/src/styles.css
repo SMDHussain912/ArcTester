@@ -326,3 +326,22 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,tra
 @media(max-width:760px){}/* Live TensorFlow training charts */
 
 @media(max-width:760px){}
+
+/* Admin Lesson Studio */
+.lesson-studio-layout{align-items:start}
+.admin-lesson-studio input[type=file]{display:block;width:100%;padding:12px;border:1px dashed var(--border);border-radius:12px;background:var(--bg);color:var(--text)}
+.lesson-editor-panel{margin-top:18px}
+.lesson-editors{align-items:start}
+.lesson-json-editor{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.55;min-height:420px;white-space:pre}
+.lesson-preview{margin-top:24px;padding-top:18px;border-top:1px solid var(--border)}
+.lesson-scene-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.lesson-scene-card{min-width:0;padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--bg);overflow-wrap:anywhere}
+.lesson-scene-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.lesson-scene-card h4{margin:12px 0 8px;font-size:16px}
+.lesson-scene-card p{font-size:13px;line-height:1.6}
+.lesson-on-screen{padding:10px 12px;border-radius:9px;background:var(--accent-soft);color:var(--text);font-weight:700}
+.lesson-visual-items{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.lesson-visual-items span{padding:9px 12px;border:1px solid var(--accent);border-radius:10px;background:var(--surface);font-size:12px;font-weight:700}
+.lesson-equation{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;font-weight:800;font-size:16px}
+.lesson-scene-card ol{padding-left:20px;font-size:13px;line-height:1.7}
+@media(max-width:760px){.lesson-editors{grid-template-columns:1fr}.lesson-json-editor{min-height:280px}}
