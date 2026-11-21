@@ -64,7 +64,7 @@ export default function AdminLessonStudio() {
     finally { setBusy(false); }
   }
 
-  useEffect(() => { void refreshDrafts().catch(e => setError((e as Error).message)); }, []);
+  useEffect(() => {\n    let active = true;\n    void request<{drafts:DraftSummary[]}>("/admin/lesson-drafts").then(result => { if (active) setDrafts(result.drafts || []); }).catch(e => { if (active) setError((e as Error).message); });\n    return () => { active = false; };\n  }, []);
 
   async function readFile(file: File) {
     setError(""); setNotice("");
