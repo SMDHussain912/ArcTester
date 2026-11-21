@@ -25,6 +25,7 @@ import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
 import LearningPathHome from "./src/components/LearningPathHome";
+import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import { triggerHapticFeedback } from "./src/feedback";
 
 const API_URL = (() => {
@@ -130,6 +131,7 @@ export default function App() {
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
   const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
+  const [lessonSession, setLessonSession] = useState(false);
 
   const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -632,7 +634,7 @@ export default function App() {
     }
   }
 
-  async function startPractice(config: PracticePaperConfig) {
+  async function startPractice(config: PracticePaperConfig, lesson = false) {
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -641,6 +643,7 @@ export default function App() {
       setError("Resume or submit your saved practice before starting another one.");
       return;
     }
+    setLessonSession(lesson);
     setBusy(true);
     setError("");
     try {
@@ -671,6 +674,7 @@ export default function App() {
         setHasSavedPracticeAttempt(true);
       }
     } catch (cause) {
+      setLessonSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -752,7 +756,7 @@ export default function App() {
         : "Your practice attempt is saved on this device and can be resumed later.",
       [
         { text: "Stay", style: "cancel" },
-        { text: "Exit to dashboard", style: "default", onPress: () => { setTest(null); setHasSavedPracticeAttempt(true); } },
+        { text: "Exit to dashboard", style: "default", onPress: () => { setTest(null); setLessonSession(false); setHasSavedPracticeAttempt(true); } },
       ],
     );
   }
@@ -807,6 +811,7 @@ export default function App() {
     setRefreshingAnnouncements(false);
     setRefreshingNotifications(false);
     setTest(null);
+    setLessonSession(false);
     setResult(null);
     setHasSavedPracticeAttempt(false);
     setCheckingPracticeRecovery(false);
@@ -877,7 +882,7 @@ export default function App() {
           </Animated.View>
         ) : result ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice result</Text>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : "Practice result"}</Text>
             <Text style={styles.statValue}>{result.score} / {result.total}</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
@@ -904,7 +909,7 @@ export default function App() {
                 <Text style={[styles.announcementDate, darkMode && { color: "#94a3b8" }]}>{question.explanation || "No explanation provided."}</Text>
               </View>
             ))}
-            <TouchableOpacity onPress={() => setResult(null)} style={styles.primary}>
+            <TouchableOpacity onPress={() => { setResult(null); setLessonSession(false); setActiveTab("home"); }} style={styles.primary}>
               <Text style={styles.primaryText}>Back to dashboard</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -912,20 +917,20 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={styles.examHeader}>
               <View>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Practice session</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Quick lesson" : "Practice session"}</Text>
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question {currentQuestionIndex + 1} of {test.questions.length}</Text>
               </View>
-              <View style={[styles.timerPill, secondsLeft === 0 && styles.timerExpired]}>
+              {!lessonSession && <View style={[styles.timerPill, secondsLeft === 0 && styles.timerExpired]}>
                 <MaterialCommunityIcons name="timer-outline" size={17} color={secondsLeft === 0 ? "#b42318" : "#2563eb"} />
                 <Text style={[styles.timerText, secondsLeft === 0 && styles.timerExpiredText]}>{formatTime(secondsLeft)}</Text>
-              </View>
+              </View>}
             </View>
             <View style={[styles.progressTrack, darkMode && { backgroundColor: "#334155" }]}>
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
-            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · timed practice</Text>
+            <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · {lessonSession ? "learn at your pace" : "timed practice"}</Text>
             {test.warnings?.map((warning, index) => <Text key={index} style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>{warning}</Text>)}
-            <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+            {!lessonSession && <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
               <View style={styles.navigatorGrid}>
                 {test.questions.map((question, index) => {
@@ -958,8 +963,8 @@ export default function App() {
                 <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>● Answered</Text>
                 <Text style={[styles.navigatorLegendText, darkMode && { color: "#94a3b8" }]}>○ Unanswered</Text>
               </View>
-            </View>
-            {secondsLeft === 0 && <Text style={styles.timerNotice}>Time is up. Submit your answers to finish.</Text>}
+            </View>}
+            {!lessonSession && secondsLeft === 0 && <Text style={styles.timerNotice}>Time is up. Submit your answers to finish.</Text>}
             {test.questions[currentQuestionIndex] && (
               <Animated.View
                 key={test.questions[currentQuestionIndex].id}
@@ -988,7 +993,7 @@ export default function App() {
               >
                 <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{test.questions[currentQuestionIndex].subject}{test.questions[currentQuestionIndex].topic ? " · " + test.questions[currentQuestionIndex].topic : ""}</Text>
                 <Text style={[styles.questionTitle, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
-                <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>
+                {!lessonSession && <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>}
                 {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
                   const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
                   return (
@@ -1025,13 +1030,13 @@ export default function App() {
                   <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity disabled={busy} onPress={confirmSubmit} style={styles.examNext}>
-                  <Text style={styles.primaryText}>{busy ? "Submitting…" : "Submit practice"}</Text>
+                <TouchableOpacity disabled={busy} onPress={() => { if (lessonSession) { if (answers[test.questions[currentQuestionIndex]?.id] === undefined) { setError("Choose an answer before checking it."); return; } void submit(); } else confirmSubmit(); }} style={styles.examNext}>
+                  <Text style={styles.primaryText}>{busy ? (lessonSession ? "Checking…" : "Submitting…") : (lessonSession ? "Check answer" : "Submit practice")}</Text>
                   <MaterialCommunityIcons name="check" size={19} color="#ffffff" />
                 </TouchableOpacity>
               )}
             </View>
-            {currentQuestionIndex < test.questions.length - 1 && (
+            {!lessonSession && currentQuestionIndex < test.questions.length - 1 && (
               <TouchableOpacity disabled={busy} onPress={confirmSubmit} style={styles.submitLink}>
                 <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Submit practice now</Text>
               </TouchableOpacity>
@@ -1099,6 +1104,15 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Subjects</Text>
               </View>
             </Animated.View>
+            <LessonLaunchCard
+              subjects={bank?.subjects ?? []}
+              darkMode={darkMode}
+              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
+              onStart={(subject, topic) => {
+                setPracticePresetSubject(subject);
+                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1 }, true);
+              }}
+            />
             <LearningPathHome
               subjects={bank?.subjects ?? []}
               progress={learningOverview?.practice.subjects ?? []}

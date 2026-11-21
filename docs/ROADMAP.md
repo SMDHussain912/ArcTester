@@ -11,7 +11,7 @@
 | 2 | Admin question review, import validation, human-reviewed content quota, additive question types | Implemented; human review of imported drafts remains a manual content task |
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
-| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Part 1 in progress on feature branch |
+| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Part 1 complete via PR #156; Part 2 in progress |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Not started |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Not started |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
@@ -38,4 +38,4 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 - Part 3 — Results, review and profile learning summary.
 - Part 4 — Offline progress queue and safe synchronization.
 
-Phase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
+**Part 1 complete:** PR #156 merged; exact-head CI #44945658948 and Android build #44945658979 passed.\n\n**Part 2 — Lesson player and immediate feedback:** Add a focused one-question lesson launcher for practice-available subjects/topics. Reuse the existing server-created practice attempt and server submission/result endpoint for correctness and explanation; do not ship answer keys or infer local mastery.\n\nPhase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
