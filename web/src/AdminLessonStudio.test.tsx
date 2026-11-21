@@ -59,7 +59,7 @@ describe("AdminLessonStudio", () => {
 
     expect(await screen.findByRole("heading", { name: "Review lesson draft" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "3 scenes" })).toBeInTheDocument();
-    expect(screen.getByText("Which pops first?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Scene 3 on-screen text")).toHaveValue("Which pops first?");
 
     fireEvent.change(screen.getByLabelText("Lesson title"), { target: { value: "Stack operations" } });
     fireEvent.change(screen.getByLabelText("Scene 2 title"), { target: { value: "Push operation visual" } });
