@@ -72,7 +72,7 @@ describe("StudentPracticeSession", () => {
   fireEvent.click(screen.getByRole("button",{name:"Review and submit full mock"}));
   expect(screen.getByRole("dialog",{name:"Submit your full mock?"})).toBeInTheDocument();
   expect(screen.getByRole("dialog")).toHaveTextContent("You answered 1 of 2 questions.");
-  expect(screen.getByRole("dialog")).toHaveTextContent("1 questions are unanswered");
+  expect(screen.getByRole("dialog")).toHaveTextContent("1 question is unanswered");
   expect(onSubmit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Continue reviewing"}));
   expect(screen.queryByRole("dialog")).toBeNull();
