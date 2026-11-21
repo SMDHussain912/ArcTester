@@ -30,6 +30,7 @@ import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
 import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
+import { toggleMultiSelectAnswer } from "./src/multiSelectAnswer";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -67,6 +68,8 @@ type Question = {
   topic: string | null;
   text: string;
   options: string[];
+  questionType: "mcq" | "multi_select" | "true_false" | "fill_blank" | "numeric" | "matching";
+  promptData: Record<string, unknown>;
 };
 type Test = {
   attemptId: number;
@@ -75,11 +78,11 @@ type Test = {
   serverNow: string;
   questions: Question[];
   warnings?: string[];
-  saved?: { questionId: number; selectedIndex: number | null }[];
+  saved?: { questionId: number; selectedIndex: number | null; response: unknown }[];
 };
 type PracticeRecovery = {
   attemptId: number;
-  answers: Record<number, number>;
+  answers: Record<number, unknown>;
   currentQuestionIndex: number;
 };
 type PracticeResult = {
@@ -97,6 +100,10 @@ type PracticeResult = {
     topic: string | null;
     text: string;
     options: string[];
+    questionType: string;
+    promptData: Record<string, unknown>;
+    answerData: Record<string, unknown>;
+    response: unknown;
     selectedIndex: number | null;
     correctIndex: number;
     isCorrect: boolean;
@@ -152,7 +159,7 @@ export default function App() {
   useEffect(() => { if (result) setResultReviewFilter("all"); }, [result?.attemptId]);
 
   const [darkMode, setDarkMode] = useState(false);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<number, unknown>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(20 * 60);
   const [busy, setBusy] = useState(false);
@@ -648,7 +655,7 @@ export default function App() {
     }
   }
 
-  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number, queueForSync = false) {
+  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, unknown>, nextIndex: number, queueForSync = false) {
     if (!user) return;
     const requestIdentity = sessionIdentityRef.current;
     const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
@@ -659,7 +666,7 @@ export default function App() {
         if (queueForSync && test?.attemptId === attemptId) {
           const queued = await queuePracticeProgress(String(user.id), {
             attemptId,
-            answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: nextAnswers[question.id] ?? null })),
+            answers: test.questions.map((question) => ({ questionId: question.id, response: nextAnswers[question.id] ?? null })),
             currentQuestionIndex: nextIndex,
           });
           setPendingSyncCount((count) => Math.max(count, 1));
@@ -677,11 +684,17 @@ export default function App() {
     }
   }
 
-  function updatePracticeAnswer(questionId: number, selectedIndex: number) {
+  function updatePracticeResponse(questionId: number, response: unknown) {
     if (!test || pendingSubmitRequested) return;
-    const nextAnswers = { ...answers, [questionId]: selectedIndex };
+    const nextAnswers = { ...answers };
+    if (Array.isArray(response) && response.length === 0) delete nextAnswers[questionId];
+    else nextAnswers[questionId] = response;
     setAnswers(nextAnswers);
     void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex, true);
+  }
+
+  function updatePracticeAnswer(questionId: number, selectedIndex: number) {
+    updatePracticeResponse(questionId, selectedIndex);
   }
 
   function updatePracticeQuestionIndex(nextIndex: number) {
@@ -729,8 +742,8 @@ export default function App() {
       }
       const serverAnswers = Object.fromEntries(
         (restored.saved ?? [])
-          .filter((answer) => answer.selectedIndex !== null)
-          .map((answer) => [answer.questionId, answer.selectedIndex as number]),
+          .filter((answer) => answer.response !== null || answer.selectedIndex !== null)
+          .map((answer) => [answer.questionId, answer.response !== null ? answer.response : answer.selectedIndex]),
       );
       const localAnswers = recovery.answers && typeof recovery.answers === "object" ? recovery.answers : {};
       setTest(restored);
@@ -907,7 +920,7 @@ export default function App() {
       await practiceSaveQueue.current;
       await queuePracticeProgress(String(user.id), {
         attemptId: test.attemptId,
-        answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: answers[question.id] ?? null })),
+        answers: test.questions.map((question) => ({ questionId: question.id, response: answers[question.id] ?? null })),
         currentQuestionIndex,
         submitRequested: true,
       });
@@ -1150,7 +1163,36 @@ export default function App() {
                 <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{test.questions[currentQuestionIndex].subject}{test.questions[currentQuestionIndex].topic ? " · " + test.questions[currentQuestionIndex].topic : ""}</Text>
                 <Text style={[styles.questionTitle, { fontSize: questionTextSize }, darkMode && { color: "#f1f5f9" }]}>{test.questions[currentQuestionIndex].text}</Text>
                 {!lessonSession && <Text style={styles.swipeHint}>Swipe left for next · right for previous</Text>}
-                {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
+                {test.questions[currentQuestionIndex].questionType === "multi_select" ? (
+                  <View>
+                    <Text style={[styles.examHint, { marginBottom: 8 }, darkMode && { color: "#94a3b8" }]}>Select all that apply</Text>
+                    {test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
+                      const currentResponse = answers[test.questions[currentQuestionIndex].id];
+                      const selected = Array.isArray(currentResponse) && currentResponse.includes(optionIndex);
+                      return (
+                        <TouchableOpacity
+                          key={optionIndex}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: selected }}
+                          onPress={() => updatePracticeResponse(
+                            test.questions[currentQuestionIndex].id,
+                            toggleMultiSelectAnswer(currentResponse, optionIndex, test.questions[currentQuestionIndex].options.length),
+                          )}
+                          style={[styles.option, darkMode && { borderColor: "#475569" }, selected && styles.optionSelected]}
+                          activeOpacity={0.78}
+                        >
+                          <View style={styles.optionRow}>
+                            <View style={[styles.optionLetter, selected && styles.optionLetterSelected, { borderRadius: 6 }]}>
+                              <Text style={[styles.optionLetterText, selected && styles.optionLetterTextSelected]}>{selected ? "✓" : String.fromCharCode(65 + optionIndex)}</Text>
+                            </View>
+                            <Text style={[styles.optionText, { flex: 1 }, darkMode && { color: "#e2e8f0" }]}>{option}</Text>
+                            {selected && <MaterialCommunityIcons name="check-circle" size={20} color="#2563eb" />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : test.questions[currentQuestionIndex].options.map((option, optionIndex) => {
                   const selected = answers[test.questions[currentQuestionIndex].id] === optionIndex;
                   return (
                     <TouchableOpacity
