@@ -90,6 +90,11 @@
   --ds-focus: #60A5FA;
   --ds-shadow-card: 0 8px 28px rgb(0 0 0 / 18%);
   --ds-shadow-raised: 0 16px 40px rgb(0 0 0 / 28%);
+  --accent: var(--ds-brand);
+  --accent-soft: var(--ds-brand-soft);
+  --success: var(--ds-success);
+  --danger: var(--ds-danger);
+  --shadow: var(--ds-shadow-card);
 }
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--ds-focus);
