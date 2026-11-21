@@ -34,7 +34,7 @@ describe("lesson generation contracts", () => {
       { sceneType: "step_sequence", title: "Idea", narration: "Explain the central idea in plain words.", onScreenText: "Idea", durationMs: 4000, visual: { steps: ["First", "Next"] } },
       { sceneType: "checkpoint", title: "Check", narration: "Ask the learner to recall the key idea.", onScreenText: "Recall", durationMs: 5000, visual: {} },
     ] };
-    const fenced = "```json\\n" + JSON.stringify(value) + "\\n```";
+    const fenced = "```json\n" + JSON.stringify(value) + "\n```";
     expect(parseModelJson(fenced, LessonStoryboardSchema)).toHaveProperty("scenes");
   });
 });
