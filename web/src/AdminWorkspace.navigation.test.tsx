@@ -38,6 +38,7 @@ describe("administrator workspace navigation", () => {
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
+      ["Lesson Studio", "Lesson Studio"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
