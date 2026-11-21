@@ -6,12 +6,14 @@ type Subject = { subject: string; count: number; practiceCount?: number; topics?
 type Bank = { total: number; practiceTotal?: number; subjects: Subject[] };
 type Row = { subject: string; topic: string | null; seen: number; correct: number; wrong?: number; incorrect?: number; accuracy: number | null };
 type Overview = { practice: { subjects: Row[] } };
+type WeakTopics = { subjects: Row[]; topics: Row[] };
 type Stat = { seen: number; correct: number; topics: Map<string, { seen: number; correct: number }> };
 const pct = (seen: number, total: number) => total > 0 ? Math.min(100, Math.round(seen / total * 100)) : 0;
 
 export default function StudentWebLearningPath({ onPractice }: { onPractice: (subject: string, topic?: string) => void }) {
   const [bank, setBank] = useState<Bank | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [subjectRows, setSubjectRows] = useState<Row[]>([]);
+  const [topicRows, setTopicRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -19,9 +21,10 @@ export default function StudentWebLearningPath({ onPractice }: { onPractice: (su
   const refresh = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const [b, overview] = await Promise.all([request<Bank>("/bank"), request<Overview>("/analytics/overview")]);
+      const [b, overview, weakTopics] = await Promise.all([request<Bank>("/bank"), request<Overview>("/analytics/overview"), request<WeakTopics>("/analytics/weak-topics")]);
       setBank(b);
-      setRows(Array.isArray(overview.practice?.subjects) ? overview.practice.subjects : []);
+      setSubjectRows(Array.isArray(overview.practice?.subjects) ? overview.practice.subjects : []);
+      setTopicRows(Array.isArray(weakTopics.topics) ? weakTopics.topics : []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load your learning path.");
     } finally { setLoading(false); }
@@ -30,18 +33,23 @@ export default function StudentWebLearningPath({ onPractice }: { onPractice: (su
 
   const stats = useMemo(() => {
     const map = new Map<string, Stat>();
-    rows.forEach((row) => {
+    subjectRows.forEach((row) => {
       const item = map.get(row.subject) ?? { seen: 0, correct: 0, topics: new Map() };
       const seen = Math.max(0, Number(row.seen) || 0), correct = Math.max(0, Number(row.correct) || 0);
       item.seen += seen; item.correct += correct;
-      if (row.topic) {
-        const topic = item.topics.get(row.topic) ?? { seen: 0, correct: 0 };
-        topic.seen += seen; topic.correct += correct; item.topics.set(row.topic, topic);
-      }
+      map.set(row.subject, item);
+    });
+    topicRows.forEach((row) => {
+      if (!row.topic) return;
+      const item = map.get(row.subject) ?? { seen: 0, correct: 0, topics: new Map() };
+      const topic = item.topics.get(row.topic) ?? { seen: 0, correct: 0 };
+      topic.seen += Math.max(0, Number(row.seen) || 0);
+      topic.correct += Math.max(0, Number(row.correct) || 0);
+      item.topics.set(row.topic, topic);
       map.set(row.subject, item);
     });
     return map;
-  }, [rows]);
+  }, [subjectRows, topicRows]);
 
   const subjects = (bank?.subjects ?? []).filter((s) => (s.practiceCount ?? s.count) > 0);
   const total = subjects.reduce((n, s) => n + (s.practiceCount ?? s.count), 0);
