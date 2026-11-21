@@ -856,7 +856,7 @@ export default function App() {
     }
   }
 
-  async function startPractice(config: PracticePaperConfig, lesson = false, speedRound = false) {
+  async function startPractice(config: PracticePaperConfig, lesson = false, speedRound = false, mistakes = false, dailyChallenge = false) {
     if (checkingPracticeRecovery) {
       setError("Checking this account for a saved practice attempt. Try again in a moment.");
       return;
@@ -867,6 +867,8 @@ export default function App() {
     }
     setLessonSession(lesson);
     setSpeedRoundSession(speedRound);
+    setDailyChallengeSession(dailyChallenge);
+    setMistakesSession(mistakes);
     setPendingSubmitRequested(false);
     setBusy(true);
     setError("");
@@ -877,10 +879,13 @@ export default function App() {
       setBank(freshBank);
       const availableSubjects = freshBank.subjects.filter((item) => item.count > 0);
       if (availableSubjects.length === 0) throw new Error("The question bank currently has no practice questions.");
-      const created = await api<Test>("/tests", {
-        method: "POST",
-        body: JSON.stringify({ mode: speedRound ? "speedRound" : "practice", subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count }),
-      });
+      const mode = dailyChallenge ? "dailyChallenge" : mistakes ? "mistakes" : speedRound ? "speedRound" : "practice";
+      const request = dailyChallenge
+        ? { mode, count: 10 }
+        : mistakes
+          ? { mode, count: 20 }
+          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count };
+      const created = await api<Test>("/tests", { method: "POST", body: JSON.stringify(request) });
       setTest(created);
       setResult(null);
       setAnswers({});
@@ -900,6 +905,8 @@ export default function App() {
     } catch (cause) {
       setLessonSession(false);
       setSpeedRoundSession(false);
+      setDailyChallengeSession(false);
+      setMistakesSession(false);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -1111,7 +1118,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : speedRoundSession ? "Speed round complete" : "Practice result"}</Text>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : speedRoundSession ? "Speed round complete" : dailyChallengeSession ? "Daily challenge result" : mistakesSession ? "Mistakes practice result" : "Practice result"}</Text>
                 <Text style={[styles.statValue, { marginTop: 4 }]}>{result.score} / {result.total}</Text>
               </View>
               <ArcTesterMascot size={64} />
