@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hapticPattern } from "./feedback";
+import { hapticPattern } from "./feedbackPatterns";
 
 describe("optional haptic feedback patterns", () => {
   it("uses a short success pattern", () => {
