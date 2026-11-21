@@ -364,6 +364,11 @@ export default function App() {
             return;
           }
           if (item.submitRequested) {
+            const latest = await getPendingPracticeProgress(String(user.id));
+            if (latest.some((queued) => queued.attemptId === item.attemptId && queued.revision !== item.revision)) {
+              madeProgress = true;
+              continue;
+            }
             try {
               await api("/tests/" + item.attemptId + "/submit", {
                 method: "POST",
@@ -640,19 +645,21 @@ export default function App() {
     const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
     practiceSaveQueue.current = practiceSaveQueue.current
       .catch(() => undefined)
-      .then(() => setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload)));
+      .then(async () => {
+        await setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload));
+        if (queueForSync && test?.attemptId === attemptId) {
+          const queued = await queuePracticeProgress(String(user.id), {
+            attemptId,
+            answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: nextAnswers[question.id] ?? null })),
+            currentQuestionIndex: nextIndex,
+          });
+          setPendingSyncCount((count) => Math.max(count, 1));
+          if (queued.submitRequested) setPendingSubmitRequested(true);
+        }
+      });
     try {
       await practiceSaveQueue.current;
-      if (queueForSync && test?.attemptId === attemptId) {
-        const queued = await queuePracticeProgress(String(user.id), {
-          attemptId,
-          answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: nextAnswers[question.id] ?? null })),
-          currentQuestionIndex: nextIndex,
-        });
-        setPendingSyncCount((count) => Math.max(count, 1));
-        if (queued.submitRequested) setPendingSubmitRequested(true);
-        if (networkConnected === true) void syncPendingPracticeProgress();
-      }
+      if (queueForSync && networkConnected === true) void syncPendingPracticeProgress();
       if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(true);
     } catch (cause) {
       if (sessionIdentityRef.current === requestIdentity) {
