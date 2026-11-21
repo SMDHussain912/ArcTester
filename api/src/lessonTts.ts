@@ -18,8 +18,8 @@ export function getLessonTtsConfig() {
   const baseUrl = process.env.NVIDIA_TTS_BASE_URL?.trim() || "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com";
   const language = process.env.NVIDIA_TTS_LANGUAGE?.trim() || "en-US";
   const voice = process.env.NVIDIA_TTS_VOICE?.trim() || "Magpie-Multilingual.EN-US.Aria";
-  const apiKey = process.env.NVIDIA_TTS_API_KEY?.trim();
-  if (!baseUrl) throw new LessonTtsError("LESSON_TTS_NOT_CONFIGURED");
+  const apiKey = process.env.NVIDIA_TTS_API_KEY?.trim() || process.env.NVIDIA_API_KEY?.trim();
+  if (!apiKey) throw new LessonTtsError("LESSON_TTS_NOT_CONFIGURED");
   const parsed = TtsConfigSchema.safeParse({ baseUrl, language, voice, apiKey });
   if (!parsed.success) throw new LessonTtsError("LESSON_TTS_NOT_CONFIGURED");
   return parsed.data;
