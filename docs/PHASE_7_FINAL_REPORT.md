@@ -23,7 +23,7 @@
 
 ## Verification
 - Final-slice exact-head GitHub Actions CI: pending.
-- Phase 7 Part 1 PR #168 exact-head CI #2583 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44961642621
+- Phase 7 Part 1 PR #168 exact-head CI #2583 passed (run link recorded in PR #168).
 - Phase 7 Part 2 PR #169 exact-head CI #2587 passed: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44961899319
 - Keyboard-only and screen-reader review: NOT VERIFIED.
 - Responsive browser/device review: NOT VERIFIED.
