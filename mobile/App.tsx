@@ -365,8 +365,10 @@ export default function App() {
             return;
           }
           if (item.submitRequested) {
+            await practiceSaveQueue.current.catch(() => undefined);
             const latest = await getPendingPracticeProgress(String(user.id));
-            if (latest.some((queued) => queued.attemptId === item.attemptId && queued.revision !== item.revision)) {
+            const latestItem = latest.find((queued) => queued.attemptId === item.attemptId);
+            if (!latestItem || latestItem.revision !== item.revision) {
               madeProgress = true;
               continue;
             }
