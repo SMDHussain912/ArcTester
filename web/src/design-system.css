@@ -166,3 +166,16 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+.feedback-settings { position: relative; color: var(--ds-text); font-size: var(--ds-text-sm); }
+.feedback-settings > summary { cursor: pointer; list-style: none; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); padding: 8px 11px; font-weight: 700; white-space: nowrap; }
+.feedback-settings > summary::-webkit-details-marker { display: none; }
+.feedback-settings[open] > summary { border-color: var(--ds-brand); }
+.feedback-settings-panel { position: absolute; z-index: 30; right: 0; top: calc(100% + 8px); width: min(280px, calc(100vw - 32px)); padding: 14px; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-lg); background: var(--ds-surface); box-shadow: var(--ds-shadow-raised); }
+.feedback-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; cursor: pointer; }
+.feedback-setting + .feedback-setting { border-top: 1px solid var(--ds-border); }
+.feedback-setting span { display: grid; gap: 3px; }
+.feedback-setting small { color: var(--ds-muted); font-size: var(--ds-text-xs); line-height: 1.35; }
+.feedback-setting input { width: 18px; height: 18px; accent-color: var(--ds-brand); flex-shrink: 0; }
+.feedback-test { width: 100%; margin-top: 8px; padding: 9px 12px; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-md); color: var(--ds-text); background: var(--ds-surface); cursor: pointer; }
+.feedback-test:focus-visible, .feedback-settings > summary:focus-visible { outline: 3px solid var(--ds-focus); outline-offset: 3px; }
