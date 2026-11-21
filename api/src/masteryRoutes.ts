@@ -21,11 +21,19 @@ export function masteryRouter(db: PrismaClient): Router {
   router.get("/learning/mastery", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const userId = req.user!.id;
-      const [questions, stats] = await Promise.all([
+      const [questions, stats, pathAnswers] = await Promise.all([
         db.question.findMany({ where: { reviewStatus: "APPROVED", topicId: { not: null } }, select: { id: true, topicId: true, topic: { select: { name: true } }, subject: { select: { name: true } } } }),
         db.stat.findMany({ where: { userId }, select: { questionId: true, seen: true, wrong: true } }),
+        db.pathAnswer.findMany({ where: { userId }, select: { questionId: true, isCorrect: true } }),
       ]);
-      const statByQuestion = new Map(stats.map((s) => [s.questionId, s]));
+      const statByQuestion = new Map<number, { seen: number; wrong: number }>();
+      for (const stat of stats) statByQuestion.set(stat.questionId, { seen: stat.seen, wrong: stat.wrong });
+      for (const answer of pathAnswers) {
+        const current = statByQuestion.get(answer.questionId) ?? { seen: 0, wrong: 0 };
+        current.seen += 1;
+        if (!answer.isCorrect) current.wrong += 1;
+        statByQuestion.set(answer.questionId, current);
+      }
       const topics = new Map<number, { subject: string; topic: string; totalQuestions: number; answeredQuestions: number; attempts: number; correct: number }>();
       for (const q of questions) {
         if (q.topicId === null || !q.topic) continue;
@@ -93,11 +101,12 @@ export function masteryRouter(db: PrismaClient): Router {
   router.get("/gamification/quests", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const userId = req.user!.id, today = utcStart();
-      const [day, reviews] = await Promise.all([
+      const [day, reviews, lessonsToday] = await Promise.all([
         db.gamificationDay.findUnique({ where: { userId_date: { userId, date: today } } }),
         db.userQuestionReview.count({ where: { userId, lastReviewedAt: { gte: today } } }),
+        db.userLessonProgress.count({ where: { userId, completedAt: { gte: today } } }),
       ]);
-      const values: Record<string, number> = { lesson: day?.lessonsCompleted ?? 0, practice: day?.practiceTestsDone ?? 0, mistakes: reviews };
+      const values: Record<string, number> = { lesson: lessonsToday, practice: day?.practiceTestsDone ?? 0, mistakes: reviews };
       const quests = DAILY_QUESTS.map((quest) => ({ ...quest, progress: Math.min(quest.target, values[quest.key] ?? 0), completed: (values[quest.key] ?? 0) >= quest.target }));
       res.json({ date: today.toISOString().slice(0, 10), quests });
     } catch (error) { next(error); }
