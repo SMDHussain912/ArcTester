@@ -621,3 +621,24 @@ model UserBadge {
   @@unique([userId, badgeKey])
   @@index([userId, unlockedAt])
 }
+
+// AI-generated lesson drafts are private until an admin reviews and publishes them.
+model LessonDraft {
+  id             String   @id @default(cuid())
+  createdById     Int
+  title           String
+  subject         String
+  topic           String
+  sourceTitle     String
+  sourceText      String
+  scriptJson      String
+  storyboardJson  String
+  provider        String
+  model           String
+  status          String   @default("DRAFT")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([createdById])
+}
