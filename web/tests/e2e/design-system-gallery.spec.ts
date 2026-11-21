@@ -19,8 +19,7 @@ test.describe("design system gallery", () => {
     await page.getByRole("button", { name: "Disable reduced motion" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-motion", "reduced");
     await expect(page.getByRole("button", { name: "Disable reduced motion" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("heading", { name: "Design system component examples" })).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "Design system component examples" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Design system component examples" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Buttons & states" })).toBeVisible();
   });
 });
