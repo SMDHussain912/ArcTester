@@ -46,7 +46,25 @@ export const LessonSceneSchema = z.object({
 
 export const LessonStoryboardSchema = z.object({
   scenes: z.array(LessonSceneSchema).min(3).max(24),
-}).strict();
+}).strict().superRefine((storyboard, ctx) => {
+  if (!storyboard.scenes.some((scene) => scene.sceneType === "diagram" || scene.sceneType === "step_sequence")) {
+    ctx.addIssue({ code: "custom", message: "A storyboard needs at least one visual explanation scene.", path: ["scenes"] });
+  }
+  if (storyboard.scenes.at(-1)?.sceneType !== "checkpoint") {
+    ctx.addIssue({ code: "custom", message: "The final scene must be a checkpoint.", path: ["scenes"] });
+  }
+  if (storyboard.scenes.reduce((sum, scene) => sum + scene.durationMs, 0) > 8 * 60 * 1000) {
+    ctx.addIssue({ code: "custom", message: "A lesson timeline cannot exceed eight minutes.", path: ["scenes"] });
+  }
+  storyboard.scenes.forEach((scene, index) => {
+    const labels = new Set(scene.visual.items);
+    scene.visual.connections.forEach((connection, connectionIndex) => {
+      if (!labels.has(connection.from) || !labels.has(connection.to)) {
+        ctx.addIssue({ code: "custom", message: "Diagram connections must reference visible items.", path: ["scenes", index, "visual", "connections", connectionIndex] });
+      }
+    });
+  });
+});
 
 export const GenerateLessonInputSchema = z.object({
   subject: z.string().trim().min(2).max(100),
@@ -72,7 +90,9 @@ function modelText(payload: unknown): string {
     choices: z.array(z.object({
       message: z.object({ content: z.union([z.string(), z.array(z.object({ text: z.string() }).passthrough())]) }),
     }).passthrough()).min(1),
-  }).passthrough().parse(payload);
+  });
+  let root: z.infer<typeof rootSchema>;
+  try { root = rootSchema.parse(payload); } catch { throw new LessonOutputValidationError(); }
   const content = root.choices[0]!.message.content;
   return typeof content === "string" ? content : content.map((part) => part.text).join("");
 }
