@@ -68,7 +68,7 @@ export async function awardXp(
   longestStreak = Math.max(longestStreak, currentStreak);
   const updateState = await tx.userGamification.update({
     where: { userId },
-    data: { totalXp: { increment: REWARD_XP[kind] }, currentStreak, longestStreak, lastActivityDate: day, streakFreezeInventory: freezeInventory },
+    data: { totalXp: { increment: REWARD_XP[kind] }, xpBalance: { increment: REWARD_XP[kind] }, currentStreak, longestStreak, lastActivityDate: day, streakFreezeInventory: freezeInventory },
   });
   const increment = kind === "lesson" ? { lessonsCompleted: 1 } : kind === "unit-test" ? { unitTestsPassed: 1 } : { practiceTestsDone: 1 };
   const daily = await tx.gamificationDay.upsert({
@@ -86,7 +86,7 @@ export async function awardXp(
     if (bonusEvent.count) {
       goalBonus = DAILY_GOAL_BONUS;
       goalReachedAt = now;
-      await tx.userGamification.update({ where: { userId }, data: { totalXp: { increment: goalBonus } } });
+      await tx.userGamification.update({ where: { userId }, data: { totalXp: { increment: goalBonus }, xpBalance: { increment: goalBonus } } });
       await tx.gamificationDay.update({ where: { userId_date: { userId, date: day } }, data: { xpEarned: { increment: goalBonus }, goalReachedAt } });
     }
   }
