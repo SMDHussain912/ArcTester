@@ -10,8 +10,8 @@
 | 1 | Remove ML/desktop scope and student exam-hall UI; retain practice + timed Full Mock Test; convert materials to links | Complete |
 | 2 | Admin question review, import validation, human-reviewed content quota, additive question types | Implemented; human review of imported drafts remains a manual content task |
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
-| 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on integration branch; integration PR to main pending |
-| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Not started |
+| 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
+| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Part 1 in progress on feature branch |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Not started |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Not started |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
@@ -28,4 +28,14 @@ A phase is complete only when its full scope is implemented, exact-head CI is gr
 - **Part 3 — Motion, sound and haptics:** lightweight feedback utilities and user/system preference handling; never make feedback essential to task completion.
 - **Part 4 — Asset and interaction gallery:** interactive gallery at `/design-system-gallery.html` with responsive layout, light/dark theme, reduced-motion toggle, and Playwright coverage. PR #154 merged after exact-head CI #2507 passed.
 
-Phase 4 stays in progress until all slices are merged and verified. Phase 4 work is stacked on the Phase 3/Part 1 integration branch; after the slices pass exact-head CI, create a focused integration PR to main.
+Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actions checks passed on the exact PR head; physical-device and accessibility checks remain manual.
+
+
+## Phase 5 delivery slices
+
+- **Part 1 — Mobile learning home and subject path:** add a guided path to the mobile home using existing bank and practice analytics; show overall explored-question progress, next subject, topic/question counts, per-subject progress and accuracy; launch practice with the chosen subject preselected. Keep this client-only and preserve existing auth, practice recovery, announcements, results, and account flows.
+- Part 2 — Lesson player and immediate feedback.
+- Part 3 — Results, review and profile learning summary.
+- Part 4 — Offline progress queue and safe synchronization.
+
+Phase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
