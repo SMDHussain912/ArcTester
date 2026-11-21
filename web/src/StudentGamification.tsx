@@ -3,7 +3,7 @@ import { request } from "./apiClient";
 
 type Day = { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean };
 type Snapshot = {
-  totalXp: number; level: number; xpIntoLevel: number; xpToNextLevel: number;
+  totalXp: number; xpBalance: number; level: number; xpIntoLevel: number; xpToNextLevel: number;
   currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number;
   today: { xpEarned: number; goalReachedAt: string | null } | null;
   week: Day[];
@@ -60,7 +60,7 @@ export default function StudentGamification() {
       {data ? <>
         <div className="stats-row">
           <article className="panel stat"><span className="muted">Total XP</span><strong>{data.totalXp.toLocaleString()}</strong><span className="muted">Level {data.level}</span></article>
-          <article className="panel stat"><span className="muted">Current streak</span><strong>{data.currentStreak} 🔥</strong><span className="muted">Longest: {data.longestStreak} days</span></article>
+          <article className="panel stat"><span className="muted">XP balance</span><strong>{data.xpBalance.toLocaleString()}</strong><span className="muted">Spendable XP</span></article>\n          <article className="panel stat"><span className="muted">Current streak</span><strong>{data.currentStreak} 🔥</strong><span className="muted">Longest: {data.longestStreak} days</span></article>
           <article className="panel stat"><span className="muted">Streak freezes</span><strong>{data.streakFreezeInventory} / {MAX_FREEZES} ❄️</strong><span className="muted">Protect one missed day automatically</span></article>
         </div>
         <section className="panel">
@@ -89,8 +89,8 @@ export default function StudentGamification() {
         </section>
         <section className="panel">
           <div className="section-head"><div><p className="eyebrow">STREAK PROTECTION</p><h2>Streak freeze</h2><p className="muted">One freeze covers a single missed UTC day. You can hold at most two.</p></div></div>
-          <button className="button button-secondary" disabled={busy || data.streakFreezeInventory >= MAX_FREEZES || data.totalXp < FREEZE_COST} onClick={() => void buyFreeze()}>Buy a freeze · {FREEZE_COST} XP</button>
-          {data.streakFreezeInventory >= MAX_FREEZES ? <p className="muted">Inventory is full.</p> : data.totalXp < FREEZE_COST ? <p className="muted">Earn {FREEZE_COST - data.totalXp} more XP to buy one.</p> : null}
+          <button className="button button-secondary" disabled={busy || data.streakFreezeInventory >= MAX_FREEZES || data.xpBalance < FREEZE_COST} onClick={() => void buyFreeze()}>Buy a freeze · {FREEZE_COST} XP</button>
+          {data.streakFreezeInventory >= MAX_FREEZES ? <p className="muted">Inventory is full.</p> : data.totalXp < FREEZE_COST ? <p className="muted">Earn {FREEZE_COST - data.xpBalance} more XP to buy one.</p> : null}
         </section>
       </> : !loading ? <section className="panel"><p className="muted">Rewards could not be loaded.</p></section> : <section className="panel"><p className="muted">Loading your XP and streak…</p></section>}
     </section>
