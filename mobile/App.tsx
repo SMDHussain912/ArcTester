@@ -168,6 +168,7 @@ export default function App() {
   const progress = useRef(new Animated.Value(0)).current;
   const practiceSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const practiceSyncLock = useRef(false);
+  const practiceSyncRef = useRef<() => Promise<void>>(async () => undefined);
   const practiceRestoreLock = useRef(false);
   const questionSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [error, setError] = useState("");
@@ -411,13 +412,15 @@ export default function App() {
     }
   }
 
+  practiceSyncRef.current = syncPendingPracticeProgress;
+
   useEffect(() => {
     let active = true;
     const applyConnection = (state: { isConnected: boolean | null; isInternetReachable: boolean | null }) => {
       if (!active) return;
       const connected = state.isConnected === true && state.isInternetReachable !== false;
       setNetworkConnected(connected);
-      if (connected) void syncPendingPracticeProgress();
+      if (connected) void practiceSyncRef.current();
     };
     const unsubscribe = NetInfo.addEventListener(applyConnection);
     NetInfo.fetch().then(applyConnection).catch(() => { if (active) setNetworkConnected(false); });
