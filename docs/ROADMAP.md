@@ -35,7 +35,15 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 
 - **Part 1 — Mobile learning home and subject path:** add a guided path to the mobile home using existing bank and practice analytics; show overall explored-question progress, next subject, topic/question counts, per-subject progress and accuracy; launch practice with the chosen subject preselected. Keep this client-only and preserve existing auth, practice recovery, announcements, results, and account flows.
 - Part 2 — Lesson player and immediate feedback.
-- Part 3 — Results, review and profile learning summary.
-- Part 4 — Offline progress queue and safe synchronization.
+- **Part 3 — Results, review and profile learning summary:** add a result score summary, answer-review filters (all/mistakes), and account-scoped learning metrics on profile using the existing server overview. Keep the review backed by authoritative result data; do not create local progress claims.
+- **Part 4 — Offline progress queue and safe synchronization:** remains the final Phase 5 slice after Part 3.
 
-**Part 1 complete:** PR #156 merged; exact-head CI #44945658948 and Android build #44945658979 passed.\n\n**Part 2 — Lesson player and immediate feedback:** Add a focused one-question lesson launcher for practice-available subjects/topics. Reuse the existing server-created practice attempt and server submission/result endpoint for correctness and explanation; do not ship answer keys or infer local mastery.\n\nPhase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
+**Part 1 complete:** PR #156 merged; exact-head CI #44945658948 and Android build #44945658979 passed.
+
+**Part 2 complete:** PR #157 merged as `5324c45a`; mobile quick lesson starts a server-created one-question attempt and uses server submission/result feedback.
+
+**Part 3 in progress:** Results, answer-review filtering, and server-backed profile learning summary are being implemented on `feature/phase-5-part-3-results-profile`.
+
+**Part 4 planned:** Offline progress queue and safe synchronization.
+
+Phase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
