@@ -1,4 +1,4 @@
-import designTokens from "../../../design-tokens.json";
+import designTokens from "../../design-tokens.json";
 
 export const design = designTokens;
 export type DesignTokens = typeof designTokens;
