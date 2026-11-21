@@ -381,6 +381,28 @@ export default function App() {
   }
 
 
+  useEffect(() => {
+    let active = true;
+    if (!user || !token) {
+      setGamification(null);
+      setDailyGoalDraft("50");
+      return () => { active = false; };
+    }
+    fetch(API_URL + "/gamification", { headers: { authorization: "Bearer " + token } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Gamification unavailable");
+        return response.json() as Promise<GamificationSnapshot>;
+      })
+      .then((snapshot) => {
+        if (active) {
+          setGamification(snapshot);
+          setDailyGoalDraft(String(snapshot.dailyGoalXp));
+        }
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [user?.id, token]);
+
   async function syncPendingPracticeProgress() {
     if (!user || !token || practiceSyncLock.current) return;
     const requestIdentity = sessionIdentityRef.current;
