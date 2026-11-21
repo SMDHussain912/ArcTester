@@ -1,3 +1,4 @@
+import "./StudentGamification.css";
 import { useCallback, useEffect, useState } from "react";
 import { request } from "./apiClient";
 
@@ -65,7 +66,7 @@ export default function StudentGamification() {
         </div>
         <section className="panel">
           <div className="section-head"><div><p className="eyebrow">LEVEL {data.level}</p><h2>{data.xpIntoLevel} / 100 XP to next level</h2></div><strong>{data.xpToNextLevel} XP left</strong></div>
-          <div className="progress-track" role="progressbar" aria-label="Level progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={data.xpIntoLevel}><span style={{ width: data.xpIntoLevel + "%" }} /></div>
+          <div className="gamification-progress" role="progressbar" aria-label="Level progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={data.xpIntoLevel}><span style={{ width: data.xpIntoLevel + "%" }} /></div>
         </section>
         <section className="panel">
           <div className="section-head"><div><p className="eyebrow">TODAY</p><h2>Daily XP goal</h2></div><strong>{todayXp} / {data.dailyGoalXp} XP</strong></div>
