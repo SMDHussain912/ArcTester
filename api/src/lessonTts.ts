@@ -4,7 +4,7 @@ const TtsConfigSchema = z.object({
   baseUrl: z.string().url(),
   language: z.string().regex(/^[a-z]{2,3}-[A-Z]{2}$/),
   voice: z.string().trim().min(1).max(160),
-  apiKey: z.string().optional(),
+  apiKey: z.string().min(1),
 });
 
 export class LessonTtsError extends Error {
@@ -15,7 +15,7 @@ export class LessonTtsError extends Error {
 }
 
 export function getLessonTtsConfig() {
-  const baseUrl = process.env.NVIDIA_TTS_BASE_URL?.trim();
+  const baseUrl = process.env.NVIDIA_TTS_BASE_URL?.trim() || "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com";
   const language = process.env.NVIDIA_TTS_LANGUAGE?.trim() || "en-US";
   const voice = process.env.NVIDIA_TTS_VOICE?.trim() || "Magpie-Multilingual.EN-US.Aria";
   const apiKey = process.env.NVIDIA_TTS_API_KEY?.trim();
@@ -40,7 +40,7 @@ export async function synthesizeLessonSpeech(text: string): Promise<Buffer> {
   try {
     const response = await fetch(config.baseUrl.replace(/\/+$/, "") + "/v1/audio/synthesize", {
       method: "POST",
-      headers: config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : undefined,
+      headers: { authorization: `Bearer ${config.apiKey}` },
       body: form,
       signal: controller.signal,
     });
