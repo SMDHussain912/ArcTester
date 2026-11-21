@@ -4,7 +4,19 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { badRequest, notFound } from "./errors.js";
-import { GenerateLessonInputSchema, generateLessonContent, LessonOutputValidationError } from "./lessonGeneration.js";
+import {
+  GenerateLessonInputSchema,
+  generateLessonContent,
+  LessonOutputValidationError,
+  LessonScriptSchema,
+  LessonStoryboardSchema,
+} from "./lessonGeneration.js";
+
+const UpdateLessonDraftSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  script: z.unknown(),
+  storyboard: z.unknown(),
+}).strict();
 
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
@@ -32,6 +44,37 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       const draft = await db.lessonDraft.findUnique({ where: { id } });
       if (!draft) return next(notFound("Lesson draft was not found."));
       res.json({ ok: true, draft });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/lesson-drafts/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const input = UpdateLessonDraftSchema.parse(req.body);
+      const script = LessonScriptSchema.parse(input.script);
+      const storyboard = LessonStoryboardSchema.parse(input.storyboard);
+      const existing = await db.lessonDraft.findUnique({ where: { id }, select: { id: true, status: true } });
+      if (!existing) return next(notFound("Lesson draft was not found."));
+      if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be edited."));
+      const draft = await db.lessonDraft.update({
+        where: { id },
+        data: { title: input.title, scriptJson: JSON.stringify(script), storyboardJson: JSON.stringify(storyboard) },
+      });
+      res.json({ ok: true, draft });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Lesson title, script or storyboard failed validation."));
+      next(error);
+    }
+  });
+
+  router.delete("/admin/lesson-drafts/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const existing = await db.lessonDraft.findUnique({ where: { id }, select: { id: true, status: true } });
+      if (!existing) return next(notFound("Lesson draft was not found."));
+      if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be deleted."));
+      await db.lessonDraft.delete({ where: { id } });
+      res.json({ ok: true });
     } catch (error) { next(error); }
   });
 
