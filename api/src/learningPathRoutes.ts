@@ -5,6 +5,7 @@ import { requireAuth, requireAdmin, type AuthedRequest } from "./auth.js";
 import { badRequest, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
+import { awardXp } from "./gamificationService.js";
 
 const Id = z.coerce.number().int().positive();
 const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict();
@@ -129,6 +130,7 @@ export function learningPathRouter(db: PrismaClient): Router {
       const progress = await db.userLessonProgress.upsert({ where: { userId_lessonId: { userId, lessonId: id } },
         create: { userId, lessonId: id, completedAt: new Date(), bestScorePct: score, attempts: 1 },
         update: { completedAt: new Date(), bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
+      if (!old?.completedAt) await db.$transaction((tx) => awardXp(tx, userId, "lesson-complete:" + id, "lesson"));
       res.json({ completed: true, scorePct: score, progress, newlyUnlocked: { type: "lesson-or-unit-test" } });
     } catch (e) { next(e); }
   });
@@ -170,6 +172,7 @@ export function learningPathRouter(db: PrismaClient): Router {
       const progress = await db.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
         create: { userId, unitId: id, passedAt: isPassed ? new Date() : null, bestScorePct: score, attempts: 1 },
         update: { passedAt: isPassed ? new Date() : old?.passedAt ?? null, bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
+      if (isPassed && !old?.passedAt) await db.$transaction((tx) => awardXp(tx, userId, "unit-test-passed:" + id, "unit-test"));
       res.json({ passed: isPassed, scorePct: score, passScorePct: 70, progress });
     } catch (e) { next(e); }
   });
