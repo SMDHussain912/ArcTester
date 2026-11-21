@@ -10,7 +10,7 @@
 - Add component tests for progress rendering, topic expansion, and practice preset callbacks.
 
 ## Integrity
-- Uses authenticated existing \`GET /bank\` and \`GET /analytics/overview\` data.
+- Uses authenticated existing \`GET /bank\`, \`GET /analytics/overview\`, and \`GET /analytics/weak-topics\` data. Subject totals come from overview; topic detail comes from the dedicated topic report.
 - Progress is read-only and derived from server analytics; no local completion/scoring or new API/schema.
 - Topic presets use the existing JSON-encoded \`[subject, topic]\` practice-filter contract.
 
