@@ -130,7 +130,9 @@ export default function AdminLessonStudio() {
   function updateScene(index: number, patch: Partial<Scene>) {
     try {
       const value = JSON.parse(storyboardText) as { scenes: Scene[] };
-      const scene = value.scenes[index];\n      if (!scene) return;\n      value.scenes[index] = { ...scene, ...patch };
+      const scene = value.scenes[index];
+      if (!scene) return;
+      value.scenes[index] = { ...scene, ...patch };
       setStoryboardText(JSON.stringify(value, null, 2));
     } catch { /* Keep invalid JSON visible in the raw editor until corrected. */ }
   }
@@ -139,6 +141,7 @@ export default function AdminLessonStudio() {
     try {
       const value = JSON.parse(storyboardText) as { scenes: Scene[] };
       const scene = value.scenes[index];
+      if (!scene) return;
       value.scenes[index] = { ...scene, visual: { ...scene.visual, ...patch } };
       setStoryboardText(JSON.stringify(value, null, 2));
     } catch { /* Keep invalid JSON visible in the raw editor until corrected. */ }
