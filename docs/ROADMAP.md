@@ -11,8 +11,8 @@
 | 2 | Admin question review, import validation, human-reviewed content quota, additive question types | Implemented; human review of imported drafts remains a manual content task |
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
-| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Part 1 complete via PR #156; Part 2 in progress |
-| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Not started |
+| 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
+| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Part 1 in progress: mobile multi-select practice |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Not started |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
@@ -40,4 +40,14 @@ Phase 4 is complete on `main` via integration PR #155. Its required GitHub Actio
 
 **Part 4 implementation in progress:** `feature/phase-5-part-4-offline-progress-sync`. A newly started attempt still requires connectivity; downloaded question bank remains practice-only and does not contain correct answers. Exact-head CI and Android build are required before merge.
 
-Phase 5 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
+**Phase 5 complete on main:** PR #159 merged as `dbc23c7e`; Android build on the PR head passed. Device-level offline/reconnect and account-isolation checks remain manual and NOT VERIFIED.
+
+## Phase 6 delivery slices
+
+- **Part 1 — Mobile multi-select practice:** render multi-select choices from the existing approved-question payload; persist response arrays through local recovery and account-scoped offline queue; submit through the existing server-owned grader; show correct and selected options in authoritative result review. No API/schema change.
+- **Part 2 — Speed round:** short, server-created practice set with a distinct time-boxed mobile flow; server remains responsible for attempt and score.
+- **Part 3 — Retryable unit test:** unit-end checkpoint using existing question selection and authoritative results; allow retry without duplicate progress/XP.
+- **Part 4 — Mistakes and daily challenge:** explicit mistake practice entry and a daily challenge using existing practice infrastructure.
+- **Part 5 — Rewards and optional social/settings polish:** surface existing server-backed rewards and opt-in leaderboard/settings only where account privacy and controls are clear.
+
+Phase 6 slices must remain additive and use existing server-owned scoring/progress. Do not invent XP or completion data from local UI state.
