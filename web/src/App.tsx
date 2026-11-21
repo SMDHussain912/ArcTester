@@ -16,7 +16,7 @@ import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
-import StudentGamification from "./StudentGamification";
+import StudentGamification from "./StudentGamification";\nimport StudentMastery from "./StudentMastery";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
 import StudentQuestionBankStats from "./StudentQuestionBankStats";
 import StudentDashboardWelcome from "./StudentDashboardWelcome";
