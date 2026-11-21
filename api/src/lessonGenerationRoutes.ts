@@ -3,7 +3,8 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
-import { badRequest, notFound } from "./errors.js";\nimport { LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
+import { badRequest, notFound } from "./errors.js";
+import { LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
 import {
   GenerateLessonInputSchema,
   generateLessonContent,
@@ -20,7 +21,14 @@ const UpdateLessonDraftSchema = z.object({
 
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
-  const speechLimit = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    max: 20,\n    standardHeaders: true,\n    legacyHeaders: false,\n    message: { error: "Lesson voice limit reached. Try again later." },\n  });\n  const generationLimit = rateLimit({
+  const speechLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Lesson voice limit reached. Try again later." },
+  });
+  const generationLimit = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 12,
     standardHeaders: true,
