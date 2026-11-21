@@ -10,6 +10,7 @@ export type StudentPage =
   | "rewards"
   | "analytics"
   | "learning"
+  | "mastery"
   | "materials";
 
 interface StudentNavigationProps {
