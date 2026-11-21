@@ -31,9 +31,10 @@ describe("lesson generation contracts", () => {
   it("parses JSON only and strips a conventional code fence", () => {
     const value = { scenes: [
       { sceneType: "title_card", title: "Start", narration: "Introduce this lesson topic.", onScreenText: "Start", durationMs: 3000, visual: {} },
-      { sceneType: "text_reveal", title: "Idea", narration: "Explain the central idea in plain words.", onScreenText: "Idea", durationMs: 4000, visual: {} },
+      { sceneType: "step_sequence", title: "Idea", narration: "Explain the central idea in plain words.", onScreenText: "Idea", durationMs: 4000, visual: { steps: ["First", "Next"] } },
       { sceneType: "checkpoint", title: "Check", narration: "Ask the learner to recall the key idea.", onScreenText: "Recall", durationMs: 5000, visual: {} },
     ] };
-    expect(parseModelJson(```json\n${JSON.stringify(value)}\n```, LessonStoryboardSchema)).toHaveProperty("scenes");
+    const fenced = "```json\\n" + JSON.stringify(value) + "\\n```";
+    expect(parseModelJson(fenced, LessonStoryboardSchema)).toHaveProperty("scenes");
   });
 });
