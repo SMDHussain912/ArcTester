@@ -203,7 +203,7 @@ export async function createTest(
   // A question can still be reused when the practice-only pool is exhausted.
   let practiceCandidates = candidates;
   let reusedExamPool = false;
-  if (input.mode === "practice" || input.mode === "speedRound") {
+  if (input.mode === "practice" || input.mode === "speedRound" || input.mode === "dailyChallenge") {
     const publishedExamQuestions = await db.examVersionQuestion.findMany({
       where: {
         sourceQuestionId: { not: null },
