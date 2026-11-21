@@ -47,9 +47,10 @@ async function main() {
       const available = group.filter((q) => !linkedIds.has(q.id)).map((q) => q.id);
       let lessonList = existingLessons;
       let lessonPosition = (lessonList.at(-1)?.position ?? 0) + 1;
-      while (available.length >= 10) {
+      while (available.length > 0) {
         let lesson = lessonList.find((item) => item.questions.length < 10);
         if (!lesson) {
+          if (available.length < 10) break;
           lesson = await tx.pathLesson.create({ data: { unitId: unit.id, position: lessonPosition, title: "Lesson " + lessonPosition }, include: { questions: { select: { questionId: true } } } });
           lessonPosition += 1;
           lessonList = [...lessonList, lesson];
