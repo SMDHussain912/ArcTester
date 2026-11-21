@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { mobilePalette, radius, spacing, typeScale } from "../design/tokens";
@@ -33,15 +33,15 @@ export default function UnitTestCheckpoint({ darkMode, disabled = false, api }: 
   const [saved, setSaved] = useState<Record<number, boolean>>({});
   const [index, setIndex] = useState(0);
   const [result, setResult] = useState<TestResult | null>(null);
-  const [resultTitle, setResultTitle] = useState("");
+  const apiRef = useRef(api);\n  apiRef.current = api;\n  const [resultTitle, setResultTitle] = useState("");
 
   const refresh = async () => {
     setLoading(true);
-    try { setPath(await api<PathState>("/path")); }
+    try { setPath(await apiRef.current<PathState>("/path")); }
     catch (cause) { setError((cause as Error).message || "Could not load your unit checkpoints."); }
     finally { setLoading(false); }
   };
-  useEffect(() => { let active = true; setLoading(true); api<PathState>("/path").then((value) => { if (active) setPath(value); }).catch((cause) => { if (active) setError((cause as Error).message || "Could not load your unit checkpoints."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [api]);
+  useEffect(() => { let active = true; setLoading(true); apiRef.current<PathState>("/path").then((value) => { if (active) setPath(value); }).catch((cause) => { if (active) setError((cause as Error).message || "Could not load your unit checkpoints."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
 
   const start = async (unit: PathUnit) => {
     setBusy(true); setError(""); setResult(null);
