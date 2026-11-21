@@ -54,6 +54,7 @@ model Question {
   examSnapshots ExamVersionQuestion[]
   lessonLinks LessonQuestion[]
   pathAnswers PathAnswer[]
+  reviews UserQuestionReview[]
   @@index([subjectId])
   @@index([reviewStatus, subjectId])
 }
@@ -95,6 +96,11 @@ model User {
   lessonProgress UserLessonProgress[]
   unitTestProgress UserUnitTestProgress[]
   pathAnswers PathAnswer[]
+  gamification UserGamification?
+  xpEvents XpLedger[]
+  gamificationDays GamificationDay[]
+  questionReviews UserQuestionReview[]
+  badges UserBadge[]
 }
 
 model Invitation {
@@ -535,4 +541,83 @@ model PathAnswer {
   @@unique([userId, scopeKey, questionId])
   @@index([userId, lessonId])
   @@index([userId, unitId])
+}
+
+
+// Student reward state. Dates are stored as UTC calendar-day boundaries.
+model UserGamification {
+  id                   Int      @id @default(autoincrement())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  totalXp              Int      @default(0)
+  xpBalance            Int      @default(0)
+  currentStreak        Int      @default(0)
+  longestStreak        Int      @default(0)
+  lastActivityDate     DateTime? @db.Date
+  dailyGoalXp         Int      @default(50)
+  streakFreezeInventory Int     @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model XpLedger {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  eventKey  String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventKey])
+  @@index([userId, createdAt])
+}
+
+model GamificationDay {
+  id                  Int      @id @default(autoincrement())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              Int
+  date                DateTime @db.Date
+  xpEarned            Int      @default(0)
+  lessonsCompleted    Int      @default(0)
+  unitTestsPassed     Int      @default(0)
+  practiceTestsDone   Int      @default(0)
+  goalReachedAt       DateTime?
+  freezeUsed          Boolean  @default(false)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+
+// Per-user spaced repetition state. The interval is rule-based and never uses ML.
+model UserQuestionReview {
+  id              Int      @id @default(autoincrement())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId      Int
+  lastReviewedAt  DateTime?
+  nextReviewAt    DateTime @default(now())
+  intervalDays    Int      @default(0)
+  repetitions     Int      @default(0)
+  reviewCount     Int      @default(0)
+  lastWasCorrect Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, lastReviewedAt])
+}
+
+model UserBadge {
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  badgeKey   String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, badgeKey])
+  @@index([userId, unlockedAt])
 }

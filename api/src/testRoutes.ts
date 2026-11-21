@@ -14,6 +14,7 @@ import { analyticsRouter } from "./analyticsRoutes.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 import { notFound } from "./errors.js";
 import { getLearningConcept, listLearningConcepts } from "./learningConcepts.js";
+import { awardXp } from "./gamificationService.js";
 
 const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -181,7 +182,9 @@ export function testRouter(db: PrismaClient): Router {
     try {
       const { id } = AttemptIdSchema.parse(req.params);
       const input = SubmitTestSchema.parse(req.body);
-      const summary = await submitTest(db, (req as AuthedRequest).user!.id, id, input);
+      const userId = (req as AuthedRequest).user!.id;
+      const summary = await submitTest(db, userId, id, input);
+      await db.$transaction((tx) => awardXp(tx, userId, "practice-test:" + id, "practice"));
       res.json(summary);
     } catch (error) {
       next(error);
