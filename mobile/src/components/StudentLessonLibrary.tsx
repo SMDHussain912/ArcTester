@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { getLocalValue, setLocalValue } from "../localSettings";
@@ -22,6 +22,9 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const loadLessonsRef = useRef(loadLessons);
+  loadLessonsRef.current = loadLessons;
   const palette = darkMode ? mobilePalette.dark : mobilePalette.light;
   const sceneProgress = useRef(new Animated.Value(0)).current;
   const diagramMotion = useRef(new Animated.Value(0)).current;
@@ -35,12 +38,12 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   const refresh = async () => {
     setLoading(true);
     setError("");
-    try { setLessons(await loadLessons()); }
+    try { setLessons(await loadLessonsRef.current()); }
     catch (cause) { setError((cause as Error).message || "Could not load published lessons."); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { void refresh(); }, [userId]);
+  useEffect(() => {\n    let active = true;\n    setLoading(true);\n    setError("");\n    loadLessonsRef.current().then((items) => { if (active) setLessons(items); }).catch((cause) => { if (active) setError((cause as Error).message || "Could not load published lessons."); }).finally(() => { if (active) setLoading(false); });\n    return () => { active = false; };\n  }, [userId]);
 
   useEffect(() => {
     sceneProgress.setValue(0);
@@ -162,6 +165,19 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
           <Text style={[styles.narration, { color: palette.text }]}>{scene.narration}</Text>
           {scene.sceneType === "checkpoint" ? <View style={[styles.checkpoint, { backgroundColor: palette.successSoft }]}><MaterialCommunityIcons name="check-circle" size={20} color={palette.success} /><Text style={[styles.checkpointText, { color: palette.text }]}>{completed ? "Lesson completed. You can replay or return to the library." : "Pause and recall the key idea before finishing."}</Text></View> : null}
         </Animated.View>
+        <TouchableOpacity onPress={() => setShowNotes((value) => !value)} accessibilityRole="button" accessibilityState={{ expanded: showNotes }} style={[styles.notesToggle, { borderColor: palette.border }]}>
+          <Text style={[styles.controlText, { color: palette.text }]}>{showNotes ? "Hide lesson notes" : "Read lesson notes"}</Text>
+          <MaterialCommunityIcons name={showNotes ? "chevron-up" : "chevron-down"} size={20} color={palette.text} />
+        </TouchableOpacity>
+        {showNotes ? <View style={[styles.notesCard, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          {activeLesson.script.sections.map((section, index) => <View key={`${section.heading}-${index}`} style={styles.notesSection}>
+            <Text style={[styles.notesHeading, { color: palette.text }]}>{section.heading}</Text>
+            <Text style={[styles.notesBody, { color: palette.text }]}>{section.explanation}</Text>
+            {section.example ? <Text style={[styles.notesExample, { color: palette.muted }]}>Example: {section.example}</Text> : null}
+          </View>)}
+          <Text style={[styles.notesHeading, { color: palette.text }]}>Key takeaways</Text>
+          {activeLesson.script.keyTakeaways.map((item, index) => <Text key={`${item}-${index}`} style={[styles.notesBody, { color: palette.text }]}>• {item}</Text>)}
+        </View> : null}
         <View style={styles.playerControls}>
           <TouchableOpacity onPress={previousScene} disabled={safeIndex === 0} accessibilityRole="button" accessibilityLabel="Previous scene" style={[styles.controlButton, { borderColor: palette.border, opacity: safeIndex === 0 ? 0.35 : 1 }]}><MaterialCommunityIcons name="chevron-left" size={25} color={palette.text} /><Text style={[styles.controlText, { color: palette.text }]}>Back</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => { if (completed && safeIndex === sceneCount - 1) { setCompleted(false); setSceneIndex(0); } setPlaying((value) => !value); }} accessibilityRole="button" accessibilityLabel={playing ? "Pause lesson" : "Play lesson"} style={[styles.playButton, { backgroundColor: palette.primary }]}><MaterialCommunityIcons name={playing ? "pause" : "play"} size={22} color={palette.onPrimary} /><Text style={[styles.playText, { color: palette.onPrimary }]}>{playing ? "Pause" : completed ? "Replay" : "Play"}</Text></TouchableOpacity>
@@ -222,7 +238,7 @@ const styles = StyleSheet.create({
   narration: { fontSize: typeScale.size.md, lineHeight: 24 },
   checkpoint: { flexDirection: "row", alignItems: "center", gap: spacing["2"], padding: spacing["3"], borderRadius: radius.md },
   checkpointText: { flex: 1, fontSize: typeScale.size.sm, fontWeight: "700", lineHeight: 19 },
-  playerControls: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing["2"] },
+  notesToggle: { minHeight: 42, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing["3"], flexDirection: "row", alignItems: "center", justifyContent: "space-between" },\n  notesCard: { borderWidth: 1, borderRadius: radius.lg, padding: spacing["3"], gap: spacing["3"] },\n  notesSection: { gap: spacing["2"] },\n  notesHeading: { fontSize: typeScale.size.md, fontWeight: "900" },\n  notesBody: { fontSize: typeScale.size.sm, lineHeight: 21 },\n  notesExample: { fontSize: typeScale.size.sm, lineHeight: 20, fontStyle: "italic" },\n  playerControls: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing["2"] },
   controlButton: { minHeight: 44, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: spacing["2"], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2 },
   controlText: { fontSize: typeScale.size.sm, fontWeight: "800" },
   playButton: { minHeight: 46, flex: 1, borderRadius: radius.lg, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing["2"] },
