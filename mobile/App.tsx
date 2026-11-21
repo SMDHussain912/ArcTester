@@ -742,8 +742,8 @@ export default function App() {
       }
       const serverAnswers = Object.fromEntries(
         (restored.saved ?? [])
-          .filter((answer) => answer.response !== null || answer.selectedIndex !== null)
-          .map((answer) => [answer.questionId, answer.response !== null ? answer.response : answer.selectedIndex]),
+          .filter((answer) => answer.response !== null && answer.response !== undefined || answer.selectedIndex !== null)
+          .map((answer) => [answer.questionId, answer.response !== null && answer.response !== undefined ? answer.response : answer.selectedIndex]),
       );
       const localAnswers = recovery.answers && typeof recovery.answers === "object" ? recovery.answers : {};
       setTest(restored);
