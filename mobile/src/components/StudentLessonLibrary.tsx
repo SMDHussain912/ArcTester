@@ -62,6 +62,10 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
   }, [userId]);
 
   useEffect(() => {
+    if (audioStatus.error) setVoiceError(audioStatus.error);
+  }, [audioStatus.error]);
+
+  useEffect(() => {
     audioPlayer.pause();
     setVoiceSceneKey("");
     setVoiceError("");
