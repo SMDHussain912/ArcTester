@@ -44,6 +44,7 @@ const API_URL = (() => {
   return url.replace(/\/+$/, "");
 })();
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
+type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[] };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
@@ -140,6 +141,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
+  const [gamification, setGamification] = useState<GamificationSnapshot | null>(null);
+  const [dailyGoalDraft, setDailyGoalDraft] = useState("50");
+  const [rewardBusy, setRewardBusy] = useState(false);
   const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
   const [networkConnected, setNetworkConnected] = useState<boolean | null>(null);
@@ -159,6 +163,8 @@ export default function App() {
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
+  const [dailyChallengeSession, setDailyChallengeSession] = useState(false);
+  const [mistakesSession, setMistakesSession] = useState(false);
   const [resultReviewFilter, setResultReviewFilter] = useState<"all" | "incorrect">("all");
   useEffect(() => { if (result) setResultReviewFilter("all"); }, [result?.attemptId]);
 
