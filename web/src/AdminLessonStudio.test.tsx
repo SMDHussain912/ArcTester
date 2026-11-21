@@ -61,13 +61,17 @@ describe("AdminLessonStudio", () => {
     expect(screen.getByRole("heading", { name: "3 scenes" })).toBeInTheDocument();
     expect(screen.getByText("Which pops first?")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Lesson title"), { target: { value: "Stack operations" } });\n    fireEvent.change(screen.getByLabelText("Scene 2 title"), { target: { value: "Push operation visual" } });\n    expect(screen.getByLabelText("Scene 2 title")).toHaveValue("Push operation visual");
+    fireEvent.change(screen.getByLabelText("Lesson title"), { target: { value: "Stack operations" } });
+    fireEvent.change(screen.getByLabelText("Scene 2 title"), { target: { value: "Push operation visual" } });
+    expect(screen.getByLabelText("Scene 2 title")).toHaveValue("Push operation visual");
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/admin/lesson-drafts/draft-1"),
       expect.objectContaining({ method: "PATCH", credentials: "include" }),
     ));
     const patchCall = fetchMock.mock.calls.find((call) => (call[1] as RequestInit | undefined)?.method === "PATCH");
-    const saved = JSON.parse(String((patchCall?.[1] as RequestInit | undefined)?.body));\n    expect(saved).toMatchObject({ title: "Stack operations" });\n    expect(saved.storyboard.scenes[1].title).toBe("Push operation visual");
+    const saved = JSON.parse(String((patchCall?.[1] as RequestInit | undefined)?.body));
+    expect(saved).toMatchObject({ title: "Stack operations" });
+    expect(saved.storyboard.scenes[1].title).toBe("Push operation visual");
   });
 });
