@@ -132,6 +132,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"home" | "practice" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
+  const [resultReviewFilter, setResultReviewFilter] = useState<"all" | "incorrect">("all");
 
   const [darkMode, setDarkMode] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -142,6 +143,7 @@ export default function App() {
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
   const lastFeedbackAttempt = useRef<number | null>(null);
   const sessionIdentity = token && user ? `${user.id}:${token}` : null;
+  const resultReviewQuestions = result?.questions.filter((question) => resultReviewFilter === "incorrect" ? !question.isCorrect : true) ?? [];
   const sessionIdentityRef = useRef<string | null>(sessionIdentity);
   const notificationRequestSequence = useRef(0);
   sessionIdentityRef.current = sessionIdentity;
@@ -882,9 +884,21 @@ export default function App() {
           </Animated.View>
         ) : result ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : "Practice result"}</Text>
-            <Text style={styles.statValue}>{result.score} / {result.total}</Text>
-            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.incorrect} incorrect · {result.unanswered} unanswered</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{lessonSession ? "Lesson complete" : "Practice result"}</Text>
+                <Text style={[styles.statValue, { marginTop: 4 }]}>{result.score} / {result.total}</Text>
+              </View>
+              <ArcTesterMascot size={64} />
+            </View>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+              {[{ label: "Correct", value: result.questions.filter((q) => q.isCorrect).length, color: "#15803d" }, { label: "Incorrect", value: result.incorrect, color: "#b42318" }, { label: "Skipped", value: result.unanswered, color: darkMode ? "#cbd5e1" : "#526078" }].map((metric) => (
+                <View key={metric.label} style={{ flex: 1, borderRadius: 12, padding: 10, backgroundColor: darkMode ? "#1e293b" : "#f1f5f9", alignItems: "center" }}>
+                  <Text style={{ fontSize: 20, fontWeight: "900", color: metric.color }}>{metric.value}</Text>
+                  <Text style={[styles.muted, { fontSize: 11 }, darkMode && { color: "#a7b4c8" }]}>{metric.label}</Text>
+                </View>
+              ))}
+            </View>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{result.expired ? "Time expired" : "Submitted successfully"}</Text>
             {result.breakdown.map((item) => (
               <View key={item.subject} style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
@@ -892,8 +906,17 @@ export default function App() {
                 <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{item.correct} correct · {item.incorrect} incorrect · {item.unanswered} unanswered</Text>
               </View>
             ))}
-            <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Answer review</Text>
-            {result.questions.map((question, index) => (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 16 }}>
+              <Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Answer review</Text>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {([{ value: "all", label: "All" }, { value: "incorrect", label: "Mistakes" }] as const).map((filter) => (
+                  <TouchableOpacity key={filter.value} accessibilityRole="button" accessibilityState={{ selected: resultReviewFilter === filter.value }} onPress={() => setResultReviewFilter(filter.value)} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16, backgroundColor: resultReviewFilter === filter.value ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}>
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: resultReviewFilter === filter.value ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078") }}>{filter.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            {resultReviewQuestions.length === 0 ? <Text style={[styles.muted, { marginTop: 12 }, darkMode && { color: "#a7b4c8" }]}>{resultReviewFilter === "incorrect" ? "No mistakes in this attempt. Nice work!" : "No answer review is available."}</Text> : resultReviewQuestions.map((question, index) => (
               <View key={question.questionId} style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
                 <Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>Question {index + 1} · {question.subject}</Text>
                 <Text style={[styles.announcementMessage, darkMode && { color: "#cbd5e1" }]}>{question.text}</Text>
@@ -1076,6 +1099,15 @@ export default function App() {
             <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION BANK</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "Loading…"} questions</Text>
+            </View>
+            <View style={[styles.profileInfo, { gap: 10 }]}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEARNING SUMMARY</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1, borderRadius: 12, padding: 12, backgroundColor: darkMode ? "#1e293b" : "#f1f5f9" }}><Text style={[styles.statValue, { fontSize: 22 }, darkMode && { color: "#f1f5f9" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, { fontSize: 11 }, darkMode && { color: "#a7b4c8" }]}>Completed practices</Text></View>
+                <View style={{ flex: 1, borderRadius: 12, padding: 12, backgroundColor: darkMode ? "#1e293b" : "#f1f5f9" }}><Text style={[styles.statValue, { fontSize: 22 }, darkMode && { color: "#f1f5f9" }]}>{learningOverview?.practice.accuracy == null ? "—" : `${Math.round(learningOverview.practice.accuracy * 100)}%`}</Text><Text style={[styles.muted, { fontSize: 11 }, darkMode && { color: "#a7b4c8" }]}>Overall accuracy</Text></View>
+              </View>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{learningOverview ? `${learningOverview.practice.questions} questions answered · ${learningOverview.practice.correct} correct · ${learningOverview.practice.incorrect} incorrect` : "Loading your account learning statistics…"}</Text>
+              {learningOverview?.practice.subjects.length ? <View style={{ gap: 8, marginTop: 2 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>SUBJECT PROGRESS</Text>{learningOverview.practice.subjects.map((subject) => <View key={subject.subject} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}><Text style={[styles.muted, { flex: 1 }, darkMode && { color: "#cbd5e1" }]} numberOfLines={2}>{subject.subject}</Text><Text style={[styles.profileValue, { fontSize: 13 }, darkMode && { color: "#f1f5f9" }]}>{subject.accuracy == null ? "—" : `${Math.round(subject.accuracy * 100)}%`}</Text></View>)}</View> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Complete a practice session to build your subject summary.</Text>}
             </View>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
               <MaterialCommunityIcons name="logout" size={18} color="#b42318" />
