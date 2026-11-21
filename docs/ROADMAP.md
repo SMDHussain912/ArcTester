@@ -26,6 +26,6 @@ A phase is complete only when its full scope is implemented, exact-head CI is gr
 - **Part 1 — Design-system foundation:** shared token source, web token mapping, React Native token adapter, accessible web primitives, keyboard focus and reduced-motion baseline. Implemented and merged into the Phase 4 integration branch; integration to main remains a release step.
 - **Part 2 — Original brand assets:** original Aster study-owl mascot and compact mark integrated across web and mobile; PR #152 merged into the integration branch after exact-head CI #2481 passed. Main integration remains a later release step.
 - **Part 3 — Motion, sound and haptics:** lightweight feedback utilities and user/system preference handling; never make feedback essential to task completion.
-- **Part 4 — Asset and interaction gallery:** interactive gallery at `/design-system-gallery.html` with responsive layout, light/dark theme, reduced-motion toggle, and Playwright coverage. PR #154 verified and merged into the integration branch.
+- **Part 4 — Asset and interaction gallery:** interactive gallery at `/design-system-gallery.html` with responsive layout, light/dark theme, reduced-motion toggle, and Playwright coverage. PR #154 is awaiting exact-head CI and merge.
 
 Phase 4 stays in progress until all slices are merged and verified. Phase 4 work is stacked on the Phase 3/Part 1 integration branch; after the slices pass exact-head CI, create a focused integration PR to main.
