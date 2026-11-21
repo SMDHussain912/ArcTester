@@ -184,12 +184,12 @@ export function testRouter(db: PrismaClient): Router {
       const { id } = AttemptIdSchema.parse(req.params);
       const input = SubmitTestSchema.parse(req.body);
       const userId = (req as AuthedRequest).user!.id;
-      const attempt = await db.attempt.findFirst({ where: { id, userId }, select: { mode: true } });
+      const attempt = await db.attempt.findFirst({ where: { id, userId }, select: { mode: true, startedAt: true } });
       if (!attempt) throw notFound("Test not found.");
       const summary = await submitTest(db, userId, id, input);
       // Daily challenge reward is one idempotent XP event per UTC day, even if
       // the student retries the same challenge attempt or submits another run.
-      const rewardKey = attempt.mode === "dailyChallenge" ? dailyChallengeRewardKey() : "practice-test:" + id;
+      const rewardKey = attempt.mode === "dailyChallenge" ? dailyChallengeRewardKey(attempt.startedAt) : "practice-test:" + id;
       await db.$transaction((tx) => awardXp(tx, userId, rewardKey, "practice"));
       res.json(summary);
     } catch (error) {
