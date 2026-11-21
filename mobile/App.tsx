@@ -1109,7 +1109,7 @@ export default function App() {
                 setActiveTab("practice");
               }}
             />
-            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>Your performance</Text>
+            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
               <View style={styles.dashboardMetricGrid}>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
                 <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
