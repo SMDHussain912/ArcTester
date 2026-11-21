@@ -16,6 +16,7 @@ import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
+import StudentGamification from "./StudentGamification";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
 import StudentQuestionBankStats from "./StudentQuestionBankStats";
 import StudentDashboardWelcome from "./StudentDashboardWelcome";
@@ -596,6 +597,8 @@ export default function App() {
           <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "learning" ? (
           <StudentLearning setActivePage={(page: string) => setActivePage(page as StudentPage)} />
+        ) : activePage === "rewards" ? (
+          <StudentGamification />
         ) : activePage === "materials" ? (
           <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
