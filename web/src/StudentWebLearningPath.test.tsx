@@ -34,7 +34,7 @@ describe("StudentWebLearningPath", () => {
     fireEvent.click(screen.getByRole("button", { name: "Practice" }));
     expect(onPractice).toHaveBeenCalledWith("Data Structures");
     fireEvent.click(screen.getByRole("button", { name: "Explore topics" }));
-    fireEvent.click(screen.getByRole("button", { name: "Practice topic" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Practice topic" })[0]);
     expect(onPractice).toHaveBeenLastCalledWith("Data Structures", "Arrays");
   });
 });
