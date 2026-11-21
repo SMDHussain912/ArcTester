@@ -92,6 +92,15 @@ export default function StudentMastery() {
           <h3>{current.text}</h3>
           {(current.questionType === "mcq" || current.questionType === "true_false") && current.options.length ? (
             <div className="stack">{current.options.map((option, optionIndex) => <button key={optionIndex} className={response === optionIndex ? "button button-primary" : "button button-secondary"} disabled={busy} onClick={() => setResponse(optionIndex)}>{option}</button>)}</div>
+          ) : current.questionType === "matching" && Array.isArray(current.promptData.left) && Array.isArray(current.promptData.right) ? (
+            <div className="stack">{(current.promptData.left as unknown[]).map((item, leftIndex) => {
+              const selected = Array.isArray(response) ? response as unknown[] : [];
+              return <label key={leftIndex} className="review-option">{String(item)}<select aria-label={`Match ${String(item)}`} value={Number.isInteger(selected[leftIndex]) ? String(selected[leftIndex]) : ""} disabled={busy} onChange={(event) => {
+                const next = [...selected];
+                next[leftIndex] = event.target.value === "" ? null : Number(event.target.value);
+                setResponse(next);
+              }}><option value="">Choose match</option>{(current.promptData.right as unknown[]).map((choice, rightIndex) => <option key={rightIndex} value={rightIndex}>{String(choice)}</option>)}</select></label>;
+            })}</div>
           ) : current.questionType === "multi_select" && current.options.length ? (
             <div className="stack">{current.options.map((option, optionIndex) => {
               const selected = Array.isArray(response) && response.includes(optionIndex);
