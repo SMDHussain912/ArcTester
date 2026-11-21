@@ -43,7 +43,13 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
     finally { setLoading(false); }
   };
 
-  useEffect(() => {\n    let active = true;\n    setLoading(true);\n    setError("");\n    loadLessonsRef.current().then((items) => { if (active) setLessons(items); }).catch((cause) => { if (active) setError((cause as Error).message || "Could not load published lessons."); }).finally(() => { if (active) setLoading(false); });\n    return () => { active = false; };\n  }, [userId]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    loadLessonsRef.current().then((items) => { if (active) setLessons(items); }).catch((cause) => { if (active) setError((cause as Error).message || "Could not load published lessons."); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [userId]);
 
   useEffect(() => {
     sceneProgress.setValue(0);
@@ -238,7 +244,13 @@ const styles = StyleSheet.create({
   narration: { fontSize: typeScale.size.md, lineHeight: 24 },
   checkpoint: { flexDirection: "row", alignItems: "center", gap: spacing["2"], padding: spacing["3"], borderRadius: radius.md },
   checkpointText: { flex: 1, fontSize: typeScale.size.sm, fontWeight: "700", lineHeight: 19 },
-  notesToggle: { minHeight: 42, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing["3"], flexDirection: "row", alignItems: "center", justifyContent: "space-between" },\n  notesCard: { borderWidth: 1, borderRadius: radius.lg, padding: spacing["3"], gap: spacing["3"] },\n  notesSection: { gap: spacing["2"] },\n  notesHeading: { fontSize: typeScale.size.md, fontWeight: "900" },\n  notesBody: { fontSize: typeScale.size.sm, lineHeight: 21 },\n  notesExample: { fontSize: typeScale.size.sm, lineHeight: 20, fontStyle: "italic" },\n  playerControls: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing["2"] },
+  notesToggle: { minHeight: 42, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing["3"], flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  notesCard: { borderWidth: 1, borderRadius: radius.lg, padding: spacing["3"], gap: spacing["3"] },
+  notesSection: { gap: spacing["2"] },
+  notesHeading: { fontSize: typeScale.size.md, fontWeight: "900" },
+  notesBody: { fontSize: typeScale.size.sm, lineHeight: 21 },
+  notesExample: { fontSize: typeScale.size.sm, lineHeight: 20, fontStyle: "italic" },
+  playerControls: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing["2"] },
   controlButton: { minHeight: 44, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: spacing["2"], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2 },
   controlText: { fontSize: typeScale.size.sm, fontWeight: "800" },
   playButton: { minHeight: 46, flex: 1, borderRadius: radius.lg, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing["2"] },
