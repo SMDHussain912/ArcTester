@@ -1,6 +1,6 @@
 # Phase 4 Part 3 Report — Motion, sound and haptics
 
-**Status:** Implementation prepared on the Phase 4 integration branch; exact-head CI required before merge.
+**Status:** PR #153 merged into the Phase 4 integration branch after exact-head CI passed.
 
 ## Delivered
 - Web feedback preferences stored locally, with sound and vibration independently opt-in and off by default.
@@ -13,7 +13,8 @@
 - No feedback blocks practice, answer review, navigation, or offline behavior.
 
 ## Verification
-- Exact-head CI status will be recorded after the Part 3 PR is opened and its final head checks complete.
+- PR #153 exact-head GitHub Actions run #2497 passed all five jobs: web/API tests, lint/build, Playwright E2E, mobile typecheck/tests, PostgreSQL backup/restore, and SQLite migration utility tests.
+- PR #153 merged at commit `1101ee453c2972d8d9e31000a84e752ec5584bd6`.
 - CI does not verify physical vibration strength or sound output on real devices.
 
 ## NOT VERIFIED / manual checks
