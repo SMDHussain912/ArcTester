@@ -467,6 +467,7 @@ export default function App() {
             setPendingSubmitRequested(false);
             setTest((current) => current?.attemptId === item.attemptId ? null : current);
             setResult(completed);
+                void refreshGamification();
             setLessonSession(false);
             setError("");
             madeProgress = true;
@@ -842,6 +843,7 @@ export default function App() {
             await deleteLocalValue(practiceRecoveryKey(user.id));
             setHasSavedPracticeAttempt(false);
             setResult(completed);
+                void refreshGamification();
             setError("");
           }
           return;
@@ -1376,6 +1378,26 @@ export default function App() {
             <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your profile</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEVEL & REWARDS</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification ? "Lv " + gamification.level : "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Level</Text></View>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification?.totalXp ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Total XP</Text></View>
+                <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification?.currentStreak ?? "—"} 🔥</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Streak</Text></View>
+              </View>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? "Today " + (gamification.today?.xpEarned ?? 0) + "/" + gamification.dailyGoalXp + " XP · longest streak " + gamification.longestStreak + " days" : "Loading reward summary…"}</Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6, height: 54, marginTop: 8 }}>
+                {(gamification?.week ?? []).map((day) => {
+                  const maxXp = Math.max(1, ...(gamification?.week ?? []).map((entry) => entry.xpEarned));
+                  const height = Math.max(4, Math.round((day.xpEarned / maxXp) * 38));
+                  return <View key={day.date} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                    <View accessibilityLabel={day.date + ": " + day.xpEarned + " XP"} style={{ width: "100%", height, borderRadius: 4, backgroundColor: day.goalReached ? "#16a34a" : "#3b82f6" }} />
+                    <Text style={[styles.muted, { fontSize: 10 }, darkMode && { color: "#94a3b8" }]}>{new Date(day.date + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short" })}</Text>
+                  </View>;
+                })}
+              </View>
+              <TouchableOpacity onPress={() => setActiveTab("settings")} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Manage daily goal & streak freezes</Text></TouchableOpacity>
+            </View>
+            <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT ID</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.id}</Text>
             </View>
@@ -1429,7 +1451,7 @@ export default function App() {
                 <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab("settings")} style={styles.secondary}><Text style={styles.secondaryText}>Goals</Text></TouchableOpacity>
               </View>
               <View style={{ height: 8, borderRadius: 8, backgroundColor: darkMode ? "#26364d" : "#e2e8f0", overflow: "hidden", marginTop: 10 }}>
-                <View style={{ height: 8, width: ((gamification?.xpIntoLevel ?? 0) + "%") as any, backgroundColor: "#2563eb" }} />
+                <View style={{ height: 8, width: `${gamification?.xpIntoLevel ?? 0}%`, backgroundColor: "#2563eb" }} />
               </View>
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                 <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
