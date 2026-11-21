@@ -37,6 +37,7 @@ export function playFeedback(kind: FeedbackKind, preferences = readFeedbackPrefe
   try {
     const context = new AudioContextConstructor();
     const now = context.currentTime;
+    let remaining = TONES[kind].length;
     TONES[kind].forEach((frequency, index) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
@@ -48,9 +49,12 @@ export function playFeedback(kind: FeedbackKind, preferences = readFeedbackPrefe
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.085);
       oscillator.connect(gain);
       gain.connect(context.destination);
+      oscillator.onended = () => {
+        remaining -= 1;
+        if (remaining === 0) void context.close().catch(() => undefined);
+      };
       oscillator.start(start);
       oscillator.stop(start + 0.09);
     });
-    void context.close().catch(() => undefined);
   } catch { /* Audio is optional; never interrupt learning if unavailable. */ }
 }
