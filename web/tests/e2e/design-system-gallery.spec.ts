@@ -16,7 +16,7 @@ test.describe("design system gallery", () => {
     await page.goto("/design-system-gallery.html");
     await page.getByRole("button", { name: "Toggle color theme" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await page.getByRole("button", { name: "Disable reduced motion" }).click();
+    await page.getByRole("button", { name: "Enable reduced motion" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-motion", "reduced");
     await expect(page.getByRole("button", { name: "Disable reduced motion" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByRole("region", { name: "Design system component examples" })).toBeVisible();
