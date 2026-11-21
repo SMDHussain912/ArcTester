@@ -1,6 +1,6 @@
 # Phase 4 Part 4 Report — Asset and interaction gallery
 
-**Status:** Gallery implementation and E2E coverage added on the Phase 4 integration branch; exact-head CI and merge required.
+**Status:** Gallery implementation and E2E coverage added; PR #154 exact-head CI and merge required.
 
 ## Delivered
 - Static, self-contained gallery at `/design-system-gallery.html`.
