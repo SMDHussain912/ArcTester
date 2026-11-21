@@ -83,12 +83,14 @@ describe("NVIDIA lesson TTS", () => {
 
   it("rejects provider responses that are not WAV audio", async () => {
     process.env.NVIDIA_TTS_BASE_URL = "https://speech.example.test";
+    process.env.NVIDIA_TTS_API_KEY = "test-key";
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not audio", { status: 200, headers: { "content-type": "text/plain" } })));
     await expect(synthesizeLessonSpeech("Speak this.")).rejects.toThrowError(new LessonTtsError("LESSON_TTS_INVALID_AUDIO"));
   });
 
   it("rejects narration that exceeds provider input bounds", async () => {
     process.env.NVIDIA_TTS_BASE_URL = "https://speech.example.test";
+    process.env.NVIDIA_TTS_API_KEY = "test-key";
     await expect(synthesizeLessonSpeech("x".repeat(1901))).rejects.toThrowError(new LessonTtsError("LESSON_TTS_PROVIDER_ERROR"));
   });
 });
