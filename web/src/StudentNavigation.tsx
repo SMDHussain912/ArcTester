@@ -4,6 +4,7 @@ import FeedbackSettings from "./components/FeedbackSettings";
 export type StudentPage =
   | "dashboard"
   | "path"
+  | "lessons"
   | "practice"
   | "question-bank"
   | "announcements"
@@ -30,6 +31,7 @@ interface StudentNavigationProps {
 const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN" | "ACCOUNT" }[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "LEARN" },
   { page: "path", label: "Learning path", icon: "↗", group: "LEARN" },
+  { page: "lessons", label: "Lessons", icon: "▻", group: "LEARN" },
   { page: "practice", label: "Practice", icon: "✎", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },
   { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },
