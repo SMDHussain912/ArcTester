@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import NetInfo from "@react-native-community/netinfo";
 import { StatusBar } from "expo-status-bar";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
@@ -28,6 +29,7 @@ import LearningPathHome from "./src/components/LearningPathHome";
 import LessonLaunchCard from "./src/components/LessonLaunchCard";
 import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
+import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -108,6 +110,16 @@ class ApiRequestError extends Error {
   }
 }
 const practiceRecoveryKey = (userId: number) => `arctester-practice-recovery:${userId}`;
+async function clearPracticeRecoveryIfMatches(userId: number, attemptId: number): Promise<boolean> {
+  const raw = await getLocalValue(practiceRecoveryKey(userId));
+  if (!raw) return false;
+  try {
+    const recovery = JSON.parse(raw) as Partial<PracticeRecovery>;
+    if (recovery.attemptId !== attemptId) return false;
+  } catch { return false; }
+  await deleteLocalValue(practiceRecoveryKey(userId));
+  return true;
+}
 
 export default function App() {
   const [email, setEmail] = useState("");
@@ -120,6 +132,9 @@ export default function App() {
   const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
   const [offlineLearningPackage, setOfflineLearningPackage] = useState<OfflineLearningPackage | null>(null);
   const [offlineBankBusy, setOfflineBankBusy] = useState(false);
+  const [networkConnected, setNetworkConnected] = useState<boolean | null>(null);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [pendingSubmitRequested, setPendingSubmitRequested] = useState(false);
   const [questionTextSize, setQuestionTextSize] = useState<14 | 16 | 18>(16);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [refreshingAnnouncements, setRefreshingAnnouncements] = useState(false);
@@ -152,6 +167,8 @@ export default function App() {
   const questionTransition = useRef(new Animated.Value(1)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const practiceSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const practiceSyncLock = useRef(false);
+  const practiceSyncRef = useRef<() => Promise<void>>(async () => undefined);
   const practiceRestoreLock = useRef(false);
   const questionSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [error, setError] = useState("");
@@ -309,6 +326,109 @@ export default function App() {
     return body as T;
   }
 
+  async function syncPendingPracticeProgress() {
+    if (!user || !token || practiceSyncLock.current) return;
+    const requestIdentity = sessionIdentityRef.current;
+    practiceSyncLock.current = true;
+    try {
+      const connection = await NetInfo.fetch().catch(() => null);
+      if (connection?.isConnected !== true || connection.isInternetReachable === false) return;
+      for (let pass = 0; pass < 12; pass += 1) {
+        if (sessionIdentityRef.current !== requestIdentity) return;
+        const pendingItems = await getPendingPracticeProgress(String(user.id));
+        setPendingSyncCount(pendingItems.length);
+        if (!pendingItems.length) break;
+        let madeProgress = false;
+        for (const item of pendingItems) {
+          if (sessionIdentityRef.current !== requestIdentity) return;
+          try {
+            await api("/tests/" + item.attemptId + "/answers", {
+              method: "PUT",
+              body: JSON.stringify({ answers: item.answers }),
+            });
+          } catch (cause) {
+            if (cause instanceof ApiRequestError && cause.status === 409) {
+              try {
+                const completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result");
+                await clearPendingPracticeProgress(String(user.id), item.attemptId);
+                const recoveryCleared = await clearPracticeRecoveryIfMatches(user.id, item.attemptId);
+                if (recoveryCleared) setHasSavedPracticeAttempt(false);
+                setPendingSubmitRequested(false);
+                setTest((current) => current?.attemptId === item.attemptId ? null : current);
+                if (item.submitRequested || test?.attemptId === item.attemptId) setResult(completed);
+                setLessonSession(false);
+                setError("");
+                madeProgress = true;
+                continue;
+              } catch { /* Keep local data until a completed result can be verified. */ }
+            }
+            return;
+          }
+          if (item.submitRequested) {
+            await practiceSaveQueue.current.catch(() => undefined);
+            const latest = await getPendingPracticeProgress(String(user.id));
+            const latestItem = latest.find((queued) => queued.attemptId === item.attemptId);
+            if (!latestItem || latestItem.revision !== item.revision) {
+              madeProgress = true;
+              continue;
+            }
+            try {
+              await api("/tests/" + item.attemptId + "/submit", {
+                method: "POST",
+                body: JSON.stringify({ answers: item.answers }),
+              });
+            } catch (cause) {
+              if (!(cause instanceof ApiRequestError && cause.status === 409)) return;
+            }
+            let completed: PracticeResult;
+            try { completed = await api<PracticeResult>("/tests/" + item.attemptId + "/result"); }
+            catch { return; }
+            await clearPendingPracticeProgress(String(user.id), item.attemptId);
+            await clearPracticeRecoveryIfMatches(user.id, item.attemptId);
+            setHasSavedPracticeAttempt(false);
+            setPendingSubmitRequested(false);
+            setTest((current) => current?.attemptId === item.attemptId ? null : current);
+            setResult(completed);
+            setLessonSession(false);
+            setError("");
+            madeProgress = true;
+          } else {
+            const removed = await markPracticeProgressSynced(String(user.id), item.attemptId, item.revision);
+            madeProgress = true;
+            if (!removed) continue;
+          }
+        }
+        if (!madeProgress) break;
+      }
+      const remaining = await getPendingPracticeProgress(String(user.id));
+      setPendingSyncCount(remaining.length);
+      setPendingSubmitRequested(remaining.some((item) => item.submitRequested));
+    } catch {
+      const remaining = await getPendingPracticeProgress(String(user.id)).catch(() => []);
+      if (sessionIdentityRef.current === requestIdentity) {
+        setPendingSyncCount(remaining.length);
+        setPendingSubmitRequested(remaining.some((item) => item.submitRequested));
+      }
+    } finally {
+      practiceSyncLock.current = false;
+    }
+  }
+
+  practiceSyncRef.current = syncPendingPracticeProgress;
+
+  useEffect(() => {
+    let active = true;
+    const applyConnection = (state: { isConnected: boolean | null; isInternetReachable: boolean | null }) => {
+      if (!active) return;
+      const connected = state.isConnected === true && state.isInternetReachable !== false;
+      setNetworkConnected(connected);
+      if (connected) void practiceSyncRef.current();
+    };
+    const unsubscribe = NetInfo.addEventListener(applyConnection);
+    NetInfo.fetch().then(applyConnection).catch(() => { if (active) setNetworkConnected(false); });
+    return () => { active = false; unsubscribe(); };
+  }, [token, user?.id]);
+
   useEffect(() => {
     SecureStore.getItemAsync("arctester-token").then((saved) => {
       if (saved) setToken(saved);
@@ -368,6 +488,7 @@ export default function App() {
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
     api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
     getOfflineLearningPackage(String(user.id)).then((result) => { if (isCurrentSession()) setOfflineLearningPackage(result); }).catch(() => { if (isCurrentSession()) setOfflineLearningPackage(null); });
+    getPendingPracticeProgress(String(user.id)).then((items) => { if (isCurrentSession()) { setPendingSyncCount(items.length); setPendingSubmitRequested(items.some((item) => item.submitRequested)); } }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
       .then((result) => { if (isCurrentSession()) setAnnouncements(result.announcements); })
       .catch(() => undefined);
@@ -527,15 +648,27 @@ export default function App() {
     }
   }
 
-  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number) {
+  async function savePracticeRecovery(attemptId: number, nextAnswers: Record<number, number>, nextIndex: number, queueForSync = false) {
     if (!user) return;
     const requestIdentity = sessionIdentityRef.current;
     const payload: PracticeRecovery = { attemptId, answers: nextAnswers, currentQuestionIndex: nextIndex };
     practiceSaveQueue.current = practiceSaveQueue.current
       .catch(() => undefined)
-      .then(() => setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload)));
+      .then(async () => {
+        await setLocalValue(practiceRecoveryKey(user.id), JSON.stringify(payload));
+        if (queueForSync && test?.attemptId === attemptId) {
+          const queued = await queuePracticeProgress(String(user.id), {
+            attemptId,
+            answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: nextAnswers[question.id] ?? null })),
+            currentQuestionIndex: nextIndex,
+          });
+          setPendingSyncCount((count) => Math.max(count, 1));
+          if (queued.submitRequested) setPendingSubmitRequested(true);
+        }
+      });
     try {
       await practiceSaveQueue.current;
+      if (queueForSync && networkConnected === true) void syncPendingPracticeProgress();
       if (sessionIdentityRef.current === requestIdentity) setHasSavedPracticeAttempt(true);
     } catch (cause) {
       if (sessionIdentityRef.current === requestIdentity) {
@@ -545,21 +678,21 @@ export default function App() {
   }
 
   function updatePracticeAnswer(questionId: number, selectedIndex: number) {
-    if (!test) return;
+    if (!test || pendingSubmitRequested) return;
     const nextAnswers = { ...answers, [questionId]: selectedIndex };
     setAnswers(nextAnswers);
-    void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex);
+    void savePracticeRecovery(test.attemptId, nextAnswers, currentQuestionIndex, true);
   }
 
   function updatePracticeQuestionIndex(nextIndex: number) {
-    if (!test) return;
+    if (!test || pendingSubmitRequested) return;
     const safeIndex = Math.max(0, Math.min(test.questions.length - 1, nextIndex));
     setCurrentQuestionIndex(safeIndex);
     void savePracticeRecovery(test.attemptId, answers, safeIndex);
   }
 
   async function resumePractice() {
-    if (!user || busy || practiceRestoreLock.current) return;
+    if (!user || busy || practiceRestoreLock.current || pendingSubmitRequested) return;
     practiceRestoreLock.current = true;
     const requestIdentity = sessionIdentityRef.current;
     setBusy(true);
@@ -648,6 +781,7 @@ export default function App() {
       return;
     }
     setLessonSession(lesson);
+    setPendingSubmitRequested(false);
     setBusy(true);
     setError("");
     try {
@@ -766,37 +900,31 @@ export default function App() {
   }
 
   async function submit() {
-    if (!test || !user) return;
+    if (!test || !user || pendingSubmitRequested) return;
     setBusy(true);
+    setError("");
     try {
       await practiceSaveQueue.current;
-      const summary = await api<{ attemptId: number; score: number; total: number; expired: boolean }>(
-        `/tests/${test.attemptId}/submit`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            answers: test.questions.map((question) => ({
-              questionId: question.id,
-              selectedIndex: answers[question.id] ?? null,
-            })),
-          }),
-        },
-      );
-      await deleteLocalValue(practiceRecoveryKey(user.id));
-      setHasSavedPracticeAttempt(false);
-      setTest(null);
-      setCurrentQuestionIndex(0);
-      try {
-        const review = await api<PracticeResult>(`/tests/${test.attemptId}/result`);
-        setResult(review);
-        setError("");
-      } catch {
-        setError(`Practice submitted: ${summary.score}/${summary.total}. Full review could not be loaded; retry from the web app.`);
+      await queuePracticeProgress(String(user.id), {
+        attemptId: test.attemptId,
+        answers: test.questions.map((question) => ({ questionId: question.id, selectedIndex: answers[question.id] ?? null })),
+        currentQuestionIndex,
+        submitRequested: true,
+      });
+      setPendingSubmitRequested(true);
+      setPendingSyncCount((count) => Math.max(count, 1));
+      await syncPendingPracticeProgress();
+      const remaining = await getPendingPracticeProgress(String(user.id));
+      setPendingSyncCount(remaining.length);
+      if (remaining.some((item) => item.attemptId === test.attemptId)) {
+        setTest(null);
+        setHasSavedPracticeAttempt(true);
+        setError(networkConnected === false
+          ? "Submit request saved on this device. It is not submitted yet; reconnect to send it safely."
+          : "Submit request is saved locally and waiting for synchronization. Do not start another attempt.");
       }
-      const fresh = await api<Bank>("/bank");
-      setBank(fresh);
     } catch (cause) {
-      setError((cause as Error).message);
+      setError("Your answers remain saved on this device. " + ((cause as Error).message || "Synchronization will retry when online."));
     } finally {
       setBusy(false);
     }
@@ -818,6 +946,8 @@ export default function App() {
     setLessonSession(false);
     setResult(null);
     setHasSavedPracticeAttempt(false);
+    setPendingSyncCount(0);
+    setPendingSubmitRequested(false);
     setCheckingPracticeRecovery(false);
     setAnswers({});
     setCurrentQuestionIndex(0);
@@ -954,6 +1084,7 @@ export default function App() {
               <Animated.View style={[styles.progressFill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
             </View>
             <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>{Object.keys(answers).length} of {test.questions.length} answered · {lessonSession ? "learn at your pace" : "timed practice"}</Text>
+            {networkConnected === false ? <Text style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>Offline · your answers are saved on this device and will sync when you reconnect.</Text> : pendingSyncCount > 0 ? <Text style={[styles.examHint, darkMode && { color: "#94a3b8" }]}>Syncing saved progress…</Text> : null}
             {test.warnings?.map((warning, index) => <Text key={index} style={[styles.timerNotice, darkMode && { color: "#fbbf24" }]}>{warning}</Text>)}
             {!lessonSession && <View style={[styles.navigator, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
               <Text style={[styles.navigatorTitle, darkMode && { color: "#cbd5e1" }]}>JUMP TO QUESTION</Text>
@@ -1072,7 +1203,7 @@ export default function App() {
           </Animated.View>
                    ) : activeTab === "practice" ? (
            <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-             {hasSavedPracticeAttempt && <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity>}
+             {hasSavedPracticeAttempt && pendingSubmitRequested ? <View style={[styles.announcementCard, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.announcementTitle, darkMode && { color: "#f1f5f9" }]}>Submission waiting to sync</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your confirmed submit is saved on this device. Reconnect to send it; it has not been graded yet.</Text></View> : hasSavedPracticeAttempt ? <TouchableOpacity disabled={busy || checkingPracticeRecovery} onPress={() => void resumePractice()} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Restoring…" : "Resume saved practice"}</Text></TouchableOpacity> : null}
              {bank ? <StudentPracticeBuilder key={practicePresetSubject ?? "practice"} subjects={bank.subjects} total={bank.total} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} initialSubject={practicePresetSubject} onRefresh={() => void refreshQuestionBank()} onStart={(config) => void startPractice(config)} /> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Loading subject and topic catalogue…</Text>}
               {offlineLearningPackage ? <OfflinePracticeLibrary questions={offlineLearningPackage.questions} darkMode={darkMode} /> : null}
            </Animated.View>
@@ -1082,7 +1213,7 @@ export default function App() {
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>APPEARANCE</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Dark mode</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Use a darker interface in low light</Text></View><Switch value={darkMode} onValueChange={(value) => void toggleDarkMode(value)} accessibilityLabel="Enable dark mode" /></View></View>
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION DISPLAY</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Question text size</Text><View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>{([14, 16, 18] as const).map((size) => <TouchableOpacity key={size} onPress={() => { setQuestionTextSize(size); void setLocalValue("arctester-question-text-size", String(size)).catch(() => undefined); }} style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: questionTextSize === size ? "#dbeafe" : (darkMode ? "#26364d" : "#f1f5f9") }}><Text style={{ color: questionTextSize === size ? "#1d4ed8" : (darkMode ? "#cbd5e1" : "#526078"), fontWeight: "700" }}>{size === 14 ? "Small" : size === 16 ? "Medium" : "Large"}</Text></TouchableOpacity>)}</View></View>
-            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
+            <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE & SYNC</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{networkConnected === false ? "Offline · " : networkConnected === true ? "Online · " : "Checking connection · "}{pendingSyncCount ? pendingSyncCount + " pending practice attempt(s)" : "No pending progress"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{pendingSyncCount > 0 ? <TouchableOpacity disabled={networkConnected !== true} onPress={() => void syncPendingPracticeProgress()} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{networkConnected === true ? "Sync pending progress now" : "Reconnect to sync progress"}</Text></TouchableOpacity> : null}{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
              <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>FEEDBACK</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Haptic feedback</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Optional vibration on practice completion</Text></View><Switch value={hapticsEnabled} onValueChange={(value) => { setHapticsEnabled(value); void setLocalValue("arctester-haptics-enabled", String(value)).catch(() => undefined); }} accessibilityLabel="Enable haptic feedback" /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
