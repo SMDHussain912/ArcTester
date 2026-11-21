@@ -70,11 +70,22 @@ export async function awardXp(
     where: { userId },
     data: { totalXp: { increment: REWARD_XP[kind] }, xpBalance: { increment: REWARD_XP[kind] }, currentStreak, longestStreak, lastActivityDate: day, streakFreezeInventory: freezeInventory },
   });
-  const increment = kind === "lesson" ? { lessonsCompleted: 1 } : kind === "unit-test" ? { unitTestsPassed: 1 } : { practiceTestsDone: 1 };
+  const dailyCreate = {
+    userId, date: day, xpEarned: REWARD_XP[kind],
+    lessonsCompleted: kind === "lesson" ? 1 : 0,
+    unitTestsPassed: kind === "unit-test" ? 1 : 0,
+    practiceTestsDone: kind === "practice" ? 1 : 0,
+  };
+  const dailyUpdate = {
+    xpEarned: { increment: REWARD_XP[kind] },
+    lessonsCompleted: kind === "lesson" ? { increment: 1 } : undefined,
+    unitTestsPassed: kind === "unit-test" ? { increment: 1 } : undefined,
+    practiceTestsDone: kind === "practice" ? { increment: 1 } : undefined,
+  };
   const daily = await tx.gamificationDay.upsert({
     where: { userId_date: { userId, date: day } },
-    create: { userId, date: day, xpEarned: REWARD_XP[kind], ...increment },
-    update: { xpEarned: { increment: REWARD_XP[kind] }, ...Object.fromEntries(Object.entries(increment).map(([key, value]) => [key, { increment: value }])) },
+    create: dailyCreate,
+    update: dailyUpdate,
   });
   let goalBonus = 0;
   let goalReachedAt = daily.goalReachedAt;
