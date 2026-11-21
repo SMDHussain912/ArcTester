@@ -547,6 +547,7 @@ model UserGamification {
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId               Int      @unique
   totalXp              Int      @default(0)
+  xpBalance            Int      @default(0)
   currentStreak        Int      @default(0)
   longestStreak        Int      @default(0)
   lastActivityDate     DateTime? @db.Date
