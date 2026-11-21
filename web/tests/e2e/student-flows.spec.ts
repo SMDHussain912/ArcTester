@@ -118,7 +118,7 @@ test.describe("Student Practice Flow", () => {
 });
 
 test.describe("Full Mock Test", () => {
-  test("student can start, see the timer, and submit a full mock test", async ({ page }) => {
+  test("blocks a full mock when the approved question bank is incomplete", async ({ page }) => {
     test.setTimeout(60000);
     const { studentEmail } = await setupStudent(page);
     await loginUi(page, studentEmail, "StudentPass123!");
@@ -128,16 +128,11 @@ test.describe("Full Mock Test", () => {
       .getByRole("button", { name: "Practice", exact: true }).click();
     await page.getByRole("button", { name: "Start mock test" }).click();
 
-    const question = page.locator(".question-card").first();
-    await expect(question).toBeVisible({ timeout: 15000 });
-    await expect(page.locator(".exam-countdown, .timer-warning").first()).toBeVisible();
-
-    const option = question.locator(".option").first();
-    await expect(option).toBeVisible();
-    await option.click();
-
-    page.on("dialog", async (dialog) => { await dialog.accept(); });
-    await page.getByRole("button", { name: "Submit answers" }).click();
-    await expect(page.getByRole("heading", { name: "Your result" })).toBeVisible({ timeout: 15000 });
+    // CI intentionally seeds a small starter bank. A full mock must fail closed
+    // with a clear readiness message rather than silently launching fewer items.
+    const error = page.locator(".error");
+    await expect(error).toContainText("A full AP ECET mock requires all 200 questions", { timeout: 15000 });
+    await expect(page.locator(".question-card")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Submit answers" })).toHaveCount(0);
   });
 });
