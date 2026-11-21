@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAuth, type AuthedRequest } from "./auth.js";
-import { badRequest, notFound } from "./errors.js";
+import { notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import { BADGES, DAILY_QUESTS, nextReviewSchedule } from "./masteryService.js";
@@ -58,9 +58,10 @@ export function masteryRouter(db: PrismaClient): Router {
         orderBy: [{ nextReviewAt: "asc" }, { lastReviewedAt: "asc" }], take: limit,
         include: { question: { include: { subject: { select: { name: true } }, topic: { select: { name: true } } } } },
       });
-      const chosen = new Set(due.map((r) => r.questionId));
+      const allReviewRows = await db.userQuestionReview.findMany({ where: { userId }, select: { questionId: true } });
+      const reviewedIds = new Set(allReviewRows.map((r) => r.questionId));
       const stats = await db.stat.findMany({ where: { userId, seen: { gt: 0 }, wrong: { gt: 0 } }, orderBy: { lastSeen: "asc" }, select: { questionId: true, lastSeen: true } });
-      const fallbackIds = stats.filter((s) => !chosen.has(s.questionId)).map((s) => s.questionId);
+      const fallbackIds = stats.filter((s) => !reviewedIds.has(s.questionId)).map((s) => s.questionId);
       const fallback = fallbackIds.length ? await db.question.findMany({
         where: { id: { in: fallbackIds }, reviewStatus: "APPROVED" },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } }, take: Math.max(0, limit - due.length),
@@ -82,8 +83,8 @@ export function masteryRouter(db: PrismaClient): Router {
       const schedule = nextReviewSchedule(previous?.intervalDays ?? 0, previous?.repetitions ?? 0, correct, now);
       await db.userQuestionReview.upsert({
         where: { userId_questionId: { userId, questionId: q.id } },
-        create: { userId, questionId: q.id, lastReviewedAt: now, nextReviewAt: schedule.nextReviewAt, intervalDays: schedule.intervalDays, repetitions: schedule.repetitions, lastWasCorrect: correct },
-        update: { lastReviewedAt: now, nextReviewAt: schedule.nextReviewAt, intervalDays: schedule.intervalDays, repetitions: schedule.repetitions, lastWasCorrect: correct },
+        create: { userId, questionId: q.id, lastReviewedAt: now, nextReviewAt: schedule.nextReviewAt, intervalDays: schedule.intervalDays, repetitions: schedule.repetitions, reviewCount: 1, lastWasCorrect: correct },
+        update: { lastReviewedAt: now, nextReviewAt: schedule.nextReviewAt, intervalDays: schedule.intervalDays, repetitions: schedule.repetitions, reviewCount: { increment: 1 }, lastWasCorrect: correct },
       });
       res.json({ correct, explanation: q.explanation, nextReviewAt: schedule.nextReviewAt.toISOString(), intervalDays: schedule.intervalDays, repetitions: schedule.repetitions });
     } catch (error) { next(error); }
@@ -108,7 +109,7 @@ export function masteryRouter(db: PrismaClient): Router {
       const [state, lessons, reviewCount, mastery, existing] = await Promise.all([
         db.userGamification.upsert({ where: { userId }, create: { userId }, update: {} }),
         db.userLessonProgress.count({ where: { userId, completedAt: { not: null } } }),
-        db.userQuestionReview.aggregate({ where: { userId }, _sum: { repetitions: true } }),
+        db.userQuestionReview.aggregate({ where: { userId }, _sum: { reviewCount: true } }),
         db.question.findMany({ where: { reviewStatus: "APPROVED", topicId: { not: null } }, select: { id: true, topicId: true } }),
         db.userBadge.findMany({ where: { userId }, select: { badgeKey: true, unlockedAt: true } }),
       ]);
@@ -126,7 +127,7 @@ export function masteryRouter(db: PrismaClient): Router {
       const conditions: Record<string, boolean> = {
         "first-lesson": lessons >= 1, "xp-100": state.totalXp >= 100,
         "streak-7": Math.max(state.currentStreak, state.longestStreak) >= 7,
-        "topic-master": topicMaster, "review-10": (reviewCount._sum.repetitions ?? 0) >= 10,
+        "topic-master": topicMaster, "review-10": (reviewCount._sum.reviewCount ?? 0) >= 10,
       };
       await db.userBadge.createMany({ data: BADGES.filter((badge) => conditions[badge.key] && !existing.some((b) => b.badgeKey === badge.key)).map((badge) => ({ userId, badgeKey: badge.key })), skipDuplicates: true });
       const unlocked = await db.userBadge.findMany({ where: { userId }, orderBy: { unlockedAt: "asc" } });
