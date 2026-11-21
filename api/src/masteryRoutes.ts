@@ -107,8 +107,55 @@ export function masteryRouter(db: PrismaClient): Router {
         db.userLessonProgress.count({ where: { userId, completedAt: { gte: today } } }),
       ]);
       const values: Record<string, number> = { lesson: lessonsToday, practice: day?.practiceTestsDone ?? 0, mistakes: reviews };
-      const quests = DAILY_QUESTS.map((quest) => ({ ...quest, progress: Math.min(quest.target, values[quest.key] ?? 0), completed: (values[quest.key] ?? 0) >= quest.target }));
-      res.json({ date: today.toISOString().slice(0, 10), quests });
+      const dateKey = today.toISOString().slice(0, 10);
+      const completed = DAILY_QUESTS.filter((quest) => (values[quest.key] ?? 0) >= quest.target);
+      const newlyAwardedXp = await db.$transaction(async (tx) => {
+        let earned = 0;
+        for (const quest of completed) {
+          const inserted = await tx.xpLedger.createMany({
+            data: [{ userId, eventKey: `daily-quest:${dateKey}:${quest.key}`, amount: quest.rewardXp, reason: `daily-quest:${quest.key}` }],
+            skipDuplicates: true,
+          });
+          if (inserted.count > 0) earned += quest.rewardXp;
+        }
+        if (earned > 0) {
+          await tx.userGamification.upsert({
+            where: { userId },
+            create: { userId, totalXp: earned, xpBalance: earned },
+            update: { totalXp: { increment: earned }, xpBalance: { increment: earned } },
+          });
+          const daily = await tx.gamificationDay.upsert({
+            where: { userId_date: { userId, date: today } },
+            create: { userId, date: today, xpEarned: earned },
+            update: { xpEarned: { increment: earned } },
+          });
+          const state = await tx.userGamification.findUnique({ where: { userId } });
+          if (state && !daily.goalReachedAt && daily.xpEarned >= state.dailyGoalXp) {
+            const bonus = await tx.xpLedger.createMany({
+              data: [{ userId, eventKey: `daily-quest-goal:${dateKey}`, amount: 10, reason: "daily-goal-bonus" }],
+              skipDuplicates: true,
+            });
+            if (bonus.count > 0) {
+              await tx.userGamification.update({ where: { userId }, data: { totalXp: { increment: 10 }, xpBalance: { increment: 10 } } });
+              await tx.gamificationDay.update({ where: { userId_date: { userId, date: today } }, data: { xpEarned: { increment: 10 }, goalReachedAt: new Date() } });
+              earned += 10;
+            }
+          }
+        }
+        return earned;
+      });
+      const claimedEvents = await db.xpLedger.findMany({
+        where: { userId, eventKey: { in: DAILY_QUESTS.map((quest) => `daily-quest:${dateKey}:${quest.key}`) } },
+        select: { eventKey: true },
+      });
+      const claimed = new Set(claimedEvents.map((event) => event.eventKey));
+      const quests = DAILY_QUESTS.map((quest) => ({
+        ...quest,
+        progress: Math.min(quest.target, values[quest.key] ?? 0),
+        completed: (values[quest.key] ?? 0) >= quest.target,
+        claimed: claimed.has(`daily-quest:${dateKey}:${quest.key}`),
+      }));
+      res.json({ date: dateKey, quests, newlyAwardedXp });
     } catch (error) { next(error); }
   });
 
