@@ -11,7 +11,7 @@ const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict()
 type PathQuestionPublicInput = { id: number; subject: { name: string }; topic: { name: string } | null; text: string; options: string | null; questionType: string; promptData: string };
 export const toPathPublicQuestion = (q: PathQuestionPublicInput) => ({
   id: q.id, subject: q.subject.name, topic: q.topic?.name ?? null,
-  text: q.text, options: decodeOptions(q.options), questionType: q.questionType,
+  text: q.text, options: decodeOptions(q.options ?? "[]"), questionType: q.questionType,
   promptData: JSON.parse(q.promptData),
 });
 const completed = (progress: { completedAt: Date | null } | null | undefined) => Boolean(progress?.completedAt);
