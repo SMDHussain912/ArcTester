@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { getLocalValue, setLocalValue } from "../localSettings";
 import { clampSceneIndex, formatLessonTime, getElapsedBeforeScene, getLessonDurationMs, type PublishedLesson } from "../lessonPlayer";
 import { mobilePalette, radius, spacing, typeScale } from "../design/tokens";
@@ -9,12 +10,14 @@ type Props = {
   darkMode: boolean;
   reduceMotion: boolean;
   userId: number;
+  apiBaseUrl: string;
+  authToken: string | null;
   loadLessons: () => Promise<PublishedLesson[]>;
 };
 
 const progressKey = (userId: number, lessonId: string) => `arctester-generated-lesson-progress:${userId}:${lessonId}`;
 
-export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, loadLessons }: Props) {
+export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, apiBaseUrl, authToken, loadLessons }: Props) {
   const [lessons, setLessons] = useState<PublishedLesson[]>([]);
   const [activeLesson, setActiveLesson] = useState<PublishedLesson | null>(null);
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -23,6 +26,11 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceSceneKey, setVoiceSceneKey] = useState("");
+  const [voiceError, setVoiceError] = useState("");
+  const audioPlayer = useAudioPlayer(null, { downloadFirst: true });
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
   const loadLessonsRef = useRef(loadLessons);
   loadLessonsRef.current = loadLessons;
   const palette = darkMode ? mobilePalette.dark : mobilePalette.light;
@@ -54,6 +62,12 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
   }, [userId]);
 
   useEffect(() => {
+    audioPlayer.pause();
+    setVoiceSceneKey("");
+    setVoiceError("");
+  }, [activeLesson?.id, safeIndex, audioPlayer]);
+
+  useEffect(() => {
     sceneProgress.setValue(0);
     if (reduceMotion) {
       sceneProgress.setValue(1);
@@ -76,6 +90,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
 
   useEffect(() => {
     if (!playing || !activeLesson || !scene) return;
+    if (voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.isLoaded) return;
     const timer = setTimeout(() => {
       if (safeIndex >= sceneCount - 1) {
         setPlaying(false);
@@ -85,7 +100,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
       }
     }, Math.max(2500, scene.durationMs));
     return () => clearTimeout(timer);
-  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount]);
+  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount, voiceSceneKey, audioStatus.isLoaded]);
 
   useEffect(() => {
     if (!activeLesson) return;
@@ -115,6 +130,34 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
     setCompleted(false);
   };
 
+  const listenToScene = async () => {
+    if (!activeLesson || !scene || !authToken) {
+      setVoiceError("Sign in again to play lesson narration.");
+      return;
+    }
+    const key = `${activeLesson.id}:${safeIndex}`;
+    setVoiceError("");
+    if (voiceSceneKey === key && audioStatus.isLoaded) {
+      if (audioStatus.playing) audioPlayer.pause();
+      else {
+        if (audioStatus.didJustFinish) audioPlayer.seekTo(0);
+        audioPlayer.play();
+      }
+      return;
+    }
+    setVoiceLoading(true);
+    try {
+      const audioUrl = `${apiBaseUrl}/lessons/${encodeURIComponent(activeLesson.id)}/scenes/${safeIndex}/audio`;
+      audioPlayer.replace({ uri: audioUrl, headers: { authorization: `Bearer ${authToken}` } });
+      setVoiceSceneKey(key);
+      audioPlayer.play();
+    } catch (cause) {
+      setVoiceError((cause as Error).message || "Could not play lesson narration.");
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
   const nextScene = () => {
     if (safeIndex >= sceneCount - 1) {
       setPlaying(false);
@@ -123,6 +166,11 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
     }
     setSceneIndex((current) => clampSceneIndex(current + 1, sceneCount));
   };
+  useEffect(() => {
+    if (!playing || !activeLesson || !audioStatus.didJustFinish) return;
+    if (voiceSceneKey === `${activeLesson.id}:${safeIndex}`) nextScene();
+  }, [playing, activeLesson?.id, safeIndex, audioStatus.didJustFinish, voiceSceneKey]);
+
   const previousScene = () => {
     setCompleted(false);
     setSceneIndex((current) => clampSceneIndex(current - 1, sceneCount));
@@ -172,6 +220,11 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, l
             </View>
           ) : null}
           <Text style={[styles.narration, { color: palette.text }]}>{scene.narration}</Text>
+          <TouchableOpacity onPress={() => void listenToScene()} disabled={voiceLoading} accessibilityRole="button" accessibilityLabel={audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "Pause narration" : "Listen to scene narration"} style={[styles.voiceButton, { borderColor: palette.border, backgroundColor: palette.surface }]}>
+            <MaterialCommunityIcons name={voiceLoading || audioStatus.isBuffering ? "loading" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "pause-circle" : "volume-high"} size={22} color={palette.primary} />
+            <Text style={[styles.voiceButtonText, { color: palette.text }]}>{voiceLoading || audioStatus.isBuffering ? "Generating voice…" : audioStatus.playing && voiceSceneKey === `${activeLesson.id}:${safeIndex}` ? "Pause narration" : voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.didJustFinish ? "Replay narration" : "Listen to narration"}</Text>
+          </TouchableOpacity>
+          {voiceError ? <Text style={[styles.voiceError, { color: palette.danger }]}>{voiceError}</Text> : null}
           {scene.sceneType === "checkpoint" ? <View style={[styles.checkpoint, { backgroundColor: palette.successSoft }]}><MaterialCommunityIcons name="check-circle" size={20} color={palette.success} /><Text style={[styles.checkpointText, { color: palette.text }]}>{completed ? "Lesson completed. You can replay or return to the library." : "Pause and recall the key idea before finishing."}</Text></View> : null}
         </Animated.View>
         <TouchableOpacity onPress={() => setShowNotes((value) => !value)} accessibilityRole="button" accessibilityState={{ expanded: showNotes }} style={[styles.notesToggle, { borderColor: palette.border }]}>
@@ -247,6 +300,9 @@ const styles = StyleSheet.create({
   narration: { fontSize: typeScale.size.md, lineHeight: 24 },
   checkpoint: { flexDirection: "row", alignItems: "center", gap: spacing["2"], padding: spacing["3"], borderRadius: radius.md },
   checkpointText: { flex: 1, fontSize: typeScale.size.sm, fontWeight: "700", lineHeight: 19 },
+  voiceButton: { minHeight: 44, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing["3"], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing["2"] },
+  voiceButtonText: { fontSize: typeScale.size.sm, fontWeight: "800" },
+  voiceError: { fontSize: typeScale.size.xs, lineHeight: 18 },
   notesToggle: { minHeight: 42, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing["3"], flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   notesCard: { borderWidth: 1, borderRadius: radius.lg, padding: spacing["3"], gap: spacing["3"] },
   notesSection: { gap: spacing["2"] },

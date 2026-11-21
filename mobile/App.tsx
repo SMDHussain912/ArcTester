@@ -1334,6 +1334,8 @@ export default function App() {
               darkMode={darkMode}
               reduceMotion={reduceMotion}
               userId={user.id}
+              apiBaseUrl={API_URL}
+              authToken={token}
               loadLessons={async () => {
                 const response = await api<{ lessons: PublishedLesson[] }>("/lessons");
                 return response.lessons;
