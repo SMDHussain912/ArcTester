@@ -19,6 +19,12 @@ const UpdateLessonDraftSchema = z.object({
   storyboard: z.unknown(),
 }).strict();
 
+export function validateLessonDraftForPublish(scriptJson: string, storyboardJson: string) {
+  const script = LessonScriptSchema.parse(JSON.parse(scriptJson) as unknown);
+  const storyboard = LessonStoryboardSchema.parse(JSON.parse(storyboardJson) as unknown);
+  return { script, storyboard };
+}
+
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
   const speechLimit = rateLimit({
@@ -125,14 +131,51 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       const existing = await db.lessonDraft.findUnique({ where: { id }, select: { id: true, status: true } });
       if (!existing) return next(notFound("Lesson draft was not found."));
       if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be edited."));
-      const draft = await db.lessonDraft.update({
-        where: { id },
+      const updated = await db.lessonDraft.updateMany({
+        where: { id, status: "DRAFT" },
         data: { title: input.title, scriptJson: JSON.stringify(script), storyboardJson: JSON.stringify(storyboard) },
       });
+      if (updated.count !== 1) return next(badRequest("Only unpublished lesson drafts can be edited."));
+      const draft = await db.lessonDraft.findUnique({ where: { id } });
       res.json({ ok: true, draft });
     } catch (error) {
       if (error instanceof z.ZodError) return next(badRequest("Lesson title, script or storyboard failed validation."));
       next(error);
+    }
+  });
+
+  router.post("/admin/lesson-drafts/:id/publish", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const existing = await db.lessonDraft.findUnique({
+        where: { id },
+        select: { id: true, status: true, scriptJson: true, storyboardJson: true },
+      });
+      if (!existing) return next(notFound("Lesson draft was not found."));
+      if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be published."));
+      try {
+        validateLessonDraftForPublish(existing.scriptJson, existing.storyboardJson);
+      } catch (error) {
+        if (error instanceof z.ZodError || error instanceof SyntaxError) {
+          return next(badRequest("Lesson script or storyboard failed validation. Fix the draft before publishing."));
+        }
+        throw error;
+      }
+      const published = await db.lessonDraft.updateMany({
+        where: {
+          id,
+          status: "DRAFT",
+          scriptJson: existing.scriptJson,
+          storyboardJson: existing.storyboardJson,
+        },
+        data: { status: "PUBLISHED" },
+      });
+      if (published.count !== 1) return next(badRequest("The draft changed while publishing. Refresh and review it again."));
+      const draft = await db.lessonDraft.findUnique({ where: { id } });
+      return res.json({ ok: true, draft });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Lesson ID is invalid."));
+      return next(error);
     }
   });
 
@@ -142,7 +185,8 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       const existing = await db.lessonDraft.findUnique({ where: { id }, select: { id: true, status: true } });
       if (!existing) return next(notFound("Lesson draft was not found."));
       if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be deleted."));
-      await db.lessonDraft.delete({ where: { id } });
+      const deleted = await db.lessonDraft.deleteMany({ where: { id, status: "DRAFT" } });
+      if (deleted.count !== 1) return next(badRequest("Only unpublished lesson drafts can be deleted."));
       res.json({ ok: true });
     } catch (error) { next(error); }
   });

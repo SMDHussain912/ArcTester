@@ -5,6 +5,7 @@ export type StudentPage =
   | "dashboard"
   | "path"
   | "lessons"
+  | "learning-summary"
   | "practice"
   | "question-bank"
   | "announcements"
@@ -32,6 +33,7 @@ const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "LEARN" },
   { page: "path", label: "Learning path", icon: "↗", group: "LEARN" },
   { page: "lessons", label: "Lessons", icon: "▻", group: "LEARN" },
+  { page: "learning-summary", label: "Learning summary", icon: "◷", group: "LEARN" },
   { page: "practice", label: "Practice", icon: "✎", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },
   { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },

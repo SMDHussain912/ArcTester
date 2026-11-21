@@ -30,6 +30,7 @@ export default function AdminLessonStudio() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("DRAFT");
   const [title, setTitle] = useState("");
   const [scriptText, setScriptText] = useState("");
   const [storyboardText, setStoryboardText] = useState("");
@@ -53,7 +54,7 @@ export default function AdminLessonStudio() {
     try {
       const result = await request<{draft:DraftRecord}>(`/admin/lesson-drafts/${encodeURIComponent(id)}`);
       const draft = result.draft;
-      setSelectedId(draft.id); setTitle(draft.title); setSubject(draft.subject); setTopic(draft.topic);
+      setSelectedId(draft.id); setSelectedStatus(draft.status); setTitle(draft.title); setSubject(draft.subject); setTopic(draft.topic);
       setSourceTitle(draft.sourceTitle); setSourceText(draft.sourceText);
       setScriptText(JSON.stringify(JSON.parse(draft.scriptJson), null, 2));
       setStoryboardText(JSON.stringify(JSON.parse(draft.storyboardJson), null, 2));
@@ -148,7 +149,7 @@ export default function AdminLessonStudio() {
   }
 
   async function saveDraft() {
-    if (!selectedId) return;
+    if (!selectedId || selectedStatus !== "DRAFT") return;
     setError(""); setNotice("");
     let script: unknown, storyboard: unknown;
     try { script = JSON.parse(scriptText); } catch { setError("Script editor contains invalid JSON."); return; }
@@ -164,13 +165,26 @@ export default function AdminLessonStudio() {
     finally { setBusy(false); }
   }
 
+  async function publishDraft() {
+    if (!selectedId || selectedStatus !== "DRAFT") return;
+    if (!window.confirm("Publish this reviewed lesson? Students will be able to see it immediately.")) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await request<{draft:DraftSummary}>("/admin/lesson-drafts/" + encodeURIComponent(selectedId) + "/publish", { method: "POST", body: "{}" });
+      setSelectedStatus(result.draft.status);
+      await refreshDrafts();
+      setNotice("Lesson published. It is now available in the student lesson library.");
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
   async function deleteDraft() {
-    if (!selectedId || !window.confirm("Delete this unpublished lesson draft? This cannot be undone.")) return;
+    if (!selectedId || selectedStatus !== "DRAFT" || !window.confirm("Delete this unpublished lesson draft? This cannot be undone.")) return;
     setBusy(true); setError(""); setNotice("");
     try {
       await request(`/admin/lesson-drafts/${encodeURIComponent(selectedId)}`, { method: "DELETE" });
       setDrafts(old => old.filter(item => item.id !== selectedId));
-      setSelectedId(""); setTitle(""); setScriptText(""); setStoryboardText("");
+      setSelectedId(""); setSelectedStatus("DRAFT"); setTitle(""); setScriptText(""); setStoryboardText("");
       setNotice("Draft deleted.");
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -205,7 +219,8 @@ export default function AdminLessonStudio() {
       </section>
     </div>
     {selectedId && <section className="admin-panel lesson-editor-panel">
-      <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · EDIT & PREVIEW</p><h2>Review lesson draft</h2><p>Edits are schema-validated by the API. Scene JSON is data only—not code.</p></div><div className="row wrap"><button className="primary" disabled={busy || !title.trim()} onClick={() => void saveDraft()}>Save draft</button><button className="button button-danger" disabled={busy} onClick={() => void deleteDraft()}>Delete draft</button></div></div>
+      <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · REVIEW & PUBLISH</p><h2>Review lesson draft</h2><p>Edits are schema-validated by the API. Scene JSON is data only—not code.</p><span className="status status-pending">{selectedStatus}</span></div><div className="row wrap">{selectedStatus === "DRAFT" ? <><button className="primary" disabled={busy || !title.trim()} onClick={() => void saveDraft()}>Save draft</button><button className="button button-secondary" disabled={busy || !!parsedStoryboard.error || !parsedStoryboard.scenes.length} onClick={() => void publishDraft()}>Publish lesson</button><button className="button button-danger" disabled={busy} onClick={() => void deleteDraft()}>Delete draft</button></> : <strong className="status status-used">Published · Student visible</strong>}</div></div>
+      <fieldset disabled={selectedStatus !== "DRAFT"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <label>Lesson title<input value={title} onChange={e => setTitle(e.target.value)}/></label>
       <div className="admin-two-col lesson-editors">
         <label>Teaching script JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={scriptText} onChange={e => setScriptText(e.target.value)}/></label>
@@ -227,6 +242,7 @@ export default function AdminLessonStudio() {
             <label>Steps (one per line)<textarea aria-label={`Scene ${index + 1} steps`} rows={3} value={scene.visual?.steps?.join("\n") || ""} onChange={e => updateSceneVisual(index, { steps: e.target.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) })}/></label>
           </article>)}</div>}
       </div>
+      </fieldset>
     </section>}
   </div>;
 }

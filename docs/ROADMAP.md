@@ -13,7 +13,7 @@
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
-| 7 | Responsive web learning-path/player/progress parity; simple admin | Part 1 merged via PR #168; exact-head CI #2583 passed. Part 2 implemented; exact-head CI pending |
+| 7 | Responsive web learning-path/player/progress parity; simple admin | Parts 1–2 merged via PRs #168/#169; exact-head CI #2583/#2587 passed. Final summary + admin publish slice implemented; exact-head CI #2590 passed, PR #170 merge pending |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Not started |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
 | 10 | Final audit and honest completion/manual verification report | Not started |
@@ -54,8 +54,8 @@ Phase 6 slices must remain additive and use existing server-owned scoring/progre
 ## Phase 7 delivery slices
 
 - **Part 1 — Responsive web learning path:** add a dedicated student web path page matching the mobile subject journey; use existing `/bank` and `/analytics/overview` data for question availability and explored counts; show overall/subject/topic progress; expose subject and topic practice presets through the existing practice builder. No new API, schema, local scoring, or progress writes. Merged on main via PR #168; exact-head CI #2583 passed. Keyboard/screen-reader and real-account checks remain manual.
-- **Part 2 — Web lesson player parity:** reuse published lesson feed and safe scene data; responsive browser lesson timeline/player. Implemented on `feature/phase-7-part-2-web-lesson-player`; exact-head CI pending.
-- **Part 3 — Web progress and learning summary parity:** consolidate existing progress, mastery and rewards into clear responsive student views using authoritative APIs.
-- **Part 4 — Simple web admin parity:** focused admin workflows needed to review/publish learning content; admin-only endpoints and server authorization remain authoritative.
+- **Part 2 — Web lesson player parity:** reuse published lesson feed and safe scene data; responsive browser lesson timeline/player. Merged via PR #169; exact-head CI #2587 passed. Keyboard/screen-reader and real-account checks remain manual.
+- **Part 3 — Web progress and learning summary parity:** consolidated practice, official exam summary, server mastery, XP/streak and recent activity into a student Learning summary using /analytics/overview, /gamification and /learning/mastery; no browser scoring or reward writes. Implemented in the Phase 7 final slice; exact-head CI #2590 passed, PR #170 merge pending.
+- **Part 4 — Simple web admin parity:** added review-confirmed publishing to the existing admin Lesson Studio; server validates script/storyboard and conditionally publishes only the exact reviewed DRAFT snapshot. Draft edits/deletes are status-conditioned; published lessons are read-only and student feed remains published-only. Implemented in the Phase 7 final slice; exact-head CI pending.
 
-Phase 7 slices must remain additive and reuse existing authenticated APIs. Do not create duplicate progress/scoring logic in the browser.
+Phase 7 slices must remain additive and reuse existing authenticated APIs. Do not create duplicate progress/scoring logic in the browser. Final slice report: docs/PHASE_7_FINAL_REPORT.md. Phase 7 is not complete until the final slice exact-head CI passes, its PR is merged, and manual verification items are reported.
