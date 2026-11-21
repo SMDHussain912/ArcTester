@@ -53,10 +53,9 @@ Prefer these for new shared UI. Existing screens are migrated incrementally to a
 Design primitives have focused component tests. The phase PR must pass web/API tests, lint, build, mobile typecheck/tests, and repository CI before merge.
 
 
-## Feedback contract — Phase 4 Part 3
+## Gallery — Phase 4 Part 4
 
-- Sound and vibration are opt-in; both default off and are stored locally per device/browser.
-- Feedback is a nonessential enhancement. Never use it as the only indication of correctness, completion, or an error.
-- Web feedback uses short synthesized Web Audio tones and the browser vibration API when available; unsupported/blocked APIs fail silently.
-- Mobile uses React Native vibration only when enabled; physical-device vibration behavior must be manually checked.
-- Reduced-motion settings and OS accessibility preferences take precedence over decorative motion. Feedback must not delay answer submission, navigation, or sync.
+- Open the live Vite-served preview at `/design-system-gallery.html`.
+- The gallery is intentionally static and does not call the API or modify user state.
+- Use its theme and reduced-motion controls to review component states; its sample progress button only changes local demo state.
+- Playwright coverage lives in `web/tests/e2e/design-system-gallery.spec.ts`.

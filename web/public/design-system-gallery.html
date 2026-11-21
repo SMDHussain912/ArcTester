@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-motion="full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>ArcTester Design System Gallery</title>
+  <style>
+    :root{color-scheme:light;--canvas:#f5f7fb;--surface:#fff;--raised:#fff;--text:#172033;--muted:#64748b;--border:#e2e8f0;--brand:#3159d8;--brand-soft:#eaf0ff;--success:#15803d;--success-soft:#eaf7ef;--warning:#b45309;--warning-soft:#fff4e5;--danger:#b91c1c;--danger-soft:#fdecec;--focus:#93c5fd;--shadow:0 8px 28px rgb(20 32 55 / 5%);--fast:120ms;--normal:200ms;--ease:cubic-bezier(.2,0,0,1);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--canvas)}
+    html[data-theme="dark"]{color-scheme:dark;--canvas:#0d1424;--surface:#141f33;--raised:#1a2940;--text:#e8eef8;--muted:#a0aec0;--border:#2c3b53;--brand:#8fb1ff;--brand-soft:#203455;--success:#4ade80;--success-soft:#17382b;--warning:#fbbf24;--warning-soft:#3c301a;--danger:#fca5a5;--danger-soft:#432327;--focus:#60a5fa;--shadow:0 8px 28px rgb(0 0 0 / 18%)}
+    *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--text);transition:background var(--normal) var(--ease),color var(--normal) var(--ease)}button,input{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+    .wrap{width:min(1100px,calc(100% - 32px));margin:0 auto;padding:24px 0 56px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.brand{display:flex;align-items:center;gap:12px}.brand img{width:44px;height:44px}.brand strong{font-size:20px}.brand small{display:block;color:var(--muted);font-size:11px;letter-spacing:1.2px;margin-top:3px}.controls{display:flex;gap:8px;flex-wrap:wrap}.control,.button{border:1px solid var(--border);border-radius:12px;padding:10px 14px;background:var(--surface);color:var(--text);font-weight:700}.control:hover,.button.secondary:hover{border-color:var(--brand);background:var(--brand-soft)}.hero{display:grid;grid-template-columns:1.25fr .75fr;gap:24px;align-items:center;padding:30px;margin-top:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);box-shadow:var(--shadow)}.eyebrow{color:var(--brand);font-size:12px;font-weight:800;letter-spacing:1.5px}.hero h1{font-size:clamp(30px,5vw,48px);line-height:1.08;margin:10px 0}.hero p{color:var(--muted);line-height:1.6;max-width:56ch}.hero-art{width:min(100%,220px);justify-self:center}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px}.card{min-width:0;padding:20px;border:1px solid var(--border);border-radius:18px;background:var(--surface);box-shadow:var(--shadow)}.card h2{font-size:18px;margin:0 0 8px}.card p{color:var(--muted);font-size:14px;line-height:1.5}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}.button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}html[data-theme="dark"] .button.primary{color:#10234a}.button.success{background:var(--success-soft);color:var(--success)}.button.danger{background:var(--danger-soft);color:var(--danger)}.button:disabled{opacity:.5;cursor:not-allowed}.badge{display:inline-flex;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:800;background:var(--brand-soft);color:var(--brand)}.badge.success{background:var(--success-soft);color:var(--success)}.badge.warning{background:var(--warning-soft);color:var(--warning)}.badge.danger{background:var(--danger-soft);color:var(--danger)}.progress{height:10px;border-radius:999px;background:var(--border);overflow:hidden;margin:12px 0}.progress span{display:block;height:100%;width:40%;background:var(--brand);border-radius:inherit;transition:width var(--normal) var(--ease)}.demo-status{min-height:24px;color:var(--muted);font-size:13px}.sample-list{padding-left:20px;color:var(--muted);line-height:1.8}.motion-demo{display:inline-block;padding:10px 14px;border-radius:12px;background:var(--brand-soft);color:var(--brand);font-weight:800;animation:float 1.8s ease-in-out infinite alternate}@keyframes float{to{transform:translateY(-6px)}}.foot{border-top:1px solid var(--border);margin-top:24px;padding-top:16px;color:var(--muted);font-size:13px;line-height:1.6}
+    html[data-motion="reduced"] *,html[data-motion="reduced"] *::before,html[data-motion="reduced"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.control:focus-visible,.button:focus-visible{outline-offset:4px}
+    @media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{grid-template-columns:1fr}.hero-art{width:140px;grid-row:1;justify-self:start}}
+    @media(max-width:520px){.wrap{width:min(100% - 24px,1100px);padding-top:16px}.grid{grid-template-columns:1fr}.hero{padding:20px}.hero-art{width:112px}.controls{width:100%}.control{flex:1}.card{padding:16px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand"><img src="/brand/aster-mark.svg" alt=""><span><strong>ArcTester</strong><small>DESIGN SYSTEM GALLERY</small></span></div>
+      <div class="controls">
+        <button class="control" id="theme-toggle" type="button" aria-label="Toggle color theme">Switch to dark mode</button>
+        <button class="control" id="motion-toggle" type="button" aria-pressed="false">Enable reduced motion</button>
+      </div>
+    </header>
+    <section class="hero" aria-labelledby="gallery-title">
+      <div>
+        <p class="eyebrow">PHASE 4 · COMPONENT SHOWCASE</p>
+        <h1 id="gallery-title">Learn with clarity.<br>Grow with confidence.</h1>
+        <p>A compact preview of ArcTester’s shared visual language: calm surfaces, readable controls, visible progress, original Aster artwork, and motion that never gets in the way.</p>
+        <div class="row"><span class="badge success">Accessible states</span><span class="badge">Responsive</span><span class="badge warning">Reduced-motion ready</span></div>
+      </div>
+      <img class="hero-art" src="/brand/aster-mascot.svg" alt="Aster, ArcTester’s study owl holding an open book">
+    </section>
+    <section class="grid" aria-label="Design system component examples">
+      <article class="card">
+        <h2>Buttons & states</h2><p>Primary actions stand out; secondary actions remain clear and reachable.</p>
+        <div class="row"><button class="button primary" type="button">Start practice</button><button class="button secondary" type="button">Later</button></div>
+        <div class="row"><button class="button success" type="button">Correct</button><button class="button danger" type="button">Try again</button><button class="button secondary" type="button" disabled>Disabled</button></div>
+      </article>
+      <article class="card">
+        <h2>Badges & progress</h2><p>Color communicates status alongside text, never by color alone.</p>
+        <div class="row"><span class="badge success">Mastered</span><span class="badge warning">Review</span><span class="badge danger">Needs practice</span></div>
+        <div class="progress" role="progressbar" aria-label="Sample unit progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="2" id="demo-progress"><span id="progress-fill"></span></div>
+        <p id="progress-label">2 of 5 sample steps complete</p>
+        <button class="button primary" type="button" id="advance-progress">Complete sample step</button>
+        <p class="demo-status" id="demo-status" aria-live="polite">Ready for a small win.</p>
+      </article>
+      <article class="card">
+        <h2>Motion preview</h2><p>Decorative movement is brief and can be switched off instantly.</p>
+        <div class="row"><span class="motion-demo" id="motion-demo">A little motion</span></div>
+        <ul class="sample-list"><li>OS reduced-motion support</li><li>App-level reduced-motion switch</li><li>No motion required to complete a task</li></ul>
+      </article>
+      <article class="card">
+        <h2>Surface & theme</h2><p>Theme control updates the whole preview and keeps contrast readable.</p>
+        <div class="row"><span class="badge">Canvas</span><span class="badge success">Surface</span></div>
+        <p>Use the theme button above to inspect both palettes.</p>
+      </article>
+      <article class="card">
+        <h2>Original brand</h2><p>Aster is original ArcTester artwork. No third-party mascot or game sound assets are reused.</p>
+        <div class="row"><img src="/brand/aster-mark.svg" alt="ArcTester compact brand mark" width="56" height="56"></div>
+      </article>
+      <article class="card">
+        <h2>Responsive layout</h2><p>This gallery adapts to desktop, tablet, and narrow mobile widths.</p>
+        <ul class="sample-list"><li>Three columns on wide screens</li><li>Two columns on tablet</li><li>Single column on phone</li></ul>
+      </article>
+    </section>
+    <footer class="foot">Preview page for design review only. It does not change account settings, save learning progress, or call the API. Use the theme and motion controls to inspect the states.</footer>
+  </main>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const themeButton = document.getElementById("theme-toggle");
+      const motionButton = document.getElementById("motion-toggle");
+      const progress = document.getElementById("demo-progress");
+      const fill = document.getElementById("progress-fill");
+      const label = document.getElementById("progress-label");
+      const status = document.getElementById("demo-status");
+      let completed = 2;
+      themeButton.addEventListener("click", () => {
+        const dark = root.dataset.theme !== "dark";
+        root.dataset.theme = dark ? "dark" : "light";
+        themeButton.textContent = dark ? "Switch to light mode" : "Switch to dark mode";
+        themeButton.setAttribute("aria-pressed", String(dark));
+      });
+      motionButton.addEventListener("click", () => {
+        const reduced = root.dataset.motion !== "reduced";
+        root.dataset.motion = reduced ? "reduced" : "full";
+        motionButton.textContent = reduced ? "Disable reduced motion" : "Enable reduced motion";
+        motionButton.setAttribute("aria-pressed", String(reduced));
+        status.textContent = reduced ? "Reduced motion is enabled." : "Motion preview is enabled.";
+      });
+      document.getElementById("advance-progress").addEventListener("click", () => {
+        completed = Math.min(5, completed + 1);
+        progress.setAttribute("aria-valuenow", String(completed));
+        fill.style.width = (completed / 5 * 100) + "%";
+        label.textContent = completed + " of 5 sample steps complete";
+        status.textContent = completed === 5 ? "Sample unit complete!" : "Step completed. Keep going.";
+        if (completed === 5) document.getElementById("advance-progress").disabled = true;
+      });
+    })();
+  </script>
+</body>
+</html>
