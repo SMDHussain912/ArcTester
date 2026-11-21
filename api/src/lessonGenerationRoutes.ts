@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
-import { badRequest, notFound } from "./errors.js";
+import { badRequest, notFound } from "./errors.js";\nimport { LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
 import {
   GenerateLessonInputSchema,
   generateLessonContent,
@@ -20,7 +20,7 @@ const UpdateLessonDraftSchema = z.object({
 
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
-  const generationLimit = rateLimit({
+  const speechLimit = rateLimit({\n    windowMs: 15 * 60 * 1000,\n    max: 20,\n    standardHeaders: true,\n    legacyHeaders: false,\n    message: { error: "Lesson voice limit reached. Try again later." },\n  });\n  const generationLimit = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 12,
     standardHeaders: true,
@@ -52,6 +52,41 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       });
       res.json({ ok: true, lessons });
     } catch (error) { next(error); }
+  });
+
+  router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, speechLimit, async (req: AuthedRequest, res, next) => {
+    try {
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      if (account?.role !== "STUDENT") return res.status(403).json({ error: "Lesson narration is available to student accounts." });
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const sceneIndex = z.coerce.number().int().min(0).max(23).parse(req.params.sceneIndex);
+      const draft = await db.lessonDraft.findFirst({
+        where: { id, status: "PUBLISHED" },
+        select: { storyboardJson: true },
+      });
+      if (!draft) return next(notFound("Published lesson was not found."));
+      let storyboard;
+      try { storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown); }
+      catch { return next(badRequest("This lesson's storyboard is invalid.")); }
+      const scene = storyboard.scenes[sceneIndex];
+      if (!scene) return next(notFound("Lesson scene was not found."));
+      const audio = await synthesizeLessonSpeech(scene.narration);
+      res.setHeader("Content-Type", "audio/wav");
+      res.setHeader("Content-Length", String(audio.length));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      return res.status(200).send(audio);
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Lesson ID or scene index is invalid."));
+      if (error instanceof LessonTtsError) {
+        if (error.message === "LESSON_TTS_NOT_CONFIGURED") return res.status(503).json({ error: "Lesson voice is not configured on the server." });
+        if (error.message === "LESSON_TTS_RATE_LIMITED") return res.status(429).json({ error: "The speech provider is rate-limiting requests. Try again later." });
+        if (error.message === "LESSON_TTS_INVALID_AUDIO") return res.status(502).json({ error: "The speech provider returned invalid audio." });
+        return res.status(502).json({ error: "The speech provider could not synthesize this scene." });
+      }
+      if (error instanceof Error && error.name === "AbortError") return res.status(504).json({ error: "Speech synthesis timed out. Try again." });
+      next(error);
+    }
   });
 
   router.get("/admin/lesson-drafts", requireAuth, requireAdmin(db), async (_req, res, next) => {
