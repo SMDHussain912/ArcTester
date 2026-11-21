@@ -25,10 +25,10 @@ export function gamificationRouter(db: PrismaClient): Router {
       const result = await db.$transaction(async (tx) => {
         const state = await tx.userGamification.upsert({ where: { userId }, create: { userId }, update: {} });
         if (state.streakFreezeInventory >= MAX_STREAK_FREEZES) throw conflict("You already have the maximum number of streak freezes.");
-        if (state.totalXp < FREEZE_PURCHASE_COST) throw badRequest("You need 100 XP to buy a streak freeze.");
-        const updated = await tx.userGamification.update({ where: { userId }, data: { totalXp: { decrement: FREEZE_PURCHASE_COST }, streakFreezeInventory: { increment: 1 } } });
+        if (state.xpBalance < FREEZE_PURCHASE_COST) throw badRequest("You need 100 XP to buy a streak freeze.");
+        const updated = await tx.userGamification.update({ where: { userId }, data: { xpBalance: { decrement: FREEZE_PURCHASE_COST }, streakFreezeInventory: { increment: 1 } } });
         await tx.xpLedger.create({ data: { userId, eventKey: "streak-freeze-purchase:" + randomUUID(), amount: -FREEZE_PURCHASE_COST, reason: "streak-freeze-purchase" } });
-        return { totalXp: updated.totalXp, streakFreezeInventory: updated.streakFreezeInventory };
+        return { totalXp: updated.totalXp, xpBalance: updated.xpBalance, streakFreezeInventory: updated.streakFreezeInventory };
       }, { isolationLevel: "Serializable" });
       res.json(result);
     } catch (error) { next(error); }
