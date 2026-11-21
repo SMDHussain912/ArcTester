@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
@@ -6,9 +7,11 @@ import { badRequest, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import { awardXp } from "./gamificationService.js";
+import { scoreUnitTestAttempt, unitTestAttemptScope, unitTestCompletionScope } from "./unitTestAttempt.js";
 
 const Id = z.coerce.number().int().positive();
 const AnswerInput = z.object({ questionId: Id, response: z.unknown() }).strict();
+const UnitTestAnswerInput = z.object({ questionId: Id, response: z.unknown(), attemptKey: z.string().uuid() }).strict();
 type PathQuestionPublicInput = { id: number; subject: { name: string }; topic: { name: string } | null; text: string; options: string | null; questionType: string; promptData: string };
 export const toPathPublicQuestion = (q: PathQuestionPublicInput) => ({
   id: q.id, subject: q.subject.name, topic: q.topic?.name ?? null,
@@ -149,39 +152,63 @@ export function learningPathRouter(db: PrismaClient): Router {
       const rows = await db.question.findMany({ where: { id: { in: links.map((x) => x.questionId) }, reviewStatus: "APPROVED" },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } } });
       const map = new Map(rows.map((q) => [q.id, q]));
-      res.json({ unitId: id, questions: links.map((x) => map.get(x.questionId)).filter((q): q is NonNullable<typeof q> => q !== undefined).map(toPathPublicQuestion) });
+      // Every launch gets an isolated answer namespace, so retries cannot reuse
+      // stale answers from a previous failed or abandoned checkpoint.
+      res.json({ unitId: id, attemptKey: randomUUID(), questions: links.map((x) => map.get(x.questionId)).filter((q): q is NonNullable<typeof q> => q !== undefined).map(toPathPublicQuestion) });
     } catch (e) { next(e); }
   });
   router.post("/path/units/:id/test/answer", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const { id } = z.object({ id: Id }).parse(req.params), input = AnswerInput.parse(req.body), userId = req.user!.id;
+      const { id } = z.object({ id: Id }).parse(req.params), input = UnitTestAnswerInput.parse(req.body), userId = req.user!.id;
       const unit = await ensureUnitTestUnlocked(db, userId, id);
       const links = unit.lessons.flatMap((l) => l.questions).slice(0, 10);
       if (!links.some((x) => x.questionId === input.questionId)) throw badRequest("Question does not belong to this unit test.");
       const q = await db.question.findFirst({ where: { id: input.questionId, reviewStatus: "APPROVED" } });
       if (!q) throw notFound("Question not found.");
       const response = normalizeResponse(input.response), correct = gradeQuestion(q.questionType as QuestionType, q.correctIndex, JSON.parse(q.answerData), response);
-      await db.pathAnswer.upsert({ where: { userId_scopeKey_questionId: { userId, scopeKey: "unit:" + id, questionId: q.id } },
-        create: { userId, lessonId: null, unitId: id, scopeKey: "unit:" + id, questionId: q.id, response: JSON.stringify(response), isCorrect: correct },
+      const scopeKey = unitTestAttemptScope(id, input.attemptKey);
+      await db.pathAnswer.upsert({ where: { userId_scopeKey_questionId: { userId, scopeKey, questionId: q.id } },
+        create: { userId, lessonId: null, unitId: id, scopeKey, questionId: q.id, response: JSON.stringify(response), isCorrect: correct },
         update: { response: JSON.stringify(response), isCorrect: correct } });
-      res.json({ correct, explanation: q.explanation });
+      res.json({ saved: true });
     } catch (e) { next(e); }
   });
   router.post("/path/units/:id/test/complete", requireAuth, async (req: AuthedRequest, res, next) => {
+    let markerWhere: { userId_scopeKey_questionId: { userId: number; scopeKey: string; questionId: number } } | null = null;
     try {
-      const { id } = z.object({ id: Id }).parse(req.params), userId = req.user!.id;
+      const { id } = z.object({ id: Id }).parse(req.params);
+      const { attemptKey } = z.object({ attemptKey: z.string().uuid() }).strict().parse(req.body);
+      const userId = req.user!.id, scopeKey = unitTestAttemptScope(id, attemptKey), completionKey = unitTestCompletionScope(id, attemptKey);
       const unit = await ensureUnitTestUnlocked(db, userId, id), links = unit.lessons.flatMap((l) => l.questions).slice(0, 10);
-      const answers = await db.pathAnswer.findMany({ where: { userId, unitId: id, lessonId: null } });
-      if (links.length !== 10 || answers.filter((a) => links.some((q) => q.questionId === a.questionId)).length < 10) throw badRequest("Answer all 10 unit-test questions.");
-      const score = Math.round(answers.filter((a) => a.isCorrect && links.some((q) => q.questionId === a.questionId)).length / 10 * 100);
-      const old = await db.userUnitTestProgress.findUnique({ where: { userId_unitId: { userId, unitId: id } } });
-      const isPassed = score >= 70;
-      const progress = await db.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
-        create: { userId, unitId: id, passedAt: isPassed ? new Date() : null, bestScorePct: score, attempts: 1 },
-        update: { passedAt: isPassed ? new Date() : old?.passedAt ?? null, bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
-      if (isPassed && !old?.passedAt) await db.$transaction((tx) => awardXp(tx, userId, "unit-test-passed:" + id, "unit-test"));
-      res.json({ passed: isPassed, scorePct: score, passScorePct: 70, progress });
-    } catch (e) { next(e); }
+      if (links.length !== 10) throw badRequest("Unit test is not fully built yet.");
+      // PathAnswer has a real Question foreign key; use the first test question
+      // as the completion marker's key, in a separate scope namespace.
+      markerWhere = { userId_scopeKey_questionId: { userId, scopeKey: completionKey, questionId: links[0]!.questionId } };
+      const response = await db.$transaction(async (tx) => {
+        const existing = await tx.pathAnswer.findUnique({ where: markerWhere! });
+        if (existing) return JSON.parse(existing.response) as { passed: boolean; scorePct: number; passScorePct: number; progress: unknown };
+        const answers = await tx.pathAnswer.findMany({ where: { userId, unitId: id, lessonId: null, scopeKey } });
+        const scored = scoreUnitTestAttempt(links.map((q) => q.questionId), answers);
+        if (scored.answeredCount < 10) throw badRequest("Answer all 10 unit-test questions.");
+        const score = scored.scorePct;
+        const old = await tx.userUnitTestProgress.findUnique({ where: { userId_unitId: { userId, unitId: id } } });
+        const isPassed = score >= 70;
+        const progress = await tx.userUnitTestProgress.upsert({ where: { userId_unitId: { userId, unitId: id } },
+          create: { userId, unitId: id, passedAt: isPassed ? new Date() : null, bestScorePct: score, attempts: 1 },
+          update: { passedAt: isPassed ? new Date() : old?.passedAt ?? null, bestScorePct: Math.max(old?.bestScorePct ?? 0, score), attempts: { increment: 1 } } });
+        const result = { passed: isPassed, scorePct: score, passScorePct: 70, progress };
+        await tx.pathAnswer.create({ data: { userId, lessonId: null, unitId: id, scopeKey: completionKey, questionId: links[0]!.questionId, response: JSON.stringify(result), isCorrect: isPassed } });
+        if (isPassed && !old?.passedAt) await awardXp(tx, userId, "unit-test-passed:" + id, "unit-test");
+        return result;
+      });
+      res.json(response);
+    } catch (e) {
+      if ((e as { code?: unknown })?.code === "P2002" && markerWhere) {
+        const existing = await db.pathAnswer.findUnique({ where: markerWhere }).catch(() => null);
+        if (existing) { res.json(JSON.parse(existing.response)); return; }
+      }
+      next(e);
+    }
   });
   router.post("/admin/path/build", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
