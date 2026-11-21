@@ -79,20 +79,40 @@ export type LessonScript = z.infer<typeof LessonScriptSchema>;
 export type LessonStoryboard = z.infer<typeof LessonStoryboardSchema>;
 export type GenerateLessonInput = z.infer<typeof GenerateLessonInputSchema>;
 
+export class LessonOutputValidationError extends Error {
+  constructor() {
+    super("LESSON_AI_INVALID_OUTPUT");
+    this.name = "LessonOutputValidationError";
+  }
+}
+
 export function parseModelJson<T>(raw: string, schema: z.ZodType<T>): T {
-  const trimmed = raw.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/, "");
-  const value = JSON.parse(trimmed) as unknown;
-  return schema.parse(value);
+  const fence = String.fromCharCode(96).repeat(3);
+  let trimmed = raw.trim();
+  if (trimmed.startsWith(fence + "json")) trimmed = trimmed.slice((fence + "json").length).trimStart();
+  else if (trimmed.startsWith(fence)) trimmed = trimmed.slice(fence.length).trimStart();
+  if (trimmed.endsWith(fence)) trimmed = trimmed.slice(0, -fence.length).trimEnd();
+  try {
+    return schema.parse(JSON.parse(trimmed) as unknown);
+  } catch {
+    throw new LessonOutputValidationError();
+  }
 }
 
 function modelText(payload: unknown): string {
-  const root = z.object({
+  const rootSchema = z.object({
     choices: z.array(z.object({
-      message: z.object({ content: z.union([z.string(), z.array(z.object({ text: z.string() }).passthrough())]) }),
+      message: z.object({
+        content: z.union([z.string(), z.array(z.object({ text: z.string() }).passthrough())]),
+      }).passthrough(),
     }).passthrough()).min(1),
-  });
+  }).passthrough();
   let root: z.infer<typeof rootSchema>;
-  try { root = rootSchema.parse(payload); } catch { throw new LessonOutputValidationError(); }
+  try {
+    root = rootSchema.parse(payload);
+  } catch {
+    throw new LessonOutputValidationError();
+  }
   const content = root.choices[0]!.message.content;
   return typeof content === "string" ? content : content.map((part) => part.text).join("");
 }
