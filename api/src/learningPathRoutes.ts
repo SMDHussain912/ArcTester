@@ -116,6 +116,13 @@ export function learningPathRouter(db: PrismaClient): Router {
       await db.pathAnswer.upsert({ where: { userId_scopeKey_questionId: { userId: req.user!.id, scopeKey: "lesson:" + id, questionId: q.id } },
         create: { userId: req.user!.id, lessonId: id, unitId: null, scopeKey: "lesson:" + id, questionId: q.id, response: JSON.stringify(response), isCorrect: correct },
         update: { response: JSON.stringify(response), isCorrect: correct } });
+      if (!correct) {
+        await db.userQuestionReview.upsert({
+          where: { userId_questionId: { userId: req.user!.id, questionId: q.id } },
+          create: { userId: req.user!.id, questionId: q.id, nextReviewAt: new Date(), intervalDays: 0, repetitions: 0, lastWasCorrect: false },
+          update: { nextReviewAt: new Date(), intervalDays: 0, lastWasCorrect: false },
+        });
+      }
       res.json({ correct, explanation: q.explanation });
     } catch (e) { next(e); }
   });
