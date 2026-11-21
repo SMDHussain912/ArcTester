@@ -2,6 +2,7 @@ CREATE TABLE "UserGamification" (
   "id" SERIAL NOT NULL,
   "userId" INTEGER NOT NULL,
   "totalXp" INTEGER NOT NULL DEFAULT 0,
+  "xpBalance" INTEGER NOT NULL DEFAULT 0,
   "currentStreak" INTEGER NOT NULL DEFAULT 0,
   "longestStreak" INTEGER NOT NULL DEFAULT 0,
   "lastActivityDate" DATE,
