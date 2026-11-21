@@ -33,7 +33,8 @@ export default function UnitTestCheckpoint({ darkMode, disabled = false, api }: 
   const [saved, setSaved] = useState<Record<number, boolean>>({});
   const [index, setIndex] = useState(0);
   const [result, setResult] = useState<TestResult | null>(null);
-  const apiRef = useRef(api);\n  apiRef.current = api;\n  const [resultTitle, setResultTitle] = useState("");
+  const apiRef = useRef(api);
+  apiRef.current = api;
 
   const refresh = async () => {
     setLoading(true);
@@ -49,7 +50,7 @@ export default function UnitTestCheckpoint({ darkMode, disabled = false, api }: 
       const created = await api<{ unitId: number; attemptKey: string; questions: PathQuestion[] }>(`/path/units/${unit.id}/test`);
       if (!created.attemptKey || created.questions.length !== 10) throw new Error("This unit checkpoint is not ready yet.");
       setSession({ unitId: unit.id, title: unit.title, attemptKey: created.attemptKey, questions: created.questions });
-      setAnswers({}); setSaved({}); setIndex(0); setResultTitle(unit.title);
+      setAnswers({}); setSaved({}); setIndex(0);
     } catch (cause) { setError((cause as Error).message || "Could not start the unit checkpoint."); }
     finally { setBusy(false); }
   };
@@ -76,7 +77,7 @@ export default function UnitTestCheckpoint({ darkMode, disabled = false, api }: 
       const completed = await api<TestResult>(`/path/units/${session.unitId}/test/complete`, {
         method: "POST", body: JSON.stringify({ attemptKey: session.attemptKey }),
       });
-      setResult(completed); setResultTitle(session.title); setSession(null);
+      setResult(completed); setSession(null);
       await refresh();
     } catch (cause) { setError((cause as Error).message || "Could not submit this checkpoint."); }
     finally { setBusy(false); }
