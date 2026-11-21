@@ -130,12 +130,12 @@ export default function AdminLessonStudio() {
   function updateScene(index: number, patch: Partial<Scene>) {
     try {
       const value = JSON.parse(storyboardText) as { scenes: Scene[] };
-      value.scenes[index] = { ...value.scenes[index], ...patch };
+      const scene = value.scenes[index];\n      if (!scene) return;\n      value.scenes[index] = { ...scene, ...patch };
       setStoryboardText(JSON.stringify(value, null, 2));
     } catch { /* Keep invalid JSON visible in the raw editor until corrected. */ }
   }
 
-  function updateSceneVisual(index: number, patch: NonNullable<Scene["visual"]>) {
+  function updateSceneVisual(index: number, patch: Partial<NonNullable<Scene["visual"]>>) {
     try {
       const value = JSON.parse(storyboardText) as { scenes: Scene[] };
       const scene = value.scenes[index];
