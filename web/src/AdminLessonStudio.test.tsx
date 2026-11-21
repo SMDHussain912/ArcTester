@@ -27,7 +27,7 @@ const draft = {
 function response(body: unknown, status = 200): Response {
   return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("AdminLessonStudio", () => {
   it("generates a draft from source text, opens it, previews scenes and saves edits", async () => {
@@ -46,6 +46,9 @@ describe("AdminLessonStudio", () => {
       }
       if (url.pathname === "/admin/lesson-drafts/draft-1" && init?.method === "PATCH") {
         return response({ ok: true, draft });
+      }
+      if (url.pathname === "/admin/lesson-drafts/draft-1/publish" && init?.method === "POST") {
+        return response({ ok: true, draft: { ...draft, status: "PUBLISHED" } });
       }
       return response({ error: "Unexpected test request" }, 404);
     });
@@ -73,5 +76,14 @@ describe("AdminLessonStudio", () => {
     const saved = JSON.parse(String((patchCall?.[1] as RequestInit | undefined)?.body));
     expect(saved).toMatchObject({ title: "Stack operations" });
     expect(saved.storyboard.scenes[1].title).toBe("Push operation visual");
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Publish lesson" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/lesson-drafts/draft-1/publish"),
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    ));
+    expect(await screen.findByText("Published · Student visible")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
   });
 });
