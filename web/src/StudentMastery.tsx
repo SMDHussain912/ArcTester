@@ -3,7 +3,7 @@ import { request } from "./apiClient";
 import "./StudentMastery.css";
 
 type MasteryTopic = { topicId: number; subject: string; topic: string; totalQuestions: number; answeredQuestions: number; attempts: number; correct: number; coveragePct: number; masteryPct: number };
-type Quest = { key: string; title: string; description: string; target: number; progress: number; completed: boolean };
+type Quest = { key: string; title: string; description: string; target: number; rewardXp: number; progress: number; completed: boolean; claimed: boolean };
 type Badge = { key: string; title: string; description: string; unlockedAt: string | null };
 type ReviewQuestion = { id: number; text: string; options: string[]; questionType: string; promptData: Record<string, unknown>; subject: string; topic: string | null; dueAt: string; intervalDays: number; repetitions: number };
 
@@ -80,7 +80,7 @@ export default function StudentMastery() {
         <div className="stack">
           {quests.map((quest) => <div key={quest.key} className="quest-row">
             <div><strong>{quest.title}</strong><p className="muted">{quest.description}</p></div>
-            <span className={quest.completed ? "status status-used" : "status status-pending"}>{quest.completed ? "Done" : `${quest.progress}/${quest.target}`}</span>
+            <span className={quest.completed ? "status status-used" : "status status-pending"}>{quest.completed ? `Done · ${quest.claimed ? "Claimed" : "+" + quest.rewardXp + " XP"}` : `${quest.progress}/${quest.target} · +${quest.rewardXp} XP`}</span>
           </div>)}
         </div>
       </section>
