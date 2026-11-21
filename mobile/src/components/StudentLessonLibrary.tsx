@@ -104,7 +104,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
       }
     }, Math.max(2500, scene.durationMs));
     return () => clearTimeout(timer);
-  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount]);
+  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount, voiceSceneKey, audioStatus.isLoaded]);
 
   useEffect(() => {
     if (!activeLesson) return;
