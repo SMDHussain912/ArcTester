@@ -383,7 +383,7 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    if (!user || !token) {
+    if (user?.id == null || !token) {
       setGamification(null);
       setDailyGoalDraft("50");
       return () => { active = false; };
