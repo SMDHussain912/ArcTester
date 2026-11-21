@@ -23,6 +23,7 @@ import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentP
 import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
+import ArcTesterMascot from "./src/components/ArcTesterMascot";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -808,9 +809,7 @@ export default function App() {
       <StatusBar style={startupVisible || darkMode ? "light" : "dark"} />
       <ScrollView style={[styles.dashboardScroll, darkMode && { backgroundColor: "#0b1220" }]} contentContainerStyle={styles.container}>
         <View style={styles.brandRow}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>A</Text>
-          </View>
+          <ArcTesterMascot variant="mark" size={40} />
           <View>
             <Text style={styles.brand}>ArcTester</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice with purpose</Text>
@@ -1070,9 +1069,14 @@ export default function App() {
         ) : (
           <>
             <Animated.View style={[styles.hero, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
-              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>SIGNED IN AS</Text>
-              <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text>
-              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your next focused session starts here.</Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>SIGNED IN AS</Text>
+                  <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text>
+                  <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your next focused session starts here.</Text>
+                </View>
+                <ArcTesterMascot size={84} />
+              </View>
             </Animated.View>
             <Animated.View style={[styles.stats, { opacity: statsEntrance, transform: [{ translateY: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }, { scale: statsEntrance.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
               <View style={[styles.stat, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>

@@ -18,6 +18,17 @@ When changing a value, update the source JSON and both platform mappings in the 
 - Use the spacing and radius scales rather than arbitrary values.
 - Original ArcTester branding only. Do not use Duolingo's mascot, illustrations, sound, or copied assets.
 
+## Original brand assets — Phase 4 Part 2
+
+Aster is ArcTester’s original study-owl mascot, authored for this project and not based on third-party app mascots or character assets.
+
+- Web hero illustration: `/web/public/brand/aster-mascot.svg`
+- Compact web mark: `/web/public/brand/aster-mark.svg`
+- Web wrapper: `web/src/components/ArcTesterMascot.tsx`
+- Mobile-native vector counterpart: `mobile/src/components/ArcTesterMascot.tsx`
+
+Use the shared web component instead of hardcoding initials or asset URLs. Give meaningful artwork an accessible name; mark decorative instances as decorative. Keep the mascot out of dense administration screens. Animation, sound, and haptics belong to later Phase 4 slices.
+
 ## Component contract
 
 Web primitives live in `web/src/components/ui.tsx` and are styled by `design-system.css`:

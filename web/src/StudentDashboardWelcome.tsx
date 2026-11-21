@@ -1,4 +1,5 @@
 import type { StudentPage } from "./StudentNavigation";
+import ArcTesterMascot from "./components/ArcTesterMascot";
 
 interface StudentDashboardWelcomeProps {
   visible: boolean;
@@ -37,7 +38,7 @@ export default function StudentDashboardWelcome({
           </div>
         </div>
         <div className="student-home-mark" aria-hidden="true">
-          <span>A</span>
+          <ArcTesterMascot size={144} decorative className="student-home-mascot" />
           <small>LEARN · PRACTICE · IMPROVE</small>
         </div>
       </section>
