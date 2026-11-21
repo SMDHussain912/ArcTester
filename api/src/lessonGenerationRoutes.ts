@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { badRequest, notFound } from "./errors.js";
-import { GenerateLessonInputSchema, generateLessonContent } from "./lessonGeneration.js";
+import { GenerateLessonInputSchema, generateLessonContent, LessonOutputValidationError } from "./lessonGeneration.js";
 
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
@@ -57,11 +57,12 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       res.status(201).json({ ok: true, draft });
     } catch (error) {
       if (error instanceof z.ZodError) return next(badRequest("Provide a subject, topic, source title and source text (100–30,000 characters)."));
+      if (error instanceof LessonOutputValidationError) return res.status(502).json({ error: "The AI returned lesson content that failed validation. Please retry or adjust the source." });
       if (error instanceof Error && error.message === "LESSON_AI_NOT_CONFIGURED") return res.status(503).json({ error: "Lesson AI is not configured on the server." });
       if (error instanceof Error && error.message === "LESSON_AI_RATE_LIMITED") return res.status(429).json({ error: "The lesson AI provider is rate-limiting requests. Try again later." });
       if (error instanceof Error && error.message === "LESSON_AI_PROVIDER_ERROR") return res.status(502).json({ error: "The lesson AI provider could not complete generation." });
       if (error instanceof Error && error.name === "AbortError") return res.status(504).json({ error: "Lesson generation timed out. Try a shorter source." });
-      if (error instanceof SyntaxError || error instanceof z.ZodError) return res.status(502).json({ error: "The AI returned lesson content that failed validation. Please retry or adjust the source." });
+      if (error instanceof SyntaxError) return res.status(502).json({ error: "The AI provider returned an invalid response. Please retry." });
       next(error);
     }
   });
