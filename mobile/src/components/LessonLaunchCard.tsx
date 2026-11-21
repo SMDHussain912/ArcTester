@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: typeScale.size.sm, lineHeight: 19 },
   label: { fontSize: typeScale.size.xs, fontWeight: "800", letterSpacing: 1 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing["2"] },
-  chip: { borderWidth: 1, borderRadius: radius.full, paddingHorizontal: spacing["3"], paddingVertical: spacing["2"] },
+  chip: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing["3"], paddingVertical: spacing["2"] },
   start: { minHeight: 46, borderRadius: radius.lg, paddingHorizontal: spacing["4"], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing["2"] },
   startText: { fontWeight: "800" },
   disabled: { opacity: 0.45 },
