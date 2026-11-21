@@ -67,6 +67,20 @@ describe("NVIDIA lesson TTS", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("uses NVIDIA_API_KEY and reuses cached scene audio", async () => {
+    process.env.NVIDIA_TTS_BASE_URL = "https://speech.example.test";
+    delete process.env.NVIDIA_TTS_API_KEY;
+    process.env.NVIDIA_API_KEY = "nvidia-server-key";
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.headers).toEqual({ authorization: "Bearer nvidia-server-key" });
+      return new Response(makeWav(), { status: 200, headers: { "content-type": "audio/wav" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await synthesizeLessonSpeech("Cache this unique narration.");
+    await synthesizeLessonSpeech("Cache this unique narration.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects provider responses that are not WAV audio", async () => {
     process.env.NVIDIA_TTS_BASE_URL = "https://speech.example.test";
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not audio", { status: 200, headers: { "content-type": "text/plain" } })));
