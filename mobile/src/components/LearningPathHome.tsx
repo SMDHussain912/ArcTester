@@ -2,18 +2,10 @@ import React from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { mobilePalette, radius, spacing, typeScale } from "../design/tokens";
+import { calculateLearningPathProgress, selectNextLearningSubject, type LearningPathSubject, type LearningPathSubjectProgress } from "../learningPath";
 
-type BankSubject = {
-  subject: string;
-  count: number;
-  practiceCount?: number;
-  topics?: { topic: string; count: number; practiceCount?: number }[];
-};
-type SubjectProgress = {
-  subject: string;
-  seen: number;
-  accuracy: number | null;
-};
+type BankSubject = LearningPathSubject;
+type SubjectProgress = LearningPathSubjectProgress;
 type Props = {
   subjects: BankSubject[];
   progress: SubjectProgress[];
@@ -25,16 +17,8 @@ type Props = {
 export default function LearningPathHome({ subjects, progress, darkMode, disabled = false, onPractice }: Props) {
   const palette = darkMode ? mobilePalette.dark : mobilePalette.light;
   const availableSubjects = subjects.filter((item) => (item.practiceCount ?? item.count) > 0);
-  const totalAvailable = availableSubjects.reduce((sum, item) => sum + (item.practiceCount ?? item.count), 0);
-  const totalSeen = availableSubjects.reduce((sum, item) => {
-    const subjectProgress = progress.find((entry) => entry.subject === item.subject);
-    return sum + Math.min(subjectProgress?.seen ?? 0, item.practiceCount ?? item.count);
-  }, 0);
-  const overallProgress = totalAvailable > 0 ? Math.min(1, totalSeen / totalAvailable) : 0;
-  const nextSubject = availableSubjects.find((item) => {
-    const itemProgress = progress.find((entry) => entry.subject === item.subject);
-    return (itemProgress?.seen ?? 0) < (item.practiceCount ?? item.count);
-  }) ?? availableSubjects[0];
+  const { totalAvailable, totalSeen, ratio: overallProgress } = calculateLearningPathProgress(subjects, progress);
+  const nextSubject = selectNextLearningSubject(subjects, progress);
 
   return (
     <View style={styles.container} accessibilityLabel="Your learning path">
@@ -114,7 +98,7 @@ export default function LearningPathHome({ subjects, progress, darkMode, disable
                 <View style={[styles.fill, { width: `${percent}%`, backgroundColor: complete ? palette.success : palette.primary }]} />
               </View>
               <View style={styles.subjectBottom}>
-                <Text style={[styles.subjectStatus, { color: complete ? palette.success : palette.muted }]}>{complete ? "Reviewed" : seen > 0 ? `${seen} explored` : "Ready to begin"}</Text>
+                <Text style={[styles.subjectStatus, { color: complete ? palette.success : palette.muted }]}>{complete ? "Reviewed" : seen > 0 ? `${seen} explored${itemProgress?.accuracy == null ? "" : ` · ${Math.round(itemProgress.accuracy * 100)}% accuracy`}` : "Ready to begin"}</Text>
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={`Practice ${item.subject}`}
