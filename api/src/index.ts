@@ -14,6 +14,7 @@ import { questionAdminRouter } from "./questionAdminRoutes.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { studyMaterialRouter } from "./studyMaterialRoutes.js";
 import { learningPathRouter } from "./learningPathRoutes.js";
+import { gamificationRouter } from "./gamificationRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -154,6 +155,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(announcementRouter(database));
   app.use(studyMaterialRouter(database));
   app.use(learningPathRouter(database));
+  app.use(gamificationRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
