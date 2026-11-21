@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 export type PracticeSessionTest={attemptId:number;mode:string;deadline:string|null;serverNow?:string;questions:{id:number;subject:string;topic:string|null;text:string;options:string[];questionType?:string;promptData?:Record<string,unknown>}[];warnings:string[]};
 type Props={test:PracticeSessionTest;answers:Record<number,unknown>;remainingSeconds:number|null;busy:boolean;isOnline?:boolean;syncStatus?:"idle"|"saving"|"saved"|"pending";localSaveAvailable?:boolean;onLeave:()=>void;onSelectAnswer:(questionId:number,response:unknown)=>void;onSubmit:()=>void};
-const hasAnswer=(value:unknown)=>value!==undefined&&value!==null&&value!=="";
+const hasAnswer=(value:unknown)=>value!==undefined&&value!==null&&value!==""&&(!Array.isArray(value)||value.some(item=>item!==null&&item!==undefined));
 export default function StudentPracticeSession({test,answers,remainingSeconds,busy,isOnline=true,localSaveAvailable=true,syncStatus="idle",onLeave,onSelectAnswer,onSubmit}:Props){
  const [activeQuestionIndex,setActiveQuestionIndex]=useState(0);const answeredCount=test.questions.filter(q=>hasAnswer(answers[q.id])).length;const current=test.questions[activeQuestionIndex];
  const timer:ReactNode=remainingSeconds!==null?<> · <strong className={remainingSeconds<300?"timer-warning":"exam-countdown"}>{Math.floor(remainingSeconds/60).toString().padStart(2,"0")}:{(remainingSeconds%60).toString().padStart(2,"0")} remaining</strong></>:null;

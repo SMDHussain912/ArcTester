@@ -6,7 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
-import { gradeQuestion, type QuestionType } from "./questionTypes.js";
+import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import {
   nextStat,
   selectMockTest,
@@ -448,7 +448,7 @@ export async function submitTest(
   }
 
   const answerById = new Map(attempt.answers.map((answer) => [answer.questionId, answer]));
-  const responseById = new Map(input.answers.map((a) => [a.questionId, a.response !== undefined ? a.response : a.selectedIndex ?? null]));
+  const responseById = new Map(input.answers.map((a) => [a.questionId, normalizeResponse(a.response !== undefined ? a.response : a.selectedIndex ?? null)]));
 
   let score = 0;
   const rows = [...memberIds].map((questionId) => {
@@ -524,7 +524,7 @@ export async function saveTestAnswers(
     for (const answer of input.answers) {
       await tx.attemptAnswer.updateMany({
         where: { attemptId, questionId: answer.questionId },
-        data: { chosen: answer.selectedIndex ?? (typeof answer.response === "number" ? answer.response : null), responseSnapshot: JSON.stringify(answer.response !== undefined ? answer.response : answer.selectedIndex ?? null) },
+        data: { chosen: answer.selectedIndex ?? (typeof answer.response === "number" ? answer.response : null), responseSnapshot: JSON.stringify(normalizeResponse(answer.response !== undefined ? answer.response : answer.selectedIndex ?? null)) },
       });
     }
   });

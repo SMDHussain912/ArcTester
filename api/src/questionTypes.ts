@@ -1,6 +1,13 @@
 export const QUESTION_TYPES = ["mcq","multi_select","true_false","fill_blank","numeric","matching"] as const;
 export type QuestionType = typeof QUESTION_TYPES[number];
 export type AnswerData = Record<string, unknown>;
+/** Normalize empty input to unanswered consistently for grading and persistence. */
+export function normalizeResponse(response: unknown): unknown {
+ if (response === null || response === undefined) return null;
+ if (typeof response === "string" && response.trim() === "") return null;
+ if (Array.isArray(response) && (response.length === 0 || response.every((item) => item === null || item === undefined))) return null;
+ return response;
+}
 export function gradeQuestion(type:QuestionType,correctIndex:number,data:AnswerData,response:unknown):boolean{
  if(response===null||response===undefined)return false;
  if(type==="mcq"||type==="true_false")return typeof response==="number"&&Number.isInteger(response)&&response===correctIndex;
