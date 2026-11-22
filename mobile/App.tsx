@@ -1478,7 +1478,7 @@ export default function App() {
               disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.subjects.some((subject) => (subject.practiceCount ?? subject.count) > 0)}
               onPress={() => {
                 const subjects = (bank?.subjects ?? []).filter((subject) => (subject.practiceCount ?? subject.count) > 0).map((subject) => subject.subject);
-                void startPractice({ subjects, topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20 }, false, true);
+                void startPractice({ subjects, topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20, questionTypes: [] }, false, true);
               }}
               style={[styles.card, { marginTop: 14, padding: 18, borderColor: "#f59e0b", backgroundColor: darkMode ? "#172235" : "#fffbeb" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}
             >
