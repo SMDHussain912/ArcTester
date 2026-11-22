@@ -5,13 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { badRequest, notFound } from "./errors.js";
 import { LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
-import {
-  GenerateLessonInputSchema,
-  generateLessonContent,
-  LessonOutputValidationError,
-  LessonScriptSchema,
-  LessonStoryboardSchema,
-} from "./lessonGeneration.js";
+import { LessonScriptSchema, LessonStoryboardSchema } from "./lessonGeneration.js";
 
 const UpdateLessonDraftSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -51,14 +45,6 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     legacyHeaders: false,
     message: { error: "Lesson voice limit reached. Try again later." },
   });
-  const generationLimit = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 12,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Lesson generation limit reached. Try again later." },
-  });
-
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
@@ -233,37 +219,6 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     }
   });
 
-  router.post("/admin/lesson-drafts/generate", requireAuth, requireAdmin(db), generationLimit, async (req: AuthedRequest, res, next) => {
-    try {
-      const input = GenerateLessonInputSchema.parse(req.body);
-      const generated = await generateLessonContent(input);
-      const draft = await db.lessonDraft.create({
-        data: {
-          createdById: req.user!.id,
-          title: generated.script.title,
-          subject: input.subject,
-          topic: input.topic,
-          sourceTitle: input.sourceTitle,
-          sourceText: input.sourceText,
-          scriptJson: JSON.stringify(generated.script),
-          storyboardJson: JSON.stringify(generated.storyboard),
-          provider: generated.provider,
-          model: generated.model,
-          status: "DRAFT",
-        },
-      });
-      res.status(201).json({ ok: true, draft });
-    } catch (error) {
-      if (error instanceof z.ZodError) return next(badRequest("Provide a subject, topic, source title and source text (100–30,000 characters)."));
-      if (error instanceof LessonOutputValidationError) return res.status(502).json({ error: "The AI returned lesson content that failed validation. Please retry or adjust the source." });
-      if (error instanceof Error && error.message === "LESSON_AI_NOT_CONFIGURED") return res.status(503).json({ error: "Lesson AI is not configured on the server." });
-      if (error instanceof Error && error.message === "LESSON_AI_RATE_LIMITED") return res.status(429).json({ error: "The lesson AI provider is rate-limiting requests. Try again later." });
-      if (error instanceof Error && error.message === "LESSON_AI_PROVIDER_ERROR") return res.status(502).json({ error: "The lesson AI provider could not complete generation." });
-      if (error instanceof Error && error.name === "AbortError") return res.status(504).json({ error: "Lesson generation timed out. Try a shorter source." });
-      if (error instanceof SyntaxError) return res.status(502).json({ error: "The AI provider returned an invalid response. Please retry." });
-      next(error);
-    }
-  });
 
   return router;
 }
