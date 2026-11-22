@@ -24,20 +24,16 @@ const ImportLessonPackageSchema = z.object({
   subject: z.string().trim().min(2).max(100),
   topic: z.string().trim().min(2).max(160),
   fileName: z.string().trim().min(1).max(180).optional(),
-  script: z.unknown(),
-  storyboard: z.unknown(),
-}).strict();
+  script: LessonScriptSchema,
+  storyboard: LessonStoryboardSchema,
+}).strict().superRefine((input, ctx) => {
+  if (input.title !== input.script.title) {
+    ctx.addIssue({ code: "custom", message: "Package title must match the lesson script title.", path: ["title"] });
+  }
+});
 
 export function parseImportedLessonPackage(value: unknown) {
-  const input = ImportLessonPackageSchema.parse(value);
-  return {
-    title: input.title,
-    subject: input.subject,
-    topic: input.topic,
-    fileName: input.fileName,
-    script: LessonScriptSchema.parse(input.script),
-    storyboard: LessonStoryboardSchema.parse(input.storyboard),
-  };
+  return ImportLessonPackageSchema.parse(value);
 }
 
 export function validateLessonDraftForPublish(scriptJson: string, storyboardJson: string) {
