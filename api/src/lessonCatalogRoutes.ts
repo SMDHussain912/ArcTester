@@ -1,9 +1,7 @@
 import { Router } from "express";
-import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 
-const LessonId = z.string().trim().min(1).max(64);
 
 export function lessonCatalogRouter(db: PrismaClient): Router {
   const router = Router();
@@ -73,8 +71,11 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
         return res.status(403).json({ error: "Published lessons are available to student accounts." });
       }
 
-      const lessonId = LessonId.parse(req.params.id);
-      const versionId = LessonId.parse(req.params.versionId);
+      const lessonId = req.params.id;
+      const versionId = req.params.versionId;
+      if (!lessonId || lessonId.length > 64 || !versionId || versionId.length > 64) {
+        return res.status(400).json({ error: "Lesson or version ID is invalid." });
+      }
       const lesson = await db.lessonDraft.findFirst({
         where: {
           id: lessonId,
@@ -103,7 +104,6 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
       // and the provider adapter are configured. Do not fall back to arbitrary URLs.
       return res.status(503).json({ error: "Versioned lesson package delivery is not configured." });
     } catch (error) {
-      if (error instanceof z.ZodError) return res.status(400).json({ error: "Lesson or version ID is invalid." });
       return next(error);
     }
   });
