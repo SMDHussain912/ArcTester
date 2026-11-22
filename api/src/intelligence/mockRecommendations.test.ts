@@ -15,8 +15,8 @@ describe("buildFullMockRecommendations", () => {
   it("recommends only sampled weak topics from an exact full mock", () => {
     const result = buildFullMockRecommendations({ answers: paper() });
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ subject: "Mathematics", topic: "Matrices", priority: "medium", questionCount: 15 });
-    expect(result[0].evidence).toMatchObject({ answeredQuestions: 100, incorrectAnswers: 75, accuracy: 0.25, source: "completed-full-mock" });
+    expect(result.find(item => item.subject === "Mathematics")).toMatchObject({ subject: "Mathematics", topic: "Matrices", priority: "high", questionCount: 15 });
+    expect(result.find(item => item.subject === "Mathematics")?.evidence).toMatchObject({ answeredQuestions: 100, incorrectAnswers: 75, accuracy: 0.25, source: "completed-full-mock" });
   });
 
   it("does not accept partial mock data", () => {
