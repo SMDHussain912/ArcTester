@@ -435,16 +435,20 @@ model IntegrityFlag {
 
 
 model StudyMaterial {
-  id           String   @id @default(cuid())
-  uploadedById Int?
-  title        String
-  description  String   @default("")
-  subject      String
-  topic        String   @default("")
-  url          String   @default("")
-  status       String   @default("DRAFT")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  uploadedById   Int?
+  title          String
+  description    String   @default("")
+  subject        String
+  topic          String   @default("")
+  url            String   @default("")
+  fileName       String   @default("")
+  mimeType       String   @default("")
+  sizeBytes      Int      @default(0)
+  contentBase64  String   @default("")
+  status         String   @default("DRAFT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([status, subject, title])
   @@index([uploadedById, createdAt])
