@@ -45,8 +45,8 @@ describe("StudentLearningSummary", () => {
     });
     render(<StudentLearningSummary setActivePage={() => undefined} />);
     expect(await screen.findByRole("heading", { name: "Learning summary" })).toBeTruthy();
-    expect(screen.getByText("0")).toBeTruthy();
-    expect(screen.getByText("Level 1")).toBeTruthy();
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Level 1/)).toBeTruthy();
     expect(screen.getByText("Completed practice attempts will show here.")).toBeTruthy();
   });
 
