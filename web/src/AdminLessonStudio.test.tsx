@@ -30,6 +30,39 @@ function response(body: unknown, status = 200): Response {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("AdminLessonStudio", () => {
+  it("imports a prepared lesson package as a draft without generating AI content", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/admin/lesson-drafts" && (!init?.method || init.method === "GET")) {
+        return response({ drafts: [draft] });
+      }
+      if (url.pathname === "/admin/lesson-drafts/import" && init?.method === "POST") {
+        return response({ ok: true, draft }, 201);
+      }
+      if (url.pathname === "/admin/lesson-drafts/draft-1" && (!init?.method || init.method === "GET")) {
+        return response({ draft });
+      }
+      return response({ error: "Unexpected test request" }, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AdminLessonStudio />);
+    const packageFile = new File([JSON.stringify({
+      title: script.title, subject: "Computer Science", topic: "Stacks", script, storyboard,
+    })], "stacks.lesson.json", { type: "application/json" });
+
+    fireEvent.change(screen.getByLabelText("Import finished lesson package"), { target: { files: [packageFile] } });
+
+    expect(await screen.findByRole("heading", { name: "Review lesson draft" })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/lesson-drafts/import"),
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    ));
+    const importCall = fetchMock.mock.calls.find((call) => String(call[0]).includes("/admin/lesson-drafts/import"));
+    const imported = JSON.parse(String((importCall?.[1] as RequestInit | undefined)?.body));
+    expect(imported).toMatchObject({ fileName: "stacks.lesson.json", title: script.title, subject: "Computer Science", topic: "Stacks" });
+    expect(screen.getByText(/Imported stacks.lesson.json as an unpublished draft/)).toBeInTheDocument();
+  });
+
   it("generates a draft from source text, opens it, previews scenes and saves edits", async () => {
     let generated = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
