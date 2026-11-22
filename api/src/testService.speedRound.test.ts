@@ -30,6 +30,18 @@ describe("speed round attempt contract", () => {
     expect(minutesFor("speedRound", 10)).toBe(5);
   });
 
+
+  it("accepts optional question type filters for custom practice", () => {
+    expect(CreateTestSchema.safeParse({ mode: "practice", subjects: ["Computer Science"], questionTypes: ["numeric", "matching"] }).success).toBe(true);
+    expect(CreateTestSchema.safeParse({ mode: "practice", subjects: ["Computer Science"], questionTypes: ["not-a-type"] }).success).toBe(false);
+  });
+
+  it("uses a requested bounded duration for practice but not for fixed modes", () => {
+    expect(minutesFor("practice", 20, 45)).toBe(45);
+    expect(minutesFor("practice", 20, 500)).toBe(180);
+    expect(minutesFor("speedRound", 10, 45)).toBe(5);
+  });
+
   it("leaves existing practice and mock durations unchanged", () => {
     expect(minutesFor("practice", 20)).toBe(18);
     expect(minutesFor("mock", 200)).toBe(180);
