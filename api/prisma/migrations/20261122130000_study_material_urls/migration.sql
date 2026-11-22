@@ -1,0 +1,1 @@
+ALTER TABLE "StudyMaterial" ADD COLUMN "url" TEXT NOT NULL DEFAULT '';
