@@ -604,7 +604,11 @@ export default function App() {
             onAcknowledge={(id) => void acknowledgeAnnouncement(id)}
           />
         ) : activePage === "analytics" ? (
-          <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} />
+          <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} onStartRecommendedPractice={(item) => {
+            if (!item.subject) { setActivePage("practice"); return; }
+            const topicKeys = item.topic ? [JSON.stringify([item.subject, item.topic])] : [];
+            void startTest("practice", undefined, buildPracticeConfig([item.subject], topicKeys, item.questionCount, "any"));
+          }} />
         ) : activePage === "learning" ? (
           <StudentLearning setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "rewards" ? (
