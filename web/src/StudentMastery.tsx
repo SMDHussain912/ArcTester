@@ -27,10 +27,14 @@ export default function StudentMastery() {
         request<{ badges: Badge[] }>("/gamification/badges"),
         request<{ questions: ReviewQuestion[] }>("/learning/practice-mistakes?limit=10"),
       ]);
-      setTopics(mastery.topics);
-      setQuests(questData.quests);
-      setBadges(badgeData.badges);
-      setQuestions(due.questions);
+      setTopics(Array.isArray(mastery?.topics) ? mastery.topics.filter(Boolean) : []);
+      setQuests(Array.isArray(questData?.quests) ? questData.quests.filter(Boolean) : []);
+      setBadges(Array.isArray(badgeData?.badges) ? badgeData.badges.filter(Boolean) : []);
+      setQuestions(Array.isArray(due?.questions) ? due.questions.filter(Boolean).map((question) => ({
+        ...question,
+        options: Array.isArray(question.options) ? question.options : [],
+        promptData: question.promptData && typeof question.promptData === "object" ? question.promptData : {},
+      })) : []);
       setIndex(0);
       setResponse(null);
     } catch (cause) {
@@ -90,7 +94,7 @@ export default function StudentMastery() {
         {current ? <article className="review-card">
           <p className="muted">{current.subject}{current.topic ? " · " + current.topic : ""} · Review {index + 1} of {questions.length}</p>
           <h3>{current.text}</h3>
-          {(current.questionType === "mcq" || current.questionType === "true_false") && current.options.length ? (
+          {(current.questionType === "mcq" || current.questionType === "true_false") && Array.isArray(current.options) && current.options.length ? (
             <div className="stack">{current.options.map((option, optionIndex) => <button key={optionIndex} className={response === optionIndex ? "button button-primary" : "button button-secondary"} disabled={busy} onClick={() => setResponse(optionIndex)}>{option}</button>)}</div>
           ) : current.questionType === "matching" && Array.isArray(current.promptData.left) && Array.isArray(current.promptData.right) ? (
             <div className="stack">{(current.promptData.left as unknown[]).map((item, leftIndex) => {
@@ -101,7 +105,7 @@ export default function StudentMastery() {
                 setResponse(next);
               }}><option value="">Choose match</option>{(current.promptData.right as unknown[]).map((choice, rightIndex) => <option key={rightIndex} value={rightIndex}>{String(choice)}</option>)}</select></label>;
             })}</div>
-          ) : current.questionType === "multi_select" && current.options.length ? (
+          ) : current.questionType === "multi_select" && Array.isArray(current.options) && current.options.length ? (
             <div className="stack">{current.options.map((option, optionIndex) => {
               const selected = Array.isArray(response) && response.includes(optionIndex);
               return <label key={optionIndex} className="review-option"><input type="checkbox" checked={selected} disabled={busy} onChange={(event) => setResponse((old: unknown) => {
