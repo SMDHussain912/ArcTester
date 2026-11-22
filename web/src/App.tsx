@@ -3,7 +3,7 @@ import { safeStorage } from "./safeStorage";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
 import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
-import { buildPracticeConfig } from "./practiceConfig";
+import { buildPracticeConfig, type PracticeConfig } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
 import type { FormEvent } from "react";
@@ -38,7 +38,7 @@ import { OnlineStatusContext } from "./OnlineStatusContext";
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
-type Bank = { total: number; subjects: { subject: string; count: number; topics?: { topic: string; count: number }[] }[] };
+type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Invitation = {
   id: string;
   email: string;
@@ -88,6 +88,7 @@ export default function App() {
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
   const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
+  const [practiceDurationMinutes, setPracticeDurationMinutes] = useState(20);
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -304,7 +305,7 @@ export default function App() {
     }
   }
 
-  async function startTest(mode: "mock" | "practice" | "mistakes", subject?: string, practiceConfig?: { subjects: string[]; topicFilters: { subject: string; topic: string }[]; count: number; difficulty: "any" | "easy" | "medium" | "hard" }) {
+  async function startTest(mode: "mock" | "practice" | "mistakes", subject?: string, practiceConfig?: PracticeConfig) {
     if (mode === "practice" && !subject && (!practiceConfig || practiceConfig.subjects.length === 0)) {
       setError("Select at least one subject before creating your practice paper.");
       return;
@@ -313,16 +314,42 @@ export default function App() {
     setError("");
     setResult(null);
     try {
-      const created = await request<Test>("/tests", {
-        method: "POST",
-        body: JSON.stringify({ mode, ...(subject ? { subject } : {}), ...(practiceConfig ? { subjects: practiceConfig.subjects, topicFilters: practiceConfig.topicFilters, count: practiceConfig.count, difficulty: practiceConfig.difficulty } : mode === "practice" ? { count: 10 } : {}) }),
-      });
+      let config = practiceConfig;
+      let countAdjustment = "";
+      if (mode === "practice" && !subject && config) {
+        const freshBank = await request<Bank>("/bank");
+        setBank(freshBank);
+        const rows = Array.isArray(freshBank?.subjects) ? freshBank.subjects : [];
+        const selectedNames = [...new Set(config.subjects)];
+        const missing = selectedNames.filter((name) => !rows.some((row) => row.subject === name));
+        if (missing.length) throw new Error("These selected subjects are no longer in the question bank: " + missing.join(", ") + ". Refresh and choose again.");
+        const availableCount = selectedNames.reduce((total, name) => {
+          const row = rows.find((item) => item.subject === name);
+          if (!row) return total;
+          const filters = config!.topicFilters.filter((filter) => filter.subject === name);
+          if (!filters.length) return total + Number(row.count ?? 0);
+          const matchingTopics = filters.map((filter) => row.topics?.find((topic) => topic.topic === filter.topic)).filter(Boolean);
+          return total + matchingTopics.reduce((sum, topic) => sum + Number(topic?.count ?? 0), 0);
+        }, 0);
+        if (availableCount <= 0) throw new Error("No approved questions match the selected subject/topic filters. Clear a topic filter or ask an administrator to add questions to that topic.");
+        if (config.count > availableCount) {
+          countAdjustment = "Your filters match " + availableCount + " question(s), so this paper was reduced to the available question count.";
+          config = { ...config, count: availableCount };
+          setPracticeQuestionCount(availableCount);
+        }
+      }
+      const body = {
+        mode,
+        ...(subject ? { subject } : {}),
+        ...(config ? { subjects: config.subjects, topicFilters: config.topicFilters, count: config.count, difficulty: config.difficulty, durationMinutes: config.durationMinutes } : mode === "practice" ? { count: 10 } : {}),
+      };
+      const created = await request<Test>("/tests", { method: "POST", body: JSON.stringify(body) });
       const previousAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
       if (previousAttemptId) safeStorage.removeItem(practiceAnswersKey(previousAttemptId));
       const clientNow = performance.now();
       setPracticeServerOffset(new Date(created.serverNow ?? new Date().toISOString()).getTime() - clientNow);
       setPracticeClock(clientNow);
-      setTest(created);
+      setTest({ ...created, warnings: [...(Array.isArray(created.warnings) ? created.warnings : []), ...(countAdjustment ? [countAdjustment] : [])] });
       setActivePage("practice");
       practiceAutoSubmitRef.current = false;
       safeStorage.setItem("arctester-active-practice-attempt", String(created.attemptId));
@@ -337,7 +364,7 @@ export default function App() {
   }
 
   function createStudentPracticePaper() {
-    void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty));
+    void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty, practiceDurationMinutes));
   }
 
   function selectPracticeAnswer(questionId: number, response: unknown) {
@@ -659,6 +686,8 @@ export default function App() {
                     selectedSubjects={practiceSubjects}
                     questionCount={practiceQuestionCount}
                     difficulty={practiceDifficulty}
+                    durationMinutes={practiceDurationMinutes}
+                    onDurationChange={setPracticeDurationMinutes}
                     onQuestionCountChange={setPracticeQuestionCount}
                     onDifficultyChange={setPracticeDifficulty}
                   />
