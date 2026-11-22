@@ -66,12 +66,26 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       return next(error);
     }
   });
+  // Legacy compatibility detail endpoint. New clients load metadata from the summary catalog.
+  router.get("/lessons/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true } });
+      if (!draft) return next(notFound("Published lesson was not found."));
+      const script = LessonScriptSchema.parse(JSON.parse(draft.scriptJson) as unknown);
+      const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
+      return res.json({ ok: true, lesson: { id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, script, storyboard } });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Lesson ID is invalid."));
+      return next(error);
+    }
+  });
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
-      if (account?.role !== "STUDENT") {
-        return res.status(403).json({ error: "Published lessons are available to student accounts." });
-      }
+      if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const published = await db.lessonDraft.findMany({
         where: { status: "PUBLISHED" },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
@@ -79,15 +93,11 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
         select: { id: true, title: true, subject: true, topic: true, updatedAt: true },
       });
       const lessons = published.map((draft) => ({
-        id: draft.id,
-        title: draft.title,
-        subject: draft.subject,
-        topic: draft.topic,
-        updatedAt: draft.updatedAt,
-      }));      res.json({ ok: true, lessons });
+        id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, updatedAt: draft.updatedAt,
+      }));
+      return res.json({ ok: true, lessons });
     } catch (error) { next(error); }
   });
-
   router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
