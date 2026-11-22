@@ -90,7 +90,11 @@ export function studyMaterialRouter(db: PrismaClient): Router {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
       const material = await db.studyMaterial.findUnique({ where: { id }, select: { status: true, fileName: true, mimeType: true, sizeBytes: true, contentBase64: true } });
-      if (!material || !material.fileName || !material.contentBase64 || (material.status !== "PUBLISHED" && req.user?.role !== "ADMIN")) return next(notFound("Study file was not found."));
+      if (!material || !material.fileName || !material.contentBase64) return next(notFound("Study file was not found."));
+      if (material.status !== "PUBLISHED") {
+        const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+        if (account?.role !== "ADMIN") return next(notFound("Study file was not found."));
+      }
       const bytes = Buffer.from(material.contentBase64, "base64");
       fileSelectHeaders(res, material.fileName, material.mimeType, bytes.length);
       res.send(bytes);
