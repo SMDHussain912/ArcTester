@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { request, API } from "./apiClient";
+import { getSceneAnimationState } from "./lessonAnimation";
 
+type TimelineAction = {
+  atMs: number;
+  action: "reveal_item" | "highlight_item" | "reveal_step" | "emphasize_text";
+  targetIndex?: number;
+  durationMs?: number;
+};
 type Scene = {
   sceneType: "title_card" | "text_reveal" | "diagram" | "equation" | "step_sequence" | "checkpoint";
   title: string;
@@ -8,6 +15,7 @@ type Scene = {
   onScreenText: string;
   durationMs: number;
   visual: { label: string; items: string[]; connections: { from: string; to: string; label: string }[]; equation: string; steps: string[] };
+  timeline?: TimelineAction[];
 };
 type Lesson = {
   id: string;
@@ -28,6 +36,10 @@ export default function StudentWebLessonPlayer() {
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioError, setAudioError] = useState("");
+  const [timelineMs, setTimelineMs] = useState(0);
+  const [animationPlaying, setAnimationPlaying] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const animationBaseRef = useRef(0);
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [query, setQuery] = useState("");
   const audioUrlRef = useRef<string | null>(null);
@@ -51,6 +63,40 @@ export default function StudentWebLessonPlayer() {
     audioUrlRef.current = null;
   }, [audio]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(query.matches);
+    const change = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    query.addEventListener?.("change", change);
+    return () => query.removeEventListener?.("change", change);
+  }, []);
+
+  useEffect(() => {
+    setTimelineMs(0);
+    animationBaseRef.current = 0;
+    setAnimationPlaying(false);
+  }, [active?.id, sceneIndex]);
+
+  useEffect(() => {
+    if (!animationPlaying || !scene) return;
+    let frame = 0;
+    let startedAt: number | null = null;
+    const tick = (now: number) => {
+      if (startedAt === null) startedAt = now;
+      const next = Math.min(scene.durationMs, animationBaseRef.current + now - startedAt);
+      setTimelineMs(next);
+      if (next >= scene.durationMs) {
+        animationBaseRef.current = scene.durationMs;
+        setAnimationPlaying(false);
+        return;
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [animationPlaying, scene?.durationMs, active?.id, sceneIndex]);
+
   const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons]);
   const filtered = useMemo(() => lessons.filter((lesson) =>
     (subjectFilter === "all" || lesson.subject === subjectFilter) &&
@@ -60,18 +106,20 @@ export default function StudentWebLessonPlayer() {
   const duration = active ? active.storyboard.scenes.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0) : 0;
   const elapsed = active ? active.storyboard.scenes.slice(0, sceneIndex).reduce((sum, item) => sum + Math.max(0, item.durationMs), 0) : 0;
   const progress = duration > 0 ? Math.round((elapsed + (scene?.durationMs ?? 0)) / duration * 100) : 0;
+  const animationState = scene ? getSceneAnimationState(scene, timelineMs, reducedMotion) : null;
 
-  const close = () => { audio?.pause(); setAudio(null); setActive(null); setSceneIndex(0); setShowNotes(false); setAudioError(""); };
-  const chooseLesson = (lesson: Lesson) => { audio?.pause(); setAudio(null); setActive(lesson); setSceneIndex(0); setShowNotes(false); setAudioError(""); };
+  const close = () => { audio?.pause(); setAudio(null); setAnimationPlaying(false); setTimelineMs(0); setActive(null); setSceneIndex(0); setShowNotes(false); setAudioError(""); };
+  const chooseLesson = (lesson: Lesson) => { audio?.pause(); setAudio(null); setAnimationPlaying(false); setTimelineMs(0); setActive(lesson); setSceneIndex(0); setShowNotes(false); setAudioError(""); };
   const move = (next: number) => {
     if (!active) return;
-    audio?.pause(); setAudio(null); setAudioError("");
+    audio?.pause(); setAudio(null); setAnimationPlaying(false); setTimelineMs(0); animationBaseRef.current = 0; setAudioError("");
     if (next >= active.storyboard.scenes.length) { close(); return; }
     setSceneIndex(Math.max(0, Math.min(next, active.storyboard.scenes.length - 1)));
   };
   const playNarration = async () => {
     if (!active || !scene) return;
     setAudioBusy(true); setAudioError("");
+    setAnimationPlaying(false); setTimelineMs(0); animationBaseRef.current = 0;
     try {
       audio?.pause();
       const response = await fetch(API + "/lessons/" + encodeURIComponent(active.id) + "/scenes/" + sceneIndex + "/audio", { credentials: "include" });
@@ -82,7 +130,14 @@ export default function StudentWebLessonPlayer() {
       const url = URL.createObjectURL(await response.blob());
       audioUrlRef.current = url;
       const player = new Audio(url);
+      player.ontimeupdate = () => {
+        const current = Math.min(scene.durationMs, Math.max(0, player.currentTime * 1000));
+        setTimelineMs(current);
+        animationBaseRef.current = current;
+      };
       player.onended = () => {
+        setTimelineMs(scene.durationMs);
+        animationBaseRef.current = scene.durationMs;
         URL.revokeObjectURL(url);
         if (audioUrlRef.current === url) audioUrlRef.current = null;
       };
@@ -91,6 +146,17 @@ export default function StudentWebLessonPlayer() {
     } catch (cause) {
       setAudioError(cause instanceof Error ? cause.message : "Could not play narration.");
     } finally { setAudioBusy(false); }
+  };
+
+  const toggleAnimation = () => {
+    if (animationPlaying) {
+      animationBaseRef.current = timelineMs;
+      setAnimationPlaying(false);
+      return;
+    }
+    audio?.pause();
+    animationBaseRef.current = timelineMs;
+    setAnimationPlaying(true);
   };
 
   if (active && scene) {
@@ -104,18 +170,27 @@ export default function StudentWebLessonPlayer() {
       <section className="panel web-lesson-scene" aria-live="polite">
         <div className="web-lesson-scene-meta"><span className="pill">{scene.sceneType.replace(/_/g, " ")}</span><span className="muted">{Math.ceil(scene.durationMs / 1000)} sec</span></div>
         <h2>{scene.title}</h2>
-        {scene.onScreenText ? <p className="web-lesson-onscreen">{scene.onScreenText}</p> : null}
+        {scene.onScreenText ? <p className={`web-lesson-onscreen${animationState?.emphasizeText ? " is-emphasized" : ""}`}>{scene.onScreenText}</p> : null}
         {scene.sceneType === "diagram" && scene.visual.items.length ? <div className="web-lesson-diagram" aria-label={scene.visual.label || "Lesson diagram"}>
-          {scene.visual.items.map((item, index) => <div className="web-lesson-diagram-item" key={item}><span>{index + 1}</span><strong>{item}</strong></div>)}
+          {scene.visual.items.map((item, index) => {
+            const visible = animationState?.visibleItems.has(index) ?? true;
+            const highlighted = animationState?.highlightedItems.has(index) ?? false;
+            return <div className={`web-lesson-diagram-item${visible ? "" : " is-hidden"}${highlighted ? " is-highlighted" : ""}`} key={item} aria-hidden={!visible}><span>{index + 1}</span><strong>{item}</strong></div>;
+          })}
           {scene.visual.connections.length ? <ul>{scene.visual.connections.map((connection, index) => <li key={index}>{connection.from} <span aria-hidden="true">→</span> {connection.to}{connection.label ? <small> · {connection.label}</small> : null}</li>)}</ul> : null}
         </div> : null}
         {scene.sceneType === "equation" && scene.visual.equation ? <div className="web-lesson-equation">{scene.visual.equation}</div> : null}
-        {scene.sceneType === "step_sequence" && scene.visual.steps.length ? <ol className="web-lesson-steps">{scene.visual.steps.map((step, index) => <li key={index}><span>{index + 1}</span>{step}</li>)}</ol> : null}
+        {scene.sceneType === "step_sequence" && scene.visual.steps.length ? <ol className="web-lesson-steps">{scene.visual.steps.map((step, index) => {
+          const visible = animationState?.visibleSteps.has(index) ?? true;
+          return <li className={visible ? "" : "is-hidden"} key={index} aria-hidden={!visible}><span>{index + 1}</span>{step}</li>;
+        })}</ol> : null}
         {scene.sceneType === "checkpoint" ? <div className="notice web-lesson-checkpoint">Pause and recall the key idea before finishing this lesson.</div> : null}
         <p className="web-lesson-narration">{scene.narration}</p>
         <div className="row web-lesson-audio">
           <button type="button" className="ghost" disabled={audioBusy} onClick={() => void playNarration()}>{audioBusy ? "Loading narration…" : "▶ Play narration"}</button>
+          <button type="button" className="ghost" onClick={toggleAnimation} disabled={timelineMs >= scene.durationMs && !animationPlaying}>{animationPlaying ? "Pause animation" : timelineMs >= scene.durationMs ? "Replay animation" : "Play animation"}</button>
           {audio ? <button type="button" className="ghost" onClick={() => { audio.pause(); setAudio(null); }}>Stop audio</button> : null}
+          <span className="muted">{Math.floor(timelineMs / 1000)}s / {Math.ceil(scene.durationMs / 1000)}s</span>
           {audioError ? <p className="error" role="alert">{audioError}</p> : null}
         </div>
       </section>

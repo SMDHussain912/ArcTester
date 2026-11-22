@@ -393,7 +393,12 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,tra
 .web-lesson-onscreen{margin:0;padding:14px 16px;border-radius:12px;background:var(--accent-soft);font-size:clamp(15px,2vw,20px);font-weight:750;line-height:1.5}
 .web-lesson-narration{margin:0;font-size:15px;line-height:1.8;white-space:pre-wrap}
 .web-lesson-diagram{display:grid;gap:12px;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--bg)}
-.web-lesson-diagram-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.web-lesson-diagram-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);opacity:1;transform:translateY(0);transition:opacity 260ms ease,transform 260ms ease,border-color 180ms ease,background 180ms ease}
+.web-lesson-diagram-item.is-hidden,.web-lesson-steps li.is-hidden{opacity:0;transform:translateY(10px);pointer-events:none}
+.web-lesson-diagram-item.is-highlighted{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
+.web-lesson-onscreen.is-emphasized{outline:2px solid var(--accent);outline-offset:3px}
+.web-lesson-steps li{transition:opacity 260ms ease,transform 260ms ease}
+@media(prefers-reduced-motion:reduce){.web-lesson-diagram-item,.web-lesson-steps li{transition:none!important;transform:none!important}.web-lesson-diagram-item.is-hidden,.web-lesson-steps li.is-hidden{opacity:1;pointer-events:auto}}
 .web-lesson-diagram-item>span,.web-lesson-steps li>span{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-weight:850;font-size:12px}
 .web-lesson-diagram ul{display:grid;gap:7px;margin:0;padding:12px 0 0;list-style:none;border-top:1px solid var(--border);font-size:12px;line-height:1.5}
 .web-lesson-diagram li span{color:var(--accent);font-weight:900}

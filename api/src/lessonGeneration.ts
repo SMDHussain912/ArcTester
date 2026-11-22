@@ -25,6 +25,20 @@ const VisualSchema = z.object({
   steps: z.array(z.string().trim().min(1).max(240)).max(10).default([]),
 }).strict();
 
+const SceneTimelineActionSchema = z.object({
+  atMs: z.number().int().min(0).max(45000),
+  action: z.enum(["reveal_item", "highlight_item", "reveal_step", "emphasize_text"]),
+  targetIndex: z.number().int().min(0).max(11).optional(),
+  durationMs: z.number().int().min(100).max(10000).default(600),
+}).strict().superRefine((action, ctx) => {
+  if ((action.action === "reveal_item" || action.action === "highlight_item" || action.action === "reveal_step") && action.targetIndex === undefined) {
+    ctx.addIssue({ code: "custom", message: "This timeline action requires a target index.", path: ["targetIndex"] });
+  }
+  if (action.action === "emphasize_text" && action.targetIndex !== undefined) {
+    ctx.addIssue({ code: "custom", message: "Text emphasis does not use a target index.", path: ["targetIndex"] });
+  }
+});
+
 export const LessonSceneSchema = z.object({
   sceneType: z.enum(["title_card", "text_reveal", "diagram", "equation", "step_sequence", "checkpoint"]),
   title: z.string().trim().min(2).max(160),
@@ -32,7 +46,19 @@ export const LessonSceneSchema = z.object({
   onScreenText: z.string().trim().max(500).default(""),
   durationMs: z.number().int().min(2500).max(45000),
   visual: VisualSchema.default({ label: "", items: [], connections: [], equation: "", steps: [] }),
+  timeline: z.array(SceneTimelineActionSchema).max(48).default([]),
 }).strict().superRefine((scene, ctx) => {
+  scene.timeline.forEach((action, actionIndex) => {
+    if (action.atMs >= scene.durationMs) {
+      ctx.addIssue({ code: "custom", message: "Timeline actions must start before the scene ends.", path: ["timeline", actionIndex, "atMs"] });
+    }
+    if ((action.action === "reveal_item" || action.action === "highlight_item") && (action.targetIndex ?? -1) >= scene.visual.items.length) {
+      ctx.addIssue({ code: "custom", message: "Timeline item actions must target a visible diagram item.", path: ["timeline", actionIndex, "targetIndex"] });
+    }
+    if (action.action === "reveal_step" && (action.targetIndex ?? -1) >= scene.visual.steps.length) {
+      ctx.addIssue({ code: "custom", message: "Timeline step actions must target an existing step.", path: ["timeline", actionIndex, "targetIndex"] });
+    }
+  });
   if (scene.sceneType === "diagram" && scene.visual.items.length < 2) {
     ctx.addIssue({ code: "custom", message: "Diagram scenes need at least two visual items.", path: ["visual", "items"] });
   }
