@@ -29,10 +29,11 @@ export const CreateTestSchema = z
     topics: z.array(z.string().trim().min(1)).max(100).optional(),
     topicFilters: z.array(z.object({
       subject: z.string().trim().min(1).max(80),
-      topic: z.string().trim().min(1).max(80),
+      topic: z.string().trim().min(1).max(100),
     })).max(300).optional(),
     difficulty: z.enum(["any", "easy", "medium", "hard"]).default("any"),
     count: z.number().int().min(1).max(200).optional(),
+    durationMinutes: z.number().int().min(5).max(180).optional(),
   })
   .superRefine((value, ctx) => {
     if ((value.mode === "practice" || value.mode === "speedRound") && !(value.subjects?.length || value.subject)) {
@@ -125,10 +126,11 @@ export interface SubmitSummary {
 const MOCK_MINUTES = 180;
 const MINUTES_PER_QUESTION = 0.9;
 
-export function minutesFor(mode: TestMode, questionCount: number): number {
+export function minutesFor(mode: TestMode, questionCount: number, durationMinutes?: number): number {
   if (mode === "mock") return MOCK_MINUTES;
   if (mode === "speedRound") return 5;
   if (mode === "dailyChallenge") return 10;
+  if (durationMinutes !== undefined) return Math.max(5, Math.min(180, Math.floor(durationMinutes)));
   return Math.max(5, Math.round(questionCount * MINUTES_PER_QUESTION));
 }
 
@@ -404,7 +406,7 @@ export async function createTest(
         mode: input.mode,
         userId,
         startedAt: now,
-        deadline: new Date(now.getTime() + minutesFor(input.mode, selected.length) * 60000),
+        deadline: new Date(now.getTime() + minutesFor(input.mode, selected.length, input.durationMinutes) * 60000),
       },
     });
     await tx.attemptAnswer.createMany({
