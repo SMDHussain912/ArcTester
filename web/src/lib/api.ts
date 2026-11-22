@@ -145,10 +145,22 @@ export interface LearningConcept {
   commonMistakes: string[];
 }
 
+export interface OfflineLearningQuestion {
+  id: number;
+  subject: string;
+  topic: string | null;
+  text: string;
+  options: string[];
+  difficulty: number;
+}
+
 export interface OfflineLearningPackage {
+  schemaVersion: number;
+  practiceOnly: boolean;
   total: number;
-  subjects: Array<{ name: string; count: number }>;
+  subjects: string[];
   exportedAt: string;
+  questions: OfflineLearningQuestion[];
 }
 
 export interface IntegrityResponse {

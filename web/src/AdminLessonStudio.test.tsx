@@ -65,16 +65,11 @@ describe("AdminLessonStudio", () => {
     expect(screen.getByText(/Imported stacks.lesson.json as an unpublished draft/)).toBeInTheDocument();
   });
 
-  it("generates a draft from source text, opens it, previews scenes and saves edits", async () => {
-    let generated = false;
+  it("opens an existing draft, reviews and publishes it without remote generation", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.pathname === "/admin/lesson-drafts" && (!init?.method || init.method === "GET")) {
-        return response({ drafts: generated ? [draft] : [] });
-      }
-      if (url.pathname === "/admin/lesson-drafts/generate" && init?.method === "POST") {
-        generated = true;
-        return response({ draft }, 201);
+        return response({ drafts: [draft] });
       }
       if (url.pathname === "/admin/lesson-drafts/draft-1" && (!init?.method || init.method === "GET")) {
         return response({ draft });
@@ -90,18 +85,16 @@ describe("AdminLessonStudio", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminLessonStudio />);
 
-    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Stacks" } });
-    fireEvent.change(screen.getByLabelText("Source title"), { target: { value: "Stack notes" } });
-    fireEvent.change(screen.getByLabelText("Source material"), { target: { value: "Stack is a linear data structure that follows last in first out order. Push adds to the top and pop removes from the top. ".repeat(2) } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate lesson draft" }));
-
+    expect(await screen.findByRole("heading", { name: "Lesson Studio" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate lesson draft" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Stack basics")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open draft" }));
     expect(await screen.findByRole("heading", { name: "Review lesson draft" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "3 scenes" })).toBeInTheDocument();
     expect(screen.getByLabelText("Scene 3 on-screen text")).toHaveValue("Which pops first?");
 
     fireEvent.change(screen.getByLabelText("Lesson title"), { target: { value: "Stack operations" } });
     fireEvent.change(screen.getByLabelText("Scene 2 title"), { target: { value: "Push operation visual" } });
-    expect(screen.getByLabelText("Scene 2 title")).toHaveValue("Push operation visual");
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/admin/lesson-drafts/draft-1"),
@@ -119,6 +112,6 @@ describe("AdminLessonStudio", () => {
       expect.objectContaining({ method: "POST", credentials: "include" }),
     ));
     expect(await screen.findByText("Published · Student visible")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save draft" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/admin/lesson-drafts/generate"))).toBe(false);
   });
 });

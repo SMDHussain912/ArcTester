@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
-const MAX_SOURCE_CHARS = 30_000;
-const MAX_FILE_BYTES = 120 * 1024;
 const MAX_IMPORT_FILE_BYTES = 256 * 1024;
 
 type DraftSummary = {
@@ -28,7 +26,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export default function AdminLessonStudio() {
-  const fileRef = useRef<HTMLInputElement>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -36,12 +33,6 @@ export default function AdminLessonStudio() {
   const [title, setTitle] = useState("");
   const [scriptText, setScriptText] = useState("");
   const [storyboardText, setStoryboardText] = useState("");
-  const [subject, setSubject] = useState("Computer Science");
-  const [topic, setTopic] = useState("");
-  const [titleHint, setTitleHint] = useState("");
-  const [sourceTitle, setSourceTitle] = useState("");
-  const [sourceText, setSourceText] = useState("");
-  const [objectivesText, setObjectivesText] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,8 +47,7 @@ export default function AdminLessonStudio() {
     try {
       const result = await request<{draft:DraftRecord}>(`/admin/lesson-drafts/${encodeURIComponent(id)}`);
       const draft = result.draft;
-      setSelectedId(draft.id); setSelectedStatus(draft.status); setTitle(draft.title); setSubject(draft.subject); setTopic(draft.topic);
-      setSourceTitle(draft.sourceTitle); setSourceText(draft.sourceText);
+      setSelectedId(draft.id); setSelectedStatus(draft.status); setTitle(draft.title);
       setScriptText(JSON.stringify(JSON.parse(draft.scriptJson), null, 2));
       setStoryboardText(JSON.stringify(JSON.parse(draft.storyboardJson), null, 2));
       setNotice(`Opened draft · ${draft.provider} / ${draft.model}`);
@@ -70,33 +60,6 @@ export default function AdminLessonStudio() {
     void request<{drafts:DraftSummary[]}>("/admin/lesson-drafts").then(result => { if (active) setDrafts(result.drafts || []); }).catch(e => { if (active) setError((e as Error).message); });
     return () => { active = false; };
   }, []);
-
-  async function readFile(file: File) {
-    setError(""); setNotice("");
-    const ext = file.name.toLowerCase().split(".").pop();
-    if (!["txt", "md", "json"].includes(ext || "")) {
-      setError("Supported source files are TXT, Markdown (.md), and text-based JSON. PDF/DOCX extraction is not included in this part.");
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setError("The source file is too large. Choose a text file under 120 KB.");
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    try {
-      const text = await file.text();
-      if (text.length > MAX_SOURCE_CHARS) {
-        setError("The source exceeds 30,000 characters. Trim it to the lesson topic before generating.");
-        return;
-      }
-      setSourceTitle(file.name);
-      setSourceText(text);
-      setNotice(`Loaded ${file.name} · ${text.length.toLocaleString()} characters`);
-    } catch {
-      setError("Could not read that file. Try a plain-text source.");
-    }
-  }
 
   async function importLessonPackage(file: File) {
     setError(""); setNotice("");
@@ -122,28 +85,6 @@ export default function AdminLessonStudio() {
       setBusy(false);
       if (importFileRef.current) importFileRef.current.value = "";
     }
-  }
-
-  async function generate() {
-    setError(""); setNotice("");
-    if (sourceText.trim().length < 100) { setError("Add at least 100 characters of source material."); return; }
-    if (sourceText.length > MAX_SOURCE_CHARS) { setError("Source material must be 30,000 characters or less."); return; }
-    if (!subject.trim() || !topic.trim() || !sourceTitle.trim()) { setError("Subject, topic and source title are required."); return; }
-    setBusy(true);
-    try {
-      const result = await request<{draft:DraftRecord}>("/admin/lesson-drafts/generate", {
-        method: "POST",
-        body: JSON.stringify({
-          subject: subject.trim(), topic: topic.trim(), titleHint: titleHint.trim() || undefined,
-          learningObjectives: objectivesText.split(/\r?\n/).map(x => x.trim()).filter(Boolean),
-          sourceTitle: sourceTitle.trim(), sourceText: sourceText.trim(),
-        }),
-      });
-      await refreshDrafts();
-      await openDraft(result.draft.id);
-      setNotice("Generated a new draft. Review and save your edits; nothing has been published.");
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
   }
 
   const parsedStoryboard = useMemo(() => {
@@ -219,29 +160,20 @@ export default function AdminLessonStudio() {
   }
 
   return <div className="stack admin-lesson-studio">
-    <div className="admin-page-title"><div><p className="eyebrow">LESSON CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Import a prepared lesson package or optionally generate a draft from source notes. Review and preview before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
+    <div className="admin-page-title"><div><p className="eyebrow">LESSON CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Import a prepared static lesson package, then review and preview it before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
     {error && <div className="admin-alert error" role="alert">{error}</div>}
     {notice && <div className="admin-alert success" role="status">{notice}</div>}
     <div className="admin-two-col lesson-studio-layout">
       <section className="admin-panel">
-        <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · SOURCE</p><h2>Prepare lesson material</h2></div></div>
-        <label>Source file (.txt, .md, .json)<input ref={fileRef} type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void readFile(file); }}/></label>
-        <p className="muted">Text-based source files are read in the admin browser and sent to the authenticated server only when you choose to generate. Max 30,000 characters.</p>
+        <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · IMPORT</p><h2>Prepared lesson package</h2></div></div>
+        <p className="muted">Prepare lesson JSON on your authoring machine with the local static lesson generator or the documented package format. This admin flow imports and validates the finished package; it does not call a hosted lesson-writing model.</p>
         <label>Import finished lesson package (.json)<input ref={importFileRef} aria-label="Import finished lesson package" type="file" accept=".json,application/json" disabled={busy} onChange={e => { const file = e.target.files?.[0]; if (file) void importLessonPackage(file); }}/></label>
-        <p className="muted">Import a prepared lesson script and storyboard directly as a draft—no AI generation or provider call. The server validates the package before saving. Max 256 KB.</p>
-        <div className="admin-two-col">
-          <label>Subject<input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Computer Science"/></label>
-          <label>Topic<input value={topic} onChange={e => setTopic(e.target.value)} placeholder="Stacks and queues"/></label>
-          <label>Lesson title (optional)<input value={titleHint} onChange={e => setTitleHint(e.target.value)} placeholder="Stack operations explained"/></label>
-          <label>Source title<input value={sourceTitle} onChange={e => setSourceTitle(e.target.value)} placeholder="Unit 2 notes"/></label>
-        </div>
-        <label>Learning objectives (one per line)<textarea rows={3} value={objectivesText} onChange={e => setObjectivesText(e.target.value)} placeholder={"Explain LIFO\nTrace push and pop operations"}/></label>
-        <label>Source material<textarea rows={9} value={sourceText} onChange={e => setSourceText(e.target.value)} placeholder="Paste or load the source notes here…"/></label>
-        <div className="row wrap"><span className="muted">{sourceText.length.toLocaleString()} / {MAX_SOURCE_CHARS.toLocaleString()} characters</span><button className="primary" disabled={busy || sourceText.trim().length < 100 || !topic.trim() || !sourceTitle.trim()} onClick={() => void generate()}>{busy ? "Working…" : "Generate lesson draft"}</button></div>
+        <p className="muted">The package is saved as an unpublished draft. Review the script and storyboard, then publish it explicitly. Max 256 KB.</p>
+        <p className="muted">Format: docs/STATIC_LESSON_IMPORT_FORMAT.md · Generator: api/scripts/generate_static_lesson.py</p>
       </section>
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">DRAFT LIBRARY</p><h2>Saved drafts ({drafts.length})</h2></div></div>
-        {!drafts.length ? <p className="muted">No lesson drafts yet. Generate one from source material.</p> :
+        {!drafts.length ? <p className="muted">No drafts yet. Import a prepared lesson package to create the first draft.</p> :
           <div className="stack">{drafts.map(draft => <article className="study-material-admin-card" key={draft.id}>
             <div className="study-material-admin-main"><div><strong>{draft.title}</strong><p className="muted">{draft.subject} · {draft.topic}</p><small>{new Date(draft.updatedAt).toLocaleString()}</small></div><span className="status status-pending">{draft.status}</span></div>
             <button className="button button-secondary" disabled={busy} onClick={() => void openDraft(draft.id)}>Open draft</button>
