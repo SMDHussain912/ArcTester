@@ -46,6 +46,8 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onUpdat
     if (mode === "file") {
       if (!file) {
         if (!editingId) return setError("Choose a file to upload.");
+        const existing = materials.find((item) => item.id === editingId);
+        if (!existing?.fileName) return setError("Choose a file to upload, or switch back to the link option to keep this resource.");
         const saved = await onUpdate(editingId, { ...metadata, url: "" });
         if (saved !== false) reset();
         return;
