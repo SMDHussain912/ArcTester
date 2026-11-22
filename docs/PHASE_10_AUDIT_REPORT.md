@@ -47,8 +47,8 @@ This is a code and repository-state audit, not a claim that every production or 
 - [ ] Perform TalkBack/screen-reader and keyboard-only checks.
 - [ ] Verify admin static JSON import, validation errors, draft editing, publish confirmation, and student visibility with real accounts.
 - [ ] Verify lesson text remains available when NVIDIA lesson generation and TTS are unconfigured.
-- [x] Phase 10 PR #176 exact-head CI run #44969090631 passed all five jobs on commit `1e74e20c9f44c62ad56887ca4654c1dea6324a22`.
-- [x] Phase 10 exact-head Android build run #44969090601 passed and produced `arctester-android-apk` (33,626,409 bytes; SHA-256 `b1084a09bd67a75ba9e3fbe4da26a40a65401ecbce1d43be06e3d27d07a703bf`).
+- [x] Phase 10 PR #176 exact-head CI run #44969600169 passed all five jobs on commit `df5e8cad45bd4ca26ab61bddfb4dd294476cde98`.
+- [x] Phase 10 exact-head Android build run #44969600269 passed and produced `arctester-android-apk` (33,626,403 bytes; SHA-256 `9d7f5d337cc31b3cb579670dfddfada5724c44654179ef19db4ef16ec3862d02`).
 
 ## Decision
 
