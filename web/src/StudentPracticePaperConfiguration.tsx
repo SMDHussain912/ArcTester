@@ -1,4 +1,5 @@
 type PracticeDifficulty = "any" | "easy" | "medium" | "hard";
+type PracticeQuestionType = "mcq" | "multi_select" | "true_false" | "fill_blank" | "numeric" | "matching";
 interface StudentPracticePaperConfigurationProps {
   selectedSubjects: string[];
   questionCount: number;
