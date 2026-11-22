@@ -887,7 +887,7 @@ export default function App() {
         ? { mode, count: 10 }
         : mistakes
           ? { mode, count: 20 }
-          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count };
+          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count, durationMinutes: config.durationMinutes };
       const created = await api<Test>("/tests", { method: "POST", body: JSON.stringify(request) });
       setTest(created);
       setResult(null);
