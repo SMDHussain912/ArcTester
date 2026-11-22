@@ -16,7 +16,7 @@ type Props = {
   onDelete: (id: string) => void;
   onRefresh: () => void;
 };
-const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const ACCEPTED = ".pdf,.txt,.md,.docx,.pptx,.xlsx,.png,.jpg,.jpeg";
 type Mode = "link" | "file";
