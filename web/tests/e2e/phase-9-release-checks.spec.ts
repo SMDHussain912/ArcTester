@@ -14,12 +14,12 @@ test.describe("Phase 9 release checks", () => {
         return !(element.innerText.trim() || element.getAttribute("aria-label") || element.getAttribute("aria-labelledby"));
       }).length,
     );
-    expect(unlabeledButtons, "Every button should have an accessible name").toHaveLength(0);
+    expect(unlabeledButtons, "Every button should have an accessible name").toBe(0);
 
     const imagesWithoutAlt = await page.locator("img").evaluateAll((images) =>
       images.filter((image) => !image.hasAttribute("alt")).length,
     );
-    expect(imagesWithoutAlt, "Images must declare alt text (empty is valid for decorative images)").toHaveLength(0);
+    expect(imagesWithoutAlt, "Images must declare alt text (empty is valid for decorative images)").toBe(0);
 
     const viewport = await page.evaluate(() => ({
       width: document.documentElement.clientWidth,
