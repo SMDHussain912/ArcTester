@@ -1,10 +1,9 @@
+import { createHash } from "node:crypto";
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { badRequest, notFound } from "./errors.js";
-import { LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
 import { LessonScriptSchema, LessonStoryboardSchema } from "./lessonGeneration.js";
 
 const UpdateLessonDraftSchema = z.object({
@@ -36,15 +35,22 @@ export function validateLessonDraftForPublish(scriptJson: string, storyboardJson
   return { script, storyboard };
 }
 
+
+type LessonAudioStorageConfig = { baseUrl: string; bucket: string; serviceKey: string };
+function getLessonAudioStorageConfig(): LessonAudioStorageConfig {
+  const baseUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const bucket = process.env.SUPABASE_AUDIO_BUCKET?.trim() || "arctester-lesson-audio";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!baseUrl || !serviceKey) throw new Error("LESSON_AUDIO_STORAGE_NOT_CONFIGURED");
+  return { baseUrl, bucket, serviceKey };
+}
+function lessonAudioObjectUrl(config: LessonAudioStorageConfig, storagePath: string): string {
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${encodedPath}`;
+}
+
 export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
-  const speechLimit = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Lesson voice limit reached. Try again later." },
-  });
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
@@ -71,37 +77,93 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, speechLimit, async (req: AuthedRequest, res, next) => {
+  router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Lesson narration is available to student accounts." });
       const id = z.string().trim().min(1).max(64).parse(req.params.id);
       const sceneIndex = z.coerce.number().int().min(0).max(23).parse(req.params.sceneIndex);
-      const draft = await db.lessonDraft.findFirst({
-        where: { id, status: "PUBLISHED" },
-        select: { storyboardJson: true },
-      });
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { storyboardJson: true } });
       if (!draft) return next(notFound("Published lesson was not found."));
-      let storyboard;
-      try { storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown); }
-      catch { return next(badRequest("This lesson's storyboard is invalid.")); }
+      const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
       const scene = storyboard.scenes[sceneIndex];
       if (!scene) return next(notFound("Lesson scene was not found."));
-      const audio = await synthesizeLessonSpeech(scene.narration);
-      res.setHeader("Content-Type", "audio/wav");
-      res.setHeader("Content-Length", String(audio.length));
-      res.setHeader("Cache-Control", "private, no-store");
+      const narrationHash = createHash("sha256").update(scene.narration.trim()).digest("hex");
+      const asset = await db.lessonAudioAsset.findUnique({ where: { lessonDraftId_sceneIndex: { lessonDraftId: id, sceneIndex } } });
+      if (!asset || asset.narrationHash !== narrationHash) return res.status(404).json({ error: "Audio has not been prepared for this scene yet." });
+      const storage = getLessonAudioStorageConfig();
+      const objectUrl = lessonAudioObjectUrl(storage, asset.storagePath);
+      const response = await fetch(objectUrl, { headers: { apikey: storage.serviceKey, authorization: `Bearer ${storage.serviceKey}` } });
+      if (!response.ok) return res.status(502).json({ error: "Stored lesson audio is temporarily unavailable." });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length !== asset.sizeBytes) return res.status(502).json({ error: "Stored lesson audio failed its integrity check." });
+      res.setHeader("Content-Type", asset.mimeType);
+      res.setHeader("Content-Length", String(bytes.length));
+      res.setHeader("Cache-Control", "private, max-age=3600");
       res.setHeader("X-Content-Type-Options", "nosniff");
-      return res.status(200).send(audio);
+      return res.status(200).send(bytes);
     } catch (error) {
       if (error instanceof z.ZodError) return next(badRequest("Lesson ID or scene index is invalid."));
-      if (error instanceof LessonTtsError) {
-        if (error.message === "LESSON_TTS_NOT_CONFIGURED") return res.status(503).json({ error: "Lesson voice is not configured on the server." });
-        if (error.message === "LESSON_TTS_RATE_LIMITED") return res.status(429).json({ error: "The speech provider is rate-limiting requests. Try again later." });
-        if (error.message === "LESSON_TTS_INVALID_AUDIO") return res.status(502).json({ error: "The speech provider returned invalid audio." });
-        return res.status(502).json({ error: "The speech provider could not synthesize this scene." });
-      }
-      if (error instanceof Error && error.name === "AbortError") return res.status(504).json({ error: "Speech synthesis timed out. Try again." });
+      next(error);
+    }
+  });
+
+  router.post("/admin/lesson-drafts/:id/scenes/:sceneIndex/audio", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const id = z.string().trim().min(1).max(64).parse(req.params.id);
+      const sceneIndex = z.coerce.number().int().min(0).max(23).parse(req.params.sceneIndex);
+      const body = z.object({
+        base64: z.string().min(100).max(18_000_000),
+        mimeType: z.enum(["audio/wav", "audio/mpeg", "audio/ogg"]),
+        voice: z.string().trim().min(1).max(160).default("unknown"),
+        model: z.string().trim().min(1).max(160).default("unknown"),
+      }).strict().parse(req.body);
+      const draft = await db.lessonDraft.findUnique({ where: { id }, select: { id: true, storyboardJson: true } });
+      if (!draft) return next(notFound("Lesson draft was not found."));
+      const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
+      const scene = storyboard.scenes[sceneIndex];
+      if (!scene) return next(notFound("Lesson scene was not found."));
+      const bytes = Buffer.from(body.base64, "base64");
+      if (bytes.toString("base64").replace(/=+$/, "") !== body.base64.replace(/=+$/, "")) return next(badRequest("Audio must be valid base64."));
+      if (bytes.length < 44 || bytes.length > 12 * 1024 * 1024) return next(badRequest("Audio must be between 44 bytes and 12 MB."));
+      const validAudio = body.mimeType === "audio/wav"
+        ? bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WAVE"
+        : body.mimeType === "audio/ogg"
+          ? bytes.toString("ascii", 0, 4) === "OggS"
+          : bytes.toString("ascii", 0, 3) === "ID3" || ((bytes[0] === 0xff) && ((bytes[1] & 0xe0) === 0xe0));
+      if (!validAudio) return next(badRequest("Audio bytes do not match the selected audio format."));
+      const storage = getLessonAudioStorageConfig();
+      const narrationHash = createHash("sha256").update(scene.narration.trim()).digest("hex");
+      const extension = body.mimeType === "audio/wav" ? "wav" : body.mimeType === "audio/ogg" ? "ogg" : "mp3";
+      const storagePath = `lesson-audio/${id}/${sceneIndex}-${narrationHash.slice(0, 20)}.${extension}`;
+      const uploadUrl = lessonAudioObjectUrl(storage, storagePath);
+      const uploaded = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          apikey: storage.serviceKey,
+          authorization: `Bearer ${storage.serviceKey}`,
+          "content-type": body.mimeType,
+          "x-upsert": "true",
+        },
+        body: new Uint8Array(bytes),
+      });
+      if (!uploaded.ok) return res.status(502).json({ error: "Audio object storage rejected the upload." });
+      const asset = await db.lessonAudioAsset.upsert({
+        where: { lessonDraftId_sceneIndex: { lessonDraftId: id, sceneIndex } },
+        create: {
+          lessonDraftId: id, uploadedById: req.user!.id, sceneIndex, storagePath,
+          mimeType: body.mimeType, sizeBytes: bytes.length, narrationHash,
+          voice: body.voice, model: body.model,
+        },
+        update: {
+          uploadedById: req.user!.id, storagePath, mimeType: body.mimeType,
+          sizeBytes: bytes.length, narrationHash, voice: body.voice, model: body.model,
+        },
+        select: { id: true, sceneIndex: true, mimeType: true, sizeBytes: true, narrationHash: true, voice: true, model: true, updatedAt: true },
+      });
+      return res.status(201).json({ ok: true, audio: asset });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Audio upload fields or scene index are invalid."));
       next(error);
     }
   });
