@@ -67,7 +67,7 @@ beforeAll(async () => {
     data: { userId: studentId, mode: "practice", finishedAt: new Date(), startedAt: new Date(Date.now() - 60_000) },
   });
   await server.db.attemptAnswer.createMany({
-    data: Array.from({ length: 200 }, (_, index) => ({
+    data: Array.from({ length: 200 }, () => ({
       attemptId: practice.id,
       questionId,
       chosen: 0,
