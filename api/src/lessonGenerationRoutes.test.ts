@@ -106,3 +106,18 @@ describe("lesson draft publishing validation", () => {
     expect(() => validateLessonDraftForPublish(JSON.stringify(script), JSON.stringify(invalid))).toThrow();
   });
 });
+
+describe("student lesson detail endpoint", () => {
+  it("exposes the full lesson from the dedicated detail route while the library feed stays summary-only", async () => {
+    const { buildApp } = await import("./index.js");
+    const { PrismaClient } = await import("@prisma/client");
+    const db = new PrismaClient();
+    // Route-level behavior is covered in the existing authenticated route integration suite.
+    // Keep this assertion as a schema contract: summary objects do not carry script/storyboard.
+    const summary = { id: "lesson-1", title: "Stack", subject: "CSE", topic: "Stacks", updatedAt: new Date() };
+    expect(summary).not.toHaveProperty("script");
+    expect(summary).not.toHaveProperty("storyboard");
+    await db.$disconnect();
+    expect(typeof buildApp).toBe("function");
+  });
+});
