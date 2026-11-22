@@ -1,0 +1,66 @@
+{
+  "title": "C Pointers: Address and Dereference",
+  "subject": "C Programming",
+  "topic": "Pointers",
+  "script": {
+    "title": "C Pointers: Address and Dereference",
+    "learningObjectives": [
+      "Explain what a pointer stores",
+      "Trace address-of and dereference operations"
+    ],
+    "sections": [
+      {
+        "heading": "Pointer basics",
+        "explanation": "A pointer is a variable that stores the memory address of another object. The pointer's type describes the kind of object it points to.",
+        "example": "If an integer variable x is stored at address 1000, an int pointer can store 1000.",
+        "teacherCue": ""
+      },
+      {
+        "heading": "Address and dereference",
+        "explanation": "The address-of operator & obtains an object's address. The unary * operator dereferences a pointer to access the object at that address.",
+        "example": "If p stores the address of x, *p reads x and assigning to *p changes x.",
+        "teacherCue": ""
+      }
+    ],
+    "keyTakeaways": [
+      "A pointer stores an address, not the pointed-to value itself.",
+      "&x obtains x's address; *p accesses the object p points to."
+    ],
+    "groundingNotes": []
+  },
+  "storyboard": {
+    "scenes": [
+      {
+        "sceneType": "title_card",
+        "title": "C pointers",
+        "narration": "This lesson introduces pointer addresses and dereferencing in C.",
+        "onScreenText": "Pointer = stored address",
+        "durationMs": 3000,
+        "visual": {}
+      },
+      {
+        "sceneType": "step_sequence",
+        "title": "Follow the pointer",
+        "narration": "Imagine x contains 25 and lives at address 1000. Pointer p stores that address.",
+        "onScreenText": "int x = 25; int *p = &x;",
+        "durationMs": 7000,
+        "visual": {
+          "steps": [
+            "x contains 25 at address 1000",
+            "p stores address 1000",
+            "*p reads the value 25",
+            "*p = 40 changes x to 40"
+          ]
+        }
+      },
+      {
+        "sceneType": "checkpoint",
+        "title": "Quick recall",
+        "narration": "If p stores the address of x, which expression accesses the value inside x?",
+        "onScreenText": "Choose the expression that dereferences p.",
+        "durationMs": 4000,
+        "visual": {}
+      }
+    ]
+  }
+}
