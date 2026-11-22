@@ -477,7 +477,7 @@ export async function getStudyRecommendations(
   db: PrismaClient,
   userId: number
 ): Promise<StudyRecommendationsReport> {
-  const [weakTopics, history, recentActivity, fullMockCount, mockAttempts] = await Promise.all([
+  const [weakTopics, history, recentActivity, fullMockCountRows, mockAttempts] = await Promise.all([
     getWeakTopics(db, userId),
     getHistory(db, userId, 1, 1),
     db.$queryRaw<Array<{ subject: string; topic: string | null; lastPracticedAt: Date }>>`
@@ -493,7 +493,16 @@ export async function getStudyRecommendations(
       WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY subject, topic
     `,
-    db.attempt.count({ where: { userId, mode: "mock", finishedAt: { not: null } } }),
+    db.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS count FROM (
+        SELECT a.id
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id
+        HAVING COUNT(aa.id) = 200
+      ) completed_full_mocks
+    `,
     db.attempt.findMany({
       where: { userId, mode: "mock", finishedAt: { not: null } },
       orderBy: { finishedAt: "desc" },
@@ -554,7 +563,7 @@ export async function getStudyRecommendations(
   return {
     generatedAt: new Date().toISOString(),
     basedOnAttempts: history.total,
-    basedOnFullMocks: fullMockCount,
+    basedOnFullMocks: Number(fullMockCountRows[0]?.count ?? 0),
     latestFullMockAt: latestFullMock?.finishedAt?.toISOString() ?? null,
     minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
     weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
