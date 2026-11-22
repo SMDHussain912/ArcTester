@@ -11,7 +11,13 @@ import{fireEvent,render,screen,waitFor}from"@testing-library/react";import{after
   await waitFor(()=>expect(downloadButton).toBeEnabled());
   fireEvent.click(downloadButton);
   await waitFor(()=>expect(blob).not.toBeNull());
-  const exported=JSON.parse(await (blob as Blob).text());
+  const exportedText=await new Promise<string>((resolve,reject)=>{
+   const reader=new FileReader();
+   reader.onload=()=>resolve(String(reader.result??""));
+   reader.onerror=()=>reject(reader.error);
+   reader.readAsText(blob as Blob);
+  });
+  const exported=JSON.parse(exportedText);
   expect(exported).toMatchObject({schemaVersion:3,practiceOnly:true,total:1,subjects:["Computer Science"],questions:pack.questions});
   expect(await screen.findByText(/1 questions across 1 subjects/)).toBeInTheDocument();
  });
