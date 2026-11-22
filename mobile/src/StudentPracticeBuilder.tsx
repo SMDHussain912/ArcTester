@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
+export type PracticeQuestionType = "mcq" | "multi_select" | "true_false" | "fill_blank" | "numeric" | "matching";
 export type PracticePaperConfig = {
   subjects: string[];
   topicFilters: { subject: string; topic: string }[];
   difficulty: "any" | "easy" | "medium" | "hard";
   count: number;
   durationMinutes: number;
+  questionTypes: PracticeQuestionType[];
 };
 type BankSubject = { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] };
 type Props = {
@@ -27,6 +29,12 @@ export default function StudentPracticeBuilder({ subjects, total, darkMode, disa
   const [difficulty, setDifficulty] = useState<PracticePaperConfig["difficulty"]>("any");
   const [count, setCount] = useState("20");
   const [durationMinutes, setDurationMinutes] = useState(20);
+  const [questionTypes, setQuestionTypes] = useState<PracticeQuestionType[]>([]);
+  const questionTypeOptions: { value: PracticeQuestionType; label: string }[] = [
+    { value: "mcq", label: "MCQ" }, { value: "multi_select", label: "Multi-select" },
+    { value: "true_false", label: "True/false" }, { value: "fill_blank", label: "Fill blank" },
+    { value: "numeric", label: "Numeric" }, { value: "matching", label: "Matching" },
+  ];
   const selectedPoolCount = selectedSubjects.reduce((sum, subject) => {
     const item = available.find((candidate) => candidate.subject === subject);
     if (!item) return sum;
@@ -51,10 +59,14 @@ export default function StudentPracticeBuilder({ subjects, total, darkMode, disa
     <Text style={[styles.muted, { color: palette.muted }]}>{selectedPoolCount.toLocaleString()} approved questions match the selected subjects and topics. The paper size is capped to this available count.</Text>
     <Text style={[styles.label, { color: palette.muted }]}>DIFFICULTY</Text>
     <View style={styles.chips}>{(["any", "easy", "medium", "hard"] as const).map((level) => <TouchableOpacity key={level} onPress={() => setDifficulty(level)} style={[styles.chip, { borderColor: difficulty === level ? "#2563eb" : palette.border, backgroundColor: difficulty === level ? (darkMode ? "#1d3b68" : "#eff6ff") : palette.chip }]}><Text style={{ color: difficulty === level ? "#2563eb" : palette.muted, fontWeight: "700", fontSize: 12 }}>{level === "any" ? "All" : level[0].toUpperCase() + level.slice(1)}</Text></TouchableOpacity>)}</View>
+    <Text style={[styles.label, { color: palette.muted }]}>QUESTION TYPES</Text>
+    <Text style={[styles.muted, { color: palette.muted }]}>{questionTypes.length ? questionTypes.length + " types selected" : "All question types included"}</Text>
+    <View style={styles.chips}>{questionTypeOptions.map((item) => { const active = questionTypes.includes(item.value); return <TouchableOpacity key={item.value} onPress={() => setQuestionTypes((current) => active ? current.filter((value) => value !== item.value) : [...current, item.value])} style={[styles.chip, { borderColor: active ? "#2563eb" : palette.border, backgroundColor: active ? (darkMode ? "#1d3b68" : "#eff6ff") : palette.chip }]}><Text style={{ color: active ? "#2563eb" : palette.muted, fontWeight: "700", fontSize: 12 }}>{item.label}</Text></TouchableOpacity>; })}</View>
+    <TouchableOpacity onPress={() => setQuestionTypes([])}><Text style={styles.action}>Use all question types</Text></TouchableOpacity>
     <Text style={[styles.label, { color: palette.muted }]}>TIME LIMIT</Text>
     <View style={styles.chips}>{([5, 10, 15, 20, 30, 45, 60, 90, 120, 180] as const).map((minutes) => <TouchableOpacity key={minutes} onPress={() => setDurationMinutes(minutes)} style={[styles.chip, { borderColor: durationMinutes === minutes ? "#2563eb" : palette.border, backgroundColor: durationMinutes === minutes ? (darkMode ? "#1d3b68" : "#eff6ff") : palette.chip }]}><Text style={{ color: durationMinutes === minutes ? "#2563eb" : palette.muted, fontWeight: "700", fontSize: 12 }}>{minutes} min</Text></TouchableOpacity>)}</View>
     <Text style={[styles.muted, { color: palette.muted }]}>{selectedSubjects.length} subjects selected · {selectedPoolCount.toLocaleString()} matching questions · {sourceCount.toLocaleString()} practice-first questions</Text>
-    <TouchableOpacity disabled={disabled || selectedSubjects.length === 0 || total === 0 || selectedPoolCount === 0} onPress={() => onStart({ subjects: selectedSubjects, topicFilters, difficulty, count: selectedCount, durationMinutes })} style={[styles.start, (disabled || selectedSubjects.length === 0 || total === 0 || selectedPoolCount === 0) && { opacity: 0.45 }]}><Text style={styles.startText}>{disabled ? "Resume your saved paper first" : "Create " + selectedCount + "-question · " + durationMinutes + " min paper"}</Text></TouchableOpacity>
+    <TouchableOpacity disabled={disabled || selectedSubjects.length === 0 || total === 0 || selectedPoolCount === 0} onPress={() => onStart({ subjects: selectedSubjects, topicFilters, difficulty, count: selectedCount, durationMinutes, questionTypes })} style={[styles.start, (disabled || selectedSubjects.length === 0 || total === 0 || selectedPoolCount === 0) && { opacity: 0.45 }]}><Text style={styles.startText}>{disabled ? "Resume your saved paper first" : "Create " + selectedCount + "-question · " + durationMinutes + " min paper"}</Text></TouchableOpacity>
   </View>;
 }
 
