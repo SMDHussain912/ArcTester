@@ -4,9 +4,10 @@ export interface PracticeConfig {
   topicFilters: { subject: string; topic: string }[];
   count: number;
   difficulty: PracticeDifficulty;
+  durationMinutes: number;
 }
 
-export function buildPracticeConfig(subjects: string[], selectedTopicKeys: string[], count: number, difficulty: PracticeDifficulty): PracticeConfig {
+export function buildPracticeConfig(subjects: string[], selectedTopicKeys: string[], count: number, difficulty: PracticeDifficulty, durationMinutes = 20): PracticeConfig {
   const selectedSubjectSet = new Set(subjects);
   const seenFilters = new Set<string>();
   const topicFilters = selectedTopicKeys.flatMap((key) => {
@@ -24,5 +25,5 @@ export function buildPracticeConfig(subjects: string[], selectedTopicKeys: strin
       return [];
     }
   });
-  return { subjects: [...subjects], topicFilters, count, difficulty };
+  return { subjects: [...new Set(subjects.filter((subject) => typeof subject === "string" && subject.trim()))], topicFilters, count: Math.max(1, Math.min(200, Math.floor(count || 1))), difficulty, durationMinutes: Math.max(5, Math.min(180, Math.floor(durationMinutes || 20))) };
 }
