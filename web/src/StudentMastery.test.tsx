@@ -18,6 +18,6 @@ describe("StudentMastery", () => {
   render(<StudentMastery />);
   expect(await screen.findByText("Review this question")).toBeInTheDocument();
   expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
-  expect(screen.getByText("No due mistakes right now. Keep practicing; missed lesson questions will appear here.")).toBeInTheDocument();
+  expect(screen.getByText("Review 1 of 1")).toBeInTheDocument();
  });
 });
