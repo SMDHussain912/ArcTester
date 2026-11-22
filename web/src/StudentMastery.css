@@ -15,3 +15,23 @@
  .review-option{align-items:flex-start}
  .review-card h3{font-size:1.05rem}
 }
+
+/* The mastery page uses global panels without padding; scope layout and spacing here. */
+.student-mastery > .panel { padding: clamp(16px, 2.2vw, 24px); min-width:0; }
+.student-mastery .panel-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin:0 0 16px; min-width:0; }
+.student-mastery .panel-header > div { min-width:0; flex:1 1 auto; }
+.student-mastery .panel-header h1,.student-mastery .panel-header h2 { line-height:1.3; margin:4px 0 8px; overflow-wrap:anywhere; }
+.student-mastery .panel-header p { margin:8px 0 0; }
+.student-mastery .stack { gap:14px; }
+.student-mastery .quest-row { padding:14px 0; }
+.student-mastery .review-card { min-width:0; padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--bg); }
+.student-mastery .review-card h3 { overflow-wrap:anywhere; }
+.student-mastery .badge-grid { margin-top:8px; }
+.student-mastery .badge-card { background:var(--bg); }
+.student-mastery .empty-section { padding:16px; border:1px dashed var(--border); border-radius:12px; line-height:1.6; }
+@media(max-width:560px) {
+ .student-mastery > .panel { padding:15px; }
+ .student-mastery .panel-header { gap:10px; }
+ .student-mastery .review-card { padding:14px; }
+ .student-mastery .badge-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
