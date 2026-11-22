@@ -36,13 +36,59 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
     ]);
     if (generation !== generationRef.current) return;
     const failures: string[] = [];
-    if (results[0].status === "fulfilled") setOverview(results[0].value);
+    if (results[0].status === "fulfilled") {
+      const raw = results[0].value as Partial<PerformanceOverview> | null;
+      const practice = raw?.practice as Partial<PerformanceOverview["practice"]> | undefined;
+      setOverview({
+        practice: {
+          completedAttempts: Number(practice?.completedAttempts ?? 0), questions: Number(practice?.questions ?? 0),
+          correct: Number(practice?.correct ?? 0), incorrect: Number(practice?.incorrect ?? 0),
+          unanswered: Number(practice?.unanswered ?? 0), accuracy: typeof practice?.accuracy === "number" ? practice.accuracy : null,
+        },
+        formalExams: {
+          graded: Number(raw?.formalExams?.graded ?? 0),
+          scorePercentage: typeof raw?.formalExams?.scorePercentage === "number" ? raw.formalExams.scorePercentage : null,
+          score: Number(raw?.formalExams?.score ?? 0), maximumScore: Number(raw?.formalExams?.maximumScore ?? 0),
+          reviewRequired: Number(raw?.formalExams?.reviewRequired ?? 0),
+        },
+      });
+    }
     else failures.push("Practice overview: " + (results[0].reason instanceof Error ? results[0].reason.message : "Could not load this section."));
-    if (results[1].status === "fulfilled") setWeakTopics(results[1].value);
+    if (results[1].status === "fulfilled") {
+      const raw = results[1].value as Partial<WeakTopicsReport> | null;
+      setWeakTopics({ subjects: Array.isArray(raw?.subjects) ? raw.subjects.filter(Boolean) : [], topics: Array.isArray(raw?.topics) ? raw.topics.filter(Boolean) : [], weakest: raw?.weakest ?? null });
+    }
     else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
-    if (results[2].status === "fulfilled") setRecommendations(results[2].value);
+    if (results[2].status === "fulfilled") {
+      const raw = results[2].value as Partial<StudyRecommendationsReport> | null;
+      setRecommendations({
+        basedOnAttempts: Number(raw?.basedOnAttempts ?? 0), basedOnFullMocks: Number(raw?.basedOnFullMocks ?? 0),
+        latestFullMockAt: raw?.latestFullMockAt ?? null, minimumAnswers: Number(raw?.minimumAnswers ?? 5),
+        weakAccuracyThreshold: Number(raw?.weakAccuracyThreshold ?? 0.6),
+        performanceExplanation: {
+          headline: String(raw?.performanceExplanation?.headline ?? "Keep practicing to build a reliable performance baseline."),
+          details: Array.isArray(raw?.performanceExplanation?.details) ? raw.performanceExplanation.details.filter((v): v is string => typeof v === "string") : [],
+          answeredQuestions: Number(raw?.performanceExplanation?.answeredQuestions ?? 0),
+          incorrectAnswers: Number(raw?.performanceExplanation?.incorrectAnswers ?? 0),
+          evidenceThreshold: Number(raw?.performanceExplanation?.evidenceThreshold ?? 5),
+          weakAccuracyThreshold: Number(raw?.performanceExplanation?.weakAccuracyThreshold ?? 0.6),
+        },
+        recommendations: Array.isArray(raw?.recommendations) ? raw.recommendations.filter(Boolean) : [],
+      });
+    }
     else failures.push("Study recommendations: " + (results[2].reason instanceof Error ? results[2].reason.message : "Could not load this section."));
-    if (results[3].status === "fulfilled") setFullMockPerformance(results[3].value);
+    if (results[3].status === "fulfilled") {
+      const raw = results[3].value as Partial<FullMockPerformanceReport> | null;
+      setFullMockPerformance({
+        generatedAt: String(raw?.generatedAt ?? new Date().toISOString()), completedFullMocks: Number(raw?.completedFullMocks ?? 0),
+        latestMockAt: raw?.latestMockAt ?? null, questionCount: Number(raw?.questionCount ?? 0),
+        answeredQuestions: Number(raw?.answeredQuestions ?? 0), correct: Number(raw?.correct ?? 0),
+        incorrect: Number(raw?.incorrect ?? 0), unanswered: Number(raw?.unanswered ?? 0),
+        accuracy: typeof raw?.accuracy === "number" ? raw.accuracy : null,
+        subjects: Array.isArray(raw?.subjects) ? raw.subjects.filter(Boolean) : [],
+        topics: Array.isArray(raw?.topics) ? raw.topics.filter(Boolean) : [],
+      });
+    }
     else failures.push("Full-mock analytics: " + (results[3].reason instanceof Error ? results[3].reason.message : "Could not load this section."));
     setErrors(failures);
     setLoading(false);
