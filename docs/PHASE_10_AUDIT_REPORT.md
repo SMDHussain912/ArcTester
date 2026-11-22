@@ -1,55 +1,53 @@
 # Phase 10 — Audit report (in progress)
 
-Audit date: 2026-11-22
+Audit date: 2026-11-23
 
 ## Scope and status
 
-This is a code and repository-state audit, not a claim that every production or physical-device condition has been verified. Phase 10 remains **IN PROGRESS** until Phase 9 is merged, exact-head Android artifact verification finishes, required hosted checks are run against the deployment, and the remaining manual acceptance items are completed or explicitly accepted as NOT VERIFIED.
+This is a repository/code audit. It does not claim production deployment health, physical-device acceptance, or accessibility verification that has not been performed.
 
-## Phase status checked
+- Phase 9 PR #175 is merged (merge commit `c45c2c21b85f82054fe728197eb1fa4fb7288383`).
+- Phase 10 PR #176 is merged (merge commit `e13e5d4246fccaf1e811447424111fc4bd171ef3`).
+- Phase 9 exact-head CI #44967911502 and Android build #44967911493 passed; the APK checksum is recorded in the Phase 9 release report.
+- Phase 10 exact-head CI #44969600169 and Android build #44969600269 passed.
+- Audit-fix code commit `c28d21d7889df73d88f938a28b358fa3511c7215` passed all five CI jobs in run #45070131635: 64 web test files / 220 tests, 59 API test files / 316 tests, lint/build, Playwright E2E, mobile typecheck, PostgreSQL backup/restore, and SQLite migration utility checks.
+- Hosted deployment smoke and physical-device checks remain NOT VERIFIED.
 
-- Phases 0–5: reported complete on main in the roadmap.
-- Phase 6: PR #167 is merged. Offline/reconnect and device/account-isolation checks still require manual verification.
-- Phase 7: PR #170 is merged. Keyboard/screen-reader and real-account lesson publishing checks remain manual.
-- Phase 8: PRs #171–#174 are merged. Approved-bank readiness and physical-device verification remain NOT VERIFIED.
-- Phase 9: PR #175 is open, not merged. Exact-head CI run #44967911502 passed all five jobs on commit `3bd15ab2a03101bb28fcb196b84a2f03186d4d16`. Exact-head Android Build run #44967911493 also passed and produced artifact `arctester-android-apk` (33,626,410 bytes; SHA-256 `21013f6276a117beff4588c9140dbb9832cecec62c790a710ce4fada4a79dd2d`). Hosted deployment smoke and physical-device checks remain NOT VERIFIED.
-- Phase 10: audit/remediation underway; not complete.
+## Lesson content and cost audit
 
-## Lesson-generation cost and content audit
+### Confirmed current behavior
 
-### Confirmed behavior
+1. Published lesson script and storyboard content is stored in PostgreSQL `LessonDraft`; student lesson-open requests read saved content rather than invoking a lesson-writing model.
+2. The current admin authoring path is local static-package generation followed by authenticated JSON import. There is no `POST /admin/lesson-drafts/generate` API route.
+3. Student narration is pre-prepared audio. Admin upload stores scene audio in a private Supabase Storage bucket and records metadata/hash/size in `LessonAudioAsset`; the authenticated student route verifies the narration hash and proxies the stored bytes. No student-time TTS synthesis is wired into the current lesson routes.
+4. The legacy `api/src/lessonTts.ts` helper and tests remain in the repository, but the current lesson router does not call that helper.
+5. Lesson Studio imports a completed JSON package, opens drafts, supports review/edit/preview, and requires explicit publish confirmation. It does not call a hosted model provider.
 
-1. Students read published lesson script and storyboard JSON stored in `LessonDraft`; the student feed does not call `generateLessonContent`.
-2. Admin AI generation is explicitly triggered by `POST /admin/lesson-drafts/generate` and makes two NVIDIA chat-completion requests: one for the script and one for the storyboard.
-3. Student narration calls server-side TTS on demand. `api/src/lessonTts.ts` currently has only an in-process 20 MB LRU-like cache with a 30-minute TTL. Render restarts, cache eviction, and separate instances can cause repeated TTS provider requests.
-4. Lesson Studio previously accepted source files for AI generation, but did not have a direct import path for a completed script + storyboard package.
+### Bugs found and fixed during this audit
 
-### Audit remediation in this branch
+- **Prisma P1012:** removed an invalid `Invitation.audioAssets` relation; retained the valid `LessonDraft.audioAssets` relation. Prisma generation and clean PostgreSQL migrations passed afterward.
+- **Audio upload body parsing:** the audio-upload path had been skipped by the global JSON parser, leaving `req.body` undefined. It now uses an 18 MiB parser, with a regression test for a request larger than the default 1 MiB limit.
+- **Study-material filenames:** an over-escaped CR/LF sanitizer removed ordinary `n` and `r` characters (for example, `notes.pdf` became `otes.pdf`). Both filename sanitizers were corrected and a download-header regression assertion was added.
+- **Offline package type:** the frontend type incorrectly described `subjects` as objects and omitted the returned `questions` payload, leading to explicit `any`. The type now matches the API response and a package-download regression test verifies the question payload is preserved.
+- **Broken Lesson Studio generation control:** the UI called a nonexistent server route and its test mocked that missing route. The dead remote-generation UI/handler was removed; admins use local static generation and import the package.
+- **Test-only Blob compatibility:** the download test now reads the generated Blob with `FileReader`, supported by the CI jsdom environment.
 
-- Add admin-only `POST /admin/lesson-drafts/import`.
-- Validate imported metadata, script, and storyboard with existing strict Zod schemas.
-- Save the imported package as a DRAFT with provider metadata `admin-upload/static-json-v1`; no NVIDIA lesson-generation call.
-- Add a dedicated Lesson Studio JSON package import control (256 KB limit), keeping source-note upload and optional AI draft generation separate.
-- Add backend and frontend tests plus a documented package format.
+## Remaining findings and release gates
 
-### Remaining lesson-system findings
+- **Hosted smoke configuration:** hosted smoke run #45017484276 failed because the required repository Actions URL variables were not configured. Set `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL`, then rerun the hosted smoke workflow against the current deployment. The failure is configuration-related; it is not a successful health check.
+- **Lesson feed payload:** the published lesson feed can return up to 100 full script/storyboard objects. The animation-engine phase should use a lightweight library summary and fetch a single immutable lesson package on demand.
+- **Audio authoring UI:** the API supports admin scene-audio upload, but the current Lesson Studio does not yet provide a complete per-scene audio authoring/upload/review UI. Add this in the local animation/lesson authoring workflow.
+- **Offline question bank:** the current downloadable practice package contains prompts/options but no answer key or explanation. If self-grading offline is required, define a practice-only answer-key contract and keep published exam snapshots excluded.
+- **Manual verification:** physical Android install/startup, low-end-device cold start/memory/frame rate, TalkBack, keyboard/focus/contrast, and real-account lesson publish/student visibility are NOT VERIFIED.
 
-- Published lesson feed currently returns up to 100 full script/storyboard objects at once. Consider a lightweight library-summary endpoint plus a per-lesson detail endpoint to reduce initial payload and improve low-end mobile performance.
-- TTS cache is not durable. Evaluate object storage or a persistent database-backed audio asset record with an admin-controlled generation step. Do not store large audio blobs on Render's ephemeral filesystem.
-- Student narration should remain optional; static text lessons work without TTS credentials.
+## Manual acceptance checklist
 
-## Release and manual verification checklist
-
-- [x] Exact-head Phase 9 CI and Android APK artifact passed (#44967911502, #44967911493).
-- [ ] Merge Phase 9 PR #175; hosted smoke and physical-device acceptance are still pending.
-- [ ] Configure `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL` repository Actions variables; run hosted smoke against the actual deployment.
-- [ ] Install the generated APK on a real Android device; verify launch, lesson flow, offline/reconnect, and low-end responsiveness.
-- [ ] Perform TalkBack/screen-reader and keyboard-only checks.
-- [ ] Verify admin static JSON import, validation errors, draft editing, publish confirmation, and student visibility with real accounts.
-- [ ] Verify lesson text remains available when NVIDIA lesson generation and TTS are unconfigured.
-- [x] Phase 10 PR #176 exact-head CI run #44969600169 passed all five jobs on commit `df5e8cad45bd4ca26ab61bddfb4dd294476cde98`.
-- [x] Phase 10 exact-head Android build run #44969600269 passed and produced `arctester-android-apk` (33,626,403 bytes; SHA-256 `9d7f5d337cc31b3cb579670dfddfada5724c44654179ef19db4ef16ec3862d02`).
+- [ ] Configure `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL`; run hosted smoke successfully against the actual deployment.
+- [ ] Install the verified APK on a physical Android device; verify launch, sign-in, lesson/practice flow, offline/reconnect, and low-end responsiveness.
+- [ ] Perform TalkBack/screen-reader, keyboard-only, focus traversal, and contrast checks on real flows.
+- [ ] Verify admin JSON import, validation errors, draft editing, publish confirmation, and student visibility with real accounts.
+- [ ] Decide whether offline practice needs answer keys/explanations and implement only after confirming the practice-only security boundary.
 
 ## Decision
 
-Static lesson content is already persisted in PostgreSQL; it should not be moved to Render's local filesystem. The new direct JSON import provides a zero-AI-cost authoring path for prewritten content. AI lesson writing remains an optional admin authoring tool, and narration is a separate optional TTS feature.
+The existing CI blockers have been repaired and the audit-fix code commit is green. The next implementation sequence is the animated static lesson engine (local authoring, versioned static packages, storage/playback, validation and review), followed by the shared ChatGPT/Claude MCP. Keep hosted checks and physical-device acceptance explicitly pending until verified.

@@ -2,7 +2,7 @@
 
 **Goal:** a lightweight, mobile-first AP ECET CSE learning app with bite-sized lessons, instant feedback, visible progress, original mascot/art/audio, and no copied Duolingo assets.
 
-**Global rules:** PRs only (never push to main); verify the exact PR head in GitHub Actions before merge; never weaken tests; remove tests only with the feature they cover; keep low-end Android performance, FOSS/free hosting, reduced-motion, sound/haptics controls, and human approval of question content. Complete phases sequentially and report evidence, NOT VERIFIED items, and user-only manual steps.
+**Global rules:** PRs are the default; direct-to-main is allowed only when the user explicitly authorizes it for that task. Verify the exact head in GitHub Actions; never weaken tests; remove tests only with the feature they cover; keep low-end Android performance, FOSS/free hosting, reduced-motion, sound/haptics controls, and human approval of question content. Complete phases sequentially and report evidence, NOT VERIFIED items, and user-only manual steps.
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -15,8 +15,8 @@
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Complete on main via PRs #160–#167; offline/reconnect and device/account-isolation checks remain NOT VERIFIED |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Complete on main via PRs #168–#170; keyboard/screen-reader and real-account lesson publish checks remain NOT VERIFIED |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Complete on main via PRs #171–#174; approved-bank readiness and physical-device verification remain NOT VERIFIED |
-| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | PR #175 open; exact-head CI #44967911502 and Android build #44967911493 passed on 3bd15ab2; APK artifact SHA-256 recorded in Phase 10 report. Hosted and physical-device checks remain NOT VERIFIED |
-| 10 | Final audit and honest completion/manual verification report | PR #176 static lesson import + audit remediation; latest exact-head CI #44969600169 and Android build #44969600269 passed. Audit report docs/PHASE_10_AUDIT_REPORT.md; phase completion waits for Phase 9 merge and manual acceptance evidence |
+| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Implemented and merged via PR #175 (merge commit c45c2c21); exact-head CI #44967911502 and Android build #44967911493 passed on 3bd15ab2. Hosted smoke remains NOT VERIFIED (run #45017484276 failed because required Actions URL variables were unset); physical-device acceptance remains NOT VERIFIED |
+| 10 | Final audit and honest completion/manual verification report | Static lesson import and audit remediation merged via PR #176 (merge commit e13e5d42); Phase 10 exact-head CI #44969600169 and Android build #44969600269 passed. Audit remains IN PROGRESS until hosted smoke and manual acceptance evidence are recorded. Current audit-fix code commit c28d21d7 passed CI run #45070131635 |
 
 A phase is complete only when its full scope is implemented, exact-head CI is green, the PR is merged, and its Phase Report is posted. Reports must include PR links, CI links, NOT VERIFIED items, and manual steps. Never report estimates as verified completion.
 
@@ -72,14 +72,10 @@ Phase 8 parts must not expose answer keys before submission, calculate official 
 
 ## Phase 10 audit and lesson-content cost remediation
 
-- Audit the merged Phases 6–8 and Phase 9 release verification state; report verified CI, pending merge, production checks and manual items separately.
-- Student lessons already read saved PostgreSQL script/storyboard content. AI generation is an admin-triggered authoring action, not a per-student lesson-open action.
-- Add direct admin import of a completed JSON lesson package into a validated DRAFT; this path must not call NVIDIA lesson generation. Keep optional AI draft generation separate.
-- Audit the on-demand TTS cache and published lesson feed payload size; durable audio caching and a summary/detail feed are follow-up optimization candidates, not silently claimed complete.
-- Report: docs/PHASE_10_AUDIT_REPORT.md. Import format: docs/STATIC_LESSON_IMPORT_FORMAT.md.
-- Phase 10 is complete only after the prior release phase is merged and all release/manual acceptance evidence is recorded honestly.
-
-
+- Audit merged Phases 6–10 and current main; distinguish code/CI verification from hosted deployment and physical-device checks.
+- Lesson scripts/storyboards are persisted in PostgreSQL `LessonDraft`. Current authoring is local static-package generation/import; there is no hosted `/admin/lesson-drafts/generate` route or student-time lesson-writing call.
+- Narration is pre-uploaded to private Supabase Storage and served through authenticated API routes using `LessonAudioAsset`; no student-time TTS synthesis is wired into current lesson routes. The legacy `lessonTts.ts` helper remains unused by the lesson router and should be reviewed separately.
+- Phase 10 is complete only after hosted smoke and manual acceptance evidence are recorded honestly.
 
 ## Phase 9 delivery — Release verification
 
@@ -88,4 +84,4 @@ Phase 8 parts must not expose answer keys before submission, calculate official 
 - Playwright release checks cover accessible button names, declared image alt text, main landmark and heading, 320px horizontal overflow, and a student-facing gallery load under throttled 3G/4x CPU conditions.
 - Report: `docs/PHASE_9_RELEASE_VERIFICATION_REPORT.md`.
 
-Phase 9 remains incomplete until exact-head CI and Android artifact workflows pass, hosted smoke is run against configured deployment URLs, and physical-device accessibility/performance checks are recorded. Do not claim TalkBack, device startup, cold-start, memory, or frame-rate results from browser CI.
+Phase 9 implementation is merged and its exact-head CI/Android artifact passed. Phase acceptance remains incomplete until hosted smoke passes against configured deployment URLs and physical-device accessibility/performance checks are recorded. Do not claim TalkBack, device startup, cold-start, memory, or frame-rate results from browser CI.

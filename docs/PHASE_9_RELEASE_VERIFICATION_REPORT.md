@@ -20,18 +20,19 @@ The hosted smoke workflow requires repository Actions variables `ARCTESTER_WEB_U
 
 ## Verification
 
-- Exact-head GitHub Actions: **PENDING** — verify the full CI and Android artifact workflows on this PR head before merge.
-- APK install and startup on a physical Android device: **NOT VERIFIED**.
-- Accessibility with TalkBack/screen reader, keyboard/focus traversal, and contrast review on the actual student flows: **NOT VERIFIED**.
-- Low-end physical device cold start, memory, sustained frame rate and real mobile network: **NOT VERIFIED**.
-- Hosted smoke: **NOT VERIFIED** until the repository variables are configured and the hosted workflow passes against the current deployment.
+- PR #175 merged on 2026-11-22 (merge commit `c45c2c21b85f82054fe728197eb1fa4fb7288383`).
+- Exact-head GitHub Actions run #44967911502 passed all five jobs on commit `3bd15ab2a03101bb28fcb196b84a2f03186d4d16`.
+- Android build #44967911493 passed and produced the APK; SHA-256: `21013f6276a117beff4588c9140dbb9832cecec62c790a710ce4fada4a79dd2d`.
+- Hosted smoke run #45017484276 failed because `ARCTESTER_WEB_URL` was not configured. This is not a successful deployment-health check; configure both URL variables and rerun.
+- APK install/startup on a physical Android device: **NOT VERIFIED**.
+- TalkBack/screen-reader, keyboard/focus traversal, and contrast review on real student flows: **NOT VERIFIED**.
+- Low-end physical device cold start, memory, sustained frame rate, and real mobile network: **NOT VERIFIED**.
 
 ## Manual acceptance
 
-1. Download the APK artifact from the successful Android Build workflow and verify the included SHA-256 file.
-2. Install the APK on a physical Android device; launch, sign in, open a lesson/practice flow, and confirm no crash.
+1. Configure `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL` repository variables and run hosted smoke against the current deployment.
+2. Install the verified APK on a physical Android device; launch, sign in, open a lesson/practice flow, and confirm no crash.
 3. Test reduced motion and keyboard/focus on web; test TalkBack and touch target behavior on Android.
-4. Run the hosted smoke workflow after setting `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL` repository variables.
-5. Record device model, Android version, APK SHA, cold-start observation and any blockers before marking Phase 9 complete.
+4. Record device model, Android version, APK SHA, cold-start observation, and any blockers before marking Phase 9 complete.
 
-Phase 9 is not complete until exact-head CI passes, the PR is merged, the hosted checks are run against the deployment, and the physical-device manual checks are reported honestly.
+Phase 9 implementation is merged. Phase acceptance remains incomplete until hosted smoke passes and physical-device accessibility/performance checks are recorded honestly.
