@@ -649,6 +649,7 @@ model LessonDraft {
 
   @@index([status, updatedAt])
   @@index([createdById])
+  audioAssets LessonAudioAsset[]
 }
 
 
