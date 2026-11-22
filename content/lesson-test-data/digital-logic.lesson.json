@@ -1,0 +1,77 @@
+{
+  "title": "Boolean Algebra: De Morgan's Laws",
+  "subject": "Digital Electronics",
+  "topic": "Boolean Algebra",
+  "script": {
+    "title": "Boolean Algebra: De Morgan's Laws",
+    "learningObjectives": [
+      "State both De Morgan's laws",
+      "Apply De Morgan's laws to a Boolean expression"
+    ],
+    "sections": [
+      {
+        "heading": "Complement of a sum",
+        "explanation": "The complement of an OR expression equals the AND of the complemented terms: NOT(A OR B) = NOT A AND NOT B.",
+        "example": "In Boolean notation, (A + B)' = A'B'.",
+        "teacherCue": ""
+      },
+      {
+        "heading": "Complement of a product",
+        "explanation": "The complement of an AND expression equals the OR of the complemented terms: NOT(A AND B) = NOT A OR NOT B.",
+        "example": "In Boolean notation, (AB)' = A' + B'.",
+        "teacherCue": ""
+      }
+    ],
+    "keyTakeaways": [
+      "Complementing an OR changes it to AND and complements each input.",
+      "Complementing an AND changes it to OR and complements each input."
+    ],
+    "groundingNotes": []
+  },
+  "storyboard": {
+    "scenes": [
+      {
+        "sceneType": "title_card",
+        "title": "De Morgan's laws",
+        "narration": "Use De Morgan's laws to transform complemented Boolean expressions.",
+        "onScreenText": "Complement + swap operator",
+        "durationMs": 3000,
+        "visual": {}
+      },
+      {
+        "sceneType": "equation",
+        "title": "Complement a sum",
+        "narration": "When the whole sum is complemented, complement each variable and replace OR with AND.",
+        "onScreenText": "(A + B)' = A'B'",
+        "durationMs": 6000,
+        "visual": {
+          "equation": "(A + B)' = A' · B'"
+        }
+      },
+      {
+        "sceneType": "step_sequence",
+        "title": "Apply the second law",
+        "narration": "For a complemented product, complement each variable and replace AND with OR.",
+        "onScreenText": "(AB)' = A' + B'",
+        "durationMs": 6000,
+        "visual": {
+          "steps": [
+            "Start with (A · B)'",
+            "Complement A to get A'",
+            "Complement B to get B'",
+            "Change AND to OR",
+            "Result: A' + B'"
+          ]
+        }
+      },
+      {
+        "sceneType": "checkpoint",
+        "title": "Quick recall",
+        "narration": "Which operator replaces AND when the entire product is complemented using De Morgan's second law?",
+        "onScreenText": "Remember: complement and swap.",
+        "durationMs": 4000,
+        "visual": {}
+      }
+    ]
+  }
+}
