@@ -26,7 +26,7 @@ describe("StudentPracticePaperConfiguration", () => {
     expect(screen.getByText(/^Question types/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Time limit"), { target: { value: "60" } });
     expect(onDurationChange).toHaveBeenCalledWith(60);
-    fireEvent.click(screen.getByLabelText("Use all question types"));
+    fireEvent.click(screen.getByRole("button", { name: "Use all question types" }));
     expect(onQuestionTypesChange).toHaveBeenCalledWith([]);
   });
   it("delegates difficulty changes to the parent", () => {
