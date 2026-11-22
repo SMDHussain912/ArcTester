@@ -119,13 +119,15 @@ export function buildApp(database: PrismaClient = db): express.Express {
     })
   );
   app.use(apiRateLimit);
-  // 1 MB JSON body limit by default. The large-payload import routes apply their
-  // own 50 MB parsers below; every other route uses the 1 MB global parser.
+  // Keep the bulk import endpoints on their route-specific parsers. Prepared
+  // lesson audio is base64 JSON (up to 12 MiB decoded), so parse it here with
+  // enough headroom for the encoded payload; ordinary API requests stay at 1 MiB.
   app.use((req, res, next) => {
-    if (req.path === "/admin/questions/import" || req.path === "/analytics/import" || /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path)) {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
       return next();
     }
-    express.json({ limit: /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path) ? "15mb" : "1mb" })(req, res, next);
+    const isLessonAudioUpload = /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path);
+    express.json({ limit: isLessonAudioUpload ? "18mb" : "1mb" })(req, res, next);
   });
   app.use(localCors);
   app.use(cookieCsrfGuard);
