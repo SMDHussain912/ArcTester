@@ -18,6 +18,17 @@ describe("StudentPracticePaperConfiguration", () => {
     fireEvent.change(screen.getByLabelText("Number of questions"), { target: { value: "0" } });
     expect(onQuestionCountChange).toHaveBeenCalledWith(1);
   });
+  it("supports custom time and question type filters", () => {
+    const onDurationChange = vi.fn();
+    const onQuestionTypesChange = vi.fn();
+    render(<StudentPracticePaperConfiguration selectedSubjects={["Math"]} questionCount={15} difficulty="any" durationMinutes={45} onDurationChange={onDurationChange} questionTypes={["numeric"]} onQuestionTypesChange={onQuestionTypesChange} onQuestionCountChange={vi.fn()} onDifficultyChange={vi.fn()} />);
+    expect(screen.getByLabelText("Time limit")).toHaveValue("45");
+    expect(screen.getByLabelText("Question types")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Time limit"), { target: { value: "60" } });
+    expect(onDurationChange).toHaveBeenCalledWith(60);
+    fireEvent.click(screen.getByLabelText("Use all question types"));
+    expect(onQuestionTypesChange).toHaveBeenCalledWith([]);
+  });
   it("delegates difficulty changes to the parent", () => {
     const onDifficultyChange = vi.fn();
     render(<StudentPracticePaperConfiguration selectedSubjects={[]} questionCount={10} difficulty="any" onQuestionCountChange={vi.fn()} onDifficultyChange={onDifficultyChange} />);
