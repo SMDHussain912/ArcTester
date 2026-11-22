@@ -48,7 +48,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
     : timelineMs;
   const animationState = scene ? getSceneAnimationState(scene, narrationTimelineMs, reduceMotion) : null;
   const lessonProgressPct = totalDuration > 0 ? Math.min(100, Math.max(0, (elapsed + narrationTimelineMs) / totalDuration * 100)) : 0;
-  const progressWidth = `${lessonProgressPct}%`;
+  const progressWidth = `${lessonProgressPct}%` as `${number}%`;
 
   const refresh = async () => {
     setLoading(true);

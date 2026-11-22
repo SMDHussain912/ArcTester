@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { getSceneAnimationState, type LessonScene } from "./lessonPlayer";
 
 const animatedScene: LessonScene = {
