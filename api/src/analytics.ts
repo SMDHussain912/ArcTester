@@ -251,7 +251,7 @@ export async function getFullMockPerformance(
         GROUP BY a.id, a."finishedAt"
         HAVING COUNT(aa.id) = 200
       )
-      SELECT COUNT(*)::int AS "completedFullMocks", MAX("finishedAt") AS "latestMockAt"
+      SELECT COUNT(*) AS "completedFullMocks", MAX("finishedAt") AS "latestMockAt"
       FROM full_mocks
     `,
     db.$queryRaw<Array<{ subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>>`
