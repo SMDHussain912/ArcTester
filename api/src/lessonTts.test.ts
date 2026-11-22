@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getLessonTtsConfig, LessonTtsError, synthesizeLessonSpeech } from "./lessonTts.js";
 
 const previousApiKey = process.env.NVIDIA_API_KEY;
+const previousTtsModel = process.env.NVIDIA_TTS_MODEL;
 
 function makeWav() {
   const wav = Buffer.alloc(44);
@@ -24,6 +25,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   if (previousApiKey === undefined) delete process.env.NVIDIA_API_KEY;
   else process.env.NVIDIA_API_KEY = previousApiKey;
+  if (previousTtsModel === undefined) delete process.env.NVIDIA_TTS_MODEL;
+  else process.env.NVIDIA_TTS_MODEL = previousTtsModel;
 });
 
 describe("NVIDIA Magpie lesson TTS", () => {
@@ -34,6 +37,7 @@ describe("NVIDIA Magpie lesson TTS", () => {
 
   it("uses the fixed Magpie deployment and default voice", async () => {
     process.env.NVIDIA_API_KEY = "server-secret";
+    process.env.NVIDIA_TTS_MODEL = "877104f7-e885-42b9-8de8-f6e4c6303969";
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/v1/audio/synthesize");
       expect(init?.method).toBe("POST");
@@ -53,6 +57,7 @@ describe("NVIDIA Magpie lesson TTS", () => {
 
   it("reuses cached scene audio", async () => {
     process.env.NVIDIA_API_KEY = "nvidia-server-key";
+    process.env.NVIDIA_TTS_MODEL = "877104f7-e885-42b9-8de8-f6e4c6303969";
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.headers).toEqual({ authorization: "Bearer nvidia-server-key" });
       return new Response(makeWav(), { status: 200, headers: { "content-type": "audio/wav" } });
