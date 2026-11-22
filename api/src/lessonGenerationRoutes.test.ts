@@ -42,6 +42,13 @@ describe("static lesson package import validation", () => {
       script: { ...script, sections: [] },
       storyboard,
     })).toThrow();
+    expect(() => parseImportedLessonPackage({
+      title: "Different title",
+      subject: "Computer Science",
+      topic: "Stacks",
+      script,
+      storyboard,
+    })).toThrow();
   });
 });
 
