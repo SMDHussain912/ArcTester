@@ -207,6 +207,123 @@ export async function getQuestionPerformance(
   };
 }
 
+export interface FullMockPerformanceRow {
+  subject: string;
+  topic: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+}
+
+export interface FullMockPerformanceReport {
+  generatedAt: string;
+  completedFullMocks: number;
+  latestMockAt: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  subjects: FullMockPerformanceRow[];
+  topics: FullMockPerformanceRow[];
+}
+
+/**
+ * Full mock analytics only includes finished mock attempts with exactly 200
+ * persisted answer rows. Subject/topic labels come from immutable answer
+ * snapshots; unanswered items remain in the paper denominator but not accuracy.
+ */
+export async function getFullMockPerformance(
+  db: PrismaClient,
+  userId: number
+): Promise<FullMockPerformanceReport> {
+  const [metadata, groupedRows] = await Promise.all([
+    db.$queryRaw<Array<{ completedFullMocks: number; latestMockAt: Date | null }>>`
+      WITH full_mocks AS (
+        SELECT a.id, a."finishedAt"
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id, a."finishedAt"
+        HAVING COUNT(aa.id) = 200
+      )
+      SELECT COUNT(*) AS "completedFullMocks", MAX("finishedAt") AS "latestMockAt"
+      FROM full_mocks
+    `,
+    db.$queryRaw<Array<{ subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>>`
+      WITH full_mocks AS (
+        SELECT a.id
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id
+        HAVING COUNT(aa.id) = 200
+      )
+      SELECT
+        COALESCE(NULLIF(aa."subjectSnapshot", ''), s.name) AS subject,
+        CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END AS topic,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+      FROM full_mocks fm
+      INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = fm.id
+      INNER JOIN "Question" q ON q.id = aa."questionId"
+      INNER JOIN "Subject" s ON s.id = q."subjectId"
+      LEFT JOIN "Topic" t ON t.id = q."topicId"
+      GROUP BY subject, topic
+    `,
+  ]);
+
+  const rows = groupedRows.map((row) => ({
+    subject: row.subject,
+    topic: row.topic,
+    correct: Number(row.correct ?? 0),
+    incorrect: Number(row.incorrect ?? 0),
+    unanswered: Number(row.unanswered ?? 0),
+  }));
+  const toPerformanceRow = (subject: string, topic: string | null, counts: { correct: number; incorrect: number; unanswered: number }): FullMockPerformanceRow => {
+    const answeredQuestions = counts.correct + counts.incorrect;
+    const questionCount = answeredQuestions + counts.unanswered;
+    return {
+      subject, topic, questionCount, answeredQuestions,
+      correct: counts.correct, incorrect: counts.incorrect, unanswered: counts.unanswered,
+      accuracy: answeredQuestions > 0 ? counts.correct / answeredQuestions : null,
+    };
+  };
+  const bySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
+  const topics = rows.map((row) => toPerformanceRow(row.subject, row.topic, row));
+  for (const row of rows) {
+    const counts = bySubject.get(row.subject) ?? { correct: 0, incorrect: 0, unanswered: 0 };
+    counts.correct += row.correct;
+    counts.incorrect += row.incorrect;
+    counts.unanswered += row.unanswered;
+    bySubject.set(row.subject, counts);
+  }
+  const subjects = [...bySubject.entries()]
+    .map(([subject, counts]) => toPerformanceRow(subject, null, counts))
+    .sort((a, b) => a.subject.localeCompare(b.subject));
+  topics.sort((a, b) => a.subject.localeCompare(b.subject) || (a.topic ?? "").localeCompare(b.topic ?? ""));
+  const total = subjects.reduce((sum, row) => ({
+    correct: sum.correct + row.correct,
+    incorrect: sum.incorrect + row.incorrect,
+    unanswered: sum.unanswered + row.unanswered,
+  }), { correct: 0, incorrect: 0, unanswered: 0 });
+  const answeredQuestions = total.correct + total.incorrect;
+  return {
+    generatedAt: new Date().toISOString(),
+    completedFullMocks: Number(metadata[0]?.completedFullMocks ?? 0),
+    latestMockAt: metadata[0]?.latestMockAt ? new Date(metadata[0].latestMockAt).toISOString() : null,
+    questionCount: answeredQuestions + total.unanswered,
+    answeredQuestions, ...total,
+    accuracy: answeredQuestions > 0 ? total.correct / answeredQuestions : null,
+    subjects, topics,
+  };
+}
+
 export interface PerformanceOverview {
   generatedAt: string;
   practice: {
