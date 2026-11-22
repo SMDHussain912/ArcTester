@@ -2,6 +2,31 @@
 // These mirror the server-side schemas in api/src/*.ts so the frontend can
 // type its responses without importing from the backend.
 
+export interface FullMockPerformanceRow {
+  subject: string;
+  topic: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+}
+
+export interface FullMockPerformanceReport {
+  generatedAt: string;
+  completedFullMocks: number;
+  latestMockAt: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  subjects: FullMockPerformanceRow[];
+  topics: FullMockPerformanceRow[];
+}
+
 export interface PerformanceOverview {
   practice: {
     completedAttempts: number;
