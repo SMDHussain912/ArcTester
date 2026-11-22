@@ -89,7 +89,7 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onUpdat
         <label>Subject<input value={form.subject} onChange={(event) => set("subject", event.target.value)}/></label>
         <label>Topic<input value={form.topic} onChange={(event) => set("topic", event.target.value)} placeholder="Arrays and linked lists"/></label>
         {mode === "link" ? <label>HTTPS resource link<input type="url" inputMode="url" value={form.url} onChange={(event) => set("url", event.target.value)} placeholder="https://example.org/notes.pdf"/></label> :
-          <label>Choose study file<input type="file" accept={ACCEPTED} disabled={busy} onChange={(event) => setFile(event.target.files?.[0] ?? null)}/><small className="muted">{file ? file.name + " · " + (file.size / 1024 / 1024).toFixed(2) + " MB" : editingId ? "Choose a file only if replacing the existing file." : "PDF, TXT, Markdown, DOCX, PPTX, XLSX, PNG or JPG · max 10 MB"}</small></label>}
+          <label>Choose study file<input aria-label="Choose study file" type="file" accept={ACCEPTED} disabled={busy} onChange={(event) => setFile(event.target.files?.[0] ?? null)}/><small className="muted">{file ? file.name + " · " + (file.size / 1024 / 1024).toFixed(2) + " MB" : editingId ? "Choose a file only if replacing the existing file." : "PDF, TXT, Markdown, DOCX, PPTX, XLSX, PNG or JPG · max 10 MB"}</small></label>}
       </div>
       <label>Description<textarea rows={3} value={form.description} onChange={(event) => set("description", event.target.value)} placeholder="What students will learn from this resource."/></label>
       {error && <p className="error" role="alert">{error}</p>}
