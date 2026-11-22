@@ -37,14 +37,11 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
   loadLessonsRef.current = loadLessons;
   const palette = darkMode ? mobilePalette.dark : mobilePalette.light;
   const sceneProgress = useRef(new Animated.Value(0)).current;
-  const diagramMotion = useRef(new Animated.Value(0)).current;
   const sceneCount = activeLesson?.storyboard.scenes.length ?? 0;
   const safeIndex = clampSceneIndex(sceneIndex, sceneCount);
   const scene = activeLesson?.storyboard.scenes[safeIndex] ?? null;
   const totalDuration = activeLesson ? getLessonDurationMs(activeLesson.storyboard) : 0;
   const elapsed = activeLesson ? getElapsedBeforeScene(activeLesson.storyboard, safeIndex) : 0;
-  const progressStart = totalDuration > 0 ? Math.min(1, elapsed / totalDuration) : 0;
-  const progressEnd = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;
   const audioSceneKey = activeLesson ? `${activeLesson.id}:${safeIndex}` : "";
   const narrationTimelineMs = voiceSceneKey === audioSceneKey && audioStatus.isLoaded && audioStatus.playing && Number.isFinite(audioStatus.currentTime)
     ? Math.min(scene?.durationMs ?? 0, Math.max(0, audioStatus.currentTime * 1000))
@@ -106,6 +103,13 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
     }, 40);
     return () => clearInterval(timer);
   }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount, voiceSceneKey, audioStatus.isLoaded, audioStatus.playing, audioSceneKey]);
+
+  useEffect(() => {
+    if (voiceSceneKey !== audioSceneKey || !audioStatus.isLoaded || !Number.isFinite(audioStatus.currentTime)) return;
+    const current = Math.min(scene?.durationMs ?? 0, Math.max(0, audioStatus.currentTime * 1000));
+    timelineRef.current = current;
+    setTimelineMs(current);
+  }, [voiceSceneKey, audioSceneKey, audioStatus.isLoaded, audioStatus.currentTime, scene?.durationMs]);
 
   useEffect(() => {
     if (!activeLesson) return;

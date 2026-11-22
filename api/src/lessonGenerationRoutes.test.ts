@@ -58,9 +58,9 @@ describe("lesson animation timeline validation", () => {
       ...storyboard,
       scenes: [
         storyboard.scenes[0],
-        { ...storyboard.scenes[1], timeline: [
-          { atMs: 500, action: "reveal_step", targetIndex: 0 },
-          { atMs: 1200, action: "highlight_item", targetIndex: 0, durationMs: 800 },
+        { ...storyboard.scenes[1], sceneType: "diagram", visual: { label: "Stack", items: ["A", "B"], connections: [], equation: "", steps: [] }, timeline: [
+          { atMs: 500, action: "reveal_item", targetIndex: 0 },
+          { atMs: 1200, action: "highlight_item", targetIndex: 1, durationMs: 800 },
           { atMs: 2000, action: "emphasize_text", durationMs: 500 },
         ] },
         storyboard.scenes[2],
