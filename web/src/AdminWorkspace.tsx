@@ -90,6 +90,19 @@ export default function AdminWorkspace(p:Props){
  useEffect(()=>{void Promise.all([loadCatalog(),loadQuestions(1),loadExams(),loadStudents(),loadResults(),loadAnnouncements()]).catch(e=>setError(e.message));},[]);
  async function loadStudyMaterials(){const r=await api<{materials:StudyMaterial[]}>("/admin/study-materials");setStudyMaterials(r.materials??[]);}
  async function uploadStudyMaterial(payload:{title:string;description:string;subject:string;topic:string;url:string}):Promise<boolean>{const uploaded=await run(async()=>{await api("/admin/study-materials",{method:"POST",body:JSON.stringify(payload)});setNotice("Study link saved as a draft. Publish it when ready.");});if(uploaded){try{await loadStudyMaterials();}catch(e){setError("Uploaded successfully, but the library could not refresh: "+(e as Error).message);}}return uploaded;}
+ async function uploadStudyMaterialFile(payload:{title:string;description:string;subject:string;topic:string;url:string},file:File,id?:string):Promise<boolean>{
+  const query=new URLSearchParams({title:payload.title,description:payload.description,subject:payload.subject,topic:payload.topic,fileName:file.name});
+  const path=id?"/admin/study-materials/"+encodeURIComponent(id)+"/file":"/admin/study-materials/upload";
+  const saved=await run(async()=>{
+   const response=await fetch(API+path+"?"+query.toString(),{method:id?"PATCH":"POST",credentials:"include",headers:{"content-type":file.type||"application/octet-stream"},body:file});
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(body.error||"File upload failed.");
+   setNotice(id?"Study file replaced.":"Study file uploaded as a draft.");
+  });
+  if(saved){try{await loadStudyMaterials();}catch(e){setError("Saved successfully, but the library could not refresh: "+(e as Error).message);}}
+  return saved;
+ }
+ async function updateStudyMaterialFile(id:string,payload:{title:string;description:string;subject:string;topic:string;url:string},file:File):Promise<boolean>{return uploadStudyMaterialFile(payload,file,id);}
  async function updateStudyMaterial(id:string,payload:{title:string;description:string;subject:string;topic:string;url:string}):Promise<boolean>{const updated=await run(async()=>{await api(`/admin/study-materials/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify(payload)});setNotice("Study resource link updated.");});if(updated){try{await loadStudyMaterials();}catch(e){setError("Updated successfully, but the library could not refresh: "+(e as Error).message);}}return updated;}
 
  async function changeStudyMaterialStatus(id:string,status:StudyMaterial["status"]){await run(async()=>{await api(`/admin/study-materials/${encodeURIComponent(id)}`,{method:"PATCH",body:JSON.stringify({status})});await loadStudyMaterials();setNotice("Study material status updated.");});}
@@ -169,7 +182,7 @@ export default function AdminWorkspace(p:Props){
     onRefresh={() => void loadReviewQueue()}
     onRelease={(id) => void releaseReviewItem(id)}
    />}
-   {tab==="study-materials"&&<AdminStudyMaterials materials={studyMaterials} busy={busy} onUpload={(payload) => uploadStudyMaterial(payload)} onUpdate={(id,payload) => updateStudyMaterial(id,payload)} onStatusChange={(id,status) => void changeStudyMaterialStatus(id,status)} onDelete={(id) => void deleteStudyMaterial(id)} onRefresh={() => void loadStudyMaterials()} />}
+   {tab==="study-materials"&&<AdminStudyMaterials materials={studyMaterials} busy={busy} onUpload={(payload) => uploadStudyMaterial(payload)} onUpdate={(id,payload) => updateStudyMaterial(id,payload)} onFileUpload={(payload,file)=>uploadStudyMaterialFile(payload,file)} onFileReplace={(id,payload,file)=>updateStudyMaterialFile(id,payload,file)} onStatusChange={(id,status) => void changeStudyMaterialStatus(id,status)} onDelete={(id) => void deleteStudyMaterial(id)} onRefresh={() => void loadStudyMaterials()} />}
    {tab==="lesson-studio"&&<AdminLessonStudio />}
    {tab==="notifications"&&<section className="admin-panel">
     <div className="admin-panel-head"><div><p className="eyebrow">COMMUNICATION OPERATIONS</p><h2>In-app notification health</h2><p>Recipient-scoped inbox records and student preference coverage. External push/email delivery is not configured by this report.</p></div><button className="ghost" disabled={notificationHealthLoading} onClick={()=>void loadNotificationHealth().catch(e=>setError(e.message))}>{notificationHealthLoading?"Refreshing…":"Refresh"}</button></div>
