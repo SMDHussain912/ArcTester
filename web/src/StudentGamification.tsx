@@ -23,7 +23,20 @@ export default function StudentGamification() {
     setLoading(true); setError("");
     try {
       const result = await request<Snapshot>("/gamification");
-      setData(result); setGoal(result.dailyGoalXp);
+      const raw = result as Partial<Snapshot> | null | undefined;
+      const safe: Snapshot = {
+        totalXp: Number(raw?.totalXp ?? 0), xpBalance: Number(raw?.xpBalance ?? 0),
+        level: Number(raw?.level ?? 1), xpIntoLevel: Number(raw?.xpIntoLevel ?? 0),
+        xpToNextLevel: Number(raw?.xpToNextLevel ?? 100), currentStreak: Number(raw?.currentStreak ?? 0),
+        longestStreak: Number(raw?.longestStreak ?? 0), dailyGoalXp: Number(raw?.dailyGoalXp ?? 50),
+        streakFreezeInventory: Number(raw?.streakFreezeInventory ?? 0),
+        today: raw?.today && typeof raw.today === "object" ? { xpEarned: Number(raw.today.xpEarned ?? 0), goalReachedAt: raw.today.goalReachedAt ?? null } : null,
+        week: Array.isArray(raw?.week) ? raw.week.filter(Boolean).map(day => ({
+          date: String(day.date ?? ""), xpEarned: Number(day.xpEarned ?? 0),
+          goalReached: Boolean(day.goalReached), freezeUsed: Boolean(day.freezeUsed),
+        })) : [],
+      };
+      setData(safe); setGoal(safe.dailyGoalXp);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load rewards.");
     } finally { setLoading(false); }
