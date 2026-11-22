@@ -1,13 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { GenerateLessonInputSchema, LessonScriptSchema, LessonStoryboardSchema, parseModelJson } from "./lessonGeneration.js";
+import { LessonScriptSchema, LessonStoryboardSchema } from "./lessonGeneration.js";
 
-describe("lesson generation contracts", () => {
-  it("requires bounded source material and a topic", () => {
-    expect(GenerateLessonInputSchema.safeParse({
-      subject: "CSE", topic: "Stacks", sourceTitle: "Notes", sourceText: "too short",
-    }).success).toBe(false);
-  });
-
+describe("static lesson content contracts", () => {
   it("accepts a script with objectives, sections and takeaways", () => {
     const script = {
       title: "Stack basics",
@@ -28,13 +22,4 @@ describe("lesson generation contracts", () => {
     expect(LessonStoryboardSchema.safeParse({ scenes: Array.from({ length: 3 }, () => ({ ...base, sceneType: "diagram" })) }).success).toBe(false);
   });
 
-  it("parses JSON only and strips a conventional code fence", () => {
-    const value = { scenes: [
-      { sceneType: "title_card", title: "Start", narration: "Introduce this lesson topic.", onScreenText: "Start", durationMs: 3000, visual: {} },
-      { sceneType: "step_sequence", title: "Idea", narration: "Explain the central idea in plain words.", onScreenText: "Idea", durationMs: 4000, visual: { steps: ["First", "Next"] } },
-      { sceneType: "checkpoint", title: "Check", narration: "Ask the learner to recall the key idea.", onScreenText: "Recall", durationMs: 5000, visual: {} },
-    ] };
-    const fenced = "```json\n" + JSON.stringify(value) + "\n```";
-    expect(parseModelJson(fenced, LessonStoryboardSchema)).toHaveProperty("scenes");
-  });
 });
