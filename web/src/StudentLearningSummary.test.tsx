@@ -35,6 +35,21 @@ describe("StudentLearningSummary", () => {
     fireEvent.click(screen.getByRole("button", { name: "Manage XP goal & streak freeze" }));
     expect(navigate).toHaveBeenCalledWith("rewards");
   });
+
+  it("renders safe defaults when the API returns incomplete nested objects", async () => {
+    mockedRequest.mockImplementation(async (path: string) => {
+      if (path === "/analytics/overview") return { practice: {}, formalExams: {} } as never;
+      if (path === "/gamification") return {} as never;
+      if (path === "/learning/mastery") return {} as never;
+      throw new Error("Unexpected endpoint");
+    });
+    render(<StudentLearningSummary setActivePage={() => undefined} />);
+    expect(await screen.findByRole("heading", { name: "Learning summary" })).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
+    expect(screen.getByText("Level 1")).toBeTruthy();
+    expect(screen.getByText("Completed practice attempts will show here.")).toBeTruthy();
+  });
+
   it("reports unavailable data without inventing a summary", async () => {
     mockedRequest.mockRejectedValue(new Error("API unavailable"));
     render(<StudentLearningSummary setActivePage={() => undefined} />);
