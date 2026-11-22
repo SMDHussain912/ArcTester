@@ -1060,7 +1060,7 @@ export default function App() {
   return (
     <SafeAreaView style={[styles.safe, darkMode && { backgroundColor: "#0b1220" }]}>
       <StatusBar style={startupVisible || darkMode ? "light" : "dark"} />
-      <ScrollView style={[styles.dashboardScroll, darkMode && { backgroundColor: "#0b1220" }]} contentContainerStyle={styles.container}>
+      <ScrollView style={[styles.dashboardScroll, darkMode && { backgroundColor: "#0b1220" }]} contentContainerStyle={[styles.container, !user && styles.authContainer]}>
         <View style={styles.brandRow}>
           <ArcTesterMascot variant="mark" size={40} />
           <View>
@@ -1713,6 +1713,7 @@ const styles = StyleSheet.create({
   startupLinkText: { color: "#a5f3fc", fontSize: 13, fontWeight: "900", letterSpacing: 6, marginTop: 22 },
   startupStatus: { color: "#64748b", fontSize: 8, fontWeight: "700", letterSpacing: 1.5, marginTop: 10 },
   startupFooter: { position: "absolute", bottom: 28, color: "#475569", fontSize: 8, letterSpacing: 2 },
+  authContainer: { flexGrow: 1, justifyContent: "center" },
   safe: { flex: 1, backgroundColor: mobilePalette.light.background },
   dashboardScroll: { flex: 1 },
   container: {
