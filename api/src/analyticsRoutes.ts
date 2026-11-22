@@ -7,6 +7,7 @@ import {
   getWeakTopics,
   getQuestionPerformance,
   getStudyRecommendations,
+  getFullMockPerformance,
   importProgress,
   exportProgress,
 } from "./analytics.js";
@@ -19,6 +20,15 @@ export function analyticsRouter(db: PrismaClient): Router {
   router.get("/overview", requireAuth, async (req, res, next) => {
     try {
       const report = await getPerformanceOverview(db, (req as AuthedRequest).user!.id);
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/full-mock-performance", requireAuth, async (req, res, next) => {
+    try {
+      const report = await getFullMockPerformance(db, (req as AuthedRequest).user!.id);
       res.json(report);
     } catch (error) {
       next(error);
