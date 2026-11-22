@@ -73,3 +73,27 @@
  .student-gamification .gamification-day b { font-size:11px; }
  .student-gamification .gamification-day small { font-size:9px; }
 }
+
+/* Keep the four reward stats in a predictable 2×2 grid. */
+.student-gamification .stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+  margin: 18px 0 24px;
+}
+.student-gamification .stats-row > .stat {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 132px;
+  justify-content: center;
+}
+.student-gamification .stats-row > .stat strong {
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+@media (max-width: 560px) {
+  .student-gamification .stats-row { gap: 10px; }
+  .student-gamification .stats-row > .stat { min-height: 116px; padding: 14px; }
+  .student-gamification .stats-row > .stat strong { font-size: 27px; }
+}
