@@ -418,3 +418,10 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,tra
 .practice-question-type-options label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .practice-question-type-options input{flex:0 0 auto}
 @media(max-width:560px){.practice-config-grid,.practice-subject-grid,.practice-topic-list{grid-template-columns:minmax(0,1fr)}.practice-question-type-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Student concept library */
+.student-learning .concept-empty-state { padding:24px; line-height:1.65; }
+.student-learning .concept-empty-state p { margin:8px 0 0; }
+.student-learning .panel-header { flex-wrap:wrap; }
+.student-learning form.row { align-items:stretch; flex-wrap:wrap; }
+.student-learning form.row input { min-width:0; flex:1 1 240px; }
