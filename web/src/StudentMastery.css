@@ -5,7 +5,7 @@
 .quest-row>div{min-width:0;flex:1 1 220px}
 .quest-row .status{max-width:100%;white-space:normal}
 .review-option{min-width:0;flex-wrap:wrap}
-.review-option select,.review-option input,.review-card input{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+.review-option select,.review-option input:not([type="checkbox"]),.review-card input:not([type="checkbox"]){min-width:0;max-width:100%;width:100%;box-sizing:border-box}
 .review-card .row{flex-wrap:wrap}
 .badge-card{min-width:0;overflow-wrap:anywhere}
 @media(max-width:560px){
