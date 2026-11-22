@@ -19,6 +19,27 @@ const UpdateLessonDraftSchema = z.object({
   storyboard: z.unknown(),
 }).strict();
 
+const ImportLessonPackageSchema = z.object({
+  title: z.string().trim().min(3).max(160),
+  subject: z.string().trim().min(2).max(100),
+  topic: z.string().trim().min(2).max(160),
+  fileName: z.string().trim().min(1).max(180).optional(),
+  script: z.unknown(),
+  storyboard: z.unknown(),
+}).strict();
+
+export function parseImportedLessonPackage(value: unknown) {
+  const input = ImportLessonPackageSchema.parse(value);
+  return {
+    title: input.title,
+    subject: input.subject,
+    topic: input.topic,
+    fileName: input.fileName,
+    script: LessonScriptSchema.parse(input.script),
+    storyboard: LessonStoryboardSchema.parse(input.storyboard),
+  };
+}
+
 export function validateLessonDraftForPublish(scriptJson: string, storyboardJson: string) {
   const script = LessonScriptSchema.parse(JSON.parse(scriptJson) as unknown);
   const storyboard = LessonStoryboardSchema.parse(JSON.parse(storyboardJson) as unknown);
@@ -189,6 +210,31 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       if (deleted.count !== 1) return next(badRequest("Only unpublished lesson drafts can be deleted."));
       res.json({ ok: true });
     } catch (error) { next(error); }
+  });
+
+  router.post("/admin/lesson-drafts/import", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const input = parseImportedLessonPackage(req.body);
+      const draft = await db.lessonDraft.create({
+        data: {
+          createdById: req.user!.id,
+          title: input.title,
+          subject: input.subject,
+          topic: input.topic,
+          sourceTitle: input.fileName || "Uploaded lesson package",
+          sourceText: "Imported static lesson content. No AI generation was requested.",
+          scriptJson: JSON.stringify(input.script),
+          storyboardJson: JSON.stringify(input.storyboard),
+          provider: "admin-upload",
+          model: "static-json-v1",
+          status: "DRAFT",
+        },
+      });
+      return res.status(201).json({ ok: true, draft });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Uploaded lesson package failed validation. Check the title, subject, topic, script and storyboard."));
+      return next(error);
+    }
   });
 
   router.post("/admin/lesson-drafts/generate", requireAuth, requireAdmin(db), generationLimit, async (req: AuthedRequest, res, next) => {
