@@ -219,7 +219,7 @@ export default function AdminLessonStudio() {
   }
 
   return <div className="stack admin-lesson-studio">
-    <div className="admin-page-title"><div><p className="eyebrow">AI CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Upload source notes, generate a teaching script and storyboard, then edit and preview before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
+    <div className="admin-page-title"><div><p className="eyebrow">LESSON CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Import a prepared lesson package or optionally generate a draft from source notes. Review and preview before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
     {error && <div className="admin-alert error" role="alert">{error}</div>}
     {notice && <div className="admin-alert success" role="status">{notice}</div>}
     <div className="admin-two-col lesson-studio-layout">
