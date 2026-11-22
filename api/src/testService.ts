@@ -34,6 +34,7 @@ export const CreateTestSchema = z
     difficulty: z.enum(["any", "easy", "medium", "hard"]).default("any"),
     count: z.number().int().min(1).max(200).optional(),
     durationMinutes: z.number().int().min(5).max(180).optional(),
+    questionTypes: z.array(z.enum(["mcq", "multi_select", "true_false", "fill_blank", "numeric", "matching"])).max(6).optional(),
   })
   .superRefine((value, ctx) => {
     if ((value.mode === "practice" || value.mode === "speedRound") && !(value.subjects?.length || value.subject)) {
@@ -48,6 +49,9 @@ export const CreateTestSchema = z
     }
     if (value.mode === "speedRound" && (value.count ?? 10) > 10) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["count"], message: "Speed rounds are limited to 10 questions." });
+    }
+    if (value.questionTypes && new Set(value.questionTypes).size !== value.questionTypes.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["questionTypes"], message: "Question types must be unique." });
     }
     if (value.subjects && new Set(value.subjects).size !== value.subjects.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subjects"], message: "Subjects must be unique." });
@@ -114,6 +118,7 @@ export interface AttemptRow {
   subject: string;
   topic: string | null;
   difficulty: string;
+  questionType: string;
 }
 
 export interface SubmitSummary {
@@ -203,6 +208,7 @@ export async function createTest(
     select: {
       id: true,
       difficulty: true,
+      questionType: true,
       subject: { select: { name: true } },
       topic: { select: { name: true } },
     },
@@ -212,6 +218,7 @@ export async function createTest(
     subject: row.subject.name,
     topic: row.topic?.name ?? null,
     difficulty: row.difficulty,
+    questionType: row.questionType,
   }));
   // Keep student-created practice papers distinct from published exam papers.
   // A question can still be reused when the practice-only pool is exhausted.
@@ -259,6 +266,7 @@ export async function createTest(
     const matchesPracticeFilters = (question: AttemptRow, subject: string): boolean => {
       if (question.subject !== subject) return false;
       if (input.difficulty !== "any" && question.difficulty !== input.difficulty) return false;
+      if (input.questionTypes?.length && !input.questionTypes.includes(question.questionType as "mcq" | "multi_select" | "true_false" | "fill_blank" | "numeric" | "matching")) return false;
       const selectedTopicsForSubject = topicsBySubject.get(subject);
       if (selectedTopicsForSubject) {
         return selectedTopicsForSubject.size === 0 || (question.topic !== null && selectedTopicsForSubject.has(question.topic));
