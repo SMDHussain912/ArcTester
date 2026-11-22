@@ -30,6 +30,7 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
   };
 }
 
-/** Default cookie-authenticated JSON request using the configured API base. */
-export const API = "/api";
+/** Default cookie-authenticated JSON request using the same Render API as App.tsx. */
+const configuredApi = import.meta.env.VITE_API_URL;
+export const API = (configuredApi || "https://arctester.onrender.com").replace(/\\/+$/, "");
 export const request = createApiClient(API);
