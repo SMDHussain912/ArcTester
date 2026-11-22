@@ -29,7 +29,33 @@ export default function StudentLearningSummary({ setActivePage }: { setActivePag
         request<{ topics: Topic[] }>("/learning/mastery"),
       ]);
       if (current !== generation.current) return;
-      setData({ overview, rewards, topics: Array.isArray(mastery.topics) ? mastery.topics : [] });
+      const safeOverview: Overview = {
+        practice: {
+          completedAttempts: Number(overview?.practice?.completedAttempts ?? 0),
+          correct: Number(overview?.practice?.correct ?? 0),
+          incorrect: Number(overview?.practice?.incorrect ?? 0),
+          accuracy: typeof overview?.practice?.accuracy === "number" ? overview.practice.accuracy : null,
+          trend: Array.isArray(overview?.practice?.trend) ? overview.practice.trend : [],
+        },
+        formalExams: {
+          submissions: Number(overview?.formalExams?.submissions ?? 0),
+          graded: Number(overview?.formalExams?.graded ?? 0),
+          scorePercentage: typeof overview?.formalExams?.scorePercentage === "number" ? overview.formalExams.scorePercentage : null,
+          score: Number(overview?.formalExams?.score ?? 0),
+          maximumScore: Number(overview?.formalExams?.maximumScore ?? 0),
+        },
+      };
+      const rawRewards = rewards as Partial<Rewards> | undefined;
+      const safeRewards: Rewards = {
+        totalXp: Number(rawRewards?.totalXp ?? 0), xpBalance: Number(rawRewards?.xpBalance ?? 0),
+        level: Number(rawRewards?.level ?? 1), xpIntoLevel: Number(rawRewards?.xpIntoLevel ?? 0),
+        xpToNextLevel: Number(rawRewards?.xpToNextLevel ?? 100), currentStreak: Number(rawRewards?.currentStreak ?? 0),
+        longestStreak: Number(rawRewards?.longestStreak ?? 0), dailyGoalXp: Number(rawRewards?.dailyGoalXp ?? 50),
+        today: rawRewards?.today && typeof rawRewards.today === "object" ? {
+          xpEarned: Number(rawRewards.today.xpEarned ?? 0), goalReachedAt: rawRewards.today.goalReachedAt ?? null,
+        } : null,
+      };
+      setData({ overview: safeOverview, rewards: safeRewards, topics: Array.isArray(mastery?.topics) ? mastery.topics.filter(Boolean) : [] });
     } catch (cause) {
       if (current === generation.current) setError(cause instanceof Error ? cause.message : "Could not load your learning summary.");
     } finally {
