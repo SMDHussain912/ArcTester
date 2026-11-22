@@ -3,7 +3,7 @@ import { ActivityIndicator, Animated, Easing, StyleSheet, Text, TouchableOpacity
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { getLocalValue, setLocalValue } from "../localSettings";
-import { clampSceneIndex, formatLessonTime, getElapsedBeforeScene, getLessonDurationMs, type PublishedLesson } from "../lessonPlayer";
+import { clampSceneIndex, formatLessonTime, getElapsedBeforeScene, getLessonDurationMs, getSceneAnimationState, type PublishedLesson } from "../lessonPlayer";
 import { mobilePalette, radius, spacing, typeScale } from "../design/tokens";
 
 type Props = {
@@ -29,6 +29,8 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceSceneKey, setVoiceSceneKey] = useState("");
   const [voiceError, setVoiceError] = useState("");
+  const [timelineMs, setTimelineMs] = useState(0);
+  const timelineRef = useRef(0);
   const audioPlayer = useAudioPlayer(null, { downloadFirst: true });
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const loadLessonsRef = useRef(loadLessons);
@@ -43,7 +45,13 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
   const elapsed = activeLesson ? getElapsedBeforeScene(activeLesson.storyboard, safeIndex) : 0;
   const progressStart = totalDuration > 0 ? Math.min(1, elapsed / totalDuration) : 0;
   const progressEnd = totalDuration > 0 ? Math.min(1, (elapsed + (scene?.durationMs ?? 0)) / totalDuration) : 0;
-  const progressWidth = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [`${progressStart * 100}%`, `${progressEnd * 100}%`] });
+  const audioSceneKey = activeLesson ? `${activeLesson.id}:${safeIndex}` : "";
+  const narrationTimelineMs = voiceSceneKey === audioSceneKey && audioStatus.isLoaded && audioStatus.playing && Number.isFinite(audioStatus.currentTime)
+    ? Math.min(scene?.durationMs ?? 0, Math.max(0, audioStatus.currentTime * 1000))
+    : timelineMs;
+  const animationState = scene ? getSceneAnimationState(scene, narrationTimelineMs, reduceMotion) : null;
+  const lessonProgressPct = totalDuration > 0 ? Math.min(100, Math.max(0, (elapsed + narrationTimelineMs) / totalDuration * 100)) : 0;
+  const progressWidth = `${lessonProgressPct}%`;
 
   const refresh = async () => {
     setLoading(true);
@@ -65,6 +73,8 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
     audioPlayer.pause();
     setVoiceSceneKey("");
     setVoiceError("");
+    timelineRef.current = 0;
+    setTimelineMs(0);
   }, [activeLesson?.id, safeIndex, audioPlayer]);
 
   useEffect(() => {
@@ -73,34 +83,29 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
       sceneProgress.setValue(1);
       return;
     }
-    const duration = playing && scene ? Math.max(2500, scene.durationMs) : 520;
-    Animated.timing(sceneProgress, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [activeLesson?.id, safeIndex, reduceMotion, sceneProgress, playing, scene?.durationMs]);
+    Animated.timing(sceneProgress, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [activeLesson?.id, safeIndex, reduceMotion, sceneProgress]);
 
-  useEffect(() => {
-    diagramMotion.setValue(0);
-    if (reduceMotion || !activeLesson || scene?.sceneType !== "diagram") return;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(diagramMotion, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(diagramMotion, { toValue: 0, duration: 1700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [activeLesson?.id, safeIndex, reduceMotion, scene?.sceneType, diagramMotion]);
+
 
   useEffect(() => {
     if (!playing || !activeLesson || !scene) return;
-    if (voiceSceneKey === `${activeLesson.id}:${safeIndex}` && audioStatus.isLoaded) return;
-    const timer = setTimeout(() => {
-      if (safeIndex >= sceneCount - 1) {
+    if (voiceSceneKey === audioSceneKey && audioStatus.isLoaded && audioStatus.playing) return;
+    const startedAt = Date.now();
+    const startOffset = timelineRef.current;
+    const timer = setInterval(() => {
+      const nextTime = Math.min(scene.durationMs, startOffset + Date.now() - startedAt);
+      timelineRef.current = nextTime;
+      setTimelineMs(nextTime);
+      if (nextTime >= scene.durationMs) {
+        clearInterval(timer);
         setPlaying(false);
-        setCompleted(true);
-      } else {
-        setSceneIndex((current) => clampSceneIndex(current + 1, sceneCount));
+        if (safeIndex >= sceneCount - 1) setCompleted(true);
+        else setSceneIndex((current) => clampSceneIndex(current + 1, sceneCount));
       }
-    }, Math.max(2500, scene.durationMs));
-    return () => clearTimeout(timer);
-  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount, voiceSceneKey, audioStatus.isLoaded]);
+    }, 40);
+    return () => clearInterval(timer);
+  }, [playing, activeLesson?.id, safeIndex, scene?.durationMs, sceneCount, voiceSceneKey, audioStatus.isLoaded, audioStatus.playing, audioSceneKey]);
 
   useEffect(() => {
     if (!activeLesson) return;
@@ -178,7 +183,7 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
 
   const sceneOpacity = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
   const sceneTranslate = sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
-  const diagramTranslate = diagramMotion.interpolate({ inputRange: [0, 1], outputRange: [-8, 8] });
+
 
   if (activeLesson && scene) {
     return (
@@ -199,16 +204,20 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
         <Animated.View style={[styles.sceneCard, { backgroundColor: palette.surface, borderColor: palette.border, opacity: sceneOpacity, transform: [{ translateY: sceneTranslate }] }]}>
           <Text style={[styles.sceneType, { color: palette.primary }]}>{scene.sceneType.replace(/_/g, " ").toUpperCase()}</Text>
           <Text style={[styles.sceneTitle, { color: palette.text }]}>{scene.title}</Text>
-          {scene.onScreenText ? <Text style={[styles.screenText, { color: palette.text }]}>{scene.onScreenText}</Text> : null}
+          {scene.onScreenText ? <Text style={[styles.screenText, { color: palette.text, fontWeight: animationState?.emphasizeText ? "900" : "700" }]}>{scene.onScreenText}</Text> : null}
           {scene.sceneType === "diagram" ? (
             <View style={[styles.visualPanel, { backgroundColor: palette.primarySoft }]}>
               {scene.visual.label ? <Text style={[styles.visualLabel, { color: palette.text }]}>{scene.visual.label}</Text> : null}
               <View style={styles.diagramNodes}>
-                {scene.visual.items.map((item, index) => (
-                  <Animated.View key={`${item}-${index}`} style={[styles.diagramNode, { backgroundColor: palette.surface, borderColor: palette.primary, transform: [{ translateY: reduceMotion ? 0 : diagramTranslate }] }]}>
-                    <Text style={[styles.diagramNodeText, { color: palette.text }]}>{item}</Text>
-                  </Animated.View>
-                ))}
+                {scene.visual.items.map((item, index) => {
+                  const visible = animationState?.visibleItems.has(index) ?? true;
+                  const highlighted = animationState?.highlightedItems.has(index) ?? false;
+                  return (
+                    <Animated.View key={`${item}-${index}`} accessibilityElementsHidden={!visible} importantForAccessibility={visible ? "auto" : "no-hide-descendants"} style={[styles.diagramNode, { opacity: visible ? 1 : 0, backgroundColor: highlighted ? palette.primarySoft : palette.surface, borderColor: highlighted ? palette.primary : palette.border }]}>
+                      <Text style={[styles.diagramNodeText, { color: palette.text }]}>{item}</Text>
+                    </Animated.View>
+                  );
+                })}
               </View>
               {scene.visual.connections.map((connection, index) => <Text key={`${connection.from}-${connection.to}-${index}`} style={[styles.connectionText, { color: palette.primary }]}>{connection.from}  →  {connection.to}{connection.label ? ` · ${connection.label}` : ""}</Text>)}
             </View>
@@ -216,7 +225,10 @@ export default function StudentLessonLibrary({ darkMode, reduceMotion, userId, a
           {scene.sceneType === "equation" && scene.visual.equation ? <View style={[styles.equationPanel, { backgroundColor: palette.primarySoft }]}><Text style={[styles.equationText, { color: palette.text }]}>{scene.visual.equation}</Text></View> : null}
           {scene.sceneType === "step_sequence" ? (
             <View style={[styles.visualPanel, { backgroundColor: palette.primarySoft }]}>
-              {scene.visual.steps.map((step, index) => <Animated.View key={`${step}-${index}`} style={[styles.stepRow, { backgroundColor: palette.surface, opacity: reduceMotion ? 1 : sceneProgress.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }) }]}><Text style={[styles.stepNumber, { color: palette.primary }]}>{index + 1}</Text><Text style={[styles.stepText, { color: palette.text }]}>{step}</Text></Animated.View>)}
+              {scene.visual.steps.map((step, index) => {
+                const visible = animationState?.visibleSteps.has(index) ?? true;
+                return <Animated.View key={`${step}-${index}`} accessibilityElementsHidden={!visible} importantForAccessibility={visible ? "auto" : "no-hide-descendants"} style={[styles.stepRow, { backgroundColor: palette.surface, opacity: visible ? 1 : 0 }]}><Text style={[styles.stepNumber, { color: palette.primary }]}>{index + 1}</Text><Text style={[styles.stepText, { color: palette.text }]}>{step}</Text></Animated.View>;
+              })}
             </View>
           ) : null}
           <Text style={[styles.narration, { color: palette.text }]}>{scene.narration}</Text>

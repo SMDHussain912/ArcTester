@@ -52,6 +52,48 @@ describe("static lesson package import validation", () => {
   });
 });
 
+describe("lesson animation timeline validation", () => {
+  it("accepts safe declarative timeline actions and defaults old scenes to an empty timeline", () => {
+    const withTimeline = {
+      ...storyboard,
+      scenes: [
+        storyboard.scenes[0],
+        { ...storyboard.scenes[1], timeline: [
+          { atMs: 500, action: "reveal_step", targetIndex: 0 },
+          { atMs: 1200, action: "highlight_item", targetIndex: 0, durationMs: 800 },
+          { atMs: 2000, action: "emphasize_text", durationMs: 500 },
+        ] },
+        storyboard.scenes[2],
+      ],
+    };
+    const parsed = parseImportedLessonPackage({ title: "Stack operations", subject: "Computer Science", topic: "Stacks", script, storyboard: withTimeline });
+    expect(parsed.storyboard.scenes[1].timeline).toHaveLength(3);
+    expect(parsed.storyboard.scenes[0].timeline).toEqual([]);
+  });
+
+  it("rejects timeline actions outside the scene or beyond visual targets", () => {
+    const badTarget = {
+      ...storyboard,
+      scenes: [
+        storyboard.scenes[0],
+        { ...storyboard.scenes[1], timeline: [{ atMs: 500, action: "reveal_step", targetIndex: 9 }] },
+        storyboard.scenes[2],
+      ],
+    };
+    expect(() => parseImportedLessonPackage({ title: "Stack operations", subject: "Computer Science", topic: "Stacks", script, storyboard: badTarget })).toThrow();
+
+    const lateCue = {
+      ...storyboard,
+      scenes: [
+        storyboard.scenes[0],
+        { ...storyboard.scenes[1], timeline: [{ atMs: 5000, action: "reveal_step", targetIndex: 0 }] },
+        storyboard.scenes[2],
+      ],
+    };
+    expect(() => parseImportedLessonPackage({ title: "Stack operations", subject: "Computer Science", topic: "Stacks", script, storyboard: lateCue })).toThrow();
+  });
+});
+
 describe("lesson draft publishing validation", () => {
   it("accepts schema-valid script and storyboard before publish", () => {
     const parsed = validateLessonDraftForPublish(JSON.stringify(script), JSON.stringify(storyboard));

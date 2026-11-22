@@ -155,7 +155,9 @@ export default function StudentWebLessonPlayer() {
       return;
     }
     audio?.pause();
-    animationBaseRef.current = timelineMs;
+    const startAt = timelineMs >= scene?.durationMs ? 0 : timelineMs;
+    animationBaseRef.current = startAt;
+    setTimelineMs(startAt);
     setAnimationPlaying(true);
   };
 
@@ -188,7 +190,7 @@ export default function StudentWebLessonPlayer() {
         <p className="web-lesson-narration">{scene.narration}</p>
         <div className="row web-lesson-audio">
           <button type="button" className="ghost" disabled={audioBusy} onClick={() => void playNarration()}>{audioBusy ? "Loading narration…" : "▶ Play narration"}</button>
-          <button type="button" className="ghost" onClick={toggleAnimation} disabled={timelineMs >= scene.durationMs && !animationPlaying}>{animationPlaying ? "Pause animation" : timelineMs >= scene.durationMs ? "Replay animation" : "Play animation"}</button>
+          <button type="button" className="ghost" onClick={toggleAnimation} >{animationPlaying ? "Pause animation" : timelineMs >= scene.durationMs ? "Replay animation" : "Play animation"}</button>
           {audio ? <button type="button" className="ghost" onClick={() => { audio.pause(); setAudio(null); }}>Stop audio</button> : null}
           <span className="muted">{Math.floor(timelineMs / 1000)}s / {Math.ceil(scene.durationMs / 1000)}s</span>
           {audioError ? <p className="error" role="alert">{audioError}</p> : null}
