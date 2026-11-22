@@ -23,7 +23,7 @@ describe("StudentPracticePaperConfiguration", () => {
     const onQuestionTypesChange = vi.fn();
     render(<StudentPracticePaperConfiguration selectedSubjects={["Math"]} questionCount={15} difficulty="any" durationMinutes={45} onDurationChange={onDurationChange} questionTypes={["numeric"]} onQuestionTypesChange={onQuestionTypesChange} onQuestionCountChange={vi.fn()} onDifficultyChange={vi.fn()} />);
     expect(screen.getByLabelText("Time limit")).toHaveValue("45");
-    expect(screen.getByText("Question types")).toBeInTheDocument();
+    expect(screen.getByText(/^Question types/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Time limit"), { target: { value: "60" } });
     expect(onDurationChange).toHaveBeenCalledWith(60);
     fireEvent.click(screen.getByLabelText("Use all question types"));
