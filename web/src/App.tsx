@@ -3,7 +3,7 @@ import { safeStorage } from "./safeStorage";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
 import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
-import { buildPracticeConfig, type PracticeConfig } from "./practiceConfig";
+import { buildPracticeConfig, type PracticeConfig, type PracticeQuestionType } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
 import type { FormEvent } from "react";
@@ -89,6 +89,7 @@ export default function App() {
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
   const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
   const [practiceDurationMinutes, setPracticeDurationMinutes] = useState(20);
+  const [practiceQuestionTypes, setPracticeQuestionTypes] = useState<PracticeQuestionType[]>([]);
   const [register, setRegister] = useState(false);
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -341,7 +342,7 @@ export default function App() {
       const body = {
         mode,
         ...(subject ? { subject } : {}),
-        ...(config ? { subjects: config.subjects, topicFilters: config.topicFilters, count: config.count, difficulty: config.difficulty, durationMinutes: config.durationMinutes } : mode === "practice" ? { count: 10 } : {}),
+        ...(config ? { subjects: config.subjects, topicFilters: config.topicFilters, count: config.count, difficulty: config.difficulty, durationMinutes: config.durationMinutes, questionTypes: config.questionTypes } : mode === "practice" ? { count: 10 } : {}),
       };
       const created = await request<Test>("/tests", { method: "POST", body: JSON.stringify(body) });
       const previousAttemptId = safeStorage.getItem("arctester-active-practice-attempt");
@@ -364,7 +365,7 @@ export default function App() {
   }
 
   function createStudentPracticePaper() {
-    void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty, practiceDurationMinutes));
+    void startTest("practice", undefined, buildPracticeConfig(practiceSubjects, practiceTopicKeys, practiceQuestionCount, practiceDifficulty, practiceDurationMinutes, practiceQuestionTypes));
   }
 
   function selectPracticeAnswer(questionId: number, response: unknown) {
@@ -688,6 +689,8 @@ export default function App() {
                     difficulty={practiceDifficulty}
                     durationMinutes={practiceDurationMinutes}
                     onDurationChange={setPracticeDurationMinutes}
+                    questionTypes={practiceQuestionTypes}
+                    onQuestionTypesChange={setPracticeQuestionTypes}
                     onQuestionCountChange={setPracticeQuestionCount}
                     onDifficultyChange={setPracticeDifficulty}
                   />
