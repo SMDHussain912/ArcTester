@@ -11,9 +11,10 @@ import Skeleton from "./components/Skeleton";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
+  onStartRecommendedPractice?: (item: StudyRecommendation) => void;
 }
 
-export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProps) {
+export default function StudentAnalytics({ setActivePage, onStartRecommendedPractice }: StudentAnalyticsProps) {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
@@ -113,8 +114,9 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           {recommendations && (
             <>
               <p className="muted">
-                Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%.
+                Recommendations use completed answers and verified full-mock results. A weak area is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%. Unanswered questions do not count as incorrect.
               </p>
+              {recommendations.latestFullMockAt ? <p className="muted">Full-mock evidence: {new Date(recommendations.latestFullMockAt).toLocaleDateString()} · {recommendations.basedOnFullMocks ?? 0} completed full mocks.</p> : null}
               <div className="performance-explanation">
                 <strong>{recommendations.performanceExplanation.headline}</strong>
                 <ul>
@@ -128,11 +130,12 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                       <strong>{item.title}</strong>
                       <span className="pill">{item.priority} priority</span>
                     </div>
-                    <p className="muted">{item.reason}</p>
+                    <p className="muted">{item.reason}</p>{item.evidence?.source === "completed-full-mock" ? <p className="muted">Evidence: latest completed 200-question mock · {item.evidence.answeredQuestions} answered · {Math.round((item.evidence.accuracy ?? 0) * 100)}% accuracy</p> : null}
                     <p className="muted">
                       Suggested session: {item.questionCount} {item.mode === "mistakes" ? "mistake review" : item.mode === "mock" ? "mock test" : "practice"} questions
                       {item.subject ? ` in ${item.subject}` : ""}{item.topic ? ` · ${item.topic}` : ""}.
                     </p>
+                    {onStartRecommendedPractice && item.subject ? <button type="button" className="button button-secondary" onClick={() => onStartRecommendedPractice(item)}>Start focused practice</button> : null}
                   </article>
                 ))}
               </div>
