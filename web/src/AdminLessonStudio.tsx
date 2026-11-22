@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const MAX_SOURCE_CHARS = 30_000;
 const MAX_FILE_BYTES = 120 * 1024;
+const MAX_IMPORT_FILE_BYTES = 256 * 1024;
 
 type DraftSummary = {
   id: string; title: string; subject: string; topic: string; status: string;
@@ -28,6 +29,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export default function AdminLessonStudio() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("DRAFT");
@@ -93,6 +95,32 @@ export default function AdminLessonStudio() {
       setNotice(`Loaded ${file.name} · ${text.length.toLocaleString()} characters`);
     } catch {
       setError("Could not read that file. Try a plain-text source.");
+    }
+  }
+
+  async function importLessonPackage(file: File) {
+    setError(""); setNotice("");
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      setError("The lesson package is too large. Choose a JSON file under 256 KB.");
+      if (importFileRef.current) importFileRef.current.value = "";
+      return;
+    }
+    setBusy(true);
+    try {
+      const packageText = await file.text();
+      const packageData = JSON.parse(packageText) as unknown;
+      const result = await request<{draft:DraftRecord}>("/admin/lesson-drafts/import", {
+        method: "POST",
+        body: JSON.stringify({ ...(packageData as Record<string, unknown>), fileName: file.name }),
+      });
+      await refreshDrafts();
+      await openDraft(result.draft.id);
+      setNotice("Imported " + file.name + " as an unpublished draft. Review it and publish when ready.");
+    } catch (e) {
+      setError((e as Error).message || "Could not import the lesson package.");
+    } finally {
+      setBusy(false);
+      if (importFileRef.current) importFileRef.current.value = "";
     }
   }
 
@@ -191,14 +219,16 @@ export default function AdminLessonStudio() {
   }
 
   return <div className="stack admin-lesson-studio">
-    <div className="admin-page-title"><div><p className="eyebrow">AI CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Upload source notes, generate a teaching script and storyboard, then edit and preview before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
+    <div className="admin-page-title"><div><p className="eyebrow">LESSON CONTENT WORKSHOP</p><h1>Lesson Studio</h1><p>Import a prepared lesson package or optionally generate a draft from source notes. Review and preview before publishing.</p></div><button className="ghost" disabled={busy} onClick={() => void refreshDrafts().catch(e => setError((e as Error).message))}>Refresh drafts</button></div>
     {error && <div className="admin-alert error" role="alert">{error}</div>}
     {notice && <div className="admin-alert success" role="status">{notice}</div>}
     <div className="admin-two-col lesson-studio-layout">
       <section className="admin-panel">
         <div className="admin-panel-head"><div><p className="eyebrow">STEP 1 · SOURCE</p><h2>Prepare lesson material</h2></div></div>
         <label>Source file (.txt, .md, .json)<input ref={fileRef} type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" onChange={e => { const file = e.target.files?.[0]; if (file) void readFile(file); }}/></label>
-        <p className="muted">Text-based files only in this part. Files are read as text in the admin browser; the source text is sent to the authenticated server for generation. Max 30,000 characters.</p>
+        <p className="muted">Text-based source files are read in the admin browser and sent to the authenticated server only when you choose to generate. Max 30,000 characters.</p>
+        <label>Import finished lesson package (.json)<input ref={importFileRef} aria-label="Import finished lesson package" type="file" accept=".json,application/json" disabled={busy} onChange={e => { const file = e.target.files?.[0]; if (file) void importLessonPackage(file); }}/></label>
+        <p className="muted">Import a prepared lesson script and storyboard directly as a draft—no AI generation or provider call. The server validates the package before saving. Max 256 KB.</p>
         <div className="admin-two-col">
           <label>Subject<input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Computer Science"/></label>
           <label>Topic<input value={topic} onChange={e => setTopic(e.target.value)} placeholder="Stacks and queues"/></label>

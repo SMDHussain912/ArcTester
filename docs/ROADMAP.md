@@ -12,11 +12,11 @@
 | 3 | Rule-based path/lesson engine, XP, levels, goals, streaks, mastery, spaced review, quests/badges | Complete on main via PR #150 |
 | 4 | Shared design system, original mascot/assets, motion/audio/haptics foundation and gallery | Complete on main via PR #155 |
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
-| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
-| 7 | Responsive web learning-path/player/progress parity; simple admin | Parts 1–2 merged via PRs #168/#169; exact-head CI #2583/#2587 passed. Final summary + admin publish slice implemented; exact-head CI #2590 passed, PR #170 merge pending |
-| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Parts 1–4 implemented on main; exact-head CI passed for each slice (#2596, #44964173273, #44965912692, #44964902968). Production approved-bank/device verification remains NOT VERIFIED |
-| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Implemented in PR; exact-head CI and manual acceptance pending |
-| 10 | Final audit and honest completion/manual verification report | Not started |
+| 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Complete on main via PRs #160–#167; offline/reconnect and device/account-isolation checks remain NOT VERIFIED |
+| 7 | Responsive web learning-path/player/progress parity; simple admin | Complete on main via PRs #168–#170; keyboard/screen-reader and real-account lesson publish checks remain NOT VERIFIED |
+| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Complete on main via PRs #171–#174; approved-bank readiness and physical-device verification remain NOT VERIFIED |
+| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | PR #175 open; exact-head CI #44967911502 and Android build #44967911493 passed on 3bd15ab2; APK artifact SHA-256 recorded in Phase 10 report. Hosted and physical-device checks remain NOT VERIFIED |
+| 10 | Final audit and honest completion/manual verification report | PR #176 static lesson import + audit remediation; latest exact-head CI #44969600169 and Android build #44969600269 passed. Audit report docs/PHASE_10_AUDIT_REPORT.md; phase completion waits for Phase 9 merge and manual acceptance evidence |
 
 A phase is complete only when its full scope is implemented, exact-head CI is green, the PR is merged, and its Phase Report is posted. Reports must include PR links, CI links, NOT VERIFIED items, and manual steps. Never report estimates as verified completion.
 
@@ -69,6 +69,16 @@ Phase 7 slices must remain additive and reuse existing authenticated APIs. Do no
 - **Part 4 — Rule-based next-step recommendations:** merged via PR #173; exact 200-question completed mock evidence, minimum answered sample, topic/subject focus, and one-click server-backed targeted practice. Exact-head CI #44964902968 passed all 5 jobs.
 
 Phase 8 parts must not expose answer keys before submission, calculate official scores in the browser, or begin a full mock with fewer than 200 questions. Full phase completion requires exact-head CI, merge, report and explicit manual verification status.
+
+## Phase 10 audit and lesson-content cost remediation
+
+- Audit the merged Phases 6–8 and Phase 9 release verification state; report verified CI, pending merge, production checks and manual items separately.
+- Student lessons already read saved PostgreSQL script/storyboard content. AI generation is an admin-triggered authoring action, not a per-student lesson-open action.
+- Add direct admin import of a completed JSON lesson package into a validated DRAFT; this path must not call NVIDIA lesson generation. Keep optional AI draft generation separate.
+- Audit the on-demand TTS cache and published lesson feed payload size; durable audio caching and a summary/detail feed are follow-up optimization candidates, not silently claimed complete.
+- Report: docs/PHASE_10_AUDIT_REPORT.md. Import format: docs/STATIC_LESSON_IMPORT_FORMAT.md.
+- Phase 10 is complete only after the prior release phase is merged and all release/manual acceptance evidence is recorded honestly.
+
 
 
 ## Phase 9 delivery — Release verification

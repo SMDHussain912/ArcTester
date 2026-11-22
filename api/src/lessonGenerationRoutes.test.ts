@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateLessonDraftForPublish } from "./lessonGenerationRoutes.js";
+import { parseImportedLessonPackage, validateLessonDraftForPublish } from "./lessonGenerationRoutes.js";
 
 const script = {
   title: "Stack operations",
@@ -18,6 +18,40 @@ const storyboard = {
     { sceneType: "checkpoint", title: "Recall", narration: "Which item is removed first?", onScreenText: "Which item pops first?", durationMs: 3000, visual: {} },
   ],
 };
+describe("static lesson package import validation", () => {
+  it("accepts a valid authored lesson package without invoking a provider", () => {
+    const imported = parseImportedLessonPackage({
+      title: "Stack operations",
+      subject: "Computer Science",
+      topic: "Stacks",
+      fileName: "stacks.lesson.json",
+      script,
+      storyboard,
+    });
+    expect(imported.title).toBe("Stack operations");
+    expect(imported.fileName).toBe("stacks.lesson.json");
+    expect(imported.script.sections).toHaveLength(2);
+    expect(imported.storyboard.scenes).toHaveLength(3);
+  });
+
+  it("rejects packages with invalid script or storyboard content", () => {
+    expect(() => parseImportedLessonPackage({
+      title: "Stack operations",
+      subject: "Computer Science",
+      topic: "Stacks",
+      script: { ...script, sections: [] },
+      storyboard,
+    })).toThrow();
+    expect(() => parseImportedLessonPackage({
+      title: "Different title",
+      subject: "Computer Science",
+      topic: "Stacks",
+      script,
+      storyboard,
+    })).toThrow();
+  });
+});
+
 describe("lesson draft publishing validation", () => {
   it("accepts schema-valid script and storyboard before publish", () => {
     const parsed = validateLessonDraftForPublish(JSON.stringify(script), JSON.stringify(storyboard));
