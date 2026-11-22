@@ -96,10 +96,13 @@ export interface StudyRecommendation {
   mode: "mistakes" | "mock" | "practice";
   subject?: string;
   topic?: string;
+  evidence?: { answeredQuestions: number; incorrectAnswers: number; accuracy: number | null; minimumAnswers: number; weakAccuracyThreshold: number; source?: "completed-full-mock" | "completed-practice" } | null;
 }
 
 export interface StudyRecommendationsReport {
   basedOnAttempts: number;
+  basedOnFullMocks?: number;
+  latestFullMockAt?: string | null;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
   performanceExplanation: PerformanceExplanation;
