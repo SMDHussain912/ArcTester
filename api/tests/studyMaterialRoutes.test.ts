@@ -34,7 +34,9 @@ describe("study materials API",()=>{
   const list=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<Record<string,unknown>>};
   expect(list.materials[0]).toMatchObject({title:"PDF Notes",fileName:"notes.pdf"});expect(list.materials[0]).not.toHaveProperty("contentBase64");
   const download=await call("/study-materials/"+created.material.id+"/file","GET",undefined,studentCookie);
-  expect(download.status).toBe(200);expect(Buffer.from(await download.arrayBuffer())).toEqual(bytes);
+  expect(download.status).toBe(200);
+  expect(download.headers.get("content-disposition")).toContain('filename="notes.pdf"');
+  expect(Buffer.from(await download.arrayBuffer())).toEqual(bytes);
  });
  it("rejects non-HTTPS and credential-bearing resource links",async()=>{
   expect((await call("/admin/study-materials","POST",{...resource,url:"http://example.org/notes"})).status).toBe(400);

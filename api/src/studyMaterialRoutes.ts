@@ -52,7 +52,7 @@ function parseUploadedFile(req: express.Request): { bytes: Buffer; fileName: str
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw badRequest("Choose a non-empty file to upload.");
   if (req.body.length > MAX_FILE_BYTES) throw badRequest("Study files must be 10 MB or smaller.");
   const query = FileMetadata.parse(req.query);
-  const fileName = basename(query.fileName).replace(/[\\r\\n"]/g, "").slice(0, 180);
+  const fileName = basename(query.fileName).replace(/[\r\n"]/g, "").slice(0, 180);
   const extension = fileName.toLowerCase().split(".").pop() ?? "";
   const expectedMime = mimeByExtension[extension];
   if (!expectedMime) throw badRequest("Unsupported file type. Upload PDF, TXT, Markdown, DOCX, PPTX, XLSX, PNG or JPG.");
@@ -64,7 +64,7 @@ function parseUploadedFile(req: express.Request): { bytes: Buffer; fileName: str
   return { bytes: req.body, fileName, mimeType };
 }
 function fileSelectHeaders(res: express.Response, fileName: string, mimeType: string, sizeBytes: number) {
-  const safeName = fileName.replace(/[\\r\\n"]/g, "_");
+  const safeName = fileName.replace(/[\r\n"]/g, "_");
   res.setHeader("Content-Type", mimeType || "application/octet-stream");
   res.setHeader("Content-Length", String(sizeBytes));
   res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
