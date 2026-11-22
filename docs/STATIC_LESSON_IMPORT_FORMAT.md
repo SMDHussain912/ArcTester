@@ -70,6 +70,29 @@ Use a UTF-8 JSON file, up to 256 KB, with this shape:
 }
 ```
 
+## Animation timeline
+
+A scene may include `timeline`; older packages without it remain valid and render all visual content immediately. The timeline is declarative data only—never JavaScript, HTML, or executable expressions.
+
+```json
+"timeline": [
+  { "atMs": 500, "action": "reveal_step", "targetIndex": 0, "durationMs": 450 },
+  { "atMs": 1800, "action": "reveal_step", "targetIndex": 1, "durationMs": 450 },
+  { "atMs": 3200, "action": "highlight_item", "targetIndex": 0, "durationMs": 900 },
+  { "atMs": 4800, "action": "emphasize_text", "durationMs": 700 }
+]
+```
+
+- `atMs` is the cue time from the start of the scene, in milliseconds. When narration audio is playing, the player follows the audio clock; otherwise, the scene animation clock drives the cues.
+- `reveal_item` and `highlight_item` target a zero-based index in `visual.items`.
+- `reveal_step` targets a zero-based index in `visual.steps`.
+- `emphasize_text` emphasizes the scene's on-screen text and must not include `targetIndex`.
+- `durationMs` controls transient highlight/emphasis time; it defaults to 600 ms and must be 100–10000 ms.
+- A timeline may contain at most 48 actions. Every cue must start before `durationMs` for the scene.
+- If reduced motion is enabled, all items and steps remain visible and transient motion/highlights are suppressed. Timeline actions must never hide essential information permanently.
+
+The local generator validates these cues before writing the JSON package. The API validates them again during import and publish.
+
 ## Validation rules
 
 - `title`, `subject`, and `topic` are required; the package title must exactly match `script.title`.

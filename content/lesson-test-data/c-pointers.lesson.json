@@ -51,7 +51,38 @@
             "*p reads the value 25",
             "*p = 40 changes x to 40"
           ]
-        }
+        },
+        "timeline": [
+          {
+            "atMs": 500,
+            "action": "reveal_step",
+            "targetIndex": 0,
+            "durationMs": 450
+          },
+          {
+            "atMs": 1800,
+            "action": "reveal_step",
+            "targetIndex": 1,
+            "durationMs": 450
+          },
+          {
+            "atMs": 3200,
+            "action": "reveal_step",
+            "targetIndex": 2,
+            "durationMs": 450
+          },
+          {
+            "atMs": 4600,
+            "action": "reveal_step",
+            "targetIndex": 3,
+            "durationMs": 450
+          },
+          {
+            "atMs": 5500,
+            "action": "emphasize_text",
+            "durationMs": 900
+          }
+        ]
       },
       {
         "sceneType": "checkpoint",

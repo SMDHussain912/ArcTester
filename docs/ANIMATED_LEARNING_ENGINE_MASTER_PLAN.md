@@ -1,6 +1,6 @@
 # ArcTester Animated Learning Engine — Master Plan
 
-**Status:** Planning baseline  
+**Status:** Implementation in progress — declarative timeline milestone 1 is implemented in API validation and web/mobile playback; immutable R2 package delivery and the full authoring/publishing studio remain pending.  
 **Target:** AP ECET CSE first; reusable across subjects  
 **Production decision:** No LLM or TTS inference in ArcTester production. Lesson authoring and media generation run locally on the creator workstation. Reviewed static lesson packages are published to Cloudflare R2 and loaded by ArcTester.
 

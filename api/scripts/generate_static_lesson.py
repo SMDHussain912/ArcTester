@@ -17,6 +17,40 @@ def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")[:80] or "lesson"
 
 
+def validate_scene_timeline(scene: dict, scene_index: int) -> None:
+    duration_ms = scene.get("durationMs")
+    visual = scene.get("visual") or {}
+    items = visual.get("items") or []
+    steps = visual.get("steps") or []
+    timeline = scene.get("timeline", [])
+    if not isinstance(timeline, list) or len(timeline) > 48:
+        raise SystemExit(f"Validation failed: scene {scene_index + 1} timeline must be an array with at most 48 actions.")
+    if not isinstance(duration_ms, int) or isinstance(duration_ms, bool):
+        raise SystemExit(f"Validation failed: scene {scene_index + 1} durationMs must be an integer.")
+    for action_index, action in enumerate(timeline):
+        prefix = f"scene {scene_index + 1}, timeline action {action_index + 1}"
+        if not isinstance(action, dict):
+            raise SystemExit(f"Validation failed: {prefix} must be an object.")
+        kind = action.get("action")
+        if kind not in {"reveal_item", "highlight_item", "reveal_step", "emphasize_text"}:
+            raise SystemExit(f"Validation failed: {prefix} uses an unsupported action.")
+        at_ms = action.get("atMs")
+        if not isinstance(at_ms, int) or isinstance(at_ms, bool) or at_ms < 0 or at_ms >= duration_ms:
+            raise SystemExit(f"Validation failed: {prefix} atMs must be an integer within the scene duration.")
+        action_duration = action.get("durationMs", 600)
+        if not isinstance(action_duration, int) or isinstance(action_duration, bool) or not 100 <= action_duration <= 10000:
+            raise SystemExit(f"Validation failed: {prefix} durationMs must be between 100 and 10000.")
+        if kind == "emphasize_text":
+            if "targetIndex" in action:
+                raise SystemExit(f"Validation failed: {prefix} emphasize_text must not include targetIndex.")
+            continue
+        target_index = action.get("targetIndex")
+        target_list = steps if kind == "reveal_step" else items
+        if not isinstance(target_index, int) or isinstance(target_index, bool) or not 0 <= target_index < len(target_list):
+            target_name = "visual.steps" if kind == "reveal_step" else "visual.items"
+            raise SystemExit(f"Validation failed: {prefix} targetIndex must refer to an existing {target_name} entry.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--title", required=True, help="Lesson title")
@@ -40,7 +74,10 @@ The JSON must exactly match this structure:
 "keyTakeaways": 3-6 strings, "groundingNotes": [outline limitations or source note]
 }},
 "storyboard": {{ "scenes": 4-7 objects }}
-Each scene: sceneType one of title_card,text_reveal,diagram,equation,step_sequence,checkpoint; title; narration (natural voice narration, 1-4 sentences); onScreenText; durationMs (2500-45000); visual object.
+Each scene: sceneType one of title_card,text_reveal,diagram,equation,step_sequence,checkpoint; title; narration (natural voice narration, 1-4 sentences); onScreenText; durationMs (2500-45000); visual object; timeline array (0-48 safe cue actions).
+Timeline actions are objects with atMs (integer milliseconds from scene start), action, optional targetIndex (zero-based), and optional durationMs (100-10000, default 600).
+Allowed actions: reveal_item (targetIndex into visual.items), highlight_item (targetIndex into visual.items), reveal_step (targetIndex into visual.steps), emphasize_text (no targetIndex).
+For diagrams, reveal useful items progressively; for step_sequence, reveal each step in order with spaced atMs cues. Add occasional highlights/emphasis only when it supports understanding. Keep every atMs less than scene duration. Do not include JavaScript, expressions, URLs, or executable content.
 Use at least one diagram with 2+ visual.items and valid connections, or a step_sequence with 2+ visual.steps.
 Last scene MUST be checkpoint. Keep total duration <= 8 minutes.
 Use simple ASCII formulas when needed. Do not include answer keys.
@@ -76,6 +113,11 @@ Trusted outline:
     if package.get("title") != package.get("script", {}).get("title"):
         raise SystemExit("Validation failed: package title and script.title must match.")
     scenes = package.get("storyboard", {}).get("scenes", [])
+    for scene_index, scene in enumerate(scenes):
+        if not isinstance(scene, dict):
+            raise SystemExit(f"Validation failed: scene {scene_index + 1} must be an object.")
+        scene.setdefault("timeline", [])
+        validate_scene_timeline(scene, scene_index)
     if len(scenes) < 3 or scenes[-1].get("sceneType") != "checkpoint":
         raise SystemExit("Validation failed: at least 3 scenes and final checkpoint are required.")
     if not any(scene.get("sceneType") in {"diagram", "step_sequence"} for scene in scenes):
