@@ -118,7 +118,7 @@ export interface AttemptRow {
   subject: string;
   topic: string | null;
   difficulty: string;
-  questionType: string;
+  questionType?: string;
 }
 
 export interface SubmitSummary {
