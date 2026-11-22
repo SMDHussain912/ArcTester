@@ -15,7 +15,7 @@
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Parts 1–2 merged via PRs #168/#169; exact-head CI #2583/#2587 passed. Final summary + admin publish slice implemented; exact-head CI #2590 passed, PR #170 merge pending |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Parts 1–4 implemented on main; exact-head CI passed for each slice (#2596, #44964173273, #44965912692, #44964902968). Production approved-bank/device verification remains NOT VERIFIED |
-| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
+| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Implemented in PR; exact-head CI and manual acceptance pending |
 | 10 | Final audit and honest completion/manual verification report | Not started |
 
 A phase is complete only when its full scope is implemented, exact-head CI is green, the PR is merged, and its Phase Report is posted. Reports must include PR links, CI links, NOT VERIFIED items, and manual steps. Never report estimates as verified completion.
@@ -69,3 +69,13 @@ Phase 7 slices must remain additive and reuse existing authenticated APIs. Do no
 - **Part 4 — Rule-based next-step recommendations:** merged via PR #173; exact 200-question completed mock evidence, minimum answered sample, topic/subject focus, and one-click server-backed targeted practice. Exact-head CI #44964902968 passed all 5 jobs.
 
 Phase 8 parts must not expose answer keys before submission, calculate official scores in the browser, or begin a full mock with fewer than 200 questions. Full phase completion requires exact-head CI, merge, report and explicit manual verification status.
+
+
+## Phase 9 delivery — Release verification
+
+- Android Build workflow now produces a standalone release APK artifact with a SHA-256 checksum and build metadata, so the artifact can be verified against its source commit and workflow run.
+- Hosted smoke checks validate the deployed HTTPS web shell and API liveness endpoint. The workflow is scheduled daily and supports manual dispatch; configure repository Actions variables `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL`.
+- Playwright release checks cover accessible button names, declared image alt text, main landmark and heading, 320px horizontal overflow, and a student-facing gallery load under throttled 3G/4x CPU conditions.
+- Report: `docs/PHASE_9_RELEASE_VERIFICATION_REPORT.md`.
+
+Phase 9 remains incomplete until exact-head CI and Android artifact workflows pass, hosted smoke is run against configured deployment URLs, and physical-device accessibility/performance checks are recorded. Do not claim TalkBack, device startup, cold-start, memory, or frame-rate results from browser CI.
