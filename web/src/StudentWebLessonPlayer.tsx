@@ -79,15 +79,16 @@ export default function StudentWebLessonPlayer() {
   }, [active?.id, sceneIndex]);
 
   useEffect(() => {
-    if (!animationPlaying || !scene) return;
+    const currentScene = active?.storyboard.scenes[sceneIndex];
+    if (!animationPlaying || !currentScene) return;
     let frame = 0;
     let startedAt: number | null = null;
     const tick = (now: number) => {
       if (startedAt === null) startedAt = now;
-      const next = Math.min(scene.durationMs, animationBaseRef.current + now - startedAt);
+      const next = Math.min(currentScene.durationMs, animationBaseRef.current + now - startedAt);
       setTimelineMs(next);
-      if (next >= scene.durationMs) {
-        animationBaseRef.current = scene.durationMs;
+      if (next >= currentScene.durationMs) {
+        animationBaseRef.current = currentScene.durationMs;
         setAnimationPlaying(false);
         return;
       }
@@ -95,7 +96,7 @@ export default function StudentWebLessonPlayer() {
     };
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
-  }, [animationPlaying, scene?.durationMs, active?.id, sceneIndex]);
+  }, [animationPlaying, active?.id, sceneIndex]);
 
   const subjects = useMemo(() => [...new Set(lessons.map((lesson) => lesson.subject))].sort(), [lessons]);
   const filtered = useMemo(() => lessons.filter((lesson) =>
