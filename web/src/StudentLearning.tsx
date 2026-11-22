@@ -10,7 +10,6 @@ export interface StudentLearningProps {
 export default function StudentLearning({ setActivePage }: StudentLearningProps) {
   const [concepts, setConcepts] = useState<LearningConcept[]>([]);
   const [conceptTotal, setConceptTotal] = useState(0);
-  const [conceptTotal, setConceptTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
