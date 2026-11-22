@@ -26,12 +26,16 @@ describe("buildFullMockRecommendations", () => {
   it("excludes unanswered questions from accuracy and sample size", () => {
     const answers = paper();
     for (let index = 0; index < 96; index += 1) answers[index].chosen = null;
-    const result = buildFullMockRecommendations({ answers, minimumAnswers: 5 });
-    const math = result.find(item => item.subject === "Mathematics");
-    expect(math?.evidence.answeredQuestions).toBe(4);
-    expect(result.some(item => item.subject === "Mathematics")).toBe(false);
-  });
+    const belowThreshold = buildFullMockRecommendations({ answers, minimumAnswers: 5 });
+    expect(belowThreshold.some(item => item.subject === "Mathematics")).toBe(false);
 
+    answers[95].chosen = 0;
+    const atThreshold = buildFullMockRecommendations({ answers, minimumAnswers: 5 });
+    const math = atThreshold.find(item => item.subject === "Mathematics");
+    expect(math?.evidence.answeredQuestions).toBe(5);
+    expect(math?.evidence.incorrectAnswers).toBe(4);
+    expect(math?.evidence.accuracy).toBe(0.2);
+  });
   it("uses subject fallback only when topic labels lack sufficient sample", () => {
     const answers = paper().map((item, index) => index < 100 ? { ...item, topic: null } : item);
     const result = buildFullMockRecommendations({ answers });
