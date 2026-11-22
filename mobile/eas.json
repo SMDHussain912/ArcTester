@@ -19,6 +19,13 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://arctester.onrender.com"
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
