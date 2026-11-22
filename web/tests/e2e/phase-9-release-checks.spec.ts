@@ -12,12 +12,12 @@ test.describe("Phase 9 release checks", () => {
       buttons.filter((button) => {
         const element = button as HTMLButtonElement;
         return !(element.innerText.trim() || element.getAttribute("aria-label") || element.getAttribute("aria-labelledby"));
-      }),
+      }).length,
     );
     expect(unlabeledButtons, "Every button should have an accessible name").toHaveLength(0);
 
     const imagesWithoutAlt = await page.locator("img").evaluateAll((images) =>
-      images.filter((image) => !image.hasAttribute("alt")),
+      images.filter((image) => !image.hasAttribute("alt")).length,
     );
     expect(imagesWithoutAlt, "Images must declare alt text (empty is valid for decorative images)").toHaveLength(0);
 
