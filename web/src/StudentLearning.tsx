@@ -27,7 +27,18 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
         "/learning/concepts" + (suffix ? "?" + suffix : ""),
       );
       if (generation !== cancelledRef.current) return;
-      setConcepts(result.concepts);
+      const rows = Array.isArray(result?.concepts) ? result.concepts : [];
+      setConcepts(rows.filter(Boolean).map((concept) => ({
+        ...concept,
+        slug: String(concept.slug ?? ""),
+        title: String(concept.title ?? "Untitled concept"),
+        subject: String(concept.subject ?? "General"),
+        topic: String(concept.topic ?? "General"),
+        definition: String(concept.definition ?? ""),
+        examples: Array.isArray(concept.examples) ? concept.examples.filter((item): item is string => typeof item === "string") : [],
+        relatedConcepts: Array.isArray(concept.relatedConcepts) ? concept.relatedConcepts.filter((item): item is string => typeof item === "string") : [],
+        commonMistakes: Array.isArray(concept.commonMistakes) ? concept.commonMistakes.filter((item): item is string => typeof item === "string") : [],
+      })));
     } catch (cause) {
       if (generation !== cancelledRef.current) return;
       setError(cause instanceof Error ? cause.message : "Could not load the concept library.");
