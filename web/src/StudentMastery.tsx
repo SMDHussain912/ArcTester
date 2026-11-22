@@ -62,7 +62,7 @@ export default function StudentMastery() {
   }
 
   return (
-    <div className="stack">
+    <div className="stack student-mastery">
       <section className="panel">
         <div className="panel-header">
           <div><p className="eyebrow">LEARNING PROGRESS</p><h1>Topic mastery</h1><p className="muted">Rule-based mastery from your practice history. Coverage shows how much of each topic you have tried.</p></div>
