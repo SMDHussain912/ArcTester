@@ -54,3 +54,22 @@
   .gamification-day { padding: 8px 2px; border-radius: 8px; }
   .gamification-day small { font-size: 10px; }
 }
+
+/* Give reward panels their own interior spacing; the global .panel is intentionally unpadded. */
+.student-gamification > .panel { padding: clamp(16px, 2.2vw, 24px); }
+.student-gamification .section-head { margin: 0 0 16px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.student-gamification .section-head > div { min-width:0; }
+.student-gamification .section-head h2 { line-height:1.35; overflow-wrap:anywhere; }
+.student-gamification .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.student-gamification #daily-xp-goal { width:min(100%,150px); }
+.student-gamification .gamification-progress { margin:16px 0 4px; }
+.student-gamification .stats-row { margin-bottom:24px; }
+.student-gamification .panel > p:last-child { margin-bottom:0; }
+@media(max-width:560px) {
+ .student-gamification > .panel { padding:16px; }
+ .student-gamification .section-head { gap:10px; }
+ .student-gamification .gamification-week { grid-template-columns:repeat(7,minmax(0,1fr)); }
+ .student-gamification .gamification-day { min-width:0; overflow-wrap:anywhere; }
+ .student-gamification .gamification-day b { font-size:11px; }
+ .student-gamification .gamification-day small { font-size:9px; }
+}
