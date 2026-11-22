@@ -74,7 +74,8 @@ export default function StudentGamification() {
       {data ? <>
         <div className="stats-row">
           <article className="panel stat"><span className="muted">Total XP</span><strong>{data.totalXp.toLocaleString()}</strong><span className="muted">Level {data.level}</span></article>
-          <article className="panel stat"><span className="muted">XP balance</span><strong>{data.xpBalance.toLocaleString()}</strong><span className="muted">Spendable XP</span></article>\n          <article className="panel stat"><span className="muted">Current streak</span><strong>{data.currentStreak} 🔥</strong><span className="muted">Longest: {data.longestStreak} days</span></article>
+          <article className="panel stat"><span className="muted">XP balance</span><strong>{data.xpBalance.toLocaleString()}</strong><span className="muted">Spendable XP</span></article>
+          <article className="panel stat"><span className="muted">Current streak</span><strong>{data.currentStreak} 🔥</strong><span className="muted">Longest: {data.longestStreak} days</span></article>
           <article className="panel stat"><span className="muted">Streak freezes</span><strong>{data.streakFreezeInventory} / {MAX_FREEZES} ❄️</strong><span className="muted">Protect one missed day automatically</span></article>
         </div>
         <section className="panel">
