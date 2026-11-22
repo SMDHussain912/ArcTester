@@ -412,3 +412,9 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,tra
 .web-lesson-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 @media(max-width:700px){.web-lesson-card-grid{grid-template-columns:1fr}.web-lesson-player-header{grid-template-columns:1fr auto}.web-lesson-player-header>button{grid-column:1/-1;justify-self:start}.web-lesson-controls{align-items:stretch}.web-lesson-controls button{flex:1}.web-lesson-controls .muted{flex-basis:100%;text-align:center;order:3}}
 @media(prefers-reduced-motion:reduce){.web-lesson-progress>span{transition:none}}
+
+.practice-question-type-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}
+.practice-question-type-options label{display:flex;align-items:center;gap:8px;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font-size:12px;line-height:1.4}
+.practice-question-type-options label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.practice-question-type-options input{flex:0 0 auto}
+@media(max-width:560px){.practice-config-grid,.practice-subject-grid,.practice-topic-list{grid-template-columns:minmax(0,1fr)}.practice-question-type-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
