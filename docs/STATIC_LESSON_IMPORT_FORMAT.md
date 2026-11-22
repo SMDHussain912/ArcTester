@@ -72,7 +72,7 @@ Use a UTF-8 JSON file, up to 256 KB, with this shape:
 
 ## Validation rules
 
-- `title`, `subject`, and `topic` are required.
+- `title`, `subject`, and `topic` are required; the package title must exactly match `script.title`.
 - Script: 2–8 objectives, 2–12 sections, 2–10 takeaways.
 - Storyboard: 3–24 scenes, at least one diagram or step sequence, and a final checkpoint.
 - Diagram connections must reference visible diagram items; equation scenes need an equation; step sequences need at least two steps.
