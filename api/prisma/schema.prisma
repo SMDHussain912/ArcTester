@@ -102,6 +102,7 @@ model User {
   questionReviews UserQuestionReview[]
   badges UserBadge[]
   lessonDrafts LessonDraft[]
+  uploadedLessonAudio LessonAudioAsset[]
 }
 
 model Invitation {
@@ -117,6 +118,7 @@ model Invitation {
 
   @@index([email, expiresAt])
   @@index([createdById])
+  audioAssets LessonAudioAsset[]
 }
 
 model Device {
@@ -647,4 +649,26 @@ model LessonDraft {
 
   @@index([status, updatedAt])
   @@index([createdById])
+}
+
+
+// Audio bytes live in private object storage; PostgreSQL stores only metadata and narration fingerprint.
+model LessonAudioAsset {
+  id             String      @id @default(cuid())
+  lessonDraft    LessonDraft @relation(fields: [lessonDraftId], references: [id], onDelete: Cascade)
+  lessonDraftId  String
+  uploadedBy     User        @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedById   Int
+  sceneIndex     Int
+  storagePath    String      @unique
+  mimeType       String
+  sizeBytes      Int
+  narrationHash  String
+  voice          String      @default("unknown")
+  model          String      @default("unknown")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([lessonDraftId, sceneIndex])
+  @@index([lessonDraftId, narrationHash])
 }
