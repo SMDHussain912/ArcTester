@@ -103,6 +103,7 @@ model User {
   badges UserBadge[]
   lessonDrafts LessonDraft[]
   uploadedLessonAudio LessonAudioAsset[]
+  createdLessonVersions LessonVersion[]
 }
 
 model Invitation {
