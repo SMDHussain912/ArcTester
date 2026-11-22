@@ -122,10 +122,10 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // 1 MB JSON body limit by default. The large-payload import routes apply their
   // own 50 MB parsers below; every other route uses the 1 MB global parser.
   app.use((req, res, next) => {
-    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import" || /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path)) {
       return next();
     }
-    express.json({ limit: "1mb" })(req, res, next);
+    express.json({ limit: /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path) ? "15mb" : "1mb" })(req, res, next);
   });
   app.use(localCors);
   app.use(cookieCsrfGuard);
