@@ -14,7 +14,7 @@
 | 5 | Mobile home/path, lesson player, feedback/results/profile, offline progress sync | Complete on main via PRs #156–#159 |
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Parts 1–5 implemented and merged; final verification/report pending |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Parts 1–2 merged via PRs #168/#169; exact-head CI #2583/#2587 passed. Final summary + admin publish slice implemented; exact-head CI #2590 passed, PR #170 merge pending |
-| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Part 1 complete on main via PR #171; Part 2 implemented on PR #172, exact-head CI pending |
+| 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Parts 1–4 implemented on main; exact-head CI passed for each slice (#2596, #44964173273, #44965912692, #44964902968). Production approved-bank/device verification remains NOT VERIFIED |
 | 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | Not started |
 | 10 | Final audit and honest completion/manual verification report | Not started |
 
@@ -64,8 +64,8 @@ Phase 7 slices must remain additive and reuse existing authenticated APIs. Do no
 ## Phase 8 delivery slices
 
 - **Part 1 — Full-length mock readiness and authoritative duration:** enforce the official 200-question CSE blueprint at attempt creation; if any subject quota is short, reject the start with a subject-by-subject approved-bank shortage instead of silently creating a partial paper. Keep the server-owned 180-minute deadline. Add unit tests for exact readiness and duration. Merged on main via PR #171; exact-head CI #2596 passed.
-- **Part 2 — Timed mock experience and answer review:** distinct full-mock session header with 180-minute duration; explicit final-submit confirmation with answered/unanswered counts; distinct mock result/review labels. Reuses server deadline, saved-answer restore, snapshots and server grading. Implemented in PR #172; exact-head CI pending.
-- **Part 3 — Subject/topic performance analytics:** implemented on `feature/phase-8-part-3-mock-subject-topic-analytics`; authenticated analytics include only completed mock attempts with exactly 200 answer rows, aggregate immutable subject/topic snapshots, report correct/incorrect/unanswered separately, and calculate accuracy over answered questions only. Exact-head CI and merge pending; live approved-bank/device verification pending.
-- **Part 4 — Rule-based next-step recommendations:** merged on main via PR #173 (`961fc9f`); exact-head CI #44964902968 passed all 5 jobs. Live-account recommendation and device accessibility checks remain pending.
+- **Part 2 — Timed mock experience and answer review:** distinct full-mock session header with 180-minute duration; explicit final-submit confirmation with answered/unanswered counts; distinct mock result/review labels. Reuses server deadline, saved-answer restore, snapshots and server grading. Merged via PR #172; exact-head CI #44964173273 passed all 5 jobs.
+- **Part 3 — Subject/topic performance analytics:** merged directly to main after exact-head CI #44965912692 passed all 5 jobs; authenticated full-mock aggregation, immutable subject/topic snapshots, and explicit answered/incorrect/unanswered denominators. Report: docs/PHASE_8_PART_3_REPORT.md.
+- **Part 4 — Rule-based next-step recommendations:** merged via PR #173; exact 200-question completed mock evidence, minimum answered sample, topic/subject focus, and one-click server-backed targeted practice. Exact-head CI #44964902968 passed all 5 jobs.
 
 Phase 8 parts must not expose answer keys before submission, calculate official scores in the browser, or begin a full mock with fewer than 200 questions. Full phase completion requires exact-head CI, merge, report and explicit manual verification status.

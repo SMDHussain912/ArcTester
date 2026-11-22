@@ -20,8 +20,8 @@ Deliver a clearer full-length AP ECET mock session and post-submit review while 
 
 ## Verification
 - PR: https://github.com/smdgamekingindo-TN/ArcTester/pull/172
-- Exact-head CI run: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44964130483
-- At report creation, CI is still running. This part is **not verified or complete** until all exact-head jobs pass and the PR is merged.
+- Exact-head CI run: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44964173273
+- Exact-head CI #44964173273 passed all 5 jobs; PR #172 is merged to main. The combined Phase 8 CI run #44965912692 also passed all 5 jobs after Part 3 landed.
 - NOT VERIFIED: real-account end-to-end full mock completion (CI seed bank intentionally cannot produce 200 approved questions), refresh/reconnect on a physical device, accessibility review, and production deployment.
 
 ## Manual checks after merge

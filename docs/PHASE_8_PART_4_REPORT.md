@@ -19,7 +19,9 @@
 - The recommendation uses answer snapshots from the completed attempt and the existing approved question bank for follow-up practice.
 
 ## Verification
-- PR and exact-head CI status pending.
+- PR #173 merged to main.
+- Exact-head CI #44964902968 passed all 5 jobs: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44964902968
+- The full Phase 8 integration CI run #44965912692 also passed all 5 jobs after Part 3 landed.
 - NOT VERIFIED: live-account recommendation against a populated 200-question bank, device-level UI/keyboard accessibility, and production deployment.
 
 ## Manual check after merge

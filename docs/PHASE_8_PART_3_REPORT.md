@@ -11,8 +11,8 @@
 - No database migration; no client-side grading or answer-key exposure.
 
 ## Verification
-- Exact-head CI: pending.
-- Merge to main: pending.
+- Exact-head CI #44965912692 passed all 5 jobs: https://github.com/smdgamekingindo-TN/ArcTester/actions/runs/44965912692
+- Merged directly to main after exact-head CI passed.
 - Production approved-bank check, real student account, refresh/reconnect on a physical device, and accessibility review: not verified.
 
 ## Manual verification after merge

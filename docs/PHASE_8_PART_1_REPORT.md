@@ -15,8 +15,8 @@
 - Practice, speed-round, daily-challenge and mistakes modes are unchanged.
 
 ## Verification
-- Exact-head GitHub Actions CI: PENDING.
-- PR merge: PENDING.
+- Exact-head GitHub Actions CI #2596 passed.
+- PR #171 merged to main.
 - Real approved-bank readiness check with student account: NOT VERIFIED.
 - Manual mock start, timeout and answer restore on production: NOT VERIFIED.
 
