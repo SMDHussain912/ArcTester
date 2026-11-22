@@ -26,7 +26,9 @@ describe("study materials API",()=>{
   const upload=await fetch(server.baseUrl+"/admin/study-materials/upload?"+query.toString(),{method:"POST",headers:{cookie:adminCookie,"content-type":"application/pdf"},body:bytes});
   expect(upload.status).toBe(201);
   const created=await upload.json() as{material:{id:string;status:string;fileName:string;sizeBytes:number}};
-  expect(created.material).toMatchObject({status:"DRAFT",fileName:"notes.pdf",sizeBytes:bytes.length});
+  expect(created.material.status).toBe("DRAFT");
+  expect(created.material.fileName).toBe("notes.pdf");
+  expect(created.material.sizeBytes).toBe(bytes.length);
   expect((await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:unknown[]}).materials).toHaveLength(0);
   expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
   const list=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<Record<string,unknown>>};
