@@ -156,7 +156,8 @@ export default function StudentWebLessonPlayer() {
       return;
     }
     audio?.pause();
-    const startAt = timelineMs >= scene?.durationMs ? 0 : timelineMs;
+    const currentDuration = active?.storyboard.scenes[sceneIndex]?.durationMs ?? 0;
+    const startAt = timelineMs >= currentDuration ? 0 : timelineMs;
     animationBaseRef.current = startAt;
     setTimelineMs(startAt);
     setAnimationPlaying(true);
