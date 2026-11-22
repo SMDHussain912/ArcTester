@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
 import type {
   PerformanceOverview,
+  FullMockPerformanceReport,
   StudyRecommendation,
   StudyRecommendationsReport,
   TopicRow,
@@ -16,6 +17,7 @@ export interface StudentAnalyticsProps {
 
 export default function StudentAnalytics({ setActivePage, onStartRecommendedPractice }: StudentAnalyticsProps) {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
+  const [fullMockPerformance, setFullMockPerformance] = useState<FullMockPerformanceReport | null>(null);
   const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
   const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,7 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
       request<PerformanceOverview>("/analytics/overview"),
       request<WeakTopicsReport>("/analytics/weak-topics"),
       request<StudyRecommendationsReport>("/analytics/recommendations"),
+      request<FullMockPerformanceReport>("/analytics/full-mock-performance"),
     ]);
     if (generation !== generationRef.current) return;
     const failures: string[] = [];
@@ -39,6 +42,8 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
     else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
     if (results[2].status === "fulfilled") setRecommendations(results[2].value);
     else failures.push("Study recommendations: " + (results[2].reason instanceof Error ? results[2].reason.message : "Could not load this section."));
+    if (results[3].status === "fulfilled") setFullMockPerformance(results[3].value);
+    else failures.push("Full-mock analytics: " + (results[3].reason instanceof Error ? results[3].reason.message : "Could not load this section."));
     setErrors(failures);
     setLoading(false);
   }, []);
@@ -73,7 +78,7 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
           <span>Other available sections remain visible. Use Refresh analytics to retry.</span>
         </div>
       ) : null}
-      {loading && !overview && !weakTopics && !recommendations ? (
+      {loading && !overview && !weakTopics && !recommendations && !fullMockPerformance ? (
         <div className="stack" style={{ gap: 10 }}>
           <Skeleton variant="stat-tile" className="skeleton-stat" />
           <Skeleton variant="stat-tile" className="skeleton-stat" />
@@ -103,6 +108,76 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
             </div>
           </section>
         </>
+      )}
+
+      {fullMockPerformance && (
+        <section className="panel" aria-labelledby="full-mock-performance-title">
+          <div className="panel-header">
+            <h2 id="full-mock-performance-title">Full-mock subject &amp; topic performance</h2>
+            <span className="pill">{fullMockPerformance.completedFullMocks} completed mocks</span>
+          </div>
+          <p className="muted">
+            Aggregated from completed 200-question mocks only{fullMockPerformance.latestMockAt ? `; latest: ${new Date(fullMockPerformance.latestMockAt).toLocaleDateString()}` : ""}.
+            Accuracy is correct answers divided by answered questions. Unanswered questions are shown separately and remain part of the paper count.
+          </p>
+          {fullMockPerformance.completedFullMocks === 0 ? (
+            <p className="muted">Complete a full 200-question mock to unlock subject and topic breakdowns.</p>
+          ) : (
+            <>
+              <div className="stat-grid">
+                <div className="stat-card">
+                  <div className="stat-label">Full-mock accuracy</div>
+                  <div className="stat-value">{accuracyPercent(fullMockPerformance.accuracy)}</div>
+                  <div className="stat-caption">{fullMockPerformance.correct} correct / {fullMockPerformance.answeredQuestions} answered</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Questions across mocks</div>
+                  <div className="stat-value">{fullMockPerformance.questionCount}</div>
+                  <div className="stat-caption">{fullMockPerformance.completedFullMocks} × 200-question papers</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-label">Unanswered</div>
+                  <div className="stat-value">{fullMockPerformance.unanswered}</div>
+                  <div className="stat-caption">Not counted as incorrect</div>
+                </div>
+              </div>
+              <div className="stack">
+                <h3>Subject breakdown</h3>
+                {fullMockPerformance.subjects.map((subject) => {
+                  const subjectTopics = fullMockPerformance.topics.filter((topic) => topic.subject === subject.subject);
+                  return (
+                    <article className="panel" key={subject.subject}>
+                      <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
+                        <strong>{subject.subject}</strong>
+                        <span className="pill">{accuracyPercent(subject.accuracy)} · {subject.answeredQuestions}/{subject.questionCount} answered</span>
+                      </div>
+                      <p className="muted">{subject.correct} correct · {subject.incorrect} incorrect · {subject.unanswered} unanswered</p>
+                      <details className="analytics-topic-details">
+                        <summary>Topic breakdown ({subjectTopics.length})</summary>
+                        <div className="table-wrap">
+                          <table className="analytics-table">
+                            <thead>
+                              <tr><th scope="col">Topic</th><th scope="col">Accuracy</th><th scope="col">Correct</th><th scope="col">Incorrect</th><th scope="col">Unanswered</th><th scope="col">Paper items</th></tr>
+                            </thead>
+                            <tbody>
+                              {subjectTopics.map((topic, index) => (
+                                <tr key={topic.topic ?? `untagged-${index}`}>
+                                  <th scope="row">{topic.topic || "Uncategorized"}</th>
+                                  <td>{accuracyPercent(topic.accuracy)} ({topic.answeredQuestions} answered)</td>
+                                  <td>{topic.correct}</td><td>{topic.incorrect}</td><td>{topic.unanswered}</td><td>{topic.questionCount}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
       )}
 
       {weakTopics && (
