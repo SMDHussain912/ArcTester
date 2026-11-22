@@ -12,7 +12,7 @@ This is a code and repository-state audit, not a claim that every production or 
 - Phase 6: PR #167 is merged. Offline/reconnect and device/account-isolation checks still require manual verification.
 - Phase 7: PR #170 is merged. Keyboard/screen-reader and real-account lesson publishing checks remain manual.
 - Phase 8: PRs #171–#174 are merged. Approved-bank readiness and physical-device verification remain NOT VERIFIED.
-- Phase 9: PR #175 is open, not merged. Exact-head CI run #44967911502 passed all five jobs on commit `3bd15ab2a03101bb28fcb196b84a2f03186d4d16`. Exact-head Android Build run #44967911493 was still in progress when this report was prepared.
+- Phase 9: PR #175 is open, not merged. Exact-head CI run #44967911502 passed all five jobs on commit `3bd15ab2a03101bb28fcb196b84a2f03186d4d16`. Exact-head Android Build run #44967911493 also passed and produced artifact `arctester-android-apk` (33,626,410 bytes; SHA-256 `21013f6276a117beff4588c9140dbb9832cecec62c790a710ce4fada4a79dd2d`). Hosted deployment smoke and physical-device checks remain NOT VERIFIED.
 - Phase 10: audit/remediation underway; not complete.
 
 ## Lesson-generation cost and content audit
@@ -40,13 +40,14 @@ This is a code and repository-state audit, not a claim that every production or 
 
 ## Release and manual verification checklist
 
-- [ ] Merge Phase 9 PR #175 after exact-head CI and Android build are green.
+- [x] Exact-head Phase 9 CI and Android APK artifact passed (#44967911502, #44967911493).
+- [ ] Merge Phase 9 PR #175; hosted smoke and physical-device acceptance are still pending.
 - [ ] Configure `ARCTESTER_WEB_URL` and `ARCTESTER_API_URL` repository Actions variables; run hosted smoke against the actual deployment.
 - [ ] Install the generated APK on a real Android device; verify launch, lesson flow, offline/reconnect, and low-end responsiveness.
 - [ ] Perform TalkBack/screen-reader and keyboard-only checks.
 - [ ] Verify admin static JSON import, validation errors, draft editing, publish confirmation, and student visibility with real accounts.
 - [ ] Verify lesson text remains available when NVIDIA lesson generation and TTS are unconfigured.
-- [ ] Re-run exact-head CI after this audit/remediation PR and record the result here.
+- [ ] Re-run exact-head CI after this audit/remediation PR and record the result here (run #44968483145 was still in progress at this report update).
 
 ## Decision
 
