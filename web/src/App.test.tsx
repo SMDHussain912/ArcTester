@@ -351,8 +351,10 @@ describe("live Vite application", () => {
       mode: "practice",
       subjects: ["Maths", "Physics"],
       topicFilters: [{ subject: "Maths", topic: "Algebra" }],
-      count: 5,
+      count: 4,
       difficulty: "easy",
+      durationMinutes: 20,
+      questionTypes: [],
     });
   });
 
