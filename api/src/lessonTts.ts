@@ -51,15 +51,16 @@ export class LessonTtsError extends Error {
   }
 }
 
-const NVIDIA_MAGPIE_TTS_ENDPOINT = "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com";
+const DEFAULT_NVIDIA_TTS_MODEL = "877104f7-e885-42b9-8de8-f6e4c6303969";
 const NVIDIA_MAGPIE_LANGUAGE = "en-US";
 const NVIDIA_MAGPIE_VOICE = "Magpie-Multilingual.EN-US.Aria";
 
 export function getLessonTtsConfig() {
   const apiKey = process.env.NVIDIA_API_KEY?.trim();
+  const model = process.env.NVIDIA_TTS_MODEL?.trim() || DEFAULT_NVIDIA_TTS_MODEL;
   if (!apiKey) throw new LessonTtsError("LESSON_TTS_NOT_CONFIGURED");
   const parsed = TtsConfigSchema.safeParse({
-    baseUrl: NVIDIA_MAGPIE_TTS_ENDPOINT,
+    baseUrl: `https://${model}.invocation.api.nvcf.nvidia.com`,
     language: NVIDIA_MAGPIE_LANGUAGE,
     voice: NVIDIA_MAGPIE_VOICE,
     apiKey,
