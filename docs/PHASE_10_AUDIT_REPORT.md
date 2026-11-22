@@ -47,7 +47,7 @@ This is a code and repository-state audit, not a claim that every production or 
 - [ ] Perform TalkBack/screen-reader and keyboard-only checks.
 - [ ] Verify admin static JSON import, validation errors, draft editing, publish confirmation, and student visibility with real accounts.
 - [ ] Verify lesson text remains available when NVIDIA lesson generation and TTS are unconfigured.
-- [ ] Re-run exact-head CI after this audit/remediation PR and record the result here (run #44968483145 was still in progress at this report update).
+- [x] Phase 10 exact-head CI run #44968918015 passed all five jobs on commit `b43f0e5e13d091990848af51abb1df9ac236fcdd`. Android build run #44968918012 was still in progress at this report update; final checks are tracked on PR #176.
 
 ## Decision
 
