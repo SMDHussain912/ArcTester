@@ -650,8 +650,56 @@ model LessonDraft {
   @@index([status, updatedAt])
   @@index([createdById])
   audioAssets LessonAudioAsset[]
+
+  versions        LessonVersion[]
+  activeVersion   LessonVersion? @relation("ActiveLessonVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  activeVersionId String? @unique
 }
 
+
+
+model LessonVersion {
+  id                   String   @id @default(cuid())
+  lessonDraft          LessonDraft @relation(fields: [lessonDraftId], references: [id], onDelete: Cascade)
+  lessonDraftId        String
+  version              Int
+  packageSchemaVersion Int
+  manifestKey          String?
+  manifestSha256       String?
+  manifestSizeBytes    Int?
+  status               String   @default("UPLOADING")
+  validationJson       String   @default("{}")
+  createdBy            User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById          Int
+  createdAt            DateTime @default(now())
+  verifiedAt           DateTime?
+  publishedAt          DateTime?
+  assets               LessonVersionAsset[]
+  activeFor            LessonDraft? @relation("ActiveLessonVersion")
+
+  @@unique([lessonDraftId, version])
+  @@index([lessonDraftId, status, version])
+}
+
+model LessonVersionAsset {
+  id             String   @id @default(cuid())
+  lessonVersion  LessonVersion @relation(fields: [lessonVersionId], references: [id], onDelete: Cascade)
+  lessonVersionId String
+  assetId        String
+  sceneId        String?
+  role           String
+  objectKey      String   @unique
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  durationMs     Int?
+  locale         String?
+  narrationHash  String?
+  createdAt      DateTime @default(now())
+
+  @@unique([lessonVersionId, assetId])
+  @@index([lessonVersionId, sceneId])
+}
 
 // Audio bytes live in private object storage; PostgreSQL stores only metadata and narration fingerprint.
 model LessonAudioAsset {
