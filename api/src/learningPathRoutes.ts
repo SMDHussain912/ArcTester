@@ -7,7 +7,6 @@ import { badRequest, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import { awardXp } from "./gamificationService.js";
-import { listLearningConcepts } from "./learningConcepts.js";
 import { scoreUnitTestAttempt, unitTestAttemptScope, unitTestCompletionScope } from "./unitTestAttempt.js";
 
 const Id = z.coerce.number().int().positive();
@@ -91,15 +90,6 @@ async function ensureUnitTestUnlocked(db: PrismaClient, userId: number, unitId: 
 
 export function learningPathRouter(db: PrismaClient): Router {
   const router = Router();
-  // The concept glossary is curated in learningConcepts.ts and served directly
-  // to authenticated students. Keep this endpoint independent of DB seed state.
-  router.get("/learning/concepts", requireAuth, (req: AuthedRequest, res, next) => {
-    try {
-      const query = z.object({ q: z.string().trim().max(120).optional() }).parse(req.query);
-      const concepts = listLearningConcepts({ query: query.q, limit: 50 });
-      res.json({ total: concepts.length, concepts });
-    } catch (error) { next(error); }
-  });
   router.get("/path", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const query = z.object({ subject: z.string().trim().min(1).max(100).optional() }).parse(req.query);
