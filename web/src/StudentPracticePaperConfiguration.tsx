@@ -4,14 +4,14 @@ interface StudentPracticePaperConfigurationProps {
   selectedSubjects: string[];
   questionCount: number;
   difficulty: PracticeDifficulty;
-  durationMinutes: number;
-  onDurationChange: (minutes: number) => void;
-  questionTypes: PracticeQuestionType[];
-  onQuestionTypesChange: (types: PracticeQuestionType[]) => void;
+  durationMinutes?: number;
+  onDurationChange?: (minutes: number) => void;
+  questionTypes?: PracticeQuestionType[];
+  onQuestionTypesChange?: (types: PracticeQuestionType[]) => void;
   onQuestionCountChange: (count: number) => void;
   onDifficultyChange: (difficulty: PracticeDifficulty) => void;
 }
-export default function StudentPracticePaperConfiguration({ selectedSubjects, questionCount, difficulty, durationMinutes, questionTypes, onDurationChange, onQuestionTypesChange, onQuestionCountChange, onDifficultyChange }: StudentPracticePaperConfigurationProps) {
+export default function StudentPracticePaperConfiguration({ selectedSubjects, questionCount, difficulty, durationMinutes = 20, questionTypes = [], onDurationChange = () => undefined, onQuestionTypesChange = () => undefined, onQuestionCountChange, onDifficultyChange }: StudentPracticePaperConfigurationProps) {
   return (
     <div className="practice-builder-section">
       <strong>3. Configure your paper</strong>
