@@ -887,7 +887,7 @@ export default function App() {
         ? { mode, count: 10 }
         : mistakes
           ? { mode, count: 20 }
-          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count, durationMinutes: config.durationMinutes };
+          : { mode, subjects: config.subjects, topicFilters: config.topicFilters, difficulty: config.difficulty, count: speedRound ? 10 : config.count, durationMinutes: config.durationMinutes, questionTypes: config.questionTypes };
       const created = await api<Test>("/tests", { method: "POST", body: JSON.stringify(request) });
       setTest(created);
       setResult(null);
@@ -1454,10 +1454,10 @@ export default function App() {
                 <View style={{ height: 8, width: `${gamification?.xpIntoLevel ?? 0}%`, backgroundColor: "#2563eb" }} />
               </View>
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20, durationMinutes: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20, durationMinutes: 20, questionTypes: [] }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
                   <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review mistakes</Text>
                 </TouchableOpacity>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20, questionTypes: [] }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
                   <Text style={[styles.primaryText, { color: "#ffffff" }]}>{gamification?.dailyChallengeCompleted ? "Challenge completed · replay" : "Daily challenge"}</Text>
                 </TouchableOpacity>
               </View>
@@ -1469,7 +1469,7 @@ export default function App() {
               disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
               onStart={(subject, topic) => {
                 setPracticePresetSubject(subject);
-                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1, durationMinutes: 20 }, true);
+                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1, durationMinutes: 20, questionTypes: [] }, true);
               }}
             />
             <TouchableOpacity
