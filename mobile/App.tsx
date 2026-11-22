@@ -1454,10 +1454,10 @@ export default function App() {
                 <View style={{ height: 8, width: `${gamification?.xpIntoLevel ?? 0}%`, backgroundColor: "#2563eb" }} />
               </View>
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start mistakes practice from questions previously answered incorrectly" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 20, durationMinutes: 20 }, false, false, true)} style={[styles.secondary, { flex: 1 }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
                   <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review mistakes</Text>
                 </TouchableOpacity>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Start today's ten-question daily challenge" disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.total} onPress={() => void startPractice({ subjects: [], topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20 }, false, false, false, true)} style={[styles.primary, { flex: 1, backgroundColor: "#7c3aed" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}>
                   <Text style={[styles.primaryText, { color: "#ffffff" }]}>{gamification?.dailyChallengeCompleted ? "Challenge completed · replay" : "Daily challenge"}</Text>
                 </TouchableOpacity>
               </View>
@@ -1469,7 +1469,7 @@ export default function App() {
               disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
               onStart={(subject, topic) => {
                 setPracticePresetSubject(subject);
-                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1 }, true);
+                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1, durationMinutes: 20 }, true);
               }}
             />
             <TouchableOpacity
@@ -1478,7 +1478,7 @@ export default function App() {
               disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt || !bank?.subjects.some((subject) => (subject.practiceCount ?? subject.count) > 0)}
               onPress={() => {
                 const subjects = (bank?.subjects ?? []).filter((subject) => (subject.practiceCount ?? subject.count) > 0).map((subject) => subject.subject);
-                void startPractice({ subjects, topicFilters: [], difficulty: "any", count: 10 }, false, true);
+                void startPractice({ subjects, topicFilters: [], difficulty: "any", count: 10, durationMinutes: 20 }, false, true);
               }}
               style={[styles.card, { marginTop: 14, padding: 18, borderColor: "#f59e0b", backgroundColor: darkMode ? "#172235" : "#fffbeb" }, (busy || checkingPracticeRecovery || hasSavedPracticeAttempt) && { opacity: 0.5 }]}
             >
