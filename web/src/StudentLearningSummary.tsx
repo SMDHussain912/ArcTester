@@ -68,7 +68,11 @@ export default function StudentLearningSummary({ setActivePage }: { setActivePag
   const goal = data?.rewards.dailyGoalXp ?? 0;
   const goalPct = goal > 0 ? Math.min(100, Math.round(todayXp / goal * 100)) : 0;
   const weakTopics = data ? [...data.topics].sort((a, b) => a.masteryPct - b.masteryPct || a.coveragePct - b.coveragePct).slice(0, 5) : [];
-  const trend = data?.overview.practice.trend.slice(-5).reverse() ?? [];
+  // Normalize again at the render boundary: stale API responses and old cached
+  // payloads must never be able to crash the summary screen.
+  const trend = Array.isArray(data?.overview?.practice?.trend)
+    ? data.overview.practice.trend.filter((item) => item && typeof item === "object").slice(-5).reverse()
+    : [];
 
   return <section className="student-learning-summary stack" aria-labelledby="learning-summary-title">
     <div className="page-heading">
