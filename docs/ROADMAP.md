@@ -15,7 +15,7 @@
 | 6 | Question variety, speed round, retryable unit test, mistakes, daily challenge, rewards, optional leaderboard/settings | Complete on main via PRs #160–#167; offline/reconnect and device/account-isolation checks remain NOT VERIFIED |
 | 7 | Responsive web learning-path/player/progress parity; simple admin | Complete on main via PRs #168–#170; keyboard/screen-reader and real-account lesson publish checks remain NOT VERIFIED |
 | 8 | Timed 200-question AP ECET mock, review, subject/topic analytics and rule-based recommendations | Complete on main via PRs #171–#174; approved-bank readiness and physical-device verification remain NOT VERIFIED |
-| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | PR #175 open; exact-head CI #44967911502 passed all 5 jobs on 3bd15ab2; exact-head Android build #44967911493 pending. Hosted and device checks remain NOT VERIFIED |
+| 9 | APK CI artifact, hosted smoke tests, accessibility and low-end performance verification | PR #175 open; exact-head CI #44967911502 and Android build #44967911493 passed on 3bd15ab2; APK artifact SHA-256 recorded in Phase 10 report. Hosted and physical-device checks remain NOT VERIFIED |
 | 10 | Final audit and honest completion/manual verification report | Audit in progress; report docs/PHASE_10_AUDIT_REPORT.md. Static lesson package import remediation in progress; phase completion waits for Phase 9 merge and manual acceptance evidence |
 
 A phase is complete only when its full scope is implemented, exact-head CI is green, the PR is merged, and its Phase Report is posted. Reports must include PR links, CI links, NOT VERIFIED items, and manual steps. Never report estimates as verified completion.
