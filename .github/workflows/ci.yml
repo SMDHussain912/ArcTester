@@ -50,10 +50,7 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run production dependency audits (high severity gate)
-        run: |
-          # Audit each production workspace independently so workspace dev tools are not pulled into the production dependency tree.
-          npm audit --workspace=api --omit=dev --audit-level=high
-          npm audit --workspace=web --omit=dev --audit-level=high
+        run: node scripts/auditProductionWorkspaces.mjs
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
