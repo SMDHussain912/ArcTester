@@ -3,7 +3,7 @@ import { request } from "./apiClient";
 import type { OfflineLearningPackage } from "./lib/api";
 type Material = { id:string; title:string; description:string; subject:string; topic:string; url?:string; fileName?:string; mimeType?:string; sizeBytes?:number; createdAt:string };
 export interface StudentMaterialsProps { setActivePage:(page:string)=>void }
-const API=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\\/+$/,"");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 function resourceHref(item:Material){return item.url||API+"/study-materials/"+encodeURIComponent(item.id)+"/file";}
 export default function StudentMaterials({setActivePage}:StudentMaterialsProps){
  const [loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null),[materials,setMaterials]=useState<Material[]>([]),[query,setQuery]=useState(""),[downloaded,setDownloaded]=useState<OfflineLearningPackage|null>(null);
