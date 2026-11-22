@@ -37,7 +37,7 @@ export default function StudentPracticeSubjectTopicFilters({
         <div className="practice-subject-grid">
           {subjects.map((item) => <label className={selectedSubjects.includes(item.subject) ? "practice-subject-choice selected" : "practice-subject-choice"} key={item.subject}>
             <input type="checkbox" checked={selectedSubjects.includes(item.subject)} onChange={(event) => toggleSubject(item.subject, event.target.checked)} />
-            <span><strong>{item.subject}</strong><small>{item.count} approved · {item.practiceCount ?? item.count} practice-first</small></span>
+            <span><strong>{item.subject}</strong><small>{item.count} questions available · {item.practiceCount ?? item.count} practice-first</small></span>
           </label>)}
         </div>
         {showEmptyMessage && <p className="muted">No subjects are available in the question bank yet.</p>}
@@ -53,7 +53,7 @@ export default function StudentPracticeSubjectTopicFilters({
           if (!item?.topics?.length) return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><p className="muted">No topics are defined. All questions in this subject remain eligible.</p></div>;
           return <div className="practice-topic-group" key={subject}><strong>{subject}</strong><div className="practice-topic-list">{item.topics.map((topic) => {
             const key = JSON.stringify([subject, topic.topic]);
-            return <label key={key}><input type="checkbox" checked={selectedTopicKeys.includes(key)} onChange={(event) => onTopicKeysChange((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />{topic.topic}<small>{topic.count} approved · {topic.practiceCount ?? topic.count} practice-first</small></label>;
+            return <label key={key}><input type="checkbox" checked={selectedTopicKeys.includes(key)} onChange={(event) => onTopicKeysChange((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} />{topic.topic}<small>{topic.count} questions available · {topic.practiceCount ?? topic.count} practice-first</small></label>;
           })}</div></div>;
         })}</div>}
         <p className="practice-helper">Leave all topics unchecked to include every topic in your selected subjects. For each subject, leave its topics unchecked to include all topics; selecting topics restricts only that subject.</p>
