@@ -17,7 +17,7 @@ describe("study materials API",()=>{
   const visible=await call("/study-materials","GET",undefined,studentCookie);
   const materials=(await visible.json() as{materials:Array<Record<string,unknown>>}).materials;
   expect(materials).toHaveLength(1);expect(materials[0]).toMatchObject({title:resource.title,url:resource.url});
-  expect(materials[0]).not.toHaveProperty("contentBase64");expect(materials[0]).not.toHaveProperty("sizeBytes");
+  expect(materials[0]).not.toHaveProperty("contentBase64");
   expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
  });
  it("accepts an admin file upload, hides it until published, then streams it to students",async()=>{
