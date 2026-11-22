@@ -82,6 +82,7 @@ export default function StudentMastery() {
       <section className="panel">
         <div className="panel-header"><div><p className="eyebrow">TODAY</p><h2>Daily quests</h2></div></div>
         <div className="stack">
+          {quests.length === 0 ? <p className="muted empty-section">Daily quests are not configured yet. They will appear here when the server returns today's quest list.</p> : null}
           {quests.map((quest) => <div key={quest.key} className="quest-row">
             <div><strong>{quest.title}</strong><p className="muted">{quest.description}</p></div>
             <span className={quest.completed ? "status status-used" : "status status-pending"}>{quest.completed ? `Done · ${quest.claimed ? "Claimed" : "+" + quest.rewardXp + " XP"}` : `${quest.progress}/${quest.target} · +${quest.rewardXp} XP`}</span>
@@ -121,6 +122,7 @@ export default function StudentMastery() {
 
       <section className="panel">
         <div className="panel-header"><div><p className="eyebrow">ACHIEVEMENTS</p><h2>Badges</h2></div><span className="pill">{badges.filter((badge) => badge.unlockedAt).length}/{badges.length} unlocked</span></div>
+        {badges.length === 0 ? <p className="muted empty-section">No achievement badges are configured yet.</p> : null}
         <div className="badge-grid">{badges.map((badge) => <article key={badge.key} className={badge.unlockedAt ? "badge-card unlocked" : "badge-card"}>
           <span aria-hidden="true">{badge.unlockedAt ? "🏅" : "◇"}</span><strong>{badge.title}</strong><p className="muted">{badge.description}</p>{badge.unlockedAt ? <small>Unlocked {new Date(badge.unlockedAt).toLocaleDateString()}</small> : <small>Locked</small>}
         </article>)}</div>
