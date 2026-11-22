@@ -46,9 +46,11 @@ describe("AdminLessonStudio", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminLessonStudio />);
-    const packageFile = new File([JSON.stringify({
+    const packageText = JSON.stringify({
       title: script.title, subject: "Computer Science", topic: "Stacks", script, storyboard,
-    })], "stacks.lesson.json", { type: "application/json" });
+    });
+    const packageFile = new File([packageText], "stacks.lesson.json", { type: "application/json" });
+    Object.defineProperty(packageFile, "text", { value: async () => packageText });
 
     fireEvent.change(screen.getByLabelText("Import finished lesson package"), { target: { files: [packageFile] } });
 
