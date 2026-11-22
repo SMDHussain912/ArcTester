@@ -469,9 +469,9 @@ export interface StudyRecommendationsReport {
 }
 
 /**
- * Turns a learner's own completed practice answers into transparent next steps.
- * Weak-topic recommendations require a minimum sample; low-sample data only
- * produces a baseline-building action. This is deterministic guidance.
+ * Turns a learner's own completed answers and exact 200-question mock outcomes
+ * into transparent next steps. Weak-area actions require a minimum answered
+ * sample; unanswered items are excluded from accuracy. This is deterministic guidance.
  */
 export async function getStudyRecommendations(
   db: PrismaClient,
