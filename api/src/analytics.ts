@@ -7,6 +7,7 @@ import { z } from "zod";
 import { badRequest } from "./errors.js";
 import { buildPerformanceExplanation, type PerformanceExplanation } from "./intelligence/performanceExplanation.js";
 import { buildRuleBasedRecommendations } from "./intelligence/ruleBasedRecommendations.js";
+import { buildFullMockRecommendations } from "./intelligence/mockRecommendations.js";
 
 export interface TopicRow {
   subject: string;
@@ -452,12 +453,15 @@ export interface StudyRecommendation {
     accuracy: number | null;
     minimumAnswers: number;
     weakAccuracyThreshold: number;
+    source?: "completed-full-mock" | "completed-practice";
   } | null;
 }
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
   basedOnAttempts: number;
+  basedOnFullMocks: number;
+  latestFullMockAt: string | null;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
   performanceExplanation: PerformanceExplanation;
@@ -473,7 +477,7 @@ export async function getStudyRecommendations(
   db: PrismaClient,
   userId: number
 ): Promise<StudyRecommendationsReport> {
-  const [weakTopics, history, recentActivity] = await Promise.all([
+  const [weakTopics, history, recentActivity, fullMockCount, mockAttempts] = await Promise.all([
     getWeakTopics(db, userId),
     getHistory(db, userId, 1, 1),
     db.$queryRaw<Array<{ subject: string; topic: string | null; lastPracticedAt: Date }>>`
@@ -489,7 +493,31 @@ export async function getStudyRecommendations(
       WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY subject, topic
     `,
+    db.attempt.count({ where: { userId, mode: "mock", finishedAt: { not: null } } }),
+    db.attempt.findMany({
+      where: { userId, mode: "mock", finishedAt: { not: null } },
+      orderBy: { finishedAt: "desc" },
+      take: 10,
+      select: {
+        finishedAt: true,
+        answers: { select: { subjectSnapshot: true, topicSnapshot: true, chosen: true, isCorrect: true } },
+      },
+    }),
   ]);
+  const latestFullMock = mockAttempts.find((attempt) => attempt.answers.length === 200) ?? null;
+  const mockRecommendations = latestFullMock
+    ? buildFullMockRecommendations({
+        answers: latestFullMock.answers.map((answer) => ({
+          subject: answer.subjectSnapshot,
+          topic: answer.topicSnapshot,
+          chosen: answer.chosen,
+          isCorrect: answer.isCorrect,
+        })),
+        minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
+        weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
+        maximumAreas: 3,
+      })
+    : [];
   const ruleBased = buildRuleBasedRecommendations({
     topics: weakTopics.topics,
     subjects: weakTopics.subjects,
@@ -499,7 +527,10 @@ export async function getStudyRecommendations(
     recentPracticeDays: RECOMMENDATION_RECENT_PRACTICE_DAYS,
     now: Date.now(),
   });
-  const recommendations: StudyRecommendation[] = [...ruleBased.recommendations];
+  const recommendations: StudyRecommendation[] = [
+    ...mockRecommendations.map((item) => ({ ...item, evidence: { ...item.evidence, source: "completed-full-mock" as const } })),
+    ...ruleBased.recommendations.filter((item) => !mockRecommendations.some((mock) => mock.subject === item.subject && mock.topic === item.topic)),
+  ];
 
   if (recommendations.length === 0) {
     const hasAnsweredEvidence = weakTopics.topics.some((row) => row.seen > 0);
@@ -523,6 +554,8 @@ export async function getStudyRecommendations(
   return {
     generatedAt: new Date().toISOString(),
     basedOnAttempts: history.total,
+    basedOnFullMocks: fullMockCount,
+    latestFullMockAt: latestFullMock?.finishedAt?.toISOString() ?? null,
     minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
     weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
     performanceExplanation: buildPerformanceExplanation(
