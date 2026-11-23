@@ -60,7 +60,7 @@ export async function loadVerifiedManifest(
   if (manifest.lessonId !== lessonId || manifest.versionId !== versionId || manifest.packageSchemaVersion !== version.packageSchemaVersion) {
     throw new Error("Published lesson manifest does not match its catalog version.");
   }
-  return { version, manifest };
+  return { version, manifest, bytes: object.bytes };
 }
 
 export function lessonCatalogRouter(db: PrismaClient): Router {
@@ -90,9 +90,10 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
       const result = await loadVerifiedManifest(db, lessonId, versionId, storage);
       if (!result) return res.status(404).json({ error: "Published lesson package was not found." });
       res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Length", String(result.bytes.byteLength));
       res.setHeader("Cache-Control", "private, max-age=300");
       res.setHeader("X-Content-Type-Options", "nosniff");
-      return res.json(result.manifest);
+      return res.status(200).send(Buffer.from(result.bytes));
     } catch (error) {
       return next(error);
     }
