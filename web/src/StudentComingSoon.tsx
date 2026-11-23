@@ -1,11 +1,16 @@
 import type { CSSProperties } from "react";
 
 const features = [
-  { title: "XP, levels & streaks", detail: "Earn experience, build daily streaks and track your learning milestones." },
-  { title: "Rewards & leaderboard", detail: "Unlock rewards and compare progress with classmates." },
-  { title: "Mastery & smart revision", detail: "Review weak topics and get practice recommendations based on your answers." },
-  { title: "Learning analytics", detail: "See accuracy trends, subject strengths and exam readiness in one place." },
-  { title: "More guided lessons", detail: "New animated explanations and expanded lesson paths." },
+  { title: "Learning hub & learning path", detail: "A structured subject → unit → lesson experience with clear next steps." },
+  { title: "Lessons library", detail: "Guided lessons with interactive steps, examples and knowledge checks." },
+  { title: "Learning summary", detail: "A focused overview of completed lessons, practice accuracy and subject progress." },
+  { title: "Animated explanations", detail: "Step-by-step reveals, highlights, narration and replayable lesson scenes." },
+  { title: "Adaptive study plan", detail: "Recommendations that prioritize weak topics and your upcoming ECET goals." },
+  { title: "Detailed exam review", detail: "Topic-wise results, answer explanations and a personal mistake-review list." },
+  { title: "Offline lessons & bookmarks", detail: "Download selected lessons and save important questions for later." },
+  { title: "XP, levels & streaks", detail: "Earn experience, build daily streaks and track learning milestones." },
+  { title: "Rewards, achievements & leaderboard", detail: "Unlock milestones and compare progress with classmates." },
+  { title: "Learning analytics", detail: "Track accuracy trends, subject strengths and exam readiness." },
 ];
 
 const panel: CSSProperties = {
@@ -39,7 +44,7 @@ export default function StudentComingSoon() {
           More ways to learn are on the way
         </h1>
         <p style={{ margin: 0, lineHeight: 1.6, color: "var(--text)" }}>
-          The launch version focuses on learning, lessons, practice and assigned exams. We’re building the features below for upcoming updates.
+          The launch version keeps practice and assigned exams available. Learning, lessons and the learning summary are moving to a future update while we finish them.
         </p>
       </header>
       <div style={panel}>
