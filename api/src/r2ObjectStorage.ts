@@ -13,6 +13,7 @@ export interface R2ObjectMetadata {
   sizeBytes: number;
   etag: string | null;
   contentType: string | null;
+  sha256: string | null;
 }
 
 export class R2StorageError extends Error {
@@ -67,6 +68,7 @@ function signedHeaders(
   url: URL,
   payloadHash: string,
   contentType?: string,
+  metadataSha256?: string,
   now = new Date(),
 ): Record<string, string> {
   const amzDate = now.toISOString().replace(/[:-]|.d{3}/g, "");
@@ -77,6 +79,7 @@ function signedHeaders(
     "x-amz-date": amzDate,
   };
   if (contentType) headers["content-type"] = contentType;
+  if (metadataSha256) headers["x-amz-meta-sha256"] = metadataSha256;
   const names = Object.keys(headers).sort();
   const canonicalHeaders = names.map((name) => `${name}:${headers[name].trim()}\n`).join("");
   const signedNames = names.join(";");
@@ -113,7 +116,7 @@ export class R2ObjectStorage {
   async putObject(key: string, bytes: Uint8Array, contentType: string): Promise<R2ObjectMetadata> {
     const url = objectUrl(this.config, key);
     const payloadHash = sha256Hex(bytes);
-    const headers = signedHeaders(this.config, "PUT", url, payloadHash, contentType);
+    const headers = signedHeaders(this.config, "PUT", url, payloadHash, contentType, payloadHash);
     const response = await this.fetchImpl(url, { method: "PUT", headers, body: new Uint8Array(bytes) });
     if (!response.ok) throw new R2StorageError("R2 rejected the object upload.", response.status, "put");
     return {
@@ -121,6 +124,7 @@ export class R2ObjectStorage {
       sizeBytes: bytes.byteLength,
       etag: response.headers.get("etag"),
       contentType,
+      sha256: response.headers.get("x-amz-meta-sha256"),
     };
   }
 
@@ -140,6 +144,7 @@ export class R2ObjectStorage {
         sizeBytes: Number(response.headers.get("content-length") ?? bytes.byteLength),
         etag: response.headers.get("etag"),
         contentType: response.headers.get("content-type"),
+        sha256: response.headers.get("x-amz-meta-sha256"),
       },
     };
   }
@@ -157,6 +162,7 @@ export class R2ObjectStorage {
       sizeBytes: Number(response.headers.get("content-length") ?? 0),
       etag: response.headers.get("etag"),
       contentType: response.headers.get("content-type"),
+      sha256: response.headers.get("x-amz-meta-sha256"),
     };
   }
 }
