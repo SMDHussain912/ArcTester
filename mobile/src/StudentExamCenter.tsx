@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 type Api = <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -28,7 +28,6 @@ export default function StudentExamCenter({ api, darkMode, disabled }: Props) {
   const [deadline, setDeadline] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
-  const [revision, setRevision] = useState(0);
   const revisionRef = useRef(0);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const attemptUuid = useRef(uuid());
@@ -67,7 +66,7 @@ export default function StudentExamCenter({ api, darkMode, disabled }: Props) {
       for (const answer of saved.answers) if (answer.examQuestionId in restored) restored[answer.examQuestionId] = answer.selectedIndex;
       setPaper(packageResponse.package); setAnswers(restored); setIndex(0);
       setStartedAt(started.session.startedAt); setDeadline(new Date(started.session.deadline).getTime());
-      revisionRef.current = saved.revision; setRevision(saved.revision); attemptUuid.current = uuid();
+      revisionRef.current = saved.revision; attemptUuid.current = uuid();
     } catch (cause) { setError((cause as Error).message || "Could not start this exam."); }
     finally { setBusy(false); }
   };
@@ -79,7 +78,7 @@ export default function StudentExamCenter({ api, darkMode, disabled }: Props) {
         method: "PUT",
         body: JSON.stringify({ revision: revisionRef.current, answers: Object.entries(next).map(([examQuestionId, selectedIndex]) => ({ examQuestionId, selectedIndex })) }),
       });
-      revisionRef.current = response.revision; setRevision(response.revision);
+      revisionRef.current = response.revision;
     }).catch((cause: unknown) => setError((cause as Error).message || "Answer sync failed. Keep the exam open and retry."))
       .finally(() => setSaving(false));
   };
