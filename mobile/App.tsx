@@ -22,6 +22,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
 import StudentExamCenter from "./src/StudentExamCenter";
+import ComingSoonScreen from "./src/ComingSoonScreen";
 import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
@@ -160,7 +161,7 @@ export default function App() {
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "profile" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "coming-soon" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
@@ -1350,6 +1351,8 @@ export default function App() {
            </Animated.View>
 ) : activeTab === "exams" ? (
             <StudentExamCenter api={api} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} />
+ ) : activeTab === "coming-soon" ? (
+          <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>
  ) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
@@ -1616,6 +1619,7 @@ export default function App() {
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "practice" }} accessibilityLabel="Practice tab" style={styles.navItem} onPress={() => setActiveTab("practice")}><MaterialCommunityIcons name="pencil-box-multiple" size={23} color={activeTab === "practice" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "practice" && styles.navLabelActive]}>Practice</Text></TouchableOpacity>
 
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "exams" }} accessibilityLabel="Exams tab" style={styles.navItem} onPress={() => setActiveTab("exams")}><MaterialCommunityIcons name="clipboard-text-outline" size={23} color={activeTab === "exams" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "exams" && styles.navLabelActive]}>Exams</Text></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "coming-soon" }} accessibilityLabel="Coming Soon tab" style={styles.navItem} onPress={() => setActiveTab("coming-soon")}><MaterialCommunityIcons name="rocket-launch-outline" size={23} color={activeTab === "coming-soon" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "coming-soon" && styles.navLabelActive]}>Soon</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
             <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
