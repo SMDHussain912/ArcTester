@@ -139,10 +139,10 @@ export default function AdminLessonStudio() {
     if (!window.confirm("Publish this reviewed lesson? Students will be able to see it immediately.")) return;
     setBusy(true); setError(""); setNotice("");
     try {
-      const result = await request<{draft:DraftSummary}>("/admin/lesson-drafts/" + encodeURIComponent(selectedId) + "/publish", { method: "POST", body: "{}" });
-      setSelectedStatus(result.draft.status);
+      const result = await request<{version:{version:number;versionId:string;sceneCount:number;uploadedObjectCount:number;reusedObjectCount:number}}>("/admin/lesson-drafts/" + encodeURIComponent(selectedId) + "/package/publish", { method: "POST", body: "{}" });
+      setSelectedStatus("PUBLISHED");
       await refreshDrafts();
-      setNotice("Lesson published. It is now available in the student lesson library.");
+      setNotice("Published immutable lesson version " + result.version.version + " (" + result.version.sceneCount + " scenes). " + result.version.uploadedObjectCount + " objects uploaded, " + result.version.reusedObjectCount + " reused. Students can now load this verified version.");
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
