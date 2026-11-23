@@ -27,11 +27,6 @@ import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLear
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
 import ArcTesterMascot from "./src/components/ArcTesterMascot";
-import LearningPathHome from "./src/components/LearningPathHome";
-import UnitTestCheckpoint from "./src/components/UnitTestCheckpoint";
-import LessonLaunchCard from "./src/components/LessonLaunchCard";
-import StudentLessonLibrary from "./src/components/StudentLessonLibrary";
-import type { PublishedLesson } from "./src/lessonPlayer";
 import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
 import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
@@ -48,7 +43,6 @@ const API_URL = (() => {
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[]; dailyChallengeCompleted: boolean };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
-type LearningOverview = { practice: { completedAttempts: number; questions: number; correct: number; incorrect: number; unanswered: number; accuracy: number | null; subjects: { subject: string; accuracy: number | null; seen: number; correct: number; incorrect: number }[]; trend: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[] }; formalExams: { graded: number; scorePercentage: number | null; reviewRequired: number; subjects: { subject: string; accuracy: number | null; correct: number; incorrect: number }[] } };
 type Announcement = {
   id: string;
   title: string;
@@ -142,7 +136,6 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
-  const [learningOverview, setLearningOverview] = useState<LearningOverview | null>(null);
   const [gamification, setGamification] = useState<GamificationSnapshot | null>(null);
   const [dailyGoalDraft, setDailyGoalDraft] = useState("50");
   const [rewardBusy, setRewardBusy] = useState(false);
@@ -567,7 +560,6 @@ export default function App() {
     api<Bank>("/bank")
       .then((result) => { if (isCurrentSession()) setBank(result); })
       .catch((cause) => { if (isCurrentSession()) setError((cause as Error).message); });
-    api<LearningOverview>("/analytics/overview").then((result) => { if (isCurrentSession()) setLearningOverview(result); }).catch(() => undefined);
     getOfflineLearningPackage(String(user.id)).then((result) => { if (isCurrentSession()) setOfflineLearningPackage(result); }).catch(() => { if (isCurrentSession()) setOfflineLearningPackage(null); });
     getPendingPracticeProgress(String(user.id)).then((items) => { if (isCurrentSession()) { setPendingSyncCount(items.length); setPendingSubmitRequested(items.some((item) => item.submitRequested)); } }).catch(() => undefined);
     api<{ announcements: Announcement[] }>("/announcements")
@@ -1411,15 +1403,6 @@ export default function App() {
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION BANK</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "Loading…"} questions</Text>
             </View>
-            <View style={[styles.profileInfo, { gap: 10 }]}>
-              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEARNING SUMMARY</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <View style={{ flex: 1, borderRadius: 12, padding: 12, backgroundColor: darkMode ? "#1e293b" : "#f1f5f9" }}><Text style={[styles.statValue, { fontSize: 22 }, darkMode && { color: "#f1f5f9" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, { fontSize: 11 }, darkMode && { color: "#a7b4c8" }]}>Completed practices</Text></View>
-                <View style={{ flex: 1, borderRadius: 12, padding: 12, backgroundColor: darkMode ? "#1e293b" : "#f1f5f9" }}><Text style={[styles.statValue, { fontSize: 22 }, darkMode && { color: "#f1f5f9" }]}>{learningOverview?.practice.accuracy == null ? "—" : `${Math.round(learningOverview.practice.accuracy * 100)}%`}</Text><Text style={[styles.muted, { fontSize: 11 }, darkMode && { color: "#a7b4c8" }]}>Overall accuracy</Text></View>
-              </View>
-              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{learningOverview ? `${learningOverview.practice.questions} questions answered · ${learningOverview.practice.correct} correct · ${learningOverview.practice.incorrect} incorrect` : "Loading your account learning statistics…"}</Text>
-              {learningOverview?.practice.subjects.length ? <View style={{ gap: 8, marginTop: 2 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>SUBJECT PROGRESS</Text>{learningOverview.practice.subjects.map((subject) => <View key={subject.subject} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}><Text style={[styles.muted, { flex: 1 }, darkMode && { color: "#cbd5e1" }]} numberOfLines={2}>{subject.subject}</Text><Text style={[styles.profileValue, { fontSize: 13 }, darkMode && { color: "#f1f5f9" }]}>{subject.accuracy == null ? "—" : `${Math.round(subject.accuracy * 100)}%`}</Text></View>)}</View> : <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Complete a practice session to build your subject summary.</Text>}
-            </View>
             <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
               <MaterialCommunityIcons name="logout" size={18} color="#b42318" />
               <Text style={styles.dangerText}>Sign out</Text>
@@ -1469,15 +1452,16 @@ export default function App() {
               </View>
               <Text style={[styles.muted, { marginTop: 8 }, darkMode && { color: "#a7b4c8" }]}>{gamification?.dailyChallengeCompleted ? "Completed today · replaying will not duplicate the daily XP reward" : "10 approved questions · rotates daily (UTC) · daily XP reward"}</Text>
             </View>
-            <LessonLaunchCard
-              subjects={bank?.subjects ?? []}
-              darkMode={darkMode}
-              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
-              onStart={(subject, topic) => {
-                setPracticePresetSubject(subject);
-                void startPractice({ subjects: [subject], topicFilters: topic ? [{ subject, topic }] : [], difficulty: "any", count: 1, durationMinutes: 20, questionTypes: [] }, true);
-              }}
-            />
+            
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={() => setActiveTab("coming-soon")}
+              style={[styles.card, { marginTop: 14, padding: 16, borderColor: "#8b5cf6", backgroundColor: darkMode ? "#172235" : "#f5f3ff" }]}
+            >
+              <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 4 }, darkMode && { color: "#f1f5f9" }]}>Learning & lessons are coming soon</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Learning path, lessons and learning summary are being prepared. View the roadmap.</Text>
+              <Text style={{ color: "#7c3aed", fontWeight: "800", marginTop: 10 }}>View roadmap →</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Start 10-question speed round, five minutes"
@@ -1499,40 +1483,6 @@ export default function App() {
                 </View>
               </View>
             </TouchableOpacity>
-            <StudentLessonLibrary
-              darkMode={darkMode}
-              reduceMotion={reduceMotion}
-              userId={user.id}
-              apiBaseUrl={API_URL}
-              authToken={token}
-              loadLessons={async () => {
-                const response = await api<{ lessons: PublishedLesson[] }>("/lessons");
-                return response.lessons;
-              }}
-            />
-            <LearningPathHome
-              subjects={bank?.subjects ?? []}
-              progress={learningOverview?.practice.subjects ?? []}
-              darkMode={darkMode}
-              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
-              onPractice={(subject) => {
-                setPracticePresetSubject(subject);
-                setActiveTab("practice");
-              }}
-            />
-            <UnitTestCheckpoint
-              darkMode={darkMode}
-              disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt}
-              api={api}
-            />
-            <View style={[styles.card, { marginTop: 14, padding: 16 }, darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}><Text style={[styles.sectionTitle, { marginTop: 0 }, darkMode && { color: "#f1f5f9" }]}>Your performance</Text>
-              <View style={styles.dashboardMetricGrid}>
-                <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.completedAttempts ?? "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice papers</Text></View>
-                <View style={[styles.dashboardMetric, darkMode && { backgroundColor: "#1e293b" }]}><Text style={[styles.dashboardMetricValue, darkMode && { color: "#93c5fd" }]}>{learningOverview?.practice.accuracy == null ? "—" : Math.round(learningOverview.practice.accuracy * 100) + "%"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Practice accuracy</Text></View>
-              </View>
-              {learningOverview?.practice.trend.length ? <View style={{ marginTop: 14 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>RECENT PRACTICE ACCURACY</Text>{learningOverview.practice.trend.slice(-6).map((item) => { const percent = item.accuracy === null ? 0 : Math.round(item.accuracy * 100); return <View key={item.attemptId} style={{ marginTop: 8 }}><View style={{ flexDirection: "row", justifyContent: "space-between" }}><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{new Date(item.finishedAt).toLocaleDateString()}</Text><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.accuracy === null ? "No answered questions" : percent + "%"}</Text></View><View style={{ height: 7, borderRadius: 8, backgroundColor: darkMode ? "#334155" : "#e9edf5", overflow: "hidden", marginTop: 4 }}><View style={{ height: "100%", width: `${percent}%` as `${number}%`, backgroundColor: "#2563eb", borderRadius: 8 }} /></View></View>; })}</View> : null}
-              {learningOverview?.practice.subjects.length ? <View style={{ marginTop: 14 }}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>SUBJECT ACCURACY · LOWEST FIRST</Text>{learningOverview.practice.subjects.slice(0, 3).map((item) => <View key={item.subject} style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 7 }}><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.subject}</Text><Text style={[styles.muted, darkMode && { color: "#cbd5e1" }]}>{item.accuracy === null ? "—" : Math.round(item.accuracy * 100) + "%"} · {item.seen} answered</Text></View>)}</View> : null}
-            </View>
             <View style={styles.announcementHeader}>
               <Text style={[styles.sectionTitle, darkMode && { color: "#f1f5f9" }]}>Announcements</Text>
               <TouchableOpacity onPress={refreshAnnouncements} disabled={refreshingAnnouncements}>
