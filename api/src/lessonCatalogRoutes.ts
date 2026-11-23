@@ -34,11 +34,15 @@ async function getActiveLessonVersion(db: PrismaClient, lessonId: string, versio
   });
 }
 
-async function loadVerifiedManifest(
+export interface LessonPackageReadStorage {
+  getObject(key: string): Promise<{ bytes: Uint8Array; metadata: { key: string; sizeBytes: number; sha256: string | null } }>;
+}
+
+export async function loadVerifiedManifest(
   db: PrismaClient,
   lessonId: string,
   versionId: string,
-  storage: R2ObjectStorage,
+  storage: LessonPackageReadStorage,
 ) {
   const lesson = await getActiveLessonVersion(db, lessonId, versionId);
   const version = lesson?.activeVersion;
