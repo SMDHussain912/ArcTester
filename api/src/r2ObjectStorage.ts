@@ -26,12 +26,6 @@ export class R2StorageError extends Error {
   }
 }
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`R2 storage is not configured: missing ${name}.`);
-  return value;
-}
-
 export function getR2StorageConfig(env: NodeJS.ProcessEnv = process.env): R2StorageConfig {
   const accountId = env.R2_ACCOUNT_ID?.trim() ?? "";
   const bucket = env.R2_BUCKET_NAME?.trim() ?? "";
