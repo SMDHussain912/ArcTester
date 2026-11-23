@@ -74,10 +74,19 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
         where: { status: "PUBLISHED" },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
         take: 100,
-        select: { id: true, title: true, subject: true, topic: true, updatedAt: true },
+        select: {
+          id: true, title: true, subject: true, topic: true, updatedAt: true,
+          activeVersion: { select: { id: true, version: true, packageSchemaVersion: true, manifestSha256: true } },
+        },
       });
       const lessons = published.map((draft) => ({
         id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, updatedAt: draft.updatedAt,
+        package: draft.activeVersion ? {
+          versionId: draft.activeVersion.id,
+          version: draft.activeVersion.version,
+          schemaVersion: draft.activeVersion.packageSchemaVersion,
+          manifestSha256: draft.activeVersion.manifestSha256,
+        } : null,
       }));
       return res.json({ ok: true, lessons });
     } catch (error) { next(error); }
