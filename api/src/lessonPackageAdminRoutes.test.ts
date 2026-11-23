@@ -91,6 +91,6 @@ describe("admin immutable lesson version publishing", () => {
       $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
     } as unknown as PrismaClient;
 
-    await expect(publishLessonDraftVersion(db, draft.id, 42, store)).rejects.toThrow(/changed during publish/i);
+    await expect(publishLessonDraftVersion(db, draft.id, 42, store)).rejects.toThrow(/LESSON_DRAFT_CHANGED_DURING_PUBLISH/i);
   });
 });
