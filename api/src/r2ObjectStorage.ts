@@ -71,7 +71,7 @@ function signedHeaders(
   metadataSha256?: string,
   now = new Date(),
 ): Record<string, string> {
-  const amzDate = now.toISOString().replace(/[:-]|\\.\\d{3}/g, "");
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
   const dateStamp = amzDate.slice(0, 8);
   const headers: Record<string, string> = {
     host: url.host,
