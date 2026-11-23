@@ -77,8 +77,8 @@ describe("AdminLessonStudio", () => {
       if (url.pathname === "/admin/lesson-drafts/draft-1" && init?.method === "PATCH") {
         return response({ ok: true, draft });
       }
-      if (url.pathname === "/admin/lesson-drafts/draft-1/publish" && init?.method === "POST") {
-        return response({ ok: true, draft: { ...draft, status: "PUBLISHED" } });
+      if (url.pathname === "/admin/lesson-drafts/draft-1/package/publish" && init?.method === "POST") {
+        return response({ ok: true, version: { version: 1, versionId: "version-1", sceneCount: 3, uploadedObjectCount: 4, reusedObjectCount: 0 } }, 201);
       }
       return response({ error: "Unexpected test request" }, 404);
     });
@@ -108,7 +108,7 @@ describe("AdminLessonStudio", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     fireEvent.click(screen.getByRole("button", { name: "Publish lesson" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/admin/lesson-drafts/draft-1/publish"),
+      expect.stringContaining("/admin/lesson-drafts/draft-1/package/publish"),
       expect.objectContaining({ method: "POST", credentials: "include" }),
     ));
     expect(await screen.findByText("Published · Student visible")).toBeInTheDocument();
