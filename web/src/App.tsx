@@ -33,6 +33,7 @@ import StudentWebLearningPath from "./StudentWebLearningPath";
 import StudentWebLessonPlayer from "./StudentWebLessonPlayer";
 import StudentLearningSummary from "./StudentLearningSummary";
 import StudentMaterials from "./StudentMaterials";
+import StudentComingSoon from "./StudentComingSoon";
 import AppSplash from "./components/AppSplash";
 import { OnlineStatusContext } from "./OnlineStatusContext";
 
@@ -597,7 +598,9 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "assignments" ? (
+        {activePage === "coming-soon" ? (
+          <StudentComingSoon />
+        ) : activePage === "assignments" ? (
           <StudentAssignedExams />
         ) : activePage === "learning-summary" ? (
           <StudentLearningSummary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
