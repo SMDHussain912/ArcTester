@@ -2,6 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { safeStorage } from "./safeStorage";
 import { getBrowserDeviceFingerprint } from "./deviceFingerprint";
 import StudentPracticeSession, { type PracticeSessionTest } from "./StudentPracticeSession";
+import StudentAssignedExams from "./StudentAssignedExams";
 import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeResults";
 import { buildPracticeConfig, type PracticeConfig, type PracticeQuestionType } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
@@ -596,7 +597,9 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "learning-summary" ? (
+        {activePage === "assignments" ? (
+          <StudentAssignedExams />
+        ) : activePage === "learning-summary" ? (
           <StudentLearningSummary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "path" ? (
           <StudentWebLearningPath onPractice={(subject, topic) => { setPracticeSubjects([subject]); setPracticeTopicKeys(topic ? [JSON.stringify([subject, topic])] : []); setActivePage("practice"); }} />
