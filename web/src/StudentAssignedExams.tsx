@@ -39,6 +39,7 @@ export default function StudentAssignedExams() {
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [now, setNow] = useState(Date.now());
   const [showSubmit, setShowSubmit] = useState(false);
   const revisionRef = useRef(0);
@@ -79,6 +80,7 @@ export default function StudentAssignedExams() {
   const startExam = async (assignment: Assignment) => {
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const { package: exam } = await request<{ package: ExamPackage }>(
         `/exams/assignments/${encodeURIComponent(assignment.id)}/package`,
@@ -147,7 +149,7 @@ export default function StudentAssignedExams() {
       setActive(null);
       setAnswers({});
       setShowSubmit(false);
-      setError(response.submission?.status === "REVIEW_REQUIRED"
+      setNotice(response.submission?.status === "REVIEW_REQUIRED"
         ? "Exam submitted. Your attempt is awaiting administrator review."
         : "Exam submitted successfully.");
       await refresh();
@@ -177,12 +179,14 @@ export default function StudentAssignedExams() {
       </article>)}</div>
       <div className="practice-submit-bar"><p>{active.exam.questions.length - answered} unanswered · {saving ? "Saving answers…" : "Your answers are saved as you choose."}</p><button type="button" className="primary" disabled={busy} onClick={() => setShowSubmit(true)}>Review & submit</button></div>
       {showSubmit ? <div className="announcement-overlay"><section className="announcement-popup panel" role="dialog" aria-modal="true" aria-labelledby="assigned-exam-submit-title"><p className="eyebrow">FINAL CHECK</p><h2 id="assigned-exam-submit-title">Submit this exam?</h2><p>You answered {answered} of {active.exam.questions.length} questions. Unanswered questions will receive zero marks.</p><div className="row"><button type="button" className="ghost" disabled={busy} onClick={() => setShowSubmit(false)}>Keep reviewing</button><button type="button" className="primary" disabled={busy} onClick={() => void submitExam()}>{busy ? "Submitting…" : "Submit exam"}</button></div></section></div> : null}
+      {notice ? <p className="success" role="status">{notice}</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
     </section>;
   }
 
   return <section className="assigned-exams">
     <div className="page-heading"><div><p className="eyebrow">YOUR EXAMS</p><h1>Assigned exams</h1><p className="muted">Exams assigned by your administrator appear here. Open an available paper to begin.</p></div><button type="button" className="ghost" disabled={loading} onClick={() => void refresh()}>Refresh</button></div>
+    {notice ? <p className="success" role="status">{notice}</p> : null}
     {error ? <p className="error" role="alert">{error}</p> : null}
     {loading ? <div className="panel">Loading your assignments…</div> : assignments.length ? <div className="exam-list">{assignments.map((assignment) => {
       const state = availability(assignment, now);
