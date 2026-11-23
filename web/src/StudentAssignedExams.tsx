@@ -164,7 +164,6 @@ export default function StudentAssignedExams() {
   useEffect(() => {
     if (active && remainingSeconds === 0 && !submittingRef.current) void submitExam();
   // submitExam intentionally uses the active exam snapshot and current answer state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, remainingSeconds]);
 
   if (active) {
