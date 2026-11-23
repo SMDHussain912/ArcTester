@@ -7,7 +7,7 @@ import {
   sha256Hex,
   type LessonPackageManifest,
 } from "./lessonPackage.js";
-import { loadVerifiedManifest, type LessonPackageReadStorage } from "./lessonCatalogRoutes.js";
+import { findLessonPackageObject, loadVerifiedManifest, type LessonPackageReadStorage } from "./lessonCatalogRoutes.js";
 
 function fixture(manifestHashOverride?: string) {
   const lessonId = "lesson_abc";
@@ -54,6 +54,13 @@ function fixture(manifestHashOverride?: string) {
 }
 
 describe("published lesson manifest delivery verification", () => {
+  it("resolves scene JSON and media assets through the same authenticated object endpoint", () => {
+    const data = fixture();
+    const scene = findLessonPackageObject(data.manifest, "scene_1");
+    expect(scene).toMatchObject({ assetId: "scene_1", objectKey: data.manifest.scenes[0].objectKey, mimeType: "application/json", sha256: data.manifest.scenes[0].sha256 });
+    expect(findLessonPackageObject(data.manifest, "missing")).toBeNull();
+  });
+
   it("returns only a checksum-verified manifest for the requested active version", async () => {
     const data = fixture();
     const result = await loadVerifiedManifest(data.db, data.lessonId, data.versionId, data.storage);
