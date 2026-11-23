@@ -60,6 +60,16 @@ export const LessonPackageManifestSchema = z.object({
     sceneIds.add(scene.sceneId);
     scenePositions.add(scene.position);
   }
+  const objectKeys = new Set<string>();
+  for (const scene of manifest.scenes) {
+    if (objectKeys.has(scene.objectKey)) ctx.addIssue({ code: "custom", path: ["scenes"], message: "Package object keys must be unique." });
+    objectKeys.add(scene.objectKey);
+  }
+  for (const asset of manifest.assets) {
+    if (objectKeys.has(asset.objectKey)) ctx.addIssue({ code: "custom", path: ["assets"], message: "Package object keys must be unique." });
+    objectKeys.add(asset.objectKey);
+    if (asset.sceneId && !sceneIds.has(asset.sceneId)) ctx.addIssue({ code: "custom", path: ["assets"], message: "Asset scene ID must reference a scene in this package." });
+  }
   const assetIds = new Set<string>();
   for (const asset of manifest.assets) {
     if (assetIds.has(asset.assetId)) ctx.addIssue({ code: "custom", path: ["assets"], message: "Asset IDs must be unique." });
