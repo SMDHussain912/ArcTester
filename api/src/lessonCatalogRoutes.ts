@@ -6,61 +6,6 @@ import { requireAuth, type AuthedRequest } from "./auth.js";
 export function lessonCatalogRouter(db: PrismaClient): Router {
   const router = Router();
 
-  // Summary-only feed. The client fetches the exact package manifest separately.
-  router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
-    try {
-      const account = await db.user.findUnique({
-        where: { id: req.user!.id },
-        select: { role: true },
-      });
-      if (account?.role !== "STUDENT") {
-        return res.status(403).json({ error: "Published lessons are available to student accounts." });
-      }
-
-      const published = await db.lessonDraft.findMany({
-        where: { status: "PUBLISHED" },
-        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: 100,
-        select: {
-          id: true,
-          title: true,
-          subject: true,
-          topic: true,
-          updatedAt: true,
-          activeVersion: {
-            select: {
-              id: true,
-              version: true,
-              packageSchemaVersion: true,
-              manifestSha256: true,
-            },
-          },
-        },
-      });
-
-      const lessons = published.map((lesson) => ({
-        id: lesson.id,
-        title: lesson.title,
-        subject: lesson.subject,
-        topic: lesson.topic,
-        updatedAt: lesson.updatedAt,
-        // null means a legacy lesson; clients continue through the legacy detail route.
-        package: lesson.activeVersion
-          ? {
-              versionId: lesson.activeVersion.id,
-              version: lesson.activeVersion.version,
-              schemaVersion: lesson.activeVersion.packageSchemaVersion,
-              manifestSha256: lesson.activeVersion.manifestSha256,
-            }
-          : null,
-      }));
-
-      return res.json({ ok: true, lessons });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
   router.get("/lessons/:id/versions/:versionId/manifest", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
