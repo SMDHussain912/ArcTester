@@ -38,6 +38,17 @@ export interface LessonPackageReadStorage {
   getObject(key: string): Promise<{ bytes: Uint8Array; metadata: { key: string; sizeBytes: number; sha256: string | null } }>;
 }
 
+export function findLessonPackageObject(
+  manifest: import("./lessonPackage.js").LessonPackageManifest,
+  assetId: string,
+): { assetId: string; objectKey: string; mimeType: string; sizeBytes: number; sha256: string } | null {
+  const asset = manifest.assets.find((item) => item.assetId === assetId);
+  if (asset) return { assetId: asset.assetId, objectKey: asset.objectKey, mimeType: asset.mimeType, sizeBytes: asset.sizeBytes, sha256: asset.sha256 };
+  const scene = manifest.scenes.find((item) => item.sceneId === assetId);
+  if (scene) return { assetId: scene.sceneId, objectKey: scene.objectKey, mimeType: "application/json", sizeBytes: scene.sizeBytes, sha256: scene.sha256 };
+  return null;
+}
+
 export async function loadVerifiedManifest(
   db: PrismaClient,
   lessonId: string,
@@ -118,7 +129,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
       }
       const loaded = await loadVerifiedManifest(db, lessonId, versionId, storage);
       if (!loaded) return res.status(404).json({ error: "Published lesson package was not found." });
-      const descriptor = loaded.manifest.assets.find((asset) => asset.assetId === assetId);
+      const descriptor = findLessonPackageObject(loaded.manifest, assetId);
       if (!descriptor) return res.status(404).json({ error: "Lesson asset was not found." });
 
       const record = await db.lessonVersionAsset.findUnique({
