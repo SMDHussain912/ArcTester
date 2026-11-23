@@ -68,7 +68,7 @@ describe("admin immutable lesson version publishing", () => {
 
     expect(result).toMatchObject({ versionId: "version_3", version: 3, sceneCount: 3, uploadedObjectCount: 4 });
     expect(createdVersion).toEqual({ id: "version_3", version: 3 });
-    expect(versionUpdate).toMatchObject({ status: "READY", packageSchemaVersion: undefined });
+    expect(versionUpdate).toMatchObject({ status: "READY", manifestKey: expect.stringContaining("/manifest.json") });
     expect(assetRows).toHaveLength(3);
     expect(draftUpdate).toEqual({ status: "PUBLISHED", activeVersionId: "version_3" });
     expect([...store.objects.keys()].some((key) => key.endsWith("/manifest.json"))).toBe(true);
