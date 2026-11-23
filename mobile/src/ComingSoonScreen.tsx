@@ -2,11 +2,16 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 const roadmap = [
-  ["XP, levels & streaks", "Earn experience and track daily learning streaks."],
-  ["Rewards & leaderboard", "Unlock milestones and compare progress with classmates."],
-  ["Mastery & smart revision", "Find weak topics and get focused revision practice."],
-  ["Learning analytics", "Track accuracy, subject strengths and exam readiness."],
-  ["More guided lessons", "New animated explanations and expanded lesson paths."],
+  ["Learning hub & learning path", "A structured subject, unit and lesson experience with clear next steps."],
+  ["Lessons library", "Guided lessons with interactive steps, examples and knowledge checks."],
+  ["Learning summary", "A focused view of completed lessons, practice accuracy and subject progress."],
+  ["Animated explanations", "Step-by-step reveals, highlights, narration and replayable lesson scenes."],
+  ["Adaptive study plan", "Recommendations that prioritize weak topics and upcoming ECET goals."],
+  ["Detailed exam review", "Topic-wise results, answer explanations and a personal mistake-review list."],
+  ["Offline lessons & bookmarks", "Download selected lessons and save important questions for later."],
+  ["XP, levels & streaks", "Earn experience, build daily streaks and track learning milestones."],
+  ["Rewards, achievements & leaderboard", "Unlock milestones and compare progress with classmates."],
+  ["Learning analytics", "Track accuracy trends, subject strengths and exam readiness."],
 ];
 
 export default function ComingSoonScreen({ darkMode }: { darkMode: boolean }) {
@@ -17,7 +22,7 @@ export default function ComingSoonScreen({ darkMode }: { darkMode: boolean }) {
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={styles.eyebrow}>ARCTESTER · NEXT UPDATE</Text>
       <Text style={[styles.title, { color: colors.text }]}>More ways to learn are on the way</Text>
-      <Text style={[styles.body, { color: colors.muted }]}>The launch version focuses on learning, lessons, practice and assigned exams. Here’s what we’re building next.</Text>
+      <Text style={[styles.body, { color: colors.muted }]}>Practice and assigned exams remain available. Learning, lessons and the learning summary are moving to a future update while we finish them.</Text>
       {roadmap.map(([title, detail], index) => (
         <View key={title} style={[styles.row, { borderBottomColor: colors.border }]}>
           <View style={styles.number}><Text style={styles.numberText}>{index + 1}</Text></View>
