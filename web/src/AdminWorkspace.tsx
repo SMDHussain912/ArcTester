@@ -15,6 +15,7 @@ import AdminOverview from "./AdminOverview";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
+import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
@@ -151,7 +152,7 @@ export default function AdminWorkspace(p:Props){
   </aside>
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
-   {error&&<div className="admin-alert error">{error}</div>}{notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
+   {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
     total={liveSessionsTotal}
@@ -289,5 +290,5 @@ export default function AdminWorkspace(p:Props){
    {tab==="subjects"&&<AdminSubjects catalog={catalog} onRefresh={() => void loadCatalog()} />}
    {tab==="invitations"&&<AdminInvitations invitations={p.invitations} inviteEmail={p.inviteEmail} createdInvitation={p.createdInvitation} busy={p.busy} onInviteEmailChange={p.setInviteEmail} onCreate={p.createInvitation} onRevoke={p.revokeInvitation} />}
   
-  </div></main></div>;
+  </div></main><div className="toast-container"><Toast open={Boolean(error)} message={error} onClose={()=>setError("")} tone="error" duration={5500}/></div></div>;
 }
