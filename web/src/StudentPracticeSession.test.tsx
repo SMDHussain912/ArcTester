@@ -68,7 +68,9 @@ describe("StudentPracticeSession", () => {
  it("requires a final review confirmation before submitting a full mock", () => {
   const onSubmit=vi.fn();
   render(<StudentPracticeSession test={{...test,mode:"mock"}} answers={{1:1}} remainingSeconds={700} busy={false} onLeave={vi.fn()} onSelectAnswer={vi.fn()} onSubmit={onSubmit} />);
-  expect(screen.getByRole("heading",{name:"Full mock test"})).toBeInTheDocument();\n  expect(screen.getByRole("heading",{name:"What is 2 + 2?"})).toBeInTheDocument();\n  expect(screen.queryByRole("heading",{name:"Which is a unit of force?"})).toBeNull();
+  expect(screen.getByRole("heading",{name:"Full mock test"})).toBeInTheDocument();
+  expect(screen.getByRole("heading",{name:"What is 2 + 2?"})).toBeInTheDocument();
+  expect(screen.queryByRole("heading",{name:"Which is a unit of force?"})).toBeNull();
   fireEvent.click(screen.getByRole("button",{name:"Review and submit full mock"}));
   expect(screen.getByRole("dialog",{name:"Submit your full mock?"})).toBeInTheDocument();
   expect(screen.getByRole("dialog")).toHaveTextContent("You answered 1 of 2 questions.");
