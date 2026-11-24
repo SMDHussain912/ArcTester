@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 const API=(import.meta.env.VITE_API_URL||"https://arctester.onrender.com").replace(/\/+$/,"");
 const endpoint=API+"/mcp/admin";
-const scopes=["questions:read","questions:create","questions:review","papers:create","papers:read","announcements:write","activity:read"];
+const scopes=["questions:read","questions:create","questions:review","papers:create","papers:read","papers:publish","exams:assign","announcements:write","activity:read"];
 type Key={id:string;name:string;scopes:string[];createdAt:string;lastUsedAt:string|null;revokedAt:string|null};
 async function call<T>(path:string,init:RequestInit={}):Promise<T>{const r=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(typeof b.error==="string"?b.error:"Request failed.");return b as T;}
 export default function AdminMcpAssistant(){
@@ -23,6 +23,6 @@ export default function AdminMcpAssistant(){
    <label>MCP endpoint<input readOnly value={endpoint}/></label><label>Client connection details<textarea rows={5} readOnly value={config}/></label><button className="ghost" onClick={()=>void copy(config)}>Copy connection details</button>
   </article>
   <article className="admin-card admin-mcp-card"><h2>Active and revoked keys</h2>{keys.length===0?<p>No administrator MCP keys yet.</p>:keys.map(k=><div className="mcp-key-row" key={k.id}><div><strong>{k.name}</strong><small>{k.scopes.join(" · ")}</small><small>{k.revokedAt?"Revoked":k.lastUsedAt?"Last used "+new Date(k.lastUsedAt).toLocaleString():"Not used yet"}</small></div>{!k.revokedAt&&<button className="danger" disabled={busy} onClick={()=>void revoke(k.id)}>Revoke</button>}</div>)}</article>
-  <article className="admin-card admin-mcp-card"><h2>Available tools</h2><ul><li>Search the official question bank by subject, topic and review status.</li><li>Create question drafts; they are never auto-approved.</li><li>Approve sourced draft questions only with explicit confirmation.</li><li>Create an unpublished question paper from approved questions.</li><li>Read recent exam results and create student announcements.</li><li>Read sanitized MCP audit summaries.</li></ul><p className="muted">Paper creation does not publish or assign students. Assignment and publishing remain a separate explicit admin action.</p></article>
+  <article className="admin-card admin-mcp-card"><h2>Available tools</h2><ul><li>Search the official question bank by subject, topic and review status.</li><li>Create question drafts; they are never auto-approved.</li><li>Approve sourced draft questions only with explicit confirmation.</li><li>Create an unpublished question paper from approved questions.</li><li>Publish a paper and assign it to approved students with explicit confirmation.</li><li>Edit questions and bulk-reject drafts.</li><li>Read recent exam results and create student announcements.</li><li>Read sanitized MCP audit summaries.</li></ul><p className="muted">Paper creation does not publish or assign students. Assignment and publishing remain a separate explicit admin action.</p></article>
  </section>;
 }
