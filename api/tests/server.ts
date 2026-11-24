@@ -165,6 +165,7 @@ export async function signUp(
 ): Promise<{ cookie: string; userId: number }> {
   const db = testDatabases.get(baseUrl);
   if (!db) throw new Error("No test database is registered for this server.");
+  await db.user.upsert({ where: { email: "test-admin@arctester.invalid" }, create: { email: "test-admin@arctester.invalid", passwordHash: "test-only", role: "ADMIN" }, update: { role: "ADMIN" } });
   const reg = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
