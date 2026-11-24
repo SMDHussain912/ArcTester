@@ -184,6 +184,13 @@ export default function App() {
   const practiceRestoreLock = useRef(false);
   const questionSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!error) return;
+    const message = !__DEV__ && /(?:Prisma|SQL|stack trace|node_modules|\\.tsx?:\\d+|Cannot read properties|undefined is not|internal server error|exception)/i.test(error)
+      ? "Something went wrong. Please try again. If it continues, contact support."
+      : error;
+    Alert.alert("ArcTester", message, [{ text: "OK", onPress: () => setError("") }], { cancelable: true, onDismiss: () => setError("") });
+  }, [error]);
   const [startupVisible, setStartupVisible] = useState(true);
   const startupFade = useRef(new Animated.Value(1)).current;
   const startupLogo = useRef(new Animated.Value(0)).current;
@@ -334,7 +341,7 @@ export default function App() {
       },
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new ApiRequestError(body.error || "The server request failed.", response.status);
+    if (!response.ok) throw new ApiRequestError(response.status >= 500 ? "ArcTester couldn\u0027t complete this request right now. Please try again." : (typeof body.error === "string" ? body.error : "The server request failed."), response.status);
     return body as T;
   }
   async function refreshGamification() {
@@ -1556,7 +1563,7 @@ export default function App() {
             </TouchableOpacity>
           </>
         )}
-        {!!error && <Text style={styles.error}>{error}</Text>}
+
         {busy && <ActivityIndicator style={{ marginTop: 16 }} />}
         <Text style={[styles.footer, darkMode && { color: "#64748b" }]}>ArcTester · Your progress, across devices</Text>
       </ScrollView>
