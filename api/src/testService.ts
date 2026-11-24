@@ -3,7 +3,7 @@ import { getLearningConceptsForTopic } from "./intelligence/conceptKnowledge.js"
 import { dailyChallengeQuestionIds, utcDayKey } from "./dailyChallenge.js";
 // Routes stay thin (parse/validate/respond); this file owns the workflow.
 
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
@@ -150,7 +150,7 @@ function shortfallWarning(shortfalls: Shortfall[]): string[] {
   );
 }
 
-export function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
+export function selectEcetMockCandidates<T extends { questionType: string }>(candidates: readonly T[]): T[] {\n  return candidates.filter((question) => question.questionType === "mcq");\n}\n\nexport function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
   if (selectedCount === MOCK_TOTAL && shortfalls.length === 0) return null;
   const details = shortfalls.length
     ? shortfalls.map((item) => item.subject + ': ' + item.available + '/' + item.requested).join('; ')
@@ -249,7 +249,7 @@ export async function createTest(
   let warnings: string[] = [];
 
   if (input.mode === "mock") {
-    const { questions, shortfalls } = selectMockTest(candidates, stats);
+    const { questions, shortfalls } = selectMockTest(selectEcetMockCandidates(candidates), stats);
     const readinessIssue = fullMockReadinessIssue(questions.length, shortfalls);
     if (readinessIssue) throw badRequest(readinessIssue);
     selected = questions;
@@ -514,29 +514,56 @@ export async function submitTest(
     });
     if (claimed.count !== 1) throw conflict("This test was already submitted.");
 
-    for (const row of rows) {
-      await tx.attemptAnswer.updateMany({
-        where: { attemptId, questionId: row.questionId },
-        data: { chosen: row.chosen, isCorrect: row.isCorrect, responseSnapshot: JSON.stringify(row.response) },
-      });
-    }
+    if (rows.length > 0) {
+      // Persist all submitted answers in one statement instead of 200 individual updates.
+      const answerValues = rows.map((row) => Prisma.sql`(
+        ${row.questionId}::int,
+        ${row.chosen}::int,
+        ${row.isCorrect}::boolean,
+        ${JSON.stringify(row.response)}::text
+      )`);
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE "AttemptAnswer" AS aa
+        SET "chosen" = v."chosen",
+            "isCorrect" = v."isCorrect",
+            "responseSnapshot" = v."responseSnapshot"
+        FROM (VALUES ${Prisma.join(answerValues)}) AS v("questionId", "chosen", "isCorrect", "responseSnapshot")
+        WHERE aa."attemptId" = ${attemptId}
+          AND aa."questionId" = v."questionId"
+      `);
 
-    for (const row of rows) {
-      const prev = await tx.stat.findUnique({
-        where: { userId_questionId: { userId, questionId: row.questionId } },
+      // Load the previous mastery stats once, then batch the upserts.
+      const previousStats = await tx.stat.findMany({
+        where: { userId, questionId: { in: rows.map((row) => row.questionId) } },
+        select: { questionId: true, seen: true, wrong: true, lastSeen: true },
       });
-      const next = nextStat(
-        prev ? { seen: prev.seen, wrong: prev.wrong, lastSeen: prev.lastSeen } : undefined,
-        row.isCorrect ? "correct" : row.response === null ? "unanswered" : "wrong",
-        now,
-      );
-      await tx.stat.upsert({
-        where: { userId_questionId: { userId, questionId: row.questionId } },
-        update: { seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen },
-        create: {
-          userId, questionId: row.questionId, seen: next.seen, wrong: next.wrong, lastSeen: next.lastSeen,
-        },
+      const previousByQuestion = new Map(previousStats.map((stat) => [stat.questionId, stat]));
+      const nextStats = rows.map((row) => {
+        const previous = previousByQuestion.get(row.questionId);
+        return {
+          questionId: row.questionId,
+          ...nextStat(
+            previous ? { seen: previous.seen, wrong: previous.wrong, lastSeen: previous.lastSeen } : undefined,
+            row.isCorrect ? "correct" : row.response === null ? "unanswered" : "wrong",
+            now,
+          ),
+        };
       });
+      const statValues = nextStats.map((stat) => Prisma.sql`(
+        ${userId}::int,
+        ${stat.questionId}::int,
+        ${stat.seen}::int,
+        ${stat.wrong}::int,
+        ${stat.lastSeen}::timestamp
+      )`);
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "Stat" ("userId", "questionId", "seen", "wrong", "lastSeen")
+        VALUES ${Prisma.join(statValues)}
+        ON CONFLICT ("userId", "questionId") DO UPDATE
+        SET "seen" = EXCLUDED."seen",
+            "wrong" = EXCLUDED."wrong",
+            "lastSeen" = EXCLUDED."lastSeen"
+      `);
     }
 
   });
