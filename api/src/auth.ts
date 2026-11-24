@@ -160,7 +160,6 @@ export async function verifyPasswordAsync(password: string, stored: string): Pro
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
-  invitationToken: z.string().min(32).max(256),
 });
 
 export const LoginSchema = z.object({
@@ -274,10 +273,13 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
   try {
     const user = await db.user.findUnique({
       where: { id },
-      select: { email: true, sessionVersion: true },
+      select: { email: true, sessionVersion: true, accessStatus: true },
     });
     if (!user || user.email !== email || user.sessionVersion !== sessionVersion) {
       return next(forbidden("This session has been revoked. Sign in again."));
+    }
+    if (user.accessStatus !== "APPROVED") {
+      return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
     }
     req.user = { id, email };
     next();
@@ -411,51 +413,14 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/register", async (req, res, next) => {
     try {
       const input = RegisterSchema.parse(req.body);
-      const tokenHash = sha256(input.invitationToken);
       const passwordHash = await hashPasswordAsync(input.password);
-      const now = new Date();
-
-      const user = await db.$transaction(async (tx) => {
-        const invitation = await tx.invitation.findUnique({ where: { tokenHash } });
-        if (
-          !invitation ||
-          invitation.email !== input.email ||
-          invitation.usedAt ||
-          invitation.revokedAt ||
-          invitation.expiresAt <= now
-        ) {
-          throw badRequest("This invitation is invalid, expired, or already used.");
-        }
-
-        const existing = await tx.user.findUnique({ where: { email: input.email } });
-        if (existing) throw conflict("An account with that email already exists.");
-
-        const claimed = await tx.invitation.updateMany({
-          where: {
-            id: invitation.id,
-            usedAt: null,
-            revokedAt: null,
-            expiresAt: { gt: now },
-          },
-          data: { usedAt: now },
-        });
-        if (claimed.count !== 1) {
-          throw badRequest("This invitation is invalid, expired, or already used.");
-        }
-
-        return tx.user.create({
-          data: {
-            email: input.email,
-            passwordHash,
-            role: "STUDENT",
-          },
-          select: { id: true, email: true, role: true },
-        });
+      const user = await db.user.create({
+        data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING" },
+        select: { id: true, email: true, role: true, accessStatus: true },
       });
-
       res.status(201).json({
         ok: true,
-        message: "Account created. Sign in to continue.",
+        message: "Account submitted for administrator approval. You can sign in after approval.",
         user,
       });
     } catch (error) {
@@ -480,6 +445,7 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
+      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
@@ -505,6 +471,7 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
+      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       res.json({
         ok: true,
@@ -556,12 +523,13 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true, sessionVersion: true },
+        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true },
       });
       const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
         return next(forbidden("This session has been revoked. Sign in again."));
       }
+      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       res.json({ ok: true, user });
     } catch {
       next(forbidden("Invalid session."));
