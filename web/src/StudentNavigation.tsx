@@ -8,6 +8,7 @@ export type StudentPage =
   | "lessons"
   | "learning-summary"
   | "practice"
+  | "ai-practice"
   | "history"
   | "assignments"
   | "question-bank"
