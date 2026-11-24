@@ -58,7 +58,8 @@ function requireStudent(db: PrismaClient) {
     try {
       const user = await db.user.findUnique({ where: { id: req.user.id }, select: { role: true, accessStatus: true } });
       if (!user || user.role !== "STUDENT" || user.accessStatus !== "APPROVED") {
-        res.status(403).json({ error: "An approved student account is required." });\n        return;
+        res.status(403).json({ error: "An approved student account is required." });
+        return;
       }
       next();
     } catch (error) { next(error); }
