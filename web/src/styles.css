@@ -685,3 +685,25 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .practice-history-pagination{justify-content:center;align-items:center;gap:16px;flex-wrap:wrap}
 @media(max-width:700px){.practice-history-row{grid-template-columns:minmax(0,1fr) auto;padding:16px}.practice-history-row>.primary{grid-column:1/-1;width:100%}.practice-history-score{text-align:right}}
 @media(max-width:420px){.practice-history-row{grid-template-columns:minmax(0,1fr)}.practice-history-score{text-align:left}.practice-history-row>.primary{grid-column:1}}
+
+/* Personal MCP workspaces */
+.student-mcp-page,.admin-mcp-assistant{display:grid;gap:20px;min-width:0}
+.student-mcp-card,.admin-mcp-card{display:grid;gap:14px;padding:22px}
+.student-mcp-card h2,.admin-mcp-card h2{margin:0;font-size:20px}
+.student-mcp-card p,.admin-mcp-card p{margin:0;line-height:1.6}
+.student-mcp-card label,.admin-mcp-card label{display:grid;gap:7px;font-weight:600}
+.student-mcp-card input,.student-mcp-card textarea,.admin-mcp-card input,.admin-mcp-card textarea{width:100%;min-width:0}
+.student-mcp-card textarea,.admin-mcp-card textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;overflow-wrap:anywhere}
+.mcp-scope-list{display:flex;gap:7px;flex-wrap:wrap}
+.mcp-scope-list span{border:1px solid var(--border);border-radius:999px;padding:5px 9px;font-size:12px}
+.mcp-secret-box{display:grid;gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px}
+.mcp-key-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border)}
+.mcp-key-row:last-child{border-bottom:0}
+.mcp-key-row>div{display:grid;gap:5px;min-width:0}
+.mcp-key-row small{color:var(--muted);overflow-wrap:anywhere}
+.mcp-question-row{padding:12px 0;border-bottom:1px solid var(--border);display:grid;gap:8px}
+.mcp-question-row p{overflow-wrap:anywhere}
+.admin-mcp-assistant .admin-page-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.admin-mcp-assistant .admin-page-heading h1{margin:6px 0}
+.admin-mcp-assistant .admin-page-heading p{max-width:760px;line-height:1.6}
+@media(max-width:640px){.student-mcp-card,.admin-mcp-card{padding:16px}.mcp-key-row{align-items:flex-start}.admin-mcp-assistant .admin-page-heading{display:grid}}
