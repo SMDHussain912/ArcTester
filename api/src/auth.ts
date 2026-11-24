@@ -1,6 +1,6 @@
 // Authentication uses HMAC-SHA256 JWTs and Node's built-in scrypt password hashing.
-// Student registration is invitation-only. Privileged operations re-check the
-// current database role instead of trusting a role claim in a client token.
+// Student accounts self-register and require administrator approval. Privileged
+// operations re-check the current database role instead of trusting client claims.
 
 import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
@@ -424,6 +424,7 @@ export function authRouter(db: PrismaClient): Router {
         user,
       });
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") return next(conflict("An account with this email already exists."));
       next(error);
     }
   });
