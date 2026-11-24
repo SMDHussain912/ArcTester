@@ -7,7 +7,6 @@ import StudentPracticeResults, { type PracticeResult } from "./StudentPracticeRe
 import { buildPracticeConfig, type PracticeConfig, type PracticeQuestionType } from "./practiceConfig";
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
-import type { FormEvent } from "react";
 import AdminWorkspace from "./AdminWorkspace";
 import AuthScreen from "./AuthScreen";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
@@ -39,16 +38,6 @@ const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").r
 const request = createApiClient(API);
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
-type Invitation = {
-  id: string;
-  email: string;
-  expiresAt: string;
-  usedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-  status: "PENDING" | "USED" | "REVOKED" | "EXPIRED";
-};
-type CreatedInvitation = { id: string; email: string; token: string; expiresAt: string };
 type Test = PracticeSessionTest;
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null; response?: unknown }[] };
 function validPracticeAnswer(question: PracticeSessionTest["questions"][number], value: unknown): boolean {
@@ -80,9 +69,6 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
@@ -283,48 +269,6 @@ export default function App() {
     }
     setError("");
     setActivePage(page);
-  }
-
-  useEffect(() => {
-    if (user?.role !== "ADMIN") return;
-    request<{ invitations: Invitation[] }>("/auth/invitations")
-      .then(({ invitations: items }) => setInvitations(Array.isArray(items) ? items : []))
-      .catch((cause) => setError((cause as Error).message));
-  }, [user]);
-
-  async function createInvitation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    setCreatedInvitation(null);
-    try {
-      const response = await request<{ invitation: CreatedInvitation }>("/auth/invitations", {
-        method: "POST",
-        body: JSON.stringify({ email: inviteEmail.trim() }),
-      });
-      setCreatedInvitation(response.invitation);
-      setInviteEmail("");
-      const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
-      setInvitations(refreshed.invitations);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function revokeInvitation(id: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await request(`/auth/invitations/${id}/revoke`, { method: "POST" });
-      const refreshed = await request<{ invitations: Invitation[] }>("/auth/invitations");
-      setInvitations(refreshed.invitations);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function authenticate() {
@@ -573,13 +517,10 @@ export default function App() {
     setPracticeLocalSaveAvailable(false);
     setPracticeSyncStatus("idle");
     clearStudentCommunications();
-    setInvitations([]);
     setPracticeSubjects([]);
     setPracticeTopicKeys([]);
     setPracticeQuestionCount(20);
     setPracticeDifficulty("any");
-    setCreatedInvitation(null);
-    setInviteEmail("");
     setError("");
     setActivePage("dashboard");
     setBusy(false);
@@ -609,13 +550,6 @@ export default function App() {
       theme={theme}
       setTheme={setTheme}
       signOut={signOut}
-      invitations={invitations}
-      createInvitation={createInvitation}
-      inviteEmail={inviteEmail}
-      setInviteEmail={setInviteEmail}
-      createdInvitation={createdInvitation}
-      revokeInvitation={revokeInvitation}
-      busy={busy}
     />;
   }
 
