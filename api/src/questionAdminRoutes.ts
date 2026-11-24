@@ -67,6 +67,37 @@ export function questionAdminRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.post("/admin/questions/review/bulk-scope", async (req, res, next) => {
+    try {
+      const input = z.object({
+        subject: z.string().trim().min(1).max(120),
+        topic: z.string().trim().max(120).optional(),
+        difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+        dryRun: z.boolean().default(false),
+      }).parse(req.body);
+      const where = {
+        reviewStatus: "DRAFT",
+        subject: { name: input.subject },
+        ...(input.topic ? { topic: { name: input.topic } } : {}),
+        ...(input.difficulty ? { difficulty: input.difficulty } : {}),
+      };
+      const candidates = await db.question.findMany({ where, select: { id: true, source: true } });
+      const eligible = candidates.filter((question) => hasReviewableSource(question.source));
+      const missingSourceCount = candidates.length - eligible.length;
+      if (input.dryRun) {
+        return res.json({ ok: true, matchedCount: candidates.length, eligibleCount: eligible.length, missingSourceCount });
+      }
+      if (eligible.length === 0) {
+        return res.json({ ok: true, approvedCount: 0, matchedCount: candidates.length, missingSourceCount });
+      }
+      const result = await db.question.updateMany({
+        where: { id: { in: eligible.map((question) => question.id) }, reviewStatus: "DRAFT" },
+        data: { reviewStatus: "APPROVED" },
+      });
+      res.json({ ok: true, approvedCount: result.count, matchedCount: candidates.length, missingSourceCount });
+    } catch (error) { next(error); }
+  });
+
   router.patch("/admin/questions/review/bulk", async (req, res, next) => {
     try {
       const input = z.object({
