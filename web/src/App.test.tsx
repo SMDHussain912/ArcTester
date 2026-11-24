@@ -252,7 +252,9 @@ describe("live Vite application", () => {
     render(<App />);
     expect(await screen.findByText("Restored question?")).toBeInTheDocument();
     const restoredQuestion = screen.getByText("Restored question?").closest("article");
-    const restoredSelectedOption = within(restoredQuestion!).getAllByRole("button").find((button) => button.getAttribute("aria-pressed") === "true");\n    expect(restoredSelectedOption).toBeDefined();\n    expect(restoredSelectedOption).toHaveClass("selected");
+    const restoredSelectedOption = within(restoredQuestion!).getAllByRole("button").find((button) => button.getAttribute("aria-pressed") === "true");
+    expect(restoredSelectedOption).toBeDefined();
+    expect(restoredSelectedOption).toHaveClass("selected");
     expect(await screen.findByText("Second restored question?")).toBeInTheDocument();
     const secondQuestion = screen.getByText("Second restored question?").closest("article");
     expect(within(secondQuestion!).getAllByRole("button").every((button) => !button.classList.contains("selected"))).toBe(true);
@@ -264,7 +266,9 @@ describe("live Vite application", () => {
         newValue: JSON.stringify({ "7": 1, "8": 2, "999": 0 }),
       }));
     });
-    const updatedSelectedOption = within(secondQuestion!).getAllByRole("button").find((button) => button.getAttribute("aria-pressed") === "true");\n    expect(updatedSelectedOption).toBeDefined();\n    expect(updatedSelectedOption).toHaveClass("selected");
+    const updatedSelectedOption = within(secondQuestion!).getAllByRole("button").find((button) => button.getAttribute("aria-pressed") === "true");
+    expect(updatedSelectedOption).toBeDefined();
+    expect(updatedSelectedOption).toHaveClass("selected");
     expect(screen.getByText(/2 \/ 2 answered/)).toBeInTheDocument();
   });
 
