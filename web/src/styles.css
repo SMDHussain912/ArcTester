@@ -672,3 +672,16 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
  .assigned-exam-session .exam-question-controls .row button{flex:1}
  .assigned-exam-session .practice-submit-bar{bottom:8px}
 }
+
+/* Student practice history: responsive attempt cards and review actions */
+.student-practice-history{min-width:0}
+.practice-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:18px;padding:22px}
+.practice-history-main{min-width:0}
+.practice-history-main h2{margin:10px 0 6px;font-size:18px;overflow-wrap:anywhere}
+.practice-history-main p{margin:0;line-height:1.55}
+.practice-history-score{display:grid;gap:4px;text-align:right;white-space:nowrap}
+.practice-history-score strong{font-size:22px}
+.practice-history-score span{font-size:12px;color:var(--muted)}
+.practice-history-pagination{justify-content:center;align-items:center;gap:16px;flex-wrap:wrap}
+@media(max-width:700px){.practice-history-row{grid-template-columns:minmax(0,1fr) auto;padding:16px}.practice-history-row>.primary{grid-column:1/-1;width:100%}.practice-history-score{text-align:right}}
+@media(max-width:420px){.practice-history-row{grid-template-columns:minmax(0,1fr)}.practice-history-score{text-align:left}.practice-history-row>.primary{grid-column:1}}

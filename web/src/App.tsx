@@ -27,6 +27,7 @@ import StudentPracticePaperConfiguration from "./StudentPracticePaperConfigurati
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
+import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
 import StudentComingSoon from "./StudentComingSoon";
 import StudentAccountSettings from "./StudentAccountSettings";
@@ -635,6 +636,8 @@ export default function App() {
             onRefresh={() => void refreshAnnouncements().catch((cause) => setError((cause as Error).message))}
             onAcknowledge={(id) => void acknowledgeAnnouncement(id)}
           />
+        ) : activePage === "history" ? (
+          <StudentPracticeHistory />
         ) : activePage === "analytics" ? (
           <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} onStartRecommendedPractice={(item) => {
             if (!item.subject) { setActivePage("practice"); return; }
