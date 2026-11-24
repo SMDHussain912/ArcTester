@@ -5,6 +5,7 @@ type McpKey = { id: string; name: string; scopes: string[]; createdAt: string; l
 type PrivateQuestion = { id: string; subject: string; topic: string; text: string; options: string[]; difficulty: string; updatedAt: string };
 type PracticeQuestion = { subject?: string; topic?: string; text: string; options: string[]; correctIndex: number; explanation?: string; difficulty?: string };
 type PracticeSet = { id: string; title: string; description: string; durationMinutes: number; questions: unknown[]; updatedAt: string };
+type PracticeRun = { id: string; titleSnapshot: string; totalQuestions: number; answeredCount: number; correctCount: number; percentage: number; completedAt: string };
 
 const scopes = ["questions:read", "questions:write", "practice:read", "practice:write"];
 const endpoint = API + "/mcp/student";
@@ -13,6 +14,7 @@ export default function StudentMcpAssistant() {
   const [keys, setKeys] = useState<McpKey[]>([]);
   const [questions, setQuestions] = useState<PrivateQuestion[]>([]);
   const [tests, setTests] = useState<PracticeSet[]>([]);
+  const [runs, setRuns] = useState<PracticeRun[]>([]);
   const [name, setName] = useState("My AI study assistant");
   const [secret, setSecret] = useState("");
   const [error, setError] = useState("");
@@ -22,16 +24,20 @@ export default function StudentMcpAssistant() {
   const [testIndex, setTestIndex] = useState(0);
   const [testAnswers, setTestAnswers] = useState<Record<number, number>>({});
   const [testFinished, setTestFinished] = useState(false);
+  const [submittingRun, setSubmittingRun] = useState(false);
+  const [savedRun, setSavedRun] = useState<PracticeRun | null>(null);
 
   async function refresh() {
-    const [keyResult, questionResult, testResult] = await Promise.all([
+    const [keyResult, questionResult, testResult, runResult] = await Promise.all([
       request<{ keys: McpKey[] }>("/student/mcp-keys"),
       request<{ questions: PrivateQuestion[] }>("/student/private-questions?limit=50"),
       request<{ practiceTests: PracticeSet[] }>("/student/practice-sets"),
+      request<{ runs: PracticeRun[] }>("/student/practice-runs"),
     ]);
     setKeys(keyResult.keys);
     setQuestions(questionResult.questions);
     setTests(testResult.practiceTests);
+    setRuns(runResult.runs);
   }
   useEffect(() => { void refresh().catch((e) => setError((e as Error).message)); }, []);
 
@@ -71,6 +77,19 @@ export default function StudentMcpAssistant() {
     finally { setBusy(false); }
   }
 
+  async function finishPrivateTest() {
+    if (!activeTest || submittingRun) return;
+    setSubmittingRun(true); setError("");
+    try {
+      const result = await request<{ run: PracticeRun }>("/student/practice-sets/" + encodeURIComponent(activeTest.id) + "/submit", {
+        method: "POST",
+        body: JSON.stringify({ answers: activeQuestions.map((_question, index) => testAnswers[index] ?? null) }),
+      });
+      setSavedRun(result.run); setTestFinished(true);
+      await refresh();
+    } catch (e) { setError((e as Error).message || "Could not save this practice result. Please retry."); }
+    finally { setSubmittingRun(false); }
+  }
   const config = JSON.stringify({ url: endpoint, transport: "streamable-http", headers: { Authorization: secret ? "Bearer " + secret : "Bearer <YOUR_STUDENT_MCP_KEY>" } }, null, 2);
   const activeQuestions = (activeTest?.questions ?? []) as PracticeQuestion[];
   const activeQuestion = activeQuestions[testIndex];
@@ -106,17 +125,21 @@ export default function StudentMcpAssistant() {
         {questions.slice(0, 8).map((q) => <div className="mcp-question-row" key={q.id}><strong>{q.subject} / {q.topic}</strong><p>{q.text}</p><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/private-questions/" + encodeURIComponent(q.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
       </article>
       {activeTest && <article className="card student-mcp-card mcp-live-practice" aria-label="Private practice test">
-        <div className="mcp-key-row"><div><h2>{activeTest.title}</h2><small>{activeQuestions.length} questions · {activeTest.durationMinutes} min · Private practice</small></div><button type="button" className="ghost" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); }}>Close</button></div>
+        <div className="mcp-key-row"><div><h2>{activeTest.title}</h2><small>{activeQuestions.length} questions · {activeTest.durationMinutes} min · Private practice</small></div><button type="button" className="ghost" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); setSavedRun(null); }}>Close</button></div>
         {!testFinished && activeQuestion ? <>
           <p>Question {testIndex + 1} of {activeQuestions.length}</p><h3>{activeQuestion.text}</h3>
           {activeQuestion.options.map((option, optionIndex) => <button key={optionIndex} type="button" className={testAnswers[testIndex] === optionIndex ? "primary mcp-answer-option" : "ghost mcp-answer-option"} onClick={() => setTestAnswers(previous => ({ ...previous, [testIndex]: optionIndex }))}>{String.fromCharCode(65 + optionIndex)}. {option}</button>)}
-          <div className="mcp-key-row"><button type="button" className="ghost" disabled={testIndex===0} onClick={() => setTestIndex(i=>i-1)}>Previous</button><span>{Object.keys(testAnswers).length}/{activeQuestions.length} answered</span>{testIndex<activeQuestions.length-1?<button type="button" className="primary" onClick={() => setTestIndex(i=>i+1)}>Next</button>:<button type="button" className="primary" onClick={() => setTestFinished(true)}>Finish test</button>}</div>
-        </> : <><h3>Score: {practiceScore} / {activeQuestions.length}</h3><p>Review your answers below.</p>{activeQuestions.map((q,i)=><div className="mcp-question-row" key={i}><strong>Q{i+1}. {q.text}</strong><p>Your answer: {testAnswers[i]===undefined?"Unanswered":q.options[testAnswers[i]]}</p><p>Correct answer: {q.options[q.correctIndex]}</p>{q.explanation&&<p>{q.explanation}</p>}</div>)}<button type="button" className="primary" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); }}>Back to practice tests</button></>}
+          <div className="mcp-key-row"><button type="button" className="ghost" disabled={testIndex===0} onClick={() => setTestIndex(i=>i-1)}>Previous</button><span>{Object.keys(testAnswers).length}/{activeQuestions.length} answered</span>{testIndex<activeQuestions.length-1?<button type="button" className="primary" onClick={() => setTestIndex(i=>i+1)}>Next</button>:<button type="button" className="primary" disabled={submittingRun} onClick={() => void finishPrivateTest()}>{submittingRun ? "Saving result…" : "Finish test"}</button>}</div>
+        </> : <><h3>Score: {savedRun ? savedRun.correctCount : practiceScore} / {activeQuestions.length}</h3>{savedRun && <p>Saved to your performance history · {savedRun.percentage}%</p>}<p>Review your answers below.</p>{activeQuestions.map((q,i)=><div className="mcp-question-row" key={i}><strong>Q{i+1}. {q.text}</strong><p>Your answer: {testAnswers[i]===undefined?"Unanswered":q.options[testAnswers[i]]}</p><p>Correct answer: {q.options[q.correctIndex]}</p>{q.explanation&&<p>{q.explanation}</p>}</div>)}<button type="button" className="primary" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); }}>Back to practice tests</button></>}
       </article>}
       <article className="card student-mcp-card">
         <h2>AI-created practice tests</h2>
         <p>Your connected AI can create and edit private test packages using the MCP tools. These are practice content, not official assigned exams.</p>
-        {tests.length === 0 ? <p>No AI practice tests saved yet. Ask your connected AI to build one and save it with <code>create_my_practice_test</code>.</p> : tests.map((test) => <div className="mcp-key-row" key={test.id}><div><strong>{test.title}</strong><small>{test.questions.length} questions · {test.durationMinutes} min</small><small>{test.description}</small></div><button type="button" className="primary" onClick={() => { setActiveTest(test); setTestIndex(0); setTestAnswers({}); setTestFinished(false); }}>Start test</button><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/practice-sets/" + encodeURIComponent(test.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
+        {tests.length === 0 ? <p>No AI practice tests saved yet. Ask your connected AI to build one and save it with <code>create_my_practice_test</code>.</p> : tests.map((test) => <div className="mcp-key-row" key={test.id}><div><strong>{test.title}</strong><small>{test.questions.length} questions · {test.durationMinutes} min</small><small>{test.description}</small></div><button type="button" className="primary" onClick={() => { setActiveTest(test); setTestIndex(0); setTestAnswers({}); setTestFinished(false); setSavedRun(null); }}>Start test</button><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/practice-sets/" + encodeURIComponent(test.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
+      </article>
+      <article className="card student-mcp-card">
+        <h2>Private practice performance</h2>
+        {runs.length === 0 ? <p>Your completed AI practice tests will appear here.</p> : runs.slice(0, 20).map(run => <div className="mcp-key-row" key={run.id}><div><strong>{run.titleSnapshot}</strong><small>{run.correctCount}/{run.totalQuestions} correct · {run.answeredCount} answered</small><small>{new Date(run.completedAt).toLocaleString()}</small></div><strong>{run.percentage}%</strong></div>)}
       </article>
     </section>
   );
