@@ -649,3 +649,26 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .result-breakdown-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .result-breakdown-grid.single{grid-template-columns:1fr}
 @media(max-width:800px){.result-breakdown-grid{grid-template-columns:1fr}}
+
+/* Assigned exams: single-question navigation and low-latency answer sync */
+.assigned-exam-session{display:grid;gap:16px;min-width:0}
+.assigned-current-question{display:grid;gap:20px;min-height:280px}
+.assigned-current-question .current-question-heading{align-items:flex-start}
+.assigned-current-question .current-question-heading>div{min-width:0;flex:1}
+.assigned-current-question .current-question-heading h2{margin:8px 0 0;line-height:1.45;overflow-wrap:anywhere}
+.assigned-current-question .current-question-heading>button{flex:0 0 auto;white-space:nowrap}
+.assigned-exam-session .exam-question-navigator{display:grid;gap:14px}
+.assigned-exam-session .exam-palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));gap:7px}
+.assigned-exam-session .exam-palette-item{min-width:0;min-height:36px}
+.assigned-exam-session .exam-palette-item.marked-for-review{border-color:var(--warning,#d99a28);background:color-mix(in srgb,var(--warning,#d99a28) 16%,var(--surface));color:var(--text)}
+.assigned-exam-session .exam-question-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.assigned-exam-session .exam-question-controls .row{gap:8px}
+.assigned-exam-session .practice-submit-bar{position:sticky;bottom:12px;z-index:4;box-shadow:var(--shadow)}
+@media(max-width:600px){
+ .assigned-current-question .current-question-heading{display:grid}
+ .assigned-current-question .current-question-heading>button{width:100%}
+ .assigned-exam-session .exam-question-controls{align-items:stretch}
+ .assigned-exam-session .exam-question-controls .row{width:100%}
+ .assigned-exam-session .exam-question-controls .row button{flex:1}
+ .assigned-exam-session .practice-submit-bar{bottom:8px}
+}
