@@ -105,6 +105,8 @@ model User {
   lessonDrafts LessonDraft[]
   uploadedLessonAudio LessonAudioAsset[]
   createdLessonVersions LessonVersion[]
+
+  @@index([role, accessStatus])
 }
 
 model Invitation {
