@@ -34,7 +34,7 @@ describe("StudentAssignedExams", () => {
     render(<StudentAssignedExams />);
     expect(await screen.findByRole("heading", { name: "Assigned exams" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "ECET Mock 01" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start / Resume exam" }));
+    fireEvent.click(screen.getByRole("button", { name: "Write exam" }));
     expect(await screen.findByText("FIFO structure?")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Queue/ }));
