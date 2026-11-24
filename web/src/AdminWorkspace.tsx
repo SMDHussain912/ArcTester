@@ -30,7 +30,7 @@ type Props = { email:string; theme:"light"|"dark"; setTheme:(v:"light"|"dark")=>
 async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  const response=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});
  const body=await response.json().catch(()=>({}));
- if(!response.ok) throw new Error(response.status>=500?"ArcTester couldn\u0027t complete this request right now. Please try again.":body.error||"Request failed.");
+ if(!response.ok) throw new Error(response.status>=500?"ArcTester couldn\u0027t complete this request right now. Please try again.":typeof body.error==="string"?body.error:"Request failed.");
  return body as T;
 }
 export default function AdminWorkspace(p:Props){
