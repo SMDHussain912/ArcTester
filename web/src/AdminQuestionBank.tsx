@@ -17,6 +17,7 @@ type AdminQuestionBankProps = {
   onReviewStatusChange?: (value: string) => void;
   onReviewQuestion?: (id: number, status: "APPROVED" | "REJECTED", source: string) => void;
   onBulkReview?: (status: "APPROVED" | "REJECTED", sources: Array<{ id: number; source: string }>) => void;
+  onBulkApproveScope?: (scope: { subject: string; topic?: string; difficulty?: string }) => void;
   catalog: AdminQuestionCatalogSubject[];
   filteredTopics: Topic[];
   selected: number[];
@@ -33,7 +34,7 @@ type AdminQuestionBankProps = {
   onPageChange: (page: number) => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, reviewStatus = "", reviewProgress = null, onReviewStatusChange = () => {}, onReviewQuestion = () => {}, onBulkReview = () => {}, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, reviewStatus = "", reviewProgress = null, onReviewStatusChange = () => {}, onReviewQuestion = () => {}, onBulkReview = () => {}, onBulkApproveScope = () => {}, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [sourceDrafts, setSourceDrafts] = useState<Record<number, string>>({});
   const pageCount = Math.max(1, Math.ceil(total / 25));
@@ -59,14 +60,15 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)} aria-label="Filter by difficulty"><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
         <select value={reviewStatus} onChange={(event) => onReviewStatusChange(event.target.value)} aria-label="Filter by review status"><option value="">All review statuses</option><option value="DRAFT">Needs review</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select>
       </div>
-      <section className="admin-panel question-review-progress" aria-label="Question review progress">
-        <div className="question-review-progress-head"><div><h2>Human review progress</h2><p className="muted">Three times the official AP ECET CSE paper quota is the draft-bank target. Drafts and approved questions count toward coverage; rejected questions do not.</p></div><button type="button" className="primary" onClick={() => { onQueryChange(""); onSubjectChange(""); onTopicChange(""); onDifficultyChange(""); onReviewStatusChange("DRAFT"); document.getElementById("question-review-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Review draft questions ↓</button></div>
+      <details className="admin-panel question-review-progress" aria-label="Question review progress">
+        <summary className="question-review-summary">Review progress · {reviewProgress?.totals?.drafted ?? "—"} draft · {reviewProgress?.totals?.approved ?? "—"} approved · {reviewProgress?.totals?.remaining ?? "—"} needed</summary>
         {reviewProgress?.totals && Array.isArray(reviewProgress.subjects) ? <>
           <div className="admin-stat-grid"><article><span>Drafted</span><b>{reviewProgress.totals.drafted.toLocaleString()}</b></article><article><span>Approved</span><b>{reviewProgress.totals.approved.toLocaleString()}</b></article><article><span>Required bank target</span><b>{reviewProgress.totals.requiredQuota.toLocaleString()}</b></article><article><span>Still needed</span><b>{reviewProgress.totals.remaining.toLocaleString()}</b></article></div>
           <div className="table-panel">{reviewProgress.subjects.map((item) => <div className="coverage-row" key={item.subject}><span>{item.subject}</span><b>{item.drafted} drafted · {item.approved} approved / {item.requiredQuota} required</b><small>{item.rejected} rejected · {item.remaining} still needed</small></div>)}</div>
           <p className="question-review-progress-note">Review draft questions using the Approve or Reject controls in each question row. Bulk approval is available when selected questions have valid sources.</p>
         </> : <p className="muted">Review progress is loading or unavailable.</p>}
-      </section>
+      </details>
+      <section className="admin-panel bulk-approve-scope"><div><b>Bulk approve by subject or topic</b><p className="muted">Uses the current subject, topic and difficulty filters. Only drafts with a valid source are approved.</p></div><button className="primary" disabled={!subject || busy} onClick={() => onBulkApproveScope({subject, ...(topic ? {topic} : {}), ...(difficulty ? {difficulty} : {})})}>Approve matching drafts</button></section>
       <div id="question-review-list" className="admin-panel table-panel">
         <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="bulk-question-difficulty" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}>Selected question difficulty</label>
