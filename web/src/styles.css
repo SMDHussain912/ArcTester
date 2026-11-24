@@ -583,3 +583,14 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .question-review-progress-head button{flex:0 0 auto;white-space:nowrap}
 .question-review-progress-note{margin:16px 0 0;padding-top:14px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.6}
 @media(max-width:700px){.question-review-progress-head{flex-direction:column;align-items:stretch}.question-review-progress-head button{width:100%;white-space:normal}}
+
+/* Global transient error feedback: keep failures local to the action and dismissible. */
+.toast-error{border-color:color-mix(in srgb,var(--danger) 48%,var(--border));border-left:4px solid var(--danger);background:var(--surface);color:var(--ink)}
+.toast-close{display:grid;place-items:center;flex:0 0 26px;width:26px;height:26px;margin-left:6px;padding:0;border:1px solid var(--border);border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:18px;line-height:1;cursor:pointer}
+.toast-close:hover{background:color-mix(in srgb,var(--danger) 10%,var(--surface))}
+.toast>span{min-width:0;overflow-wrap:anywhere}
+.toast-container{width:min(calc(100vw - 32px),560px)}
+.toast-container .toast{box-sizing:border-box;width:100%;max-width:100%}
+@media(max-width:600px){.toast-container{inset:12px 12px auto;width:auto;transform:none}}
+.app-error-reference{margin:18px 0;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--muted);font-size:12px}
+.app-error-reference code{font-family:ui-monospace,SFMono-Regular,monospace;color:var(--text)}
