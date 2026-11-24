@@ -504,3 +504,7 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 @media(max-width:620px){.account-setting-section{padding:16px}.account-theme-picker{align-items:flex-start;flex-direction:column}.notification-row{padding:16px}}
 
 .student-brand .student-brand-mark{display:block;width:36px;height:36px;flex:0 0 36px;object-fit:contain;border-radius:11px}
+
+/* Notification inbox: keep the card content comfortably inset from its border. */
+.notification-row{padding:30px}
+@media(max-width:560px){.notification-row{padding:20px}}
