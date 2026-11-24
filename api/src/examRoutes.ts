@@ -542,6 +542,20 @@ export function examRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.patch("/admin/students/access/bulk", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }).parse(req.body);
+      if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Student IDs must be unique."));
+      const students = await db.user.findMany({ where: { id: { in: input.ids }, role: "STUDENT" }, select: { id: true } });
+      if (students.length !== input.ids.length) return next(badRequest("One or more selected accounts are not students."));
+      const result = await db.user.updateMany({
+        where: { id: { in: input.ids }, role: "STUDENT" },
+        data: { accessStatus: "APPROVED", sessionVersion: { increment: 1 } },
+      });
+      res.json({ ok: true, approvedCount: result.count });
+    } catch (error) { next(error); }
+  });
+
   router.get("/admin/analytics/overview", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const [
