@@ -54,11 +54,11 @@ async function authenticateMcp(db: PrismaClient, req: Request, res: Response, ne
 
 function requireStudent(db: PrismaClient) {
   return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void> => {
-    if (!req.user) return res.status(401).json({ error: "Sign in first." });
+    if (!req.user) { res.status(401).json({ error: "Sign in first." }); return; }
     try {
       const user = await db.user.findUnique({ where: { id: req.user.id }, select: { role: true, accessStatus: true } });
       if (!user || user.role !== "STUDENT" || user.accessStatus !== "APPROVED") {
-        return res.status(403).json({ error: "An approved student account is required." });
+        res.status(403).json({ error: "An approved student account is required." });\n        return;
       }
       next();
     } catch (error) { next(error); }
