@@ -5,10 +5,10 @@ import type { PrismaClient } from "@prisma/client";
 import { forbidden, badRequest, notFound } from "./errors.js";
 import { requireAuth, requireAdmin, type AuthedRequest } from "./auth.js";
 import { importFromJson } from "./importService.js";
-import { QuestionInputSchema } from "./questions.js";
+import { QuestionInputSchema, hashQuestion, encodeOptions } from "./questions.js";
 
 const PREFIX = "arc_admin_";
-const SCOPES = ["questions:read", "questions:create", "questions:review", "papers:create", "papers:read", "announcements:write", "activity:read"] as const;
+const SCOPES = ["questions:read", "questions:create", "questions:review", "papers:create", "papers:read", "papers:publish", "exams:assign", "announcements:write", "activity:read"] as const;
 const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 type KeyContext = { id: string; userId: number; scopes: string[] };
 function scope(key: KeyContext, required: string) { return key.scopes.includes(required); }
