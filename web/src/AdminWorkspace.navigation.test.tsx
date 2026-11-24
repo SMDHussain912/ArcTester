@@ -22,7 +22,7 @@ describe("administrator workspace navigation", () => {
       return Promise.resolve(response({}));
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} invitations={[]} createInvitation={vi.fn()} inviteEmail="" setInviteEmail={vi.fn()} createdInvitation={null} revokeInvitation={vi.fn()} busy={false} />);
+    render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
 
     const workspaces = [
       ["Overview", "Build better exams."],
@@ -34,7 +34,7 @@ describe("administrator workspace navigation", () => {
       ["Results & analytics", "Results & analytics"],
       ["Announcements", "Announcements"],
       ["Subjects & topics", "Subjects & topics"],
-      ["Student access", "Invitations"],
+      ["Student access", "Student approvals"],
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
