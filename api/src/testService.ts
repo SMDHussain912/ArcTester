@@ -150,7 +150,7 @@ function shortfallWarning(shortfalls: Shortfall[]): string[] {
   );
 }
 
-export function selectEcetMockCandidates<T extends { questionType: string }>(candidates: readonly T[]): T[] {
+export function selectEcetMockCandidates<T extends { questionType?: string }>(candidates: readonly T[]): T[] {
   return candidates.filter((question) => question.questionType === "mcq");
 }
 
