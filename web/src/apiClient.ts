@@ -21,9 +21,11 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
     });
     const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = body && typeof body === "object" && "error" in body &&
-        typeof (body as ApiErrorBody).error === "string"
-        ? (body as { error: string }).error : "The request failed.";
+      const message = response.status >= 500
+        ? "ArcTester couldn't complete this request right now. Please try again."
+        : body && typeof body === "object" && "error" in body &&
+          typeof (body as ApiErrorBody).error === "string"
+          ? (body as { error: string }).error : "The request failed.";
       throw new ApiRequestError(message, response.status);
     }
     return body as T;
