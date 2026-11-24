@@ -32,8 +32,8 @@ describe("StudentPracticeResults", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review question 2 incorrect" }));
     expect(screen.getByText("Force is measured in newtons.")).toBeInTheDocument();
     expect(screen.getByText("Incorrect")).toBeInTheDocument();
-    expect(screen.getByText("Your answer: Watt")).toBeInTheDocument();
-    expect(screen.getByText("Correct answer: Newton")).toBeInTheDocument();
+    expect(screen.getByText("Your answer:").parentElement).toHaveTextContent("Watt");
+    expect(screen.getByText("Correct answer:").parentElement).toHaveTextContent("Newton");
 
     fireEvent.click(screen.getByRole("button", { name: "Review question 3 unanswered" }));
     expect(screen.getAllByText("Not answered")).toHaveLength(2);
