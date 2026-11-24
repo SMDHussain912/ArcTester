@@ -15,7 +15,7 @@ import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentNotificationBanner from "./StudentNotificationBanner";
 import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
-import { useStudentCommunications } from "./useStudentCommunications";
+import { useStudentCommunications, type StudentNotification } from "./useStudentCommunications";
 import { DashboardProgressSummary } from "./StudentProgress";
 import StudentGamification from "./StudentGamification";
 import StudentMastery from "./StudentMastery";
@@ -239,8 +239,50 @@ export default function App() {
     return () => { cancelled = true; };
   }, [user, test, result]);
 
-  async function openStudentNotification(id: string) {
-    await markNotificationRead(id);
+  async function openStudentNotification(notification: StudentNotification) {
+    await markNotificationRead(notification.id);
+
+    // Notifications store in-app destinations, while the student workspace
+    // uses local page state rather than URL-based routing.
+    let destination: URL;
+    try {
+      destination = new URL(notification.href, window.location.origin);
+    } catch {
+      setError("This notification has an invalid destination.");
+      return;
+    }
+    if (destination.origin !== window.location.origin) {
+      setError("This notification points outside ArcTester and cannot be opened here.");
+      return;
+    }
+
+    const path = destination.pathname.replace(/\\/+$/, "") || "/";
+    const destinations: Record<string, StudentPage> = {
+      "/": "dashboard",
+      "/dashboard": "dashboard",
+      "/practice": "practice",
+      "/tests": "practice",
+      "/assigned-exams": "assignments",
+      "/assignments": "assignments",
+      "/exams": "assignments",
+      "/exam": "assignments",
+      "/question-bank": "question-bank",
+      "/notifications": "notifications",
+      "/announcements": "announcements",
+      "/account": "account",
+      "/settings": "settings",
+      "/progress": "progress",
+      "/learning": "learning",
+      "/lessons": "lessons",
+      "/learning-summary": "learning-summary",
+    };
+    const page = destinations[path];
+    if (!page) {
+      setError("This notification's destination isn't available in the student app yet.");
+      return;
+    }
+    setError("");
+    setActivePage(page);
   }
 
   useEffect(() => {
@@ -745,7 +787,7 @@ export default function App() {
           <StudentNotificationBanner
             notification={studentNotifications.find((item) => !item.readAt)!}
             onRead={(id) => void markNotificationRead(id)}
-            onOpen={(notification) => void openStudentNotification(notification.id)}
+            onOpen={(notification) => void openStudentNotification(notification)}
           />
         )}
       </main>
