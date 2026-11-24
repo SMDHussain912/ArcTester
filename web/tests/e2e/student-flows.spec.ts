@@ -61,18 +61,15 @@ async function setupStudent(page: Page) {
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const studentEmail = `student-${suffix}@arctester.test`;
-  const inviteRes = await apiRequest(page, "/auth/invitations", "POST", { email: studentEmail }, adminCookie);
-  const inviteToken = inviteRes.json.invitation?.token;
-  if (inviteRes.status !== 201 || typeof inviteToken !== "string") {
-    throw new Error(`E2E invitation creation failed: ${JSON.stringify(inviteRes.json)}`);
-  }
-
   const register = await apiRequest(page, "/auth/register", "POST", {
     email: studentEmail,
     password: "StudentPass123!",
-    invitationToken: inviteToken,
   });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
+  const studentId = register.json.user?.id;
+  if (!Number.isSafeInteger(studentId)) throw new Error("E2E registration did not return the student ID.");
+  const approval = await apiRequest(page, `/admin/students/${studentId}/access`, "PATCH", { accessStatus: "APPROVED" }, adminCookie);
+  if (approval.status !== 200) throw new Error(`E2E student approval failed: ${JSON.stringify(approval.json)}`);
   await loginApi(page, studentEmail, "StudentPass123!");
   return { studentEmail, subjectName: question.subject };
 }
