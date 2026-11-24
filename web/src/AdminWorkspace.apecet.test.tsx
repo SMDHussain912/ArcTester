@@ -5,7 +5,7 @@ import AdminWorkspace from "./AdminWorkspace";
 function response(body: unknown): Response { return { ok: true, status: 200, json: async () => body } as Response; }
 function renderAdmin(fetchMock: ReturnType<typeof vi.fn>) {
   vi.stubGlobal("fetch", fetchMock);
-  return render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} invitations={[]} createInvitation={vi.fn()} inviteEmail="" setInviteEmail={vi.fn()} createdInvitation={null} revokeInvitation={vi.fn()} busy={false} />);
+  return render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
 }
 afterEach(() => vi.unstubAllGlobals());
 
