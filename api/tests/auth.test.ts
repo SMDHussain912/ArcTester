@@ -105,11 +105,9 @@ describe("auth", () => {
   });
 
   it("registers a student without an invitation and leaves approval pending", async () => {
-    const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
       email: "alice@example.com",
       password: "secret1234",
-      invitationToken,
     });
     expect(res.status).toBe(201);
     expect((res.json as { ok: boolean; user: { accessStatus: string } }).ok).toBe(true);
@@ -138,7 +136,10 @@ describe("auth", () => {
     expect((res.json as { error: string }).error).toBe("That request was invalid.");
   });
 
-  it("logs in and sets a session cookie", async () => {
+  it("blocks pending students until an administrator approves them", async () => {
+    const pending = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email: "alice@example.com", password: "secret1234" });
+    expect(pending.status).toBe(403);
+    expect((pending.json as { error: string }).error).toContain("waiting for administrator approval");
     await server.db.user.update({ where: { email: "alice@example.com" }, data: { accessStatus: "APPROVED" } });
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
       email: "alice@example.com",
