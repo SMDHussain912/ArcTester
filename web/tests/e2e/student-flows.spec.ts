@@ -127,7 +127,7 @@ test.describe("Full Mock Test", () => {
 
     // CI intentionally seeds a small starter bank. A full mock must fail closed
     // with a clear readiness message rather than silently launching fewer items.
-    const error = page.locator(".error");
+    const error = page.locator(".toast-error");
     await expect(error).toContainText("A full AP ECET mock requires all 200 questions", { timeout: 15000 });
     await expect(page.locator(".question-card")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Submit answers" })).toHaveCount(0);
