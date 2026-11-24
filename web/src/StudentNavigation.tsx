@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import FeedbackSettings from "./components/FeedbackSettings";
+import ArcTesterMascot from "./components/ArcTesterMascot";
 
 export type StudentPage =
   | "dashboard"
@@ -68,7 +69,7 @@ export default function StudentNavigation({
           title="Go to student dashboard"
           aria-label="ArcTester dashboard"
         >
-          <span className="brand-mark" aria-hidden="true">A</span>
+          <ArcTesterMascot variant="mark" size={36} decorative className="student-brand-mark" />
           <span className="student-brand-copy"><b>ArcTester</b><small>STUDENT WORKSPACE</small></span>
         </button>
 
