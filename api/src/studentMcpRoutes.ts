@@ -285,7 +285,7 @@ export function studentMcpRouter(db: PrismaClient): Router {
         case "list_my_practice_tests": {
           if (!hasScope(key, "practice:read")) return res.json(jsonRpcError(id, -32003, "Missing practice:read scope."));
           const input = z.object({ limit: z.number().int().min(1).max(100).default(50) }).parse(args);
-          const tests = await db.studentPracticeSet.findMany({ where: { userId: key.userId }, orderBy: { updatedAt: "desc" }, take: input.limit, select: { id: true, title: true, description: true, durationMinutes: true, createdAt: true, updatedAt: true } });
+          const tests = await db.studentPracticeSet.findMany({ where: { userId: key.userId }, orderBy: { updatedAt: "desc" }, take: input.limit, select: { id: true, title: true, description: true, durationMinutes: true, questions: true, createdAt: true, updatedAt: true } });
           output = { practiceTests: tests }; break;
         }
         default: return res.json(jsonRpcError(id, -32602, "Unknown tool."));
