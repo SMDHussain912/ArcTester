@@ -8,6 +8,7 @@ export type StudentPage =
   | "lessons"
   | "learning-summary"
   | "practice"
+  | "ai-practice"
   | "history"
   | "assignments"
   | "question-bank"
@@ -38,6 +39,7 @@ interface StudentNavigationProps {
 const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN" | "ACCOUNT" }[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "LEARN" },
   { page: "practice", label: "Practice", icon: "✎", group: "LEARN" },
+  { page: "ai-practice", label: "AI Practice & MCP", icon: "✧", group: "LEARN" },
   { page: "history", label: "Practice history", icon: "◷", group: "LEARN" },
   { page: "assignments", label: "Assigned exams", icon: "▣", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },

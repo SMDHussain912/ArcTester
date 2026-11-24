@@ -105,6 +105,12 @@ model User {
   lessonDrafts LessonDraft[]
   uploadedLessonAudio LessonAudioAsset[]
   createdLessonVersions LessonVersion[]
+  privateQuestions StudentPrivateQuestion[]
+  practiceSets StudentPracticeSet[]
+  practiceRuns StudentPracticeRun[]
+  mcpKeys StudentMcpKey[]
+  adminMcpKeys AdminMcpKey[]
+  adminMcpAuditLogs AdminMcpAuditLog[]
 
   @@index([role, accessStatus])
 }
@@ -724,4 +730,91 @@ model LessonAudioAsset {
 
   @@unique([lessonDraftId, sceneIndex])
   @@index([lessonDraftId, narrationHash])
+}
+
+/// Student-owned practice content is isolated from the public/admin ECET bank.
+model StudentPrivateQuestion {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  subject     String
+  topic       String   @default("General")
+  text        String
+  options     Json     @default("[]")
+  correctIndex Int     @default(0)
+  explanation String   @default("")
+  difficulty  String   @default("medium")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([userId, subject, topic])
+  @@index([userId, updatedAt])
+}
+
+model StudentPracticeSet {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  title       String
+  description String   @default("")
+  durationMinutes Int  @default(20)
+  questions   Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  runs        StudentPracticeRun[]
+  @@index([userId, updatedAt])
+}
+
+model StudentPracticeRun {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           Int
+  practiceSet      StudentPracticeSet? @relation(fields: [practiceSetId], references: [id], onDelete: SetNull)
+  practiceSetId    String?
+  titleSnapshot    String
+  totalQuestions   Int
+  answeredCount   Int
+  correctCount    Int
+  percentage      Float
+  answers         Json
+  completedAt     DateTime @default(now())
+  @@index([userId, completedAt])
+  @@index([practiceSetId])
+}
+
+model StudentMcpKey {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  name        String
+  keyHash     String   @unique
+  scopes      String[]
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([userId, revokedAt])
+}
+
+model AdminMcpKey {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  name        String
+  keyHash     String   @unique
+  scopes      String[]
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([userId, revokedAt])
+}
+
+model AdminMcpAuditLog {
+  id          String   @id @default(cuid())
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  actorId     Int
+  tool        String
+  success     Boolean
+  summary     String   @default("")
+  createdAt   DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([createdAt])
 }

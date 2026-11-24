@@ -27,6 +27,7 @@ import StudentPracticePaperConfiguration from "./StudentPracticePaperConfigurati
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
 import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
+import StudentMcpAssistant from "./StudentMcpAssistant";
 import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
 import StudentComingSoon from "./StudentComingSoon";
@@ -638,6 +639,8 @@ export default function App() {
           />
         ) : activePage === "history" ? (
           <StudentPracticeHistory />
+        ) : activePage === "ai-practice" ? (
+          <StudentMcpAssistant />
         ) : activePage === "analytics" ? (
           <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} onStartRecommendedPractice={(item) => {
             if (!item.subject) { setActivePage("practice"); return; }
