@@ -158,6 +158,55 @@ export function adminMcpRouter(db: PrismaClient): Router {
             return {id:exam.id,title:exam.title,version:1,questions:input.questionIds.length,status:"DRAFT"};
           });output={paper:created};summary="created unpublished exam draft";break;
         }
+        case "publish_question_paper": {
+          if (!scope(key, "papers:publish")) return res.json(rpcError(id, -32003, "Missing papers:publish scope."));
+          const input = z.object({ examId: z.string().min(1), confirm: z.literal(true) }).parse(args);
+          const exam = await db.exam.findUnique({ where: { id: input.examId }, include: { versions: { orderBy: { version: "desc" }, take: 1, include: { _count: { select: { questions: true } } } } } });
+          const version = exam?.versions[0];
+          if (!exam || !version) return res.json(rpcError(id, -32004, "Exam draft not found."));
+          if (exam.status === "ARCHIVED") return res.json(rpcError(id, -32002, "Archived exam cannot be published."));
+          if (version._count.questions === 0) return res.json(rpcError(id, -32002, "Add at least one question before publishing."));
+          const publishedAt = version.publishedAt ?? new Date();
+          await db.$transaction([
+            db.examVersion.update({ where: { id: version.id }, data: { publishedAt } }),
+            db.exam.update({ where: { id: exam.id }, data: { status: "PUBLISHED" } }),
+          ]);
+          output = { examId: exam.id, versionId: version.id, status: "PUBLISHED", publishedAt }; summary = "published exam " + exam.id; break;
+        }
+        case "assign_question_paper": {
+          if (!scope(key, "exams:assign")) return res.json(rpcError(id, -32003, "Missing exams:assign scope."));
+          const input = z.object({ examId: z.string().min(1), studentIds: z.array(z.number().int().positive()).min(1).max(1000), availableFrom: z.string().datetime().optional(), dueAt: z.string().datetime().optional(), confirm: z.literal(true) }).refine(v => new Set(v.studentIds).size === v.studentIds.length, { message: "Student IDs must be unique." }).refine(v => !v.availableFrom || !v.dueAt || new Date(v.dueAt) > new Date(v.availableFrom), { message: "Due date must be after availability date." }).parse(args);
+          const exam = await db.exam.findUnique({ where: { id: input.examId }, include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: "desc" }, take: 1 } } });
+          const version = exam?.versions[0];
+          if (!exam || !version) return res.json(rpcError(id, -32004, "No published exam version is available to assign."));
+          if (exam.status === "ARCHIVED") return res.json(rpcError(id, -32002, "Archived exams cannot receive assignments."));
+          const students = await db.user.findMany({ where: { id: { in: input.studentIds }, role: "STUDENT", accessStatus: "APPROVED" }, select: { id: true } });
+          if (students.length !== input.studentIds.length) return res.json(rpcError(id, -32002, "One or more student IDs are not approved students."));
+          const assigned = await db.$transaction(async tx => {
+            const results: { assignmentId: string; studentId: number }[] = [];
+            let skipped = 0;
+            for (const studentId of input.studentIds) {
+              const existing = await tx.examAssignment.findUnique({ where: { examVersionId_studentId: { examVersionId: version.id, studentId } }, select: { id: true } });
+              if (existing) { skipped += 1; continue; }
+              const assignment = await tx.examAssignment.create({ data: {
+                examVersionId: version.id, studentId, assignedById: key.userId,
+                availableFrom: input.availableFrom ? new Date(input.availableFrom) : null,
+                dueAt: input.dueAt ? new Date(input.dueAt) : null,
+              }, select: { id: true, studentId: true } });
+              const prefs = await tx.studentNotificationPreference.findUnique({ where: { userId: studentId }, select: { examAssignments: true } });
+              if (prefs?.examAssignments !== false) {
+                await tx.studentNotification.create({ data: {
+                  userId: studentId, kind: "EXAM_ASSIGNMENT", title: "New exam assigned",
+                  message: exam.title + " has been assigned to you. Open your assigned exams for details.",
+                  href: "/assignments", dedupeKey: "exam-assignment:" + assignment.id,
+                } });
+              }
+              results.push({ assignmentId: assignment.id, studentId });
+            }
+            return { results, skipped };
+          });
+          output = { created: assigned.results.length, skippedExisting: assigned.skipped, assignments: assigned.results }; summary = "assigned exam to " + assigned.results.length + " students"; break;
+        }
         case "list_exam_results": {
           if(!scope(key,"papers:read"))return res.json(rpcError(id,-32003,"Missing papers:read scope."));
           const input=z.object({limit:z.number().int().min(1).max(100).default(50)}).parse(args);
