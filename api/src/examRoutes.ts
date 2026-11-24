@@ -511,17 +511,34 @@ export function examRouter(db: PrismaClient): Router {
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(50),
         search: z.string().trim().max(120).optional(),
+        accessStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
       }).parse(req.query);
-      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search } } : {}) };
+      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search, mode: "insensitive" as const } } : {}), ...(query.accessStatus ? { accessStatus: query.accessStatus } : {}) };
       const [students, total] = await Promise.all([
         db.user.findMany({
-          where, orderBy: { email: "asc" },
+          where, orderBy: [{ accessStatus: "asc" }, { createdAt: "desc" }],
           skip: (query.page - 1) * query.limit, take: query.limit,
-          select: { id: true, email: true },
+          select: { id: true, email: true, accessStatus: true, createdAt: true },
         }),
         db.user.count({ where }),
       ]);
       res.json({ ok: true, students, page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/students/:id/access", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return next(badRequest("Invalid student ID."));
+      const input = z.object({ accessStatus: z.enum(["APPROVED", "REJECTED", "PENDING"]) }).parse(req.body);
+      const student = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+      if (!student || student.role !== "STUDENT") return next(notFound("Student account not found."));
+      const updated = await db.user.update({
+        where: { id },
+        data: { accessStatus: input.accessStatus, sessionVersion: { increment: 1 } },
+        select: { id: true, email: true, accessStatus: true, createdAt: true },
+      });
+      res.json({ ok: true, student: updated });
     } catch (error) { next(error); }
   });
 
