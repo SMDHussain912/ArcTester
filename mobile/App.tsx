@@ -1343,7 +1343,9 @@ export default function App() {
            </Animated.View>
 ) : activeTab === "exams" ? (
             <StudentExamCenter api={api} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} />
- ) : activeTab === "progress" ? (\n          <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>\n ) : activeTab === "coming-soon" ? (
+ ) : activeTab === "progress" ? (
+          <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>
+ ) : activeTab === "coming-soon" ? (
           <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>
  ) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
