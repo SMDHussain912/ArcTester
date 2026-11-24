@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fullMockReadinessIssue, minutesFor } from "./testService.js";
+import { fullMockReadinessIssue, minutesFor, selectEcetMockCandidates } from "./testService.js";
 import { MOCK_TOTAL } from "./selection.js";
 
 describe("full AP ECET mock readiness", () => {
@@ -19,7 +19,17 @@ describe("full AP ECET mock readiness", () => {
     expect(fullMockReadinessIssue(199, [])).toContain("199/200 questions selected");
   });
 
-  it("keeps the full mock duration at 180 minutes", () => {
+
+  it("keeps the ECET full mock strictly multiple-choice", () => {
+    const candidates = [
+      { id: 1, questionType: "mcq" },
+      { id: 2, questionType: "numeric" },
+      { id: 3, questionType: "matching" },
+      { id: 4, questionType: "true_false" },
+    ];
+    expect(selectEcetMockCandidates(candidates).map((question) => question.id)).toEqual([1]);
+  });
+\n  it("keeps the full mock duration at 180 minutes", () => {
     expect(minutesFor("mock", 200)).toBe(180);
   });
 });
