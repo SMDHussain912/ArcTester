@@ -575,3 +575,11 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
   .question-review-progress-actions button{width:100%}
   #question-review-list{scroll-margin-top:130px}
 }
+
+.question-review-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.question-review-progress-head>div{min-width:0;flex:1}
+.question-review-progress-head h2{margin:0 0 8px}
+.question-review-progress-head p{margin:0;line-height:1.6}
+.question-review-progress-head button{flex:0 0 auto;white-space:nowrap}
+.question-review-progress-note{margin:16px 0 0;padding-top:14px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.6}
+@media(max-width:700px){.question-review-progress-head{flex-direction:column;align-items:stretch}.question-review-progress-head button{width:100%;white-space:normal}}
