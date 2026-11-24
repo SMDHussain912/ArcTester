@@ -12,6 +12,7 @@ import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnaly
 import AdminPaperBuilder, { type AdminPaperDraft, type AdminPaperQuestion, type AdminPaperDifficultyMix, type AdminPaperSubjectScoring } from "./AdminPaperBuilder";
 import AdminQuestionImport, { type AdminImportReport } from "./AdminQuestionImport";
 import AdminOverview from "./AdminOverview";
+import AdminMcpAssistant from "./AdminMcpAssistant";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
@@ -167,7 +168,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"]];
+ const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"]];
  return <div className="admin-shell">
   <aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
    <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>setTab(id)}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
@@ -231,6 +232,7 @@ export default function AdminWorkspace(p:Props){
       <p className="admin-muted">Snapshot generated {new Date(notificationHealth.generatedAt).toLocaleString()}.</p>
     </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
    </section>}
+   {tab==="mcp-assistant"&&<AdminMcpAssistant />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
