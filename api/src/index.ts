@@ -19,6 +19,8 @@ import { lessonPackageAdminRouter } from "./lessonPackageAdminRoutes.js";
 import { learningPathRouter } from "./learningPathRoutes.js";
 import { gamificationRouter } from "./gamificationRoutes.js";
 import { masteryRouter } from "./masteryRoutes.js";
+import { studentMcpRouter } from "./studentMcpRoutes.js";
+import { adminMcpRouter } from "./adminMcpRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -125,7 +127,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // lesson audio is base64 JSON (up to 12 MiB decoded), so parse it here with
   // enough headroom for the encoded payload; ordinary API requests stay at 1 MiB.
   app.use((req, res, next) => {
-    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import" || req.path === "/mcp/student" || req.path === "/mcp/admin" || req.path === "/student/private-questions/import") {
       return next();
     }
     const isLessonAudioUpload = /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path);
@@ -166,6 +168,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(learningPathRouter(database));
   app.use(gamificationRouter(database));
   app.use(masteryRouter(database));
+  app.use(studentMcpRouter(database));
+  app.use(adminMcpRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
