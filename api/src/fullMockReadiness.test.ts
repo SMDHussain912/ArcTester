@@ -29,7 +29,8 @@ describe("full AP ECET mock readiness", () => {
     ];
     expect(selectEcetMockCandidates(candidates).map((question) => question.id)).toEqual([1]);
   });
-\n  it("keeps the full mock duration at 180 minutes", () => {
+
+  it("keeps the full mock duration at 180 minutes", () => {
     expect(minutesFor("mock", 200)).toBe(180);
   });
 });
