@@ -64,9 +64,10 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         {reviewProgress?.totals && Array.isArray(reviewProgress.subjects) ? <>
           <div className="admin-stat-grid"><article><span>Drafted</span><b>{reviewProgress.totals.drafted.toLocaleString()}</b></article><article><span>Approved</span><b>{reviewProgress.totals.approved.toLocaleString()}</b></article><article><span>Required bank target</span><b>{reviewProgress.totals.requiredQuota.toLocaleString()}</b></article><article><span>Still needed</span><b>{reviewProgress.totals.remaining.toLocaleString()}</b></article></div>
           <div className="table-panel">{reviewProgress.subjects.map((item) => <div className="coverage-row" key={item.subject}><span>{item.subject}</span><b>{item.drafted} drafted · {item.approved} approved / {item.requiredQuota} required</b><small>{item.rejected} rejected · {item.remaining} still needed</small></div>)}</div>
+          <div className="question-review-progress-actions"><p>Ready to approve questions? Open the draft list and review sources before approving.</p><button type="button" className="primary" onClick={() => { onQueryChange(""); onSubjectChange(""); onTopicChange(""); onDifficultyChange(""); onReviewStatusChange("DRAFT"); document.getElementById("question-review-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>Review draft questions ↓</button></div>
         </> : <p className="muted">Review progress is loading or unavailable.</p>}
       </section>
-      <div className="admin-panel table-panel">
+      <div id="question-review-list" className="admin-panel table-panel">
         <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="bulk-question-difficulty" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}>Selected question difficulty</label>
           <select id="bulk-question-difficulty" aria-label="Selected question difficulty" value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as "easy" | "medium" | "hard")} disabled={!selected.length || busy}>
