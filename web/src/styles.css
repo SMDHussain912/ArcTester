@@ -594,3 +594,42 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 @media(max-width:600px){.toast-container{inset:12px 12px auto;width:auto;transform:none}}
 .app-error-reference{margin:18px 0;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--muted);font-size:12px}
 .app-error-reference code{font-family:ui-monospace,SFMono-Regular,monospace;color:var(--text)}
+
+
+/* Student access approval and compact question review controls */
+.question-review-progress { padding: 0; }
+.question-review-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  font-weight: 700;
+}
+.question-review-summary::-webkit-details-marker { display: none; }
+.question-review-summary::after { content: "▾"; color: var(--muted, #94a3b8); }
+.question-review-progress[open] .question-review-summary { border-bottom: 1px solid var(--border, #2d3748); }
+.question-review-progress .admin-stat-grid,
+.question-review-progress .table-panel,
+.question-review-progress > .muted,
+.question-review-progress .question-review-progress-note { margin: 16px 20px; }
+.bulk-approve-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0;
+}
+.bulk-approve-scope p { margin: 5px 0 0; }
+.bulk-approve-scope button { flex-shrink: 0; }
+.question-review-summary { color: var(--text, inherit); }
+.invitation-row > input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; }
+.invitation-row > div { min-width: 0; flex: 1; }
+.invitation-row > div b { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .bulk-approve-scope { align-items: stretch; flex-direction: column; }
+  .question-review-summary { align-items: flex-start; flex-wrap: wrap; }
+  .invitation-row { flex-wrap: wrap; }
+}
