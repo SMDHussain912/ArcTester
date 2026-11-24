@@ -133,7 +133,7 @@ export function adminMcpRouter(db: PrismaClient): Router {
           const question = await db.question.update({ where: { id: existing.id }, data: {
             subjectId: subject.id, topicId: topic.id, text: merged.text, options: encodeOptions(merged.options),
             correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source, difficulty: merged.difficulty,
-            questionType: merged.questionType, promptData: JSON.stringify(merged.promptData), answerData: JSON.stringify(merged.answerData), questionHash: hashQuestion(merged.text),
+            questionType: merged.questionType, promptData: JSON.stringify(merged.promptData), answerData: JSON.stringify(merged.answerData), questionHash: hashQuestion(merged.text), reviewStatus: "DRAFT",
           }, select: { id: true, text: true, reviewStatus: true } });
           output = { question }; summary = "edited question " + question.id; break;
         }
