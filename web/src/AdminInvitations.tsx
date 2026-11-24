@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 
+export type AdminInvitation = { id: string; email: string; expiresAt: string; status: string };
+export type CreatedAdminInvitation = { email: string; token: string; expiresAt: string };
 export type StudentAccessStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type StudentAccessRow = { id: number; email: string; accessStatus: StudentAccessStatus; createdAt: string };
 
