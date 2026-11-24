@@ -104,7 +104,7 @@ export default function AdminWorkspace(p:Props){
    setStudents(all);
   }
   async function changeStudentAccess(id:number,accessStatus:StudentAccessStatus){await run(async()=>{await api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus})});setNotice(accessStatus==="APPROVED"?"Student approved. They can sign in now.":accessStatus==="REJECTED"?"Student access rejected.":"Student approval reset.");await loadStudents();});}
-  async function bulkApproveStudents(ids:number[]){if(!ids.length)return;await run(async()=>{await Promise.all(ids.map(id=>api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus:"APPROVED"})})));setNotice(`Approved ${ids.length} student account(s).`);await loadStudents();});}
+  async function bulkApproveStudents(ids:number[]){if(!ids.length)return;await run(async()=>{const result=await api<{approvedCount:number}>("/admin/students/access/bulk",{method:"PATCH",body:JSON.stringify({ids})});setNotice(`Approved ${result.approvedCount} student account(s).`);await loadStudents();});}
   const approvedStudents=students.filter(student=>student.accessStatus==="APPROVED");
  async function loadResults(){const r=await api<{results:AdminExamResult[]}>("/admin/exam-results");setResults(Array.isArray(r.results) ? r.results : []);}
  async function loadAnnouncements(){const r=await api<{announcements:AdminAnnouncement[]}>("/admin/announcements");setAnnouncements(Array.isArray(r.announcements) ? r.announcements : []);}
