@@ -5,7 +5,7 @@ interface StudentNotificationsInboxProps {
   onRefresh: () => void;
   onRead: (id: string) => void;
   onMarkAllRead: () => void;
-  onOpen: (id: string) => void;
+  onOpen: (notification: StudentNotification) => void;
 }
 
 export default function StudentNotificationsInbox({
@@ -43,7 +43,7 @@ export default function StudentNotificationsInbox({
             <h2>{item.title}</h2>
             <p>{item.message}</p>
             <div className="row">
-              <button className="ghost" onClick={() => onOpen(item.id)}>Open</button>
+              <button className="ghost" onClick={() => onOpen(item)}>Open</button>
               {!item.readAt ? <button className="ghost" onClick={() => onRead(item.id)}>Mark as read</button> : null}
             </div>
           </article>
