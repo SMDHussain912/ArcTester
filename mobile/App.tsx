@@ -131,7 +131,6 @@ async function clearPracticeRecoveryIfMatches(userId: number, attemptId: number)
 export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [invitationToken, setInvitationToken] = useState("");
   const [register, setRegister] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
