@@ -10,7 +10,8 @@ function correctText(q:ReviewQuestion):string{const d=q.answerData??{};if(q.ques
 export default function StudentPracticeResults({result,onBack}:Props){
  const lastFeedbackAttempt=useRef<number|null>(null);
  const [activeQuestionIndex,setActiveQuestionIndex]=useState(0);
- useEffect(()=>{setActiveQuestionIndex(0);},[result.attemptId]);\n useEffect(()=>{if(lastFeedbackAttempt.current===result.attemptId)return;lastFeedbackAttempt.current=result.attemptId;playFeedback("complete",readFeedbackPreferences());},[result]);
+ useEffect(()=>{setActiveQuestionIndex(0);},[result.attemptId]);
+ useEffect(()=>{if(lastFeedbackAttempt.current===result.attemptId)return;lastFeedbackAttempt.current=result.attemptId;playFeedback("complete",readFeedbackPreferences());},[result]);
  const current=result.questions[activeQuestionIndex];
  return <section>
   <div className="page-heading"><div><p className="eyebrow">{result.mode==="mock"?"AP ECET FULL MOCK · RESULTS":"SESSION COMPLETE"}</p><h1>Your result</h1></div><button className="ghost" onClick={onBack}>Back to dashboard</button></div>
