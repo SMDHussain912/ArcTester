@@ -154,7 +154,7 @@ export default function App() {
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "coming-soon" | "profile" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "progress" | "coming-soon" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
@@ -1343,7 +1343,7 @@ export default function App() {
            </Animated.View>
 ) : activeTab === "exams" ? (
             <StudentExamCenter api={api} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} />
- ) : activeTab === "coming-soon" ? (
+ ) : activeTab === "progress" ? (\n          <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>\n ) : activeTab === "coming-soon" ? (
           <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>
  ) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
@@ -1373,7 +1373,7 @@ export default function App() {
             <View style={styles.profileAvatar}>
               <MaterialCommunityIcons name="account" size={34} color="#ffffff" />
             </View>
-            <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your profile</Text>
+            <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your account</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEVEL & REWARDS</Text>
@@ -1569,11 +1569,12 @@ export default function App() {
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "practice" }} accessibilityLabel="Practice tab" style={styles.navItem} onPress={() => setActiveTab("practice")}><MaterialCommunityIcons name="pencil-box-multiple" size={23} color={activeTab === "practice" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "practice" && styles.navLabelActive]}>Practice</Text></TouchableOpacity>
 
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "exams" }} accessibilityLabel="Exams tab" style={styles.navItem} onPress={() => setActiveTab("exams")}><MaterialCommunityIcons name="clipboard-text-outline" size={23} color={activeTab === "exams" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "exams" && styles.navLabelActive]}>Exams</Text></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "progress" }} accessibilityLabel="Progress tab" style={styles.navItem} onPress={() => setActiveTab("progress")}><MaterialCommunityIcons name="chart-line" size={23} color={activeTab === "progress" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "progress" && styles.navLabelActive]}>Progress</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "coming-soon" }} accessibilityLabel="Coming Soon tab" style={styles.navItem} onPress={() => setActiveTab("coming-soon")}><MaterialCommunityIcons name="rocket-launch-outline" size={23} color={activeTab === "coming-soon" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "coming-soon" && styles.navLabelActive]}>Soon</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
-          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Profile tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Account tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
             <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />
-            <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Profile</Text>
+            <Text style={[styles.navLabel, activeTab === "profile" && styles.navLabelActive]}>Account</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
