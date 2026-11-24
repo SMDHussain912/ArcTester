@@ -34,7 +34,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  return body as T;
 }
 export default function AdminWorkspace(p:Props){
- const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState(""),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}"});
@@ -251,6 +251,7 @@ export default function AdminWorkspace(p:Props){
     onReviewStatusChange={setReviewStatus}
     onReviewQuestion={(id,status,source)=>void reviewQuestion(id,status,source)}
     onBulkReview={(status,sources)=>void bulkReviewQuestions(status,sources)}
+    onBulkApproveScope={(scope)=>void bulkApproveQuestionScope(scope)}
     catalog={catalog}
     filteredTopics={filteredTopics}
     selected={selected}
