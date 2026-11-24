@@ -5,7 +5,7 @@ import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminLessonStudio from "./AdminLessonStudio";
-import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation } from "./AdminInvitations";
+import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation, type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamStudent, type AdminExamPreview } from "./AdminExamManagement";
 import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnalytics";
@@ -39,7 +39,7 @@ export default function AdminWorkspace(p:Props){
  const questionRequestSequence=useRef(0);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}"});
  const [exam,setExam]=useState<AdminPaperDraft>({title:"",description:"",instructions:"Read each question carefully. Select one correct option.",duration:"180",shuffleQuestions:true,shuffleOptions:false,marks:"1",negative:"0.25",selectionMode:"manual",perSubject:""});
- const [examIds,setExamIds]=useState<number[]>([]),[exams,setExams]=useState<AdminManagedExam[]>([]),[subjectQuotas,setSubjectQuotas]=useState<Record<string,number>>({}),[difficultyMix,setDifficultyMix]=useState<AdminPaperDifficultyMix>({easy:30,medium:50,hard:20}),[subjectScoring,setSubjectScoring]=useState<AdminPaperSubjectScoring>({}),[students,setStudents]=useState<AdminExamStudent[]>([]),[assignmentExam,setAssignmentExam]=useState<string|null>(null),[assignedStudents,setAssignedStudents]=useState<number[]>([]),[availableFrom,setAvailableFrom]=useState(""),[dueAt,setDueAt]=useState(""),[preview,setPreview]=useState<AdminExamPreview|null>(null),[results,setResults]=useState<AdminExamResult[]>([]),[announcements,setAnnouncements]=useState<AdminAnnouncement[]>([]),[announcementTitle,setAnnouncementTitle]=useState(""),[announcementMessage,setAnnouncementMessage]=useState(""),[announcementExpiry,setAnnouncementExpiry]=useState(""),[announcementPublishAt,setAnnouncementPublishAt]=useState("");
+ const [examIds,setExamIds]=useState<number[]>([]),[exams,setExams]=useState<AdminManagedExam[]>([]),[subjectQuotas,setSubjectQuotas]=useState<Record<string,number>>({}),[difficultyMix,setDifficultyMix]=useState<AdminPaperDifficultyMix>({easy:30,medium:50,hard:20}),[subjectScoring,setSubjectScoring]=useState<AdminPaperSubjectScoring>({}),[students,setStudents]=useState<StudentAccessRow[]>([]),[assignmentExam,setAssignmentExam]=useState<string|null>(null),[assignedStudents,setAssignedStudents]=useState<number[]>([]),[availableFrom,setAvailableFrom]=useState(""),[dueAt,setDueAt]=useState(""),[preview,setPreview]=useState<AdminExamPreview|null>(null),[results,setResults]=useState<AdminExamResult[]>([]),[announcements,setAnnouncements]=useState<AdminAnnouncement[]>([]),[announcementTitle,setAnnouncementTitle]=useState(""),[announcementMessage,setAnnouncementMessage]=useState(""),[announcementExpiry,setAnnouncementExpiry]=useState(""),[announcementPublishAt,setAnnouncementPublishAt]=useState("");
  const [editingId,setEditingId]=useState<number|null>(null);
  const [studyMaterials,setStudyMaterials]=useState<StudyMaterial[]>([]);
  const [notificationHealth,setNotificationHealth]=useState<NotificationHealth|null>(null);
@@ -63,6 +63,17 @@ export default function AdminWorkspace(p:Props){
  async function loadQuestionReviewProgress(){const r=await api<import("./AdminQuestionBank").QuestionReviewProgress>("/admin/question-review/progress");setReviewProgress(r);}
  async function reviewQuestion(id:number,status:"APPROVED"|"REJECTED",source:string){await run(async()=>{await api(`/admin/questions/${id}/review`,{method:"PATCH",body:JSON.stringify({status,source})});setNotice(status==="APPROVED"?"Question approved for student practice and exams.":"Question rejected.");await Promise.all([loadQuestions(page),loadQuestionReviewProgress()]);});}
  async function bulkReviewQuestions(status:"APPROVED"|"REJECTED",sources:Array<{id:number;source:string}>){if(!selected.length)return;await run(async()=>{const count=selected.length;await api("/admin/questions/review/bulk",{method:"PATCH",body:JSON.stringify({ids:selected,status,sources})});setSelected([]);setNotice(`${count} question(s) ${status.toLowerCase()}.`);await Promise.all([loadQuestions(page),loadQuestionReviewProgress()]);});}
+ async function bulkApproveQuestionScope(scope:{subject:string;topic?:string;difficulty?:string}){
+   await run(async()=>{
+    const preview=await api<{matchedCount:number;eligibleCount:number;missingSourceCount:number}>("/admin/questions/review/bulk-scope",{method:"POST",body:JSON.stringify({...scope,dryRun:true})});
+    if(!preview.eligibleCount){setNotice(preview.matchedCount? `No questions approved: ${preview.missingSourceCount} draft(s) need a valid source.`:"No draft questions match this subject/topic.");return;}
+    const label=scope.topic?scope.subject+" / "+scope.topic:scope.subject;
+    if(!window.confirm(`Approve ${preview.eligibleCount} draft question(s) in ${label}? ${preview.missingSourceCount} without a valid source will be skipped.`))return;
+    const result=await api<{approvedCount:number;missingSourceCount:number}>("/admin/questions/review/bulk-scope",{method:"POST",body:JSON.stringify({...scope,dryRun:false})});
+    setSelected([]);setNotice(`Approved ${result.approvedCount} questions. ${result.missingSourceCount} missing-source draft(s) skipped.`);
+    await Promise.all([loadQuestions(1),loadQuestionReviewProgress()]);
+   });
+  }
  async function loadQuestions(nextPage=page){
   const requestId=++questionRequestSequence.current;
   const params=new URLSearchParams({page:String(nextPage),limit:"25"});
@@ -82,7 +93,19 @@ export default function AdminWorkspace(p:Props){
   }
  }
  async function loadExams(){const r=await api<{exams:AdminManagedExam[]}>("/admin/exams");setExams(Array.isArray(r.exams) ? r.exams : []);}
- async function loadStudents(){const r=await api<{students:AdminExamStudent[]}>("/admin/students");setStudents(Array.isArray(r.students) ? r.students : []);}
+ async function loadStudents(){
+   const first=await api<{students:StudentAccessRow[];totalPages:number}>("/admin/students?limit=100&page=1");
+   const all=[...(first.students??[])];
+   for(let start=2;start<=first.totalPages;start+=6){
+    const pages=Array.from({length:Math.min(6,first.totalPages-start+1)},(_,i)=>start+i);
+    const rows=await Promise.all(pages.map(page=>api<{students:StudentAccessRow[]}>(`/admin/students?limit=100&page=${page}`)));
+    rows.forEach(result=>all.push(...(result.students??[])));
+   }
+   setStudents(all);
+  }
+  async function changeStudentAccess(id:number,accessStatus:StudentAccessStatus){await run(async()=>{await api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus})});setNotice(accessStatus==="APPROVED"?"Student approved. They can sign in now.":accessStatus==="REJECTED"?"Student access rejected.":"Student approval reset.");await loadStudents();});}
+  async function bulkApproveStudents(ids:number[]){if(!ids.length)return;await run(async()=>{await Promise.all(ids.map(id=>api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus:"APPROVED"})})));setNotice(`Approved ${ids.length} student account(s).`);await loadStudents();});}
+  const approvedStudents=students.filter(student=>student.accessStatus==="APPROVED");
  async function loadResults(){const r=await api<{results:AdminExamResult[]}>("/admin/exam-results");setResults(Array.isArray(r.results) ? r.results : []);}
  async function loadAnnouncements(){const r=await api<{announcements:AdminAnnouncement[]}>("/admin/announcements");setAnnouncements(Array.isArray(r.announcements) ? r.announcements : []);}
  async function createAnnouncement(e:FormEvent){e.preventDefault();await run(async()=>{await api("/admin/announcements",{method:"POST",body:JSON.stringify({title:announcementTitle,message:announcementMessage,startsAt:announcementPublishAt?new Date(announcementPublishAt).toISOString():undefined,expiresAt:announcementExpiry?new Date(announcementExpiry).toISOString():null})});setAnnouncementTitle("");setAnnouncementMessage("");setAnnouncementExpiry("");setAnnouncementPublishAt("");setNotice(announcementPublishAt?"Announcement scheduled.":"Announcement published.");await loadAnnouncements();});}
@@ -284,11 +307,11 @@ export default function AdminWorkspace(p:Props){
     onSubjectScoringChange={(name, rule) => setSubjectScoring((current) => ({ ...current, [name]: rule }))}
     onSubmit={(event) => void createExam(event)}
    />}
-   {tab==="exams"&&<AdminExamManagement exams={exams} students={students} assignmentExam={assignmentExam} assignedStudents={assignedStudents} availableFrom={availableFrom} dueAt={dueAt} preview={preview} busy={busy} onNewExam={() => setTab("builder")} onPreview={(id) => void openPreview(id)} onPublish={(id) => void publish(id)} onToggleAssignment={(id) => { setAssignmentExam(assignmentExam === id ? null : id); setAssignedStudents([]); }} onToggleStudent={(id, checked) => setAssignedStudents((current) => checked ? [...current, id] : current.filter((studentId) => studentId !== id))} onAvailableFromChange={setAvailableFrom} onDueAtChange={setDueAt} onCancelAssignment={() => setAssignmentExam(null)} onAssign={() => void assignExam()} onClosePreview={() => setPreview(null)} />}
+   {tab==="exams"&&<AdminExamManagement exams={exams} students={approvedStudents} assignmentExam={assignmentExam} assignedStudents={assignedStudents} availableFrom={availableFrom} dueAt={dueAt} preview={preview} busy={busy} onNewExam={() => setTab("builder")} onPreview={(id) => void openPreview(id)} onPublish={(id) => void publish(id)} onToggleAssignment={(id) => { setAssignmentExam(assignmentExam === id ? null : id); setAssignedStudents([]); }} onToggleStudent={(id, checked) => setAssignedStudents((current) => checked ? [...current, id] : current.filter((studentId) => studentId !== id))} onAvailableFromChange={setAvailableFrom} onDueAtChange={setDueAt} onCancelAssignment={() => setAssignmentExam(null)} onAssign={() => void assignExam()} onClosePreview={() => setPreview(null)} />}
    {tab==="results"&&<AdminResultsAnalytics results={results} onRefresh={() => void loadResults()} />}
    {tab==="announcements"&&<AdminAnnouncements announcements={announcements} title={announcementTitle} message={announcementMessage} expiry={announcementExpiry} publishAt={announcementPublishAt} busy={busy} onTitleChange={setAnnouncementTitle} onMessageChange={setAnnouncementMessage} onExpiryChange={setAnnouncementExpiry} onPublishAtChange={setAnnouncementPublishAt} onCreate={createAnnouncement} onRefresh={() => void loadAnnouncements()} onDelete={(id) => void deleteAnnouncement(id)} />}
    {tab==="subjects"&&<AdminSubjects catalog={catalog} onRefresh={() => void loadCatalog()} />}
-   {tab==="invitations"&&<AdminInvitations invitations={p.invitations} inviteEmail={p.inviteEmail} createdInvitation={p.createdInvitation} busy={p.busy} onInviteEmailChange={p.setInviteEmail} onCreate={p.createInvitation} onRevoke={p.revokeInvitation} />}
+   {tab==="invitations"&&<AdminInvitations students={students} busy={busy} onRefresh={() => void loadStudents()} onChangeStatus={(id,status)=>void changeStudentAccess(id,status)} onBulkApprove={(ids)=>void bulkApproveStudents(ids)} />}
   
   </div></main><div className="toast-container"><Toast open={Boolean(error)} message={error} onClose={()=>setError("")} tone="error" duration={5500}/></div></div>;
 }
