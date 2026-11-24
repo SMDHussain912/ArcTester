@@ -256,7 +256,7 @@ export default function App() {
       return;
     }
 
-    const path = destination.pathname.replace(/\\/+$/, "") || "/";
+    const path = destination.pathname.replace(/\/+$/, "") || "/";
     const destinations: Record<string, StudentPage> = {
       "/": "dashboard",
       "/dashboard": "dashboard",
