@@ -11,6 +11,8 @@ export type StudentPage =
   | "question-bank"
   | "announcements"
   | "notifications"
+  | "account"
+  | "settings"
   | "progress"
   | "rewards"
   | "analytics"
@@ -37,9 +39,10 @@ const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN
   { page: "assignments", label: "Assigned exams", icon: "▣", group: "LEARN" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "LEARN" },
   { page: "coming-soon", label: "Coming Soon", icon: "✦", group: "LEARN" },
-  { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },
   { page: "announcements", label: "Announcements", icon: "◉", group: "ACCOUNT" },
   { page: "notifications", label: "Notifications", icon: "♢", group: "ACCOUNT" },
+  { page: "account", label: "Account", icon: "◉", group: "ACCOUNT" },
+  { page: "settings", label: "Settings", icon: "⚙", group: "ACCOUNT" },
 ];
 
 export default function StudentNavigation({
@@ -88,7 +91,7 @@ export default function StudentNavigation({
               );
             })}
           </nav>
-          <p className="student-nav-label student-nav-label-secondary">UPDATES</p>
+          <p className="student-nav-label student-nav-label-secondary">ACCOUNT</p>
           <nav aria-label="Student updates">
             {NAV_ITEMS.filter(({ group }) => group === "ACCOUNT").map(({ page, label, icon }) => {
               const count = page === "announcements" ? unreadAnnouncementCount : unreadNotificationCount;
