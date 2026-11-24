@@ -50,4 +50,25 @@ describe("StudentAssignedExams", () => {
     ));
     expect(await screen.findByText("Exam submitted successfully.")).toBeInTheDocument();
   });
+  it("shows results for a submitted exam instead of a write action", async () => {
+    const assignment = {
+      id: "assignment-submitted", status: "SUBMITTED", assignedAt: "2026-11-24T00:00:00.000Z",
+      availableFrom: null, dueAt: null,
+      exam: { id: "exam-submitted", title: "Submitted Mock", description: "CSE" },
+      version: 2, durationMinutes: 60, questionCount: 80,
+      submission: { id: "submission-1", status: "GRADED", score: 64, maximumScore: 80, submittedAt: "2026-11-23T10:00:00.000Z" },
+    };
+    mockedRequest.mockImplementation(async (path) => {
+      if (path === "/exams/assigned") return { assignments: [assignment] } as never;
+      return {} as never;
+    });
+    render(<StudentAssignedExams />);
+    expect(await screen.findByRole("heading", { name: "Submitted Mock" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "View results" }));
+    expect(await screen.findByRole("dialog", { name: "Submitted Mock" })).toBeInTheDocument();
+    expect(screen.getByText("64")).toBeInTheDocument();
+    expect(screen.getByText(/80 marks/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Write exam" })).not.toBeInTheDocument();
+  });
+
 });
