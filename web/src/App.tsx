@@ -225,7 +225,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, [user, test, result]);
 
-  async function openStudentNotification(notification: StudentNotification) {
+  async function openStudentNotification(notification: Pick<StudentNotification, "id" | "href">) {
     await markNotificationRead(notification.id);
 
     // Notifications store in-app destinations, while the student workspace
