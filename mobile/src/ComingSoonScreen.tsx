@@ -5,6 +5,7 @@ const roadmap = [
   ["Learning hub & learning path", "A structured subject, unit and lesson experience with clear next steps."],
   ["Lessons library", "Guided lessons with interactive steps, examples and knowledge checks."],
   ["Learning summary", "A focused view of completed lessons, practice accuracy and subject progress."],
+  ["Progress dashboard", "A clear view of study activity, milestones and performance over time."],
   ["Animated explanations", "Step-by-step reveals, highlights, narration and replayable lesson scenes."],
   ["Adaptive study plan", "Recommendations that prioritize weak topics and upcoming ECET goals."],
   ["Detailed exam review", "Topic-wise results, answer explanations and a personal mistake-review list."],
