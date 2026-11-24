@@ -1593,7 +1593,7 @@ export default function App() {
                 { translateY: startupLogo.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
               ],
             }]}>
-              <Text style={styles.startupLogoText}>A</Text>
+              <ArcTesterMascot variant="mascot" size={104} />
             </Animated.View>
             <Animated.Text style={[styles.startupEyebrow, { opacity: startupLogo }]}>NEURAL EXAMINATION SYSTEM</Animated.Text>
             <Animated.Text style={[styles.startupTitle, { opacity: startupLogo }]}>ArcTester</Animated.Text>
