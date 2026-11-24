@@ -13,9 +13,10 @@ describe("ArcTesterMascot", () => {
 
   it("uses the compact mark and hides decorative artwork from assistive technology", () => {
     const { container } = render(<ArcTesterMascot variant="mark" decorative size={40} />);
-    const image = container.querySelector("img");
-    expect(image).toHaveAttribute("src", "/brand/aster-mark.svg");
-    expect(image).toHaveAttribute("alt", "");
-    expect(image).toHaveAttribute("aria-hidden", "true");
+    const mark = container.querySelector("svg");
+    expect(mark).toHaveAttribute("width", "40");
+    expect(mark).toHaveAttribute("height", "40");
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(mark).not.toHaveAttribute("role", "img");
   });
 });
