@@ -107,6 +107,7 @@ model User {
   createdLessonVersions LessonVersion[]
   privateQuestions StudentPrivateQuestion[]
   practiceSets StudentPracticeSet[]
+  practiceRuns StudentPracticeRun[]
   mcpKeys StudentMcpKey[]
   adminMcpKeys AdminMcpKey[]
   adminMcpAuditLogs AdminMcpAuditLog[]
@@ -759,7 +760,25 @@ model StudentPracticeSet {
   questions   Json
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  runs        StudentPracticeRun[]
   @@index([userId, updatedAt])
+}
+
+model StudentPracticeRun {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           Int
+  practiceSet      StudentPracticeSet? @relation(fields: [practiceSetId], references: [id], onDelete: SetNull)
+  practiceSetId    String?
+  titleSnapshot    String
+  totalQuestions   Int
+  answeredCount   Int
+  correctCount    Int
+  percentage      Float
+  answers         Json
+  completedAt     DateTime @default(now())
+  @@index([userId, completedAt])
+  @@index([practiceSetId])
 }
 
 model StudentMcpKey {
