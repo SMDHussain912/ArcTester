@@ -645,3 +645,7 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 @media(max-width:560px){.current-question-heading{display:grid}.current-question-heading h2{margin-bottom:0}.current-question-heading button{width:100%}}
 
 .exam-palette-item.incorrect{border-color:var(--error,#d95c5c);background:color-mix(in srgb,var(--error,#d95c5c) 14%,var(--surface));color:var(--text)}
+
+.result-breakdown-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.result-breakdown-grid.single{grid-template-columns:1fr}
+@media(max-width:800px){.result-breakdown-grid{grid-template-columns:1fr}}
