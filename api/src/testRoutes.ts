@@ -191,7 +191,9 @@ export function testRouter(db: PrismaClient): Router {
       // the student retries the same challenge attempt or submits another run.
       const rewardKey = attempt.mode === "dailyChallenge" ? dailyChallengeRewardKey(attempt.startedAt) : "practice-test:" + id;
       await db.$transaction((tx) => awardXp(tx, userId, rewardKey, "practice"));
-      res.json(summary);
+      // Return the detailed result with the submit response so the client avoids a second HTTP round trip.
+      const result = await getResult(db, userId, id);
+      res.json({ ...summary, result });
     } catch (error) {
       next(error);
     }
