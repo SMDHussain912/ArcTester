@@ -4,6 +4,7 @@ const features = [
   { title: "Learning hub & learning path", detail: "A structured subject → unit → lesson experience with clear next steps." },
   { title: "Lessons library", detail: "Guided lessons with interactive steps, examples and knowledge checks." },
   { title: "Learning summary", detail: "A focused overview of completed lessons, practice accuracy and subject progress." },
+  { title: "Progress dashboard", detail: "A clear view of study activity, milestones and performance over time." },
   { title: "Animated explanations", detail: "Step-by-step reveals, highlights, narration and replayable lesson scenes." },
   { title: "Adaptive study plan", detail: "Recommendations that prioritize weak topics and your upcoming ECET goals." },
   { title: "Detailed exam review", detail: "Topic-wise results, answer explanations and a personal mistake-review list." },
