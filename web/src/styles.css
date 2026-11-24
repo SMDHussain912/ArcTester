@@ -707,3 +707,45 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .admin-mcp-assistant .admin-page-heading h1{margin:6px 0}
 .admin-mcp-assistant .admin-page-heading p{max-width:760px;line-height:1.6}
 @media(max-width:640px){.student-mcp-card,.admin-mcp-card{padding:16px}.mcp-key-row{align-items:flex-start}.admin-mcp-assistant .admin-page-heading{display:grid}}
+
+
+/* MCP workspaces: theme-aware form controls and tidy upload placement */
+.student-mcp-page,.admin-mcp-assistant{width:100%;max-width:1120px;margin-inline:auto;gap:22px}
+.student-mcp-page .page-header{align-items:flex-start;gap:24px;margin-bottom:8px}
+.student-mcp-page .page-header>div{min-width:0;max-width:760px}
+.student-mcp-page .page-header h1{margin:6px 0 10px;line-height:1.12}
+.student-mcp-page .page-header p:not(.eyebrow){line-height:1.65;color:var(--muted);margin:0}
+.student-mcp-card,.admin-mcp-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:24px;min-width:0}
+.student-mcp-card>p,.admin-mcp-card>p{color:var(--muted);font-size:13px;line-height:1.65}
+.student-mcp-card label:not(.student-question-upload),.admin-mcp-card label{font-size:13px;color:var(--text)}
+.student-mcp-card input:not([type=file]),.student-mcp-card textarea,.admin-mcp-card input,.admin-mcp-card textarea{
+ display:block;width:100%;min-width:0;padding:12px 14px;border:1px solid var(--border);border-radius:10px;
+ background:var(--bg);color:var(--text);font:inherit;line-height:1.5;box-shadow:none;outline:none;
+}
+.student-mcp-card textarea,.admin-mcp-card textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;resize:vertical}
+.student-mcp-card input:focus,.student-mcp-card textarea:focus,.admin-mcp-card input:focus,.admin-mcp-card textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.student-mcp-card input[readonly],.student-mcp-card textarea[readonly],.admin-mcp-card input[readonly],.admin-mcp-card textarea[readonly]{background:var(--surface);color:var(--muted)}
+.student-question-upload{position:relative;display:flex;align-items:center;gap:14px;min-height:92px;padding:18px;border:1.5px dashed var(--border);border-radius:14px;background:var(--bg);cursor:pointer;transition:border-color .15s,background .15s}
+.student-question-upload:hover{border-color:var(--accent);background:var(--accent-soft)}
+.student-question-upload>span:nth-child(2){display:grid;gap:5px}
+.student-question-upload strong{font-size:14px;color:var(--text)}
+.student-question-upload small{font-size:12px;color:var(--muted);line-height:1.5}
+.student-upload-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:24px;font-weight:800}
+.student-question-upload input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.student-mcp-card .mcp-question-row p{margin:0;color:var(--muted);line-height:1.6}
+.student-mcp-card .mcp-answer-option{width:100%;text-align:left;white-space:normal;line-height:1.5}
+.admin-mcp-assistant .admin-page-heading{margin-bottom:8px}
+.admin-mcp-assistant .admin-page-heading>div{min-width:0}
+.admin-mcp-assistant .admin-page-heading p:not(.eyebrow){color:var(--muted);font-size:13px;margin:0}
+.admin-mcp-assistant .admin-mcp-card label{gap:8px}
+.admin-mcp-assistant .admin-mcp-card .primary{width:100%;min-height:44px}
+.admin-mcp-assistant .mcp-scope-list{gap:8px}
+.admin-mcp-assistant .mcp-scope-list span{font-size:11px;color:var(--muted);background:var(--bg);padding:6px 10px}
+@media(max-width:700px){
+ .student-mcp-page,.admin-mcp-assistant{gap:14px}
+ .student-mcp-page .page-header{display:grid}
+ .student-mcp-card,.admin-mcp-card{padding:17px}
+ .student-question-upload{padding:14px}
+ .mcp-key-row{flex-wrap:wrap}
+ .mcp-key-row>div{flex-basis:100%}
+}

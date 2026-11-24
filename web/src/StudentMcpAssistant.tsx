@@ -103,6 +103,13 @@ export default function StudentMcpAssistant() {
       {error && <div className="error" role="alert">{error}</div>}
       {notice && <div className="success" role="status">{notice}</div>}
       <article className="card student-mcp-card">
+        <h2>Upload private questions</h2>
+        <p>Upload a JSON file to your personal bank. Supported fields: subject, topic, text, options, correctIndex, explanation, difficulty.</p>
+        <label className="student-question-upload"><span className="student-upload-icon" aria-hidden="true">↑</span><span><strong>Choose a JSON file</strong><small>Upload questions to your private practice bank</small></span><input type="file" accept=".json,application/json" disabled={busy} onChange={(e) => { void importFile(e.target.files?.[0]); e.currentTarget.value = ""; }} /></label>
+        <p><strong>{questions.length}</strong> questions loaded in the current list</p>
+        {questions.slice(0, 8).map((q) => <div className="mcp-question-row" key={q.id}><strong>{q.subject} / {q.topic}</strong><p>{q.text}</p><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/private-questions/" + encodeURIComponent(q.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
+      </article>
+      <article className="card student-mcp-card">
         <h2>Connect your AI</h2>
         <p>Create a personal key, then add the MCP endpoint to an AI client that supports remote Streamable HTTP MCP servers.</p>
         <label>Key name<input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></label>
@@ -117,13 +124,7 @@ export default function StudentMcpAssistant() {
         <h2>Your MCP keys</h2>
         {keys.length === 0 ? <p>No keys created yet.</p> : keys.map((key) => <div className="mcp-key-row" key={key.id}><div><strong>{key.name}</strong><small>{key.scopes.join(" · ")}</small><small>{key.revokedAt ? "Revoked" : key.lastUsedAt ? "Last used " + new Date(key.lastUsedAt).toLocaleString() : "Not used yet"}</small></div>{!key.revokedAt && <button type="button" className="danger" disabled={busy} onClick={() => void revoke(key.id)}>Revoke</button>}</div>)}
       </article>
-      <article className="card student-mcp-card">
-        <h2>Upload private questions</h2>
-        <p>Upload a JSON file to your personal bank. Supported fields: subject, topic, text, options, correctIndex, explanation, difficulty.</p>
-        <input type="file" accept=".json,application/json" disabled={busy} onChange={(e) => { void importFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
-        <p><strong>{questions.length}</strong> questions loaded in the current list</p>
-        {questions.slice(0, 8).map((q) => <div className="mcp-question-row" key={q.id}><strong>{q.subject} / {q.topic}</strong><p>{q.text}</p><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/private-questions/" + encodeURIComponent(q.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
-      </article>
+      
       {activeTest && <article className="card student-mcp-card mcp-live-practice" aria-label="Private practice test">
         <div className="mcp-key-row"><div><h2>{activeTest.title}</h2><small>{activeQuestions.length} questions · {activeTest.durationMinutes} min · Private practice</small></div><button type="button" className="ghost" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); setSavedRun(null); }}>Close</button></div>
         {!testFinished && activeQuestion ? <>
