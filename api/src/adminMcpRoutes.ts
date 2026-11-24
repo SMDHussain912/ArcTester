@@ -108,6 +108,42 @@ export function adminMcpRouter(db: PrismaClient): Router {
           const result=await db.question.updateMany({where:{id:{in:input.ids},reviewStatus:"DRAFT"},data:{reviewStatus:"APPROVED"}});
           output={approved:result.count};summary="approved "+result.count+" sourced drafts";break;
         }
+        case "edit_question": {
+          if (!scope(key, "questions:create")) return res.json(rpcError(id, -32003, "Missing questions:create scope."));
+          const input = z.object({ id: z.number().int().positive(), patch: z.object({
+            subject: z.string().trim().min(1).max(100).optional(), topic: z.string().trim().min(1).max(100).optional(),
+            text: z.string().trim().min(1).max(5000).optional(), options: z.array(z.string().trim()).optional(),
+            correctIndex: z.number().int().min(0).optional(), explanation: z.string().max(5000).optional(),
+            source: z.string().max(500).optional(), difficulty: z.enum(["easy","medium","hard"]).optional(),
+            questionType: z.enum(["mcq","multi_select","true_false","fill_blank","numeric","matching"]).optional(),
+            promptData: z.record(z.string(),z.unknown()).optional(), answerData: z.record(z.string(),z.unknown()).optional(),
+          }).refine(value => Object.keys(value).length > 0) }).parse(args);
+          const existing = await db.question.findUnique({ where: { id: input.id }, include: { subject: true, topic: true } });
+          if (!existing) return res.json(rpcError(id, -32004, "Question not found."));
+          const merged = QuestionInputSchema.parse({
+            subject: input.patch.subject ?? existing.subject.name, topic: input.patch.topic ?? existing.topic?.name ?? "General",
+            text: input.patch.text ?? existing.text, options: input.patch.options ?? JSON.parse(existing.options),
+            correctIndex: input.patch.correctIndex ?? existing.correctIndex, explanation: input.patch.explanation ?? existing.explanation,
+            source: input.patch.source ?? existing.source, difficulty: input.patch.difficulty ?? existing.difficulty,
+            questionType: input.patch.questionType ?? existing.questionType, promptData: input.patch.promptData ?? JSON.parse(existing.promptData),
+            answerData: input.patch.answerData ?? JSON.parse(existing.answerData),
+          });
+          const subject = await db.subject.upsert({ where: { name: merged.subject }, create: { name: merged.subject }, update: {} });
+          const topic = await db.topic.upsert({ where: { subjectId_name: { subjectId: subject.id, name: merged.topic } }, create: { subjectId: subject.id, name: merged.topic }, update: {} });
+          const question = await db.question.update({ where: { id: existing.id }, data: {
+            subjectId: subject.id, topicId: topic.id, text: merged.text, options: encodeOptions(merged.options),
+            correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source, difficulty: merged.difficulty,
+            questionType: merged.questionType, promptData: JSON.stringify(merged.promptData), answerData: JSON.stringify(merged.answerData), questionHash: hashQuestion(merged.text),
+          }, select: { id: true, text: true, reviewStatus: true } });
+          output = { question }; summary = "edited question " + question.id; break;
+        }
+        case "reject_questions": {
+          if (!scope(key, "questions:review")) return res.json(rpcError(id, -32003, "Missing questions:review scope."));
+          const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(200), confirm: z.literal(true) }).parse(args);
+          if (new Set(input.ids).size !== input.ids.length) return res.json(rpcError(id, -32602, "Question IDs must be unique."));
+          const result = await db.question.updateMany({ where: { id: { in: input.ids }, reviewStatus: "DRAFT" }, data: { reviewStatus: "REJECTED" } });
+          output = { rejected: result.count }; summary = "rejected " + result.count + " drafts"; break;
+        }
         case "create_question_paper": {
           if(!scope(key,"papers:create"))return res.json(rpcError(id,-32003,"Missing papers:create scope."));
           const input=z.object({title:z.string().trim().min(2).max(120),description:z.string().max(2000).default(""),instructions:z.string().max(5000).default(""),questionIds:z.array(z.number().int().positive()).min(1).max(200),durationMinutes:z.number().int().min(1).max(600),marks:z.number().min(0).max(100).default(1),negativeMarks:z.number().min(0).max(100).default(0)}).parse(args);
