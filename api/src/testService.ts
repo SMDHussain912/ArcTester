@@ -150,7 +150,11 @@ function shortfallWarning(shortfalls: Shortfall[]): string[] {
   );
 }
 
-export function selectEcetMockCandidates<T extends { questionType: string }>(candidates: readonly T[]): T[] {\n  return candidates.filter((question) => question.questionType === "mcq");\n}\n\nexport function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
+export function selectEcetMockCandidates<T extends { questionType: string }>(candidates: readonly T[]): T[] {
+  return candidates.filter((question) => question.questionType === "mcq");
+}
+
+export function fullMockReadinessIssue(selectedCount: number, shortfalls: Shortfall[]): string | null {
   if (selectedCount === MOCK_TOTAL && shortfalls.length === 0) return null;
   const details = shortfalls.length
     ? shortfalls.map((item) => item.subject + ': ' + item.available + '/' + item.requested).join('; ')
