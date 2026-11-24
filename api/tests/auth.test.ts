@@ -104,7 +104,7 @@ describe("auth", () => {
     if (server) await server.close();
   });
 
-  it("registers a new user with an invitation", async () => {
+  it("registers a student without an invitation and leaves approval pending", async () => {
     const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
       email: "alice@example.com",
@@ -112,7 +112,8 @@ describe("auth", () => {
       invitationToken,
     });
     expect(res.status).toBe(201);
-    expect((res.json as { ok: boolean }).ok).toBe(true);
+    expect((res.json as { ok: boolean; user: { accessStatus: string } }).ok).toBe(true);
+    expect((res.json as { user: { accessStatus: string } }).user.accessStatus).toBe("PENDING");
   });
 
   it("rejects duplicate email", async () => {
@@ -138,6 +139,7 @@ describe("auth", () => {
   });
 
   it("logs in and sets a session cookie", async () => {
+    await server.db.user.update({ where: { email: "alice@example.com" }, data: { accessStatus: "APPROVED" } });
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/login`, {
       email: "alice@example.com",
       password: "secret1234",
@@ -163,6 +165,7 @@ describe("auth", () => {
       password: "secret1234",
       invitationToken: bobToken,
     });
+    await server.db.user.update({ where: { email: "bob@example.com" }, data: { accessStatus: "APPROVED" } });
 
     // 8 failed attempts against alice lock alice's account.
     for (let i = 0; i < 8; i += 1) {
@@ -271,6 +274,7 @@ describe("auth — bearer token (native/mobile clients)", () => {
       password: "secret1234",
       invitationToken,
     });
+    await server.db.user.update({ where: { email: "mobile@example.com" }, data: { accessStatus: "APPROVED" } });
     const res = await fetch(`${server.baseUrl}/auth/token`, {
       method: "POST",
       headers: { "content-type": "application/json" },
