@@ -16,7 +16,7 @@ import StudentNotificationBanner from "./StudentNotificationBanner";
 import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications } from "./useStudentCommunications";
-import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
+import { DashboardProgressSummary } from "./StudentProgress";
 import StudentGamification from "./StudentGamification";
 import StudentMastery from "./StudentMastery";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
@@ -30,6 +30,7 @@ import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
 import StudentMaterials from "./StudentMaterials";
 import StudentComingSoon from "./StudentComingSoon";
+import StudentAccountSettings from "./StudentAccountSettings";
 import AppSplash from "./components/AppSplash";
 import { OnlineStatusContext } from "./OnlineStatusContext";
 
@@ -127,11 +128,28 @@ export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(
     () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
+  const [reduceMotion, setReduceMotion] = useState(() => safeStorage.getItem("arctester-reduce-motion") === "true");
+  const [showNotificationBanners, setShowNotificationBanners] = useState(() => safeStorage.getItem("arctester-show-notification-banners") !== "false");
+  const [showAnnouncementPopups, setShowAnnouncementPopups] = useState(() => safeStorage.getItem("arctester-show-announcement-popups") !== "false");
+
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     safeStorage.setItem("arctester-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.dataset.reduceMotion = reduceMotion ? "true" : "false";
+    safeStorage.setItem("arctester-reduce-motion", String(reduceMotion));
+  }, [reduceMotion]);
+  function updateNotificationBanners(value: boolean) {
+    setShowNotificationBanners(value);
+    safeStorage.setItem("arctester-show-notification-banners", String(value));
+  }
+  function updateAnnouncementPopups(value: boolean) {
+    setShowAnnouncementPopups(value);
+    safeStorage.setItem("arctester-show-announcement-popups", String(value));
+  }
+
 
   useEffect(() => {
     request<{ user: User }>("/auth/me")
@@ -594,8 +612,25 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "coming-soon" || activePage === "learning" || activePage === "learning-summary" || activePage === "path" || activePage === "lessons" ? (
+        {activePage === "coming-soon" || activePage === "progress" || activePage === "learning" || activePage === "learning-summary" || activePage === "path" || activePage === "lessons" ? (
           <StudentComingSoon />
+        ) : activePage === "account" || activePage === "settings" ? (
+          <StudentAccountSettings
+            page={activePage}
+            email={user.email}
+            userId={user.id}
+            role={user.role}
+            theme={theme}
+            onThemeChange={setTheme}
+            reduceMotion={reduceMotion}
+            onReduceMotionChange={setReduceMotion}
+            showNotificationBanners={showNotificationBanners}
+            onShowNotificationBannersChange={updateNotificationBanners}
+            showAnnouncementPopups={showAnnouncementPopups}
+            onShowAnnouncementPopupsChange={updateAnnouncementPopups}
+            busy={busy}
+            onSignOut={signOut}
+          />
         ) : activePage === "assignments" ? (
           <StudentAssignedExams />
         ) : activePage === "practice" && test ? (
@@ -697,7 +732,6 @@ export default function App() {
                 />
               </div>
             </section>
-            {activePage === "progress" ? <StudentProgress /> : null}
             <StudentQuestionBankBrowser
               subjects={bank?.subjects ?? []}
               visible={activePage === "question-bank"}
@@ -707,7 +741,7 @@ export default function App() {
           </>
         )}
         {error && <p className="error">{error}</p>}
-        {activePage !== "notifications" && !test && !result && studentNotifications.find((item) => !item.readAt) && (
+        {showNotificationBanners && activePage !== "notifications" && !test && !result && studentNotifications.find((item) => !item.readAt) && (
           <StudentNotificationBanner
             notification={studentNotifications.find((item) => !item.readAt)!}
             onRead={(id) => void markNotificationRead(id)}
@@ -715,7 +749,7 @@ export default function App() {
           />
         )}
       </main>
-      {activeAnnouncements[0] && (
+      {showAnnouncementPopups && activeAnnouncements[0] && (
         <StudentAnnouncementDialog
           announcement={activeAnnouncements[0]}
           onAcknowledge={(id) => void dismissAnnouncement(id)}
