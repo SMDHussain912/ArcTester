@@ -17,6 +17,11 @@ describe("API client", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Invitation expired." }), { status: 410 }));
     await expect(createApiClient("http://localhost:4000", fetcher)("/auth/register")).rejects.toThrow("Invitation expired.");
   });
+  it("hides server implementation details from 5xx responses", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "PrismaClientKnownRequestError at api/src/routes.ts:88" }), { status: 500 }));
+    await expect(createApiClient("http://localhost:4000", fetcher)("/broken"))
+      .rejects.toThrow("ArcTester couldn't complete this request right now. Please try again.");
+  });
   it("exposes the HTTP status on API errors for recovery decisions", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Test not found." }), { status: 404 }));
     await expect(createApiClient("http://localhost:4000", fetcher)("/tests/42"))
