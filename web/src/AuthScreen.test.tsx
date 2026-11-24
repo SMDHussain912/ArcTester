@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AuthScreen from "./AuthScreen";
 function renderAuth(overrides: Partial<React.ComponentProps<typeof AuthScreen>> = {}) {
-  const props = { email: "", password: "", invitationToken: "", register: false, busy: false, error: "", onEmailChange: vi.fn(), onPasswordChange: vi.fn(), onInvitationTokenChange: vi.fn(), onRegisterChange: vi.fn(), onAuthenticate: vi.fn(), ...overrides };
+  const props = { email: "", password: "", register: false, busy: false, error: "", onEmailChange: vi.fn(), onPasswordChange: vi.fn(), onRegisterChange: vi.fn(), onAuthenticate: vi.fn(), ...overrides };
   render(<AuthScreen {...props} />); return props;
 }
 describe("AuthScreen", () => {
@@ -16,13 +16,12 @@ describe("AuthScreen", () => {
     expect(props.onPasswordChange).toHaveBeenCalledWith("secret123");
     expect(props.onAuthenticate).toHaveBeenCalledTimes(1);
   });
-  it("shows the invitation field and registration password requirements", () => {
-    const props = renderAuth({ register: true });
+  it("shows self-registration without an invitation code and requires a strong password", () => {
+    renderAuth({ register: true });
     expect(screen.getByRole("heading", { name: "Create your account" })).toBeTruthy();
-    expect(screen.getByLabelText("Invitation code")).toBeTruthy();
+    expect(screen.queryByLabelText("Invitation code")).toBeNull();
     expect(screen.getByLabelText("Password").getAttribute("minLength")).toBe("8");
-    fireEvent.change(screen.getByLabelText("Invitation code"), { target: { value: "invite-code" } });
-    expect(props.onInvitationTokenChange).toHaveBeenCalledWith("invite-code");
+    expect(screen.getByText(/administrator will review your account/i)).toBeTruthy();
   });
   it("disables submission while busy and exposes API errors", () => {
     renderAuth({ busy: true, error: "The invitation has expired." });
@@ -31,7 +30,7 @@ describe("AuthScreen", () => {
   });
   it("delegates switching between sign-in and registration", () => {
     const props = renderAuth();
-    fireEvent.click(screen.getByRole("button", { name: "Have an invitation? Create account" }));
+    fireEvent.click(screen.getByRole("button", { name: "New student? Create an account" }));
     expect(props.onRegisterChange).toHaveBeenCalledWith(true);
   });
 });
