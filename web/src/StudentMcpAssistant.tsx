@@ -3,6 +3,7 @@ import { API, request } from "./apiClient";
 
 type McpKey = { id: string; name: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; revokedAt: string | null };
 type PrivateQuestion = { id: string; subject: string; topic: string; text: string; options: string[]; difficulty: string; updatedAt: string };
+type PracticeQuestion = { subject?: string; topic?: string; text: string; options: string[]; correctIndex: number; explanation?: string; difficulty?: string };
 type PracticeSet = { id: string; title: string; description: string; durationMinutes: number; questions: unknown[]; updatedAt: string };
 
 const scopes = ["questions:read", "questions:write", "practice:read", "practice:write"];
@@ -17,6 +18,10 @@ export default function StudentMcpAssistant() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeTest, setActiveTest] = useState<PracticeSet | null>(null);
+  const [testIndex, setTestIndex] = useState(0);
+  const [testAnswers, setTestAnswers] = useState<Record<number, number>>({});
+  const [testFinished, setTestFinished] = useState(false);
 
   async function refresh() {
     const [keyResult, questionResult, testResult] = await Promise.all([
@@ -67,6 +72,9 @@ export default function StudentMcpAssistant() {
   }
 
   const config = JSON.stringify({ url: endpoint, transport: "streamable-http", headers: { Authorization: secret ? "Bearer " + secret : "Bearer <YOUR_STUDENT_MCP_KEY>" } }, null, 2);
+  const activeQuestions = (activeTest?.questions ?? []) as PracticeQuestion[];
+  const activeQuestion = activeQuestions[testIndex];
+  const practiceScore = activeQuestions.reduce((sum, question, index) => sum + (testAnswers[index] === question.correctIndex ? 1 : 0), 0);
   return (
     <section className="student-mcp-page">
       <header className="page-header">
@@ -97,10 +105,18 @@ export default function StudentMcpAssistant() {
         <p><strong>{questions.length}</strong> questions loaded in the current list</p>
         {questions.slice(0, 8).map((q) => <div className="mcp-question-row" key={q.id}><strong>{q.subject} / {q.topic}</strong><p>{q.text}</p><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/private-questions/" + encodeURIComponent(q.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
       </article>
+      {activeTest && <article className="card student-mcp-card mcp-live-practice" aria-label="Private practice test">
+        <div className="mcp-key-row"><div><h2>{activeTest.title}</h2><small>{activeQuestions.length} questions · {activeTest.durationMinutes} min · Private practice</small></div><button type="button" className="ghost" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); }}>Close</button></div>
+        {!testFinished && activeQuestion ? <>
+          <p>Question {testIndex + 1} of {activeQuestions.length}</p><h3>{activeQuestion.text}</h3>
+          {activeQuestion.options.map((option, optionIndex) => <button key={optionIndex} type="button" className={testAnswers[testIndex] === optionIndex ? "primary mcp-answer-option" : "ghost mcp-answer-option"} onClick={() => setTestAnswers(previous => ({ ...previous, [testIndex]: optionIndex }))}>{String.fromCharCode(65 + optionIndex)}. {option}</button>)}
+          <div className="mcp-key-row"><button type="button" className="ghost" disabled={testIndex===0} onClick={() => setTestIndex(i=>i-1)}>Previous</button><span>{Object.keys(testAnswers).length}/{activeQuestions.length} answered</span>{testIndex<activeQuestions.length-1?<button type="button" className="primary" onClick={() => setTestIndex(i=>i+1)}>Next</button>:<button type="button" className="primary" onClick={() => setTestFinished(true)}>Finish test</button>}</div>
+        </> : <><h3>Score: {practiceScore} / {activeQuestions.length}</h3><p>Review your answers below.</p>{activeQuestions.map((q,i)=><div className="mcp-question-row" key={i}><strong>Q{i+1}. {q.text}</strong><p>Your answer: {testAnswers[i]===undefined?"Unanswered":q.options[testAnswers[i]]}</p><p>Correct answer: {q.options[q.correctIndex]}</p>{q.explanation&&<p>{q.explanation}</p>}</div>)}<button type="button" className="primary" onClick={() => { setActiveTest(null); setTestFinished(false); setTestIndex(0); setTestAnswers({}); }}>Back to practice tests</button></>}
+      </article>}
       <article className="card student-mcp-card">
         <h2>AI-created practice tests</h2>
         <p>Your connected AI can create and edit private test packages using the MCP tools. These are practice content, not official assigned exams.</p>
-        {tests.length === 0 ? <p>No AI practice tests saved yet. Ask your connected AI to build one and save it with <code>create_my_practice_test</code>.</p> : tests.map((test) => <div className="mcp-key-row" key={test.id}><div><strong>{test.title}</strong><small>{test.questions.length} questions · {test.durationMinutes} min</small><small>{test.description}</small></div><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/practice-sets/" + encodeURIComponent(test.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
+        {tests.length === 0 ? <p>No AI practice tests saved yet. Ask your connected AI to build one and save it with <code>create_my_practice_test</code>.</p> : tests.map((test) => <div className="mcp-key-row" key={test.id}><div><strong>{test.title}</strong><small>{test.questions.length} questions · {test.durationMinutes} min</small><small>{test.description}</small></div><button type="button" className="primary" onClick={() => { setActiveTest(test); setTestIndex(0); setTestAnswers({}); setTestFinished(false); }}>Start test</button><button type="button" className="danger" disabled={busy} onClick={async () => { try { await request("/student/practice-sets/" + encodeURIComponent(test.id), { method: "DELETE" }); await refresh(); } catch (e) { setError((e as Error).message); } }}>Delete</button></div>)}
       </article>
     </section>
   );
