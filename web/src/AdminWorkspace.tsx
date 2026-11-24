@@ -7,7 +7,7 @@ import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminLessonStudio from "./AdminLessonStudio";
 import AdminInvitations, { type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
-import AdminExamManagement, { type AdminManagedExam, type AdminExamStudent, type AdminExamPreview } from "./AdminExamManagement";
+import AdminExamManagement, { type AdminManagedExam, type AdminExamPreview } from "./AdminExamManagement";
 import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnalytics";
 import AdminPaperBuilder, { type AdminPaperDraft, type AdminPaperQuestion, type AdminPaperDifficultyMix, type AdminPaperSubjectScoring } from "./AdminPaperBuilder";
 import AdminQuestionImport, { type AdminImportReport } from "./AdminQuestionImport";
