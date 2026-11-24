@@ -9,6 +9,7 @@ let studentCookie = "";
 let approvedId = 0;
 let draftId = 0;
 let rejectedId = 0;
+let pendingStudentId = 0;
 
 async function patchJson(url: string, body: unknown, cookie: string) {
   const response = await fetch(url, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body) });
@@ -20,6 +21,8 @@ describe("question review workflow and student approval boundary", () => {
     server = await startTestServer(buildApp);
     const admin = await server.db.user.create({ data: { email: "question-review-admin@example.test", passwordHash: hashPassword("correct-horse-battery"), role: "ADMIN" } });
     const student = await server.db.user.create({ data: { email: "question-review-student@example.test", passwordHash: hashPassword("correct-horse-battery"), role: "STUDENT" } });
+    const pendingStudent = await server.db.user.create({ data: { email: "question-review-pending@example.test", passwordHash: hashPassword("correct-horse-battery"), role: "STUDENT", accessStatus: "PENDING" } });
+    pendingStudentId = pendingStudent.id;
     adminCookie = (await signIn(server.baseUrl, admin.email)).cookie;
     studentCookie = (await signIn(server.baseUrl, student.email)).cookie;
     const subject = await server.db.subject.create({ data: { name: "Mathematics" } });
@@ -32,6 +35,19 @@ describe("question review workflow and student approval boundary", () => {
   });
 
   afterAll(async () => { if (server) await server.close(); });
+
+  it("lists pending accounts and permits admin approval before sign-in", async () => {
+    const pendingLogin = await postJson(server.baseUrl + "/auth/login", { email: "question-review-pending@example.test", password: "correct-horse-battery" });
+    expect(pendingLogin.status).toBe(403);
+    const pendingList = await getJson(server.baseUrl + "/admin/students?accessStatus=PENDING&search=question-review-pending", adminCookie);
+    expect(pendingList.status).toBe(200);
+    expect((pendingList.json as { students: Array<{ id: number; accessStatus: string }> }).students).toContainEqual(expect.objectContaining({ id: pendingStudentId, accessStatus: "PENDING" }));
+    const approved = await patchJson(server.baseUrl + `/admin/students/${pendingStudentId}/access`, { accessStatus: "APPROVED" }, adminCookie);
+    expect(approved.status).toBe(200);
+    expect(approved.json.student).toMatchObject({ id: pendingStudentId, accessStatus: "APPROVED" });
+    const login = await postJson(server.baseUrl + "/auth/login", { email: "question-review-pending@example.test", password: "correct-horse-battery" });
+    expect(login.status).toBe(200);
+  });
 
   it("exposes only approved questions in public bank counts and student practice", async () => {
     const bank = await getJson(server.baseUrl + "/bank");
@@ -91,4 +107,18 @@ describe("question review workflow and student approval boundary", () => {
     expect(approved.status).toBe(200);
     expect(approved.json).toMatchObject({ ok: true, updated: 2, reviewStatus: "APPROVED" });
   });
-});
+
+  it("bulk approves source-valid drafts for a selected subject and topic", async () => {
+    const subject = await server.db.subject.findUniqueOrThrow({ where: { name: "Mathematics" } });
+    const topic = await server.db.topic.findUniqueOrThrow({ where: { subjectId_name: { subjectId: subject.id, name: "Review Workflow" } } });
+    const base = { subjectId: subject.id, topicId: topic.id, options: JSON.stringify(["A", "B", "C", "D"]), correctIndex: 0, explanation: "", difficulty: "medium", reviewStatus: "DRAFT" };
+    await server.db.question.create({ data: { ...base, text: "Scoped bulk approve valid source", source: "Verified scope source", questionHash: "review-scope-valid" } });
+    await server.db.question.create({ data: { ...base, text: "Scoped bulk approve missing source", source: "NEEDS HUMAN REVIEW", questionHash: "review-scope-missing" } });
+    const preview = await postJson(server.baseUrl + "/admin/questions/review/bulk-scope", { subject: "Mathematics", topic: "Review Workflow", dryRun: true }, adminCookie);
+    expect(preview.status).toBe(200);
+    expect(preview.json).toMatchObject({ matchedCount: 2, eligibleCount: 1, missingSourceCount: 1 });
+    const result = await postJson(server.baseUrl + "/admin/questions/review/bulk-scope", { subject: "Mathematics", topic: "Review Workflow", dryRun: false }, adminCookie);
+    expect(result.status).toBe(200);
+    expect(result.json).toMatchObject({ approvedCount: 1, matchedCount: 2, missingSourceCount: 1 });
+  });
+
