@@ -5,7 +5,7 @@ import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminLessonStudio from "./AdminLessonStudio";
-import AdminInvitations, { type AdminInvitation, type CreatedAdminInvitation, type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
+import AdminInvitations, { type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamStudent, type AdminExamPreview } from "./AdminExamManagement";
 import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnalytics";
@@ -26,7 +26,7 @@ type NotificationHealth = {
  preferences:{students:number;configuredStudents:number;examAssignmentsDisabled:number;examResultsDisabled:number};
 };
 
-type Props = { email:string; theme:"light"|"dark"; setTheme:(v:"light"|"dark")=>void; signOut:()=>void; invitations:AdminInvitation[]; createInvitation:(e:FormEvent<HTMLFormElement>)=>void; inviteEmail:string; setInviteEmail:(v:string)=>void; createdInvitation:CreatedAdminInvitation|null; revokeInvitation:(id:string)=>void; busy:boolean };
+type Props = { email:string; theme:"light"|"dark"; setTheme:(v:"light"|"dark")=>void; signOut:()=>void };
 async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  const response=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});
  const body=await response.json().catch(()=>({}));
@@ -234,7 +234,7 @@ export default function AdminWorkspace(p:Props){
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
-    invitationsCount={p.invitations.length}
+    pendingApprovalsCount={students.filter(student=>student.accessStatus==="PENDING").length}
     catalog={catalog}
     onNavigate={(nextTab) => setTab(nextTab)}
    />}
