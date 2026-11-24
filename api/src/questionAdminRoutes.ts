@@ -77,8 +77,8 @@ export function questionAdminRouter(db: PrismaClient): Router {
       }).parse(req.body);
       const where = {
         reviewStatus: "DRAFT",
-        subject: { name: input.subject },
-        ...(input.topic ? { topic: { name: input.topic } } : {}),
+        subject: { is: { name: input.subject } },
+        ...(input.topic ? { topic: { is: { name: input.topic } } } : {}),
         ...(input.difficulty ? { difficulty: input.difficulty } : {}),
       };
       const candidates = await db.question.findMany({ where, select: { id: true, source: true } });
