@@ -502,3 +502,5 @@ textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,tra
 .account-settings-note{margin:12px 0 0;font-size:11px;line-height:1.6}
 html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html[data-reduce-motion="true"] *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 @media(max-width:620px){.account-setting-section{padding:16px}.account-theme-picker{align-items:flex-start;flex-direction:column}.notification-row{padding:16px}}
+
+.student-brand .student-brand-mark{display:block;width:36px;height:36px;flex:0 0 36px;object-fit:contain;border-radius:11px}
