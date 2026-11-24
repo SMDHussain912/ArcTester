@@ -80,7 +80,6 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [invitationToken, setInvitationToken] = useState("");
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
@@ -339,13 +338,12 @@ export default function App() {
         await Promise.all([
           request("/auth/register", {
             method: "POST",
-            body: JSON.stringify({ email, password, invitationToken: invitationToken.trim() }),
+            body: JSON.stringify({ email, password }),
           }),
           animationMinimum,
         ]);
         setRegister(false);
-        setInvitationToken("");
-        setError("Account created. You can now sign in.");
+        setError("Account submitted for administrator approval. You can sign in after approval.");
       } else {
         const [session] = await Promise.all([
           request<{ user: User }>("/auth/login", {
@@ -594,13 +592,11 @@ export default function App() {
       <AuthScreen
         email={email}
         password={password}
-        invitationToken={invitationToken}
         register={register}
         busy={busy}
         error={error}
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
-        onInvitationTokenChange={setInvitationToken}
         onRegisterChange={setRegister}
         onAuthenticate={() => void authenticate()}
       />
