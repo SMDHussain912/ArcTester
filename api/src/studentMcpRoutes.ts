@@ -193,6 +193,7 @@ export function studentMcpRouter(db: PrismaClient): Router {
         { name: "delete_my_question", description: "Delete one of your own private questions.", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string" } } } },
         { name: "create_my_practice_test", description: "Create a private practice test from AI-generated questions; does not publish or assign an official exam.", inputSchema: { type: "object", required: ["title", "questions"], properties: { title: { type: "string" }, description: { type: "string" }, durationMinutes: { type: "integer", minimum: 1, maximum: 600 }, questions: { type: "array", minItems: 1, maxItems: 100, items: { type: "object" } } } } },
         { name: "list_my_practice_tests", description: "List your saved private practice tests.", inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } } } },
+        { name: "edit_my_practice_test", description: "Edit one of your own saved private practice tests, including replacing or revising its questions.", inputSchema: { type: "object", required: ["id", "patch"], properties: { id: { type: "string" }, patch: { type: "object" } } } },
       ];
       return res.json({ jsonrpc: "2.0", id, result: { tools } });
     }
@@ -240,6 +241,15 @@ export function studentMcpRouter(db: PrismaClient): Router {
           const input = PracticeSetInput.parse(args);
           const set = await db.studentPracticeSet.create({ data: { ...input, userId: key.userId, questions: input.questions as never } });
           output = { practiceTest: set }; break;
+        }
+        case "edit_my_practice_test": {
+          if (!hasScope(key, "practice:write")) return res.json(jsonRpcError(id, -32003, "Missing practice:write scope."));
+          const input = z.object({ id: z.string().min(1), patch: PracticeSetInput.partial() }).parse(args);
+          const existing = await db.studentPracticeSet.findFirst({ where: { id: input.id, userId: key.userId } });
+          if (!existing) return res.json(jsonRpcError(id, -32004, "Practice test not found."));
+          const merged = PracticeSetInput.parse({ ...existing, ...input.patch, questions: input.patch.questions ?? existing.questions });
+          const updated = await db.studentPracticeSet.update({ where: { id: existing.id }, data: { ...merged, questions: merged.questions as never } });
+          output = { practiceTest: updated }; break;
         }
         case "list_my_practice_tests": {
           if (!hasScope(key, "practice:read")) return res.json(jsonRpcError(id, -32003, "Missing practice:read scope."));
