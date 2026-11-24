@@ -87,6 +87,8 @@ model User {
   notificationPreferences StudentNotificationPreference?
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
+
+  @@index([role, accessStatus])
 }
 
 model Invitation {
