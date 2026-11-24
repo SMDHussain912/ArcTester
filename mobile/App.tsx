@@ -701,11 +701,10 @@ export default function App() {
           body: JSON.stringify({
             email: email.trim(),
             password,
-            invitationToken: invitationToken.trim(),
           }),
         });
         setRegister(false);
-        setInvitationToken("");
+        setError("Account request submitted. You can sign in after an administrator approves your account.");
       } else {
         const result = await api<{ token: string; user: User }>("/auth/token", {
           method: "POST",
@@ -1075,7 +1074,7 @@ export default function App() {
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>{register ? "Create your account" : "Welcome back"}</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>
               {register
-                ? "Enter the invitation code shared by your admin."
+                ? "Register with your email. An administrator will review your account before you can sign in."
                 : "Sign in to continue your preparation."}
             </Text>
             <TextInput
@@ -1095,16 +1094,6 @@ export default function App() {
               onChangeText={setPassword}
               style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
             />
-            {register && (
-              <TextInput
-                autoCapitalize="none"
-                placeholder="Invitation code"
-                placeholderTextColor="#8b95a7"
-                value={invitationToken}
-                onChangeText={setInvitationToken}
-                style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
-              />
-            )}
             <TouchableOpacity disabled={busy} onPress={authenticate} style={styles.primary}>
               <Text style={styles.primaryText}>
                 {busy ? "Please wait…" : register ? "Create account" : "Sign in"}
@@ -1114,7 +1103,7 @@ export default function App() {
               <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>
                 {register
                   ? "Already have an account? Sign in"
-                  : "Have an invitation? Create account"}
+                  : "New student? Create an account"}
               </Text>
             </TouchableOpacity>
           </Animated.View>
