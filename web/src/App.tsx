@@ -385,7 +385,7 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      await request(`/tests/${test.attemptId}/submit`, {
+      const submitted = await request<{ result?: Result }>(`/tests/${test.attemptId}/submit`, {
         method: "POST",
         body: JSON.stringify({
           answers: test.questions.map((question) => ({
@@ -394,7 +394,7 @@ export default function App() {
           })),
         }),
       });
-      const fullResult = await request<Result>(`/tests/${test.attemptId}/result`);
+      const fullResult = submitted.result ?? await request<Result>(`/tests/${test.attemptId}/result`);
       setResult(fullResult);
       setPracticeLocalSaveAvailable(false);
       setPracticeSyncStatus("idle");
