@@ -155,7 +155,7 @@ export async function issueTestInvitation(db: PrismaClient, email: string): Prom
 }
 
 /**
- * Register a brand-new account and sign it in. Returns the session cookie
+ * Register a brand-new account, approve it as test setup, and sign it in. Returns the session cookie
  * plus the new user's id, so tests can scope expectations to one account.
  */
 export async function signUp(
@@ -165,11 +165,10 @@ export async function signUp(
 ): Promise<{ cookie: string; userId: number }> {
   const db = testDatabases.get(baseUrl);
   if (!db) throw new Error("No test database is registered for this server.");
-  const invitationToken = await issueTestInvitation(db, email);
   const reg = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password, invitationToken }),
+    body: JSON.stringify({ email, password }),
   });
   if (reg.status !== 201) {
     throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);
