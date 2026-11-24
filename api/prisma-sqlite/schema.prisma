@@ -72,6 +72,7 @@ model User {
   email              String       @unique
   passwordHash       String
   role               String       @default("STUDENT")
+  accessStatus        String       @default("APPROVED")
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
