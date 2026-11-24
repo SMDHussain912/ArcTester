@@ -513,7 +513,7 @@ export function examRouter(db: PrismaClient): Router {
         search: z.string().trim().max(120).optional(),
         accessStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
       }).parse(req.query);
-      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search, mode: "insensitive" as const } } : {}), ...(query.accessStatus ? { accessStatus: query.accessStatus } : {}) };
+      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search } } : {}), ...(query.accessStatus ? { accessStatus: query.accessStatus } : {}) };
       const [students, total] = await Promise.all([
         db.user.findMany({
           where, orderBy: [{ accessStatus: "asc" }, { createdAt: "desc" }],
