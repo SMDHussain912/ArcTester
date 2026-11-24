@@ -158,6 +158,37 @@ export function studentMcpRouter(db: PrismaClient): Router {
       res.status(201).json({ ok: true, practiceTest: set });
     } catch (error) { next(error); }
   });
+  router.get("/student/practice-runs", requireAuth, requireStudent(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const runs = await db.studentPracticeRun.findMany({ where: { userId: req.user!.id }, orderBy: { completedAt: "desc" }, take: 100 });
+      res.json({ ok: true, runs });
+    } catch (error) { next(error); }
+  });
+  router.post("/student/practice-sets/:id/submit", requireAuth, requireStudent(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ answers: z.array(z.union([z.number().int().min(0), z.null()])).min(1).max(100) }).parse(req.body);
+      const set = await db.studentPracticeSet.findFirst({ where: { id: req.params.id, userId: req.user!.id } });
+      if (!set) return next(notFound("Practice test not found."));
+      if (!Array.isArray(set.questions) || set.questions.length !== input.answers.length) return next(badRequest("Answer count does not match this practice test."));
+      const questions = set.questions as unknown as { text: string; options: string[]; correctIndex: number; explanation?: string }[];
+      const reviewed = questions.map((question, index) => {
+        const selectedIndex = input.answers[index];
+        if (!Array.isArray(question.options) || !Number.isInteger(question.correctIndex) || question.correctIndex < 0 || question.correctIndex >= question.options.length) {
+          throw badRequest("This saved practice test contains an invalid question.");
+        }
+        if (selectedIndex !== null && selectedIndex >= question.options.length) throw badRequest("An answer option is out of range.");
+        return { questionIndex: index, selectedIndex, correctIndex: question.correctIndex, isCorrect: selectedIndex === question.correctIndex, text: question.text, explanation: question.explanation ?? "" };
+      });
+      const correctCount = reviewed.filter(answer => answer.isCorrect).length;
+      const answeredCount = reviewed.filter(answer => answer.selectedIndex !== null).length;
+      const percentage = reviewed.length ? Math.round(correctCount / reviewed.length * 10000) / 100 : 0;
+      const run = await db.studentPracticeRun.create({ data: {
+        userId: req.user!.id, practiceSetId: set.id, titleSnapshot: set.title,
+        totalQuestions: reviewed.length, answeredCount, correctCount, percentage, answers: reviewed as never,
+      } });
+      res.status(201).json({ ok: true, run });
+    } catch (error) { next(error); }
+  });
   router.delete("/student/practice-sets/:id", requireAuth, requireStudent(db), async (req: AuthedRequest, res, next) => {
     try {
       const result = await db.studentPracticeSet.deleteMany({ where: { id: req.params.id, userId: req.user!.id } });
