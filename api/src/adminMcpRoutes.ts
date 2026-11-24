@@ -121,8 +121,8 @@ export function adminMcpRouter(db: PrismaClient): Router {
         case "list_exam_results": {
           if(!scope(key,"papers:read"))return res.json(rpcError(id,-32003,"Missing papers:read scope."));
           const input=z.object({limit:z.number().int().min(1).max(100).default(50)}).parse(args);
-          const rows=await db.examSubmission.findMany({take:input.limit,orderBy:{receivedAt:"desc"},include:{assignment:{include:{student:{select:{id:true,email:true}},examVersion:{include:{exam:{select:{id:true,title:true}}}}}}}});
-          output={results:rows.map(x=>({submissionId:x.id,status:x.status,score:x.score,maximumScore:x.maximumScore,submittedAt:x.submittedAt,studentId:x.assignment.student.id,studentEmail:x.assignment.student.email,exam:x.assignment.examVersion.exam.title}))};summary="read "+rows.length+" exam results";break;
+          const rows=await db.examSubmission.findMany({take:input.limit,orderBy:{receivedAt:"desc"},include:{assignment:{include:{student:{select:{id:true}},examVersion:{include:{exam:{select:{id:true,title:true}}}}}}}});
+          output={results:rows.map(x=>({submissionId:x.id,status:x.status,score:x.score,maximumScore:x.maximumScore,submittedAt:x.submittedAt,studentRef:"student-"+x.assignment.student.id,exam:x.assignment.examVersion.exam.title}))};summary="read "+rows.length+" exam results";break;
         }
         case "create_announcement": {
           if(!scope(key,"announcements:write"))return res.json(rpcError(id,-32003,"Missing announcements:write scope."));
