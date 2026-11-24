@@ -40,13 +40,6 @@ describe("administrator question bank", () => {
       theme="light"
       setTheme={vi.fn()}
       signOut={vi.fn()}
-      invitations={[]}
-      createInvitation={vi.fn()}
-      inviteEmail=""
-      setInviteEmail={vi.fn()}
-      createdInvitation={null}
-      revokeInvitation={vi.fn()}
-      busy={false}
     />);
 
     fireEvent.click(screen.getByRole("button", { name: "Question bank" }));
@@ -129,13 +122,6 @@ describe("administrator question bank", () => {
       theme="light"
       setTheme={vi.fn()}
       signOut={vi.fn()}
-      invitations={[]}
-      createInvitation={vi.fn()}
-      inviteEmail=""
-      setInviteEmail={vi.fn()}
-      createdInvitation={null}
-      revokeInvitation={vi.fn()}
-      busy={false}
     />);
 
     fireEvent.click(screen.getByRole("button", { name: "Live invigilation" }));
