@@ -1,4 +1,4 @@
-# ArcTester Question MCP — Feature Specification
+# ArcTester Admin MCP — Feature Specification
 
 **Status:** Implementation specification  
 **Target:** ArcTester API + admin web + standalone remote MCP service  
@@ -6,104 +6,141 @@
 
 ## Objective
 
-Allow ChatGPT, Claude, and other authorized MCP clients to create and upload ArcTester question drafts directly to the existing API. Every submission must be visible in the admin Question Bank / review queue and remain unpublished until a human admin approves it.
+Provide an authorized ChatGPT, Claude, or other MCP client with a configurable ArcTester admin-assistant capability. Depending on the scopes granted by an administrator, it can create/upload questions, review and approve questions, create question papers, assign papers to students/groups, and create/publish announcements. All actions must use existing ArcTester services and be visible in the admin panel and audit log.
 
-This is a question-content capability, not permission to access student accounts, exam attempts, production secrets, or arbitrary server operations.
+This is not unrestricted database, infrastructure, or secret access. The MCP must not expose student passwords, session tokens, internal server credentials, or raw API key values.
 
-## User experience
+## Admin experience
 
-### Admin: MCP access
-Add an admin-only **MCP Access** area with:
-- MCP endpoint URL and client setup instructions.
-- Named API keys with creation date, key ID/prefix, scopes, enabled/revoked state, last-used time, and expiry.
-- Create, revoke, and rotate actions.
-- Copy the generated secret once at creation/rotation. Never retrieve or show the full secret again.
-- Clear status if a key has expired, been revoked, or exceeded its usage limit.
+### MCP Access and keys
+Admin-only page provides:
+- Remote MCP endpoint and client setup instructions.
+- Named keys with key ID/prefix, scopes, created/expiry/last-used timestamps and active/revoked state.
+- Create, rotate, disable and revoke.
+- Display a generated secret only once; never recover or display it again.
+- Copy-once connection configuration and safe troubleshooting status.
 
-### Admin: MCP activity
-Show a searchable, paginated audit table with:
-- timestamp, key label/key ID, client name, tool/action, request/correlation ID;
-- submitted batch ID and created question IDs/count;
-- success/failure, validation summary, duration, and safe error details;
-- filters by date, key, action, status, subject/topic and batch.
+### Activity and audit logs
+Searchable, paginated logs show timestamp, key label/id, client, tool/action, request/correlation ID, target IDs, counts, result, validation summary, duration and safe error message. Filters include date, key, action, result, subject/topic, batch, paper, assignment and announcement.
 
-Logs must redact authorization headers, raw API keys, passwords, connection strings, R2 credentials, student PII and full request bodies. Question text may be shown only in the question-management view, not copied into operational logs by default.
+Never log raw keys, Authorization headers, passwords, tokens, database/R2 credentials, student PII, or full request bodies. Log minimal identifiers and structured summaries. Admin-only detailed question content belongs in content review, not operational logs.
 
-### AI client workflow
-1. Admin creates a scoped key and configures it in the MCP client as a secret.
-2. AI calls validation before upload, or uploads a batch and receives per-row validation results.
-3. Valid questions are stored as `DRAFT` and grouped under an MCP import batch.
-4. Admin opens the batch in the Question Bank, filters by subject/topic, edits, approves/rejects, or bulk-approves selected items.
-5. Only approved questions become available to student/exam selection.
+### Admin review queue
+MCP-created questions and batches appear in the existing Question Bank/review queue. Admins can inspect/edit question text, options, correct answer, explanation, subject/topic, difficulty and duplicates; approve/reject individually or in bulk by selected rows, subject, topic, batch and filters. Approval is available to an MCP key only when it has the explicit `questions:approve` scope. Approved content follows the same validation and publication rules as admin UI actions.
 
-## MCP tools (initial write MVP)
+## MCP tools
 
-- `arctester_validate_questions`: validate one or many questions without writing.
-- `arctester_create_question`: create one draft question.
-- `arctester_create_question_batch`: create a batch of drafts from structured JSON.
-- `arctester_upload_question_csv`: upload supported ArcTester question CSV; return row-level validation and import status.
-- `arctester_get_import_batch`: retrieve status and created IDs for a batch owned by the authenticated key.
-- `arctester_list_import_batches`: list the authenticated key's recent batches.
-- `arctester_get_mcp_activity`: read only redacted activity records permitted to that key/admin.
+### Questions and imports
+- `arctester_validate_questions`: validate one or many questions.
+- `arctester_create_question`: create a question draft.
+- `arctester_create_question_batch`: create batch drafts from structured JSON.
+- `arctester_upload_question_csv`: upload supported question CSV with row-level validation.
+- `arctester_get_import_batch` / `arctester_list_import_batches`: inspect import status and results.
+- `arctester_review_question`: retrieve a question and review details.
+- `arctester_update_question`: edit a question before or after review, subject to current workflow rules.
+- `arctester_approve_questions`: approve one or many validated questions; explicit scope required.
+- `arctester_reject_questions`: reject selected questions with reason; explicit scope required.
+- `arctester_bulk_review_questions`: review/approve/reject selected questions using filters and a bounded selection; approval/rejection scopes required.
 
-Do not expose approve, publish, delete, or student-facing exam assignment tools to the MCP writer role in the MVP. Human approval stays in the admin panel.
+### Question papers and assignments
+- `arctester_create_question_paper`: create a paper using approved questions and a specified blueprint/preset, subject/topic quotas, order, duration, marks and negative marks.
+- `arctester_preview_question_paper`: validate blueprint, question count, coverage, duplicates, availability and scoring before creation.
+- `arctester_update_question_paper`: edit a draft paper.
+- `arctester_publish_question_paper`: publish a paper when `papers:publish` scope is granted.
+- `arctester_assign_question_paper`: assign a published paper to a selected student, cohort/class or allowed group, with schedule/deadline settings and explicit `exams:assign` scope.
+- `arctester_get_assignment_status`: inspect assignment counts and safe status.
+- `arctester_unassign_question_paper`: revoke/cancel an assignment only when supported by existing business rules and explicit `exams:manage_assignments` scope.
 
-## Service architecture
+Paper creation must use approved questions only, honor configured ECET preset/blueprint order, subject quotas, marks, negative marks and time. Never silently substitute questions when a quota cannot be met; return a preview with shortages and require a revised selection or explicit user instruction.
 
-- Standalone TypeScript/Node remote MCP service, deployed as a separate Render web service with HTTPS and Streamable HTTP transport.
-- MCP service authenticates each request using an ArcTester-issued key and calls the existing ArcTester API through a private server-to-server route.
-- Reuse the existing question schema, subject/topic mapping, duplicate hash, import service, review status, and DB. Do not introduce a second question database or bypass the existing import pipeline.
-- Admin key and log endpoints live in the existing API; the MCP adapter should be thin and share the same validated service layer.
-- Add a dedicated MCP batch/import entity to associate source key, request id, counts, status and question IDs. Keep key ownership and audit records relationally enforced.
-- Use idempotency keys for writes so client retries do not create duplicate questions.
+### Announcements
+- `arctester_create_announcement`: create a draft announcement with title/body, audience, and optional schedule.
+- `arctester_preview_announcement`: preview audience and content.
+- `arctester_publish_announcement`: publish immediately or schedule when supported; requires `announcements:publish`.
+- `arctester_update_announcement` / `arctester_archive_announcement`: manage announcements within granted scopes.
+
+### Logs and status
+- `arctester_get_mcp_activity`: retrieve redacted activity permitted to the caller.
+- `arctester_get_operation_status`: inspect status of a long-running operation by request ID.
+
+## Permission scopes
+
+Use least-privilege, independently revocable scopes:
+- `questions:validate`
+- `questions:create`
+- `questions:edit`
+- `questions:approve`
+- `questions:reject`
+- `imports:read`
+- `papers:create`
+- `papers:edit`
+- `papers:publish`
+- `exams:assign`
+- `exams:manage_assignments`
+- `announcements:create`
+- `announcements:edit`
+- `announcements:publish`
+- `activity:read`
+
+Admin selects scopes when creating a key and can update/revoke them. A key with all requested scopes can complete the full workflow; limited keys must receive clear scope-denied errors. Never make broad admin access the default.
+
+## Confirmation and safe execution
+
+The MCP is allowed to perform the actions explicitly granted to its key. For irreversible or broad-impact actions, return a concise preview and require an explicit confirmation step in the MCP interaction before execution: bulk approval above configured threshold, assigning to an entire cohort, publishing an announcement to all students, or cancelling assignments. Support bounded selection, dry-run/preview, idempotency and operation status. Do not require confirmation for harmless validation or draft creation.
+
+## Architecture
+
+- Standalone TypeScript/Node remote MCP service on a separate Render web service with HTTPS and Streamable HTTP transport.
+- Authenticate MCP requests with ArcTester-issued scoped keys; use a private authenticated server-to-server API route to the existing ArcTester backend.
+- Reuse current question validation/import, approval, paper generation, assignment and announcement services. MCP must not bypass business rules or create a second database.
+- Add relational records for MCP key metadata, import batches, operation records and audit events. Store question/paper/assignment/announcement identifiers and safe summaries.
+- Use idempotency keys, request size limits, rate limits, pagination and ownership checks.
 
 ## API key handling
 
-- Generate high-entropy random secrets (minimum 256 bits); display the full secret only once.
-- Persist only a strong one-way hash (e.g. SHA-256 of a sufficiently random secret, with a key identifier/prefix for lookup); never persist plaintext.
-- Store the hash and key metadata in PostgreSQL. Use constant-time hash comparison where applicable.
-- Scopes are least-privilege and explicit: `questions:validate`, `questions:create`, `questions:batch`, `imports:read`, `activity:read`.
-- Revoke/rotate immediately; enforce expiry, rate limits, batch size and request-size limits.
-- The MCP service's internal API credential belongs in Render environment secrets, not in source code, admin frontend bundles, logs or tool outputs.
-- Never return secret values from list/detail/log endpoints. Admin may see key name, ID/prefix, scopes, status, timestamps and last-used time only.
+- Generate high-entropy random secrets (minimum 256 bits).
+- Store only a one-way hash and lookup key ID/prefix; compare securely.
+- Show secret once at creation/rotation; never return it in list/detail/log endpoints.
+- Internal service credentials live only in Render environment secrets.
+- Revoke/rotate immediately; enforce expiry, scopes, rate limits and usage limits.
+- Never put MCP keys in source, web/mobile bundles, prompts, logs or generated question content.
 
-## Data and validation rules
+## Data rules
 
-- Reuse `QuestionInputSchema`, `importFromJson`, `importFromCsv`, and existing import services.
-- Validate subject and topic against ArcTester canonical records.
-- Validate question type, options/answer shape, correct answer, explanation, difficulty, source and required fields.
-- Detect exact/normalized duplicates using the existing question hash and report duplicates instead of silently duplicating.
-- Default every MCP-created question to `DRAFT`; do not accept client-supplied `APPROVED` status.
-- Return safe row-level errors with row index, field, code and message.
-- Support preview/validate first, then submit with a batch id and idempotency key.
+- Reuse existing schemas and canonical subject/topic records.
+- Validate question type, options/answer, explanation, difficulty, source and required fields.
+- Detect duplicates and report them; use idempotency to avoid duplicate writes on retry.
+- Default new questions to draft. MCP may approve only with explicit `questions:approve` scope and normal validation.
+- Papers contain approved questions only and respect blueprint/preset constraints.
+- Assignments and announcements use existing audience/role/eligibility checks; return safe previews and counts.
+- Return structured, row-level errors without leaking internal stack traces or secrets.
 
 ## Required tests
 
-- Key creation returns secret once; list/detail cannot recover it.
-- Correct key works; malformed, expired, revoked and wrong-scope keys are denied.
-- Key rotation/revocation invalidates the old credential.
-- Raw secrets and sensitive headers never appear in logs or error responses.
-- Validation rejects malformed question types/options/answer data and invalid subject/topic.
-- Duplicate and idempotent retry behavior is deterministic.
-- MCP imports always create drafts and never bypass admin approval.
-- Batch ownership prevents one key/client from reading another key's private batch details.
-- Admin logs are paginated, filtered, access-controlled and redacted.
+- Key one-time reveal, hashing, rotation/revocation, expiry and scope enforcement.
+- Redaction of credentials and PII in logs/errors.
+- Question validation, duplicates, idempotency and review/approval audit trail.
+- Paper blueprint/order/scoring/coverage and approved-question-only constraints.
+- Assignment audience authorization, cohort limits, deadlines and duplicate assignment handling.
+- Announcement audience validation, draft/publish permissions and schedule behavior.
+- Bulk operation preview, confirmation thresholds and partial failure reporting.
+- All operations visible in admin activity logs; CI passes.
 
 ## Delivery order
 
-1. Audit existing question import routes/services and admin navigation; identify reusable code.
-2. Add Prisma models + migration for MCP keys, import batches and audit events.
-3. Add admin-only key management and activity-log APIs/UI.
-4. Add internal authenticated batch-import API using existing validation/import pipeline.
-5. Implement and test remote MCP server/tools.
-6. Add setup documentation and Render service configuration (no secret values committed).
-7. Run full CI, review the PR, then deploy the API and MCP service in controlled order.
+1. Audit current question, approval, paper, assignment and announcement services/routes.
+2. Add MCP key, operation, import-batch and audit models/migrations.
+3. Implement admin key/scope management and activity-log UI.
+4. Implement internal authenticated APIs reusing existing service layer.
+5. Implement remote MCP server and tools.
+6. Add end-to-end tests, docs and Render service configuration (no secrets committed).
+7. Review PR, pass CI, then deploy API and MCP service in controlled order.
 
 ## Acceptance criteria
 
-- An authorized MCP client can validate and submit a single or batch of questions directly to ArcTester.
-- Every accepted question appears as a draft in admin and requires human approval.
-- Admin can create, inspect metadata, revoke and rotate keys.
-- Admin can view filtered activity logs and safe validation details.
-- No API key secret can be retrieved after one-time display; secrets are absent from logs.
-- CI passes and both ChatGPT/Claude-compatible connection instructions are documented.
+- Authorized MCP client can create/upload, review, approve/reject questions within granted scopes.
+- Authorized MCP client can create/publish question papers, assign them, and create/publish announcements within granted scopes.
+- Admin can manage scoped keys, review content, inspect operation/audit logs, and revoke access.
+- All operations obey existing validation and business rules, are idempotent where applicable, and are auditable.
+- Secrets are one-time displayed, never retrievable, and never logged.
+- ChatGPT/Claude setup instructions are documented; CI passes before deployment.
