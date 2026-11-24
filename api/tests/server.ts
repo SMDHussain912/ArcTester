@@ -174,6 +174,7 @@ export async function signUp(
   if (reg.status !== 201) {
     throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);
   }
+  await db.user.update({ where: { email: email.trim().toLowerCase() }, data: { accessStatus: "APPROVED" } });
   const login = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
