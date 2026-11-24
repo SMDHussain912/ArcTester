@@ -32,6 +32,7 @@ import StudentMaterials from "./StudentMaterials";
 import StudentComingSoon from "./StudentComingSoon";
 import StudentAccountSettings from "./StudentAccountSettings";
 import AppSplash from "./components/AppSplash";
+import Toast from "./components/Toast";
 import { OnlineStatusContext } from "./OnlineStatusContext";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
@@ -782,7 +783,7 @@ export default function App() {
             />
           </>
         )}
-        {error && <p className="error">{error}</p>}
+
         {showNotificationBanners && activePage !== "notifications" && !test && !result && studentNotifications.find((item) => !item.readAt) && (
           <StudentNotificationBanner
             notification={studentNotifications.find((item) => !item.readAt)!}
@@ -797,6 +798,9 @@ export default function App() {
           onAcknowledge={(id) => void dismissAnnouncement(id)}
         />
       )}
+      <div className="toast-container">
+        <Toast open={Boolean(error)} message={error} onClose={() => setError("")} tone="error" duration={5500} />
+      </div>
     </div>
   );
 }
