@@ -398,11 +398,11 @@ export function examRouter(db: PrismaClient): Router {
       if (exam.status === "ARCHIVED") return next(conflict("Archived exams cannot receive new assignments."));
 
       const students = await db.user.findMany({
-        where: { id: { in: input.studentIds }, role: "STUDENT" },
+        where: { id: { in: input.studentIds }, role: "STUDENT", accessStatus: "APPROVED" },
         select: { id: true },
       });
       if (students.length !== input.studentIds.length) {
-        return next(badRequest("One or more selected accounts are not students."));
+        return next(badRequest("One or more selected accounts are not approved students."));
       }
 
       const assignments = await db.$transaction(async (tx) => {
