@@ -42,6 +42,7 @@ export default function StudentAssignedExams() {
   const [notice, setNotice] = useState("");
   const [now, setNow] = useState(Date.now());
   const [showSubmit, setShowSubmit] = useState(false);
+  const [viewSubmission, setViewSubmission] = useState<Assignment | null>(null);
   const revisionRef = useRef(0);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const submittingRef = useRef(false);
@@ -189,7 +190,34 @@ export default function StudentAssignedExams() {
     {error ? <p className="error" role="alert">{error}</p> : null}
     {loading ? <div className="panel">Loading your assignments…</div> : assignments.length ? <div className="exam-list">{assignments.map((assignment) => {
       const state = availability(assignment, now);
-      return <article className="panel exam-row" key={assignment.id}><div><span className={assignment.submission ? "status status-used" : "status"}>{state.label}</span><h2>{assignment.exam.title}</h2><p>{assignment.questionCount} questions · {assignment.durationMinutes} minutes · Version {assignment.version}</p><p className="muted">Due: {formatDate(assignment.dueAt)}</p></div><div className="exam-actions">{state.canStart ? <button type="button" className="primary" disabled={busy} onClick={() => void startExam(assignment)}>{busy ? "Opening…" : "Start / Resume exam"}</button> : null}</div></article>;
+      const submitted = Boolean(assignment.submission);
+      const actionLabel = assignment.status === "IN_PROGRESS" ? "Continue exam" : "Write exam";
+      return <article className="panel exam-row" key={assignment.id}>
+        <div className="exam-row-content">
+          <span className={submitted ? "status status-used" : "status"}>{state.label}</span>
+          <h2>{assignment.exam.title}</h2>
+          <p>{assignment.questionCount} questions · {assignment.durationMinutes} minutes · Version {assignment.version}</p>
+          <p className="muted">Due: {formatDate(assignment.dueAt)}</p>
+          {assignment.submission?.submittedAt ? <p className="muted">Submitted: {formatDate(assignment.submission.submittedAt)}</p> : null}
+        </div>
+        <div className="exam-actions">
+          {submitted
+            ? <button type="button" className="primary" onClick={() => setViewSubmission(assignment)}>View results</button>
+            : state.canStart
+              ? <button type="button" className="primary" disabled={busy} onClick={() => void startExam(assignment)}>{busy ? "Opening…" : actionLabel}</button>
+              : <button type="button" className="ghost" disabled>{state.label}</button>}
+        </div>
+      </article>;
     })}</div> : <div className="panel empty-state"><h2>No exams assigned yet</h2><p>Your administrator has not assigned an exam to your account.</p></div>}
+    {viewSubmission ? <div className="announcement-overlay"><section className="announcement-popup panel exam-result-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-result-title">
+      <p className="eyebrow">EXAM SUBMISSION</p>
+      <h2 id="exam-result-title">{viewSubmission.exam.title}</h2>
+      <p className="muted">Status: {viewSubmission.submission?.status === "GRADED" ? "Graded" : viewSubmission.submission?.status === "REVIEW_REQUIRED" ? "Awaiting administrator review" : viewSubmission.submission?.status ?? "Submitted"}</p>
+      {viewSubmission.submission?.score !== null && viewSubmission.submission?.score !== undefined && viewSubmission.submission?.maximumScore !== null && viewSubmission.submission?.maximumScore !== undefined
+        ? <p className="exam-result-score"><strong>{viewSubmission.submission.score}</strong> / {viewSubmission.submission.maximumScore} marks</p>
+        : <p>Your exam was submitted. The score will appear here after it has been evaluated.</p>}
+      {viewSubmission.submission?.submittedAt ? <p className="muted">Submitted: {formatDate(viewSubmission.submission.submittedAt)}</p> : null}
+      <div className="row"><button type="button" className="ghost" onClick={() => setViewSubmission(null)}>Close</button></div>
+    </section></div> : null}
   </section>;
 }
