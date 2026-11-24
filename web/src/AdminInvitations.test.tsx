@@ -16,9 +16,10 @@ describe("student access approvals", () => {
     render(<AdminInvitations students={students} busy={false} onRefresh={vi.fn()} onChangeStatus={onChangeStatus} onBulkApprove={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Student approvals" })).toBeTruthy();
     expect(screen.getByText("pending@example.test")).toBeTruthy();
-    expect(screen.getByText("approved@example.test")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(onChangeStatus).toHaveBeenCalledWith(1, "APPROVED");
+    fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "ALL" } });
+    expect(screen.getByText("approved@example.test")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "REJECTED" } });
     expect(screen.getByText("rejected@example.test")).toBeTruthy();
     expect(screen.queryByText("pending@example.test")).toBeNull();
@@ -26,6 +27,7 @@ describe("student access approvals", () => {
 
   it("searches student accounts by email", () => {
     render(<AdminInvitations students={students} busy={false} onRefresh={vi.fn()} onChangeStatus={vi.fn()} onBulkApprove={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "ALL" } });
     fireEvent.change(screen.getByLabelText("Search student email"), { target: { value: "approved@" } });
     expect(screen.getByText("approved@example.test")).toBeTruthy();
     expect(screen.queryByText("pending@example.test")).toBeNull();
