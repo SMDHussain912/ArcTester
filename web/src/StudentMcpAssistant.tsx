@@ -85,8 +85,8 @@ export default function StudentMcpAssistant() {
         method: "POST",
         body: JSON.stringify({ answers: activeQuestions.map((_question, index) => testAnswers[index] ?? null) }),
       });
-      setSavedRun(result.run); setTestFinished(true);
-      await refresh();
+      setSavedRun(result.run); setTestFinished(true); setNotice("Practice result saved successfully.");
+      void refresh().catch((e) => setError("Result saved, but history refresh failed: " + (e as Error).message));
     } catch (e) { setError((e as Error).message || "Could not save this practice result. Please retry."); }
     finally { setSubmittingRun(false); }
   }
