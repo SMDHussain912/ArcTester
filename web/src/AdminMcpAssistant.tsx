@@ -5,10 +5,10 @@ const scopes=["questions:read","questions:create","questions:review","papers:cre
 type Key={id:string;name:string;scopes:string[];createdAt:string;lastUsedAt:string|null;revokedAt:string|null};
 async function call<T>(path:string,init:RequestInit={}):Promise<T>{const r=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(typeof b.error==="string"?b.error:"Request failed.");return b as T;}
 export default function AdminMcpAssistant(){
- const [keys,setKeys]=useState<Key[]>([]),[name,setName]=useState("ArcTester admin assistant"),[secret,setSecret]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [keys,setKeys]=useState<Key[]>([]),[name,setName]=useState("ArcTester admin assistant"),[selectedScopes,setSelectedScopes]=useState<string[]>(scopes.filter(s=>!s.startsWith("models:"))),[secret,setSecret]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  async function refresh(){const r=await call<{keys:Key[]}>("/admin/mcp-keys");setKeys(r.keys);}
  useEffect(()=>{void refresh().catch(e=>setError((e as Error).message));},[]);
- async function create(){setBusy(true);setError("");setSecret("");try{const r=await call<{key:Key&{secret:string}}>("/admin/mcp-keys",{method:"POST",body:JSON.stringify({name,scopes})});setSecret(r.key.secret);setNotice("Key created. Copy it now; it is displayed only once.");await refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function create(){setBusy(true);setError("");setSecret("");try{const r=await call<{key:Key&{secret:string}}>("/admin/mcp-keys",{method:"POST",body:JSON.stringify({name,scopes:selectedScopes})});setSecret(r.key.secret);setNotice("Key created. Copy it now; it is displayed only once.");await refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function revoke(id:string){setBusy(true);try{await call("/admin/mcp-keys/"+encodeURIComponent(id)+"/revoke",{method:"POST"});await refresh();setNotice("Key revoked.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function copy(text:string){try{await navigator.clipboard.writeText(text);setNotice("Copied.");}catch{setError("Clipboard blocked; select and copy manually.");}}
  const config=JSON.stringify({url:endpoint,transport:"streamable-http",headers:{Authorization:secret?"Bearer "+secret:"Bearer <YOUR_ADMIN_MCP_KEY>"}},null,2);
@@ -17,8 +17,8 @@ export default function AdminMcpAssistant(){
   {error&&<div className="error" role="alert">{error}</div>}{notice&&<div className="success" role="status">{notice}</div>}
   <article className="admin-card admin-mcp-card"><h2>Connect your AI client</h2><p>Generate a scoped key. The secret is returned once; stored credentials are hashed. Revoke a key immediately if it is exposed.</p>
    <label>Key label<input value={name} onChange={e=>setName(e.target.value)} maxLength={80}/></label>
-   <div className="mcp-scope-list">{scopes.map(s=><span key={s}>{s}</span>)}</div>
-   <button className="primary" disabled={busy||name.trim().length<2} onClick={()=>void create()}>Create admin MCP key</button>
+   <fieldset className="mcp-scope-list"><legend>Key permissions (choose only what this client needs)</legend>{scopes.map(s=><label key={s}><input type="checkbox" checked={selectedScopes.includes(s)} onChange={e=>setSelectedScopes(current=>e.target.checked?[...current,s]:current.filter(item=>item!==s))}/><span>{s}</span></label>)}</fieldset>
+   <button className="primary" disabled={busy||name.trim().length<2||selectedScopes.length===0} onClick={()=>void create()}>Create admin MCP key</button>
    {secret&&<div className="mcp-secret-box"><strong>Copy once and store securely.</strong><textarea rows={3} readOnly value={secret}/><button className="ghost" onClick={()=>void copy(secret)}>Copy secret</button></div>}
    <label>MCP endpoint<input readOnly value={endpoint}/></label><label>Client connection details<textarea rows={5} readOnly value={config}/></label><button className="ghost" onClick={()=>void copy(config)}>Copy connection details</button>
   </article>
