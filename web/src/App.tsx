@@ -35,7 +35,7 @@ import { OnlineStatusContext } from "./OnlineStatusContext";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
-type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null; registrationNumber?: string | null };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Test = PracticeSessionTest;
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null; response?: unknown }[] };
@@ -68,7 +68,7 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
+  const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", registrationNumber: "", branchName: "", branchCode: "" });
   const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
