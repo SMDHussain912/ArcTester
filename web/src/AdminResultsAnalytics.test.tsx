@@ -17,7 +17,7 @@ describe("AdminResultsAnalytics", () => {
     expect(screen.getByRole("heading", { name: "Graded score bands" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Submission status" })).toBeTruthy();
     expect(screen.getAllByText("GRADED").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("REVIEW REQUIRED")).toBeTruthy();
+    expect(screen.getAllByText("REVIEW REQUIRED").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("graded@example.test")).toBeTruthy();
     expect(screen.getByText("review@example.test")).toBeTruthy();
   });
