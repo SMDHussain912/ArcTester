@@ -35,6 +35,13 @@ const STUDENT_PROFILE = {
   branchCode: "CM",
 };
 
+function fixtureRegistrationNumber(email: string): string {
+  if (email === "alice@example.com") return "24999-CM-053";
+  let hash = 0;
+  for (const character of email.trim().toLowerCase()) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
+  return "24999-CM-" + String(hash % 1000).padStart(3, "0");
+}
+
 function setCookieFromResponse(res: Response): void {
   const setCookie = res.headers.getSetCookie?.() ?? [];
   for (const cookie of setCookie) {
@@ -50,10 +57,15 @@ async function postJsonWithCookie(
   const headers: Record<string, string> = { "content-type": "application/json" };
   const session = cookieJar.get("ecet_session");
   if (session) headers.cookie = `ecet_session=${session}`;
+  let payload = body;
+  if (url.endsWith("/auth/register") && body && typeof body === "object" && !Array.isArray(body)) {
+    const input = body as Record<string, unknown>;
+    if (input.registrationNumber === "24999-CM-053" && typeof input.email === "string") payload = { ...input, registrationNumber: fixtureRegistrationNumber(input.email) };
+  }
   const res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   setCookieFromResponse(res);
   return { status: res.status, json: await res.json(), headers: res.headers };
