@@ -38,13 +38,19 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
           incorrect: Number(practice?.incorrect ?? 0),
           unanswered: Number(practice?.unanswered ?? 0),
           accuracy: typeof practice?.accuracy === "number" ? practice.accuracy : null,
+          trend: Array.isArray(practice?.trend) ? practice.trend.filter(Boolean) : [],
         },
         formalExams: {
+          submissions: Number(formal?.submissions ?? 0),
           graded: Number(formal?.graded ?? 0),
           scorePercentage: typeof formal?.scorePercentage === "number" ? formal.scorePercentage : null,
           score: typeof formal?.score === "number" ? formal.score : null,
           maximumScore: typeof formal?.maximumScore === "number" ? formal.maximumScore : null,
           reviewRequired: Number(formal?.reviewRequired ?? 0),
+          correct: Number(formal?.correct ?? 0),
+          incorrect: Number(formal?.incorrect ?? 0),
+          unanswered: Number(formal?.unanswered ?? 0),
+          subjects: Array.isArray(formal?.subjects) ? formal.subjects.filter(Boolean) : [],
         },
       });
     } else {
@@ -129,6 +135,18 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
                   { label: "Unanswered", value: overview.practice.unanswered, color: "var(--analytics-unanswered, #94a3b8)" },
                 ]}
               />
+              <AnalyticsBarChart
+                title="Practice accuracy by attempt"
+                description="Recent completed practice attempts, shown in chronological order."
+                items={(overview.practice.trend ?? []).filter((attempt) => attempt.accuracy !== null).map((attempt, index) => ({
+                  label: "Attempt " + (index + 1),
+                  value: Math.round((attempt.accuracy ?? 0) * 100),
+                  detail: new Date(attempt.finishedAt).toLocaleDateString() + " · " + attempt.correct + "/" + attempt.total + " correct",
+                }))}
+                maxValue={100}
+                formatValue={(value) => value + "%"}
+                emptyMessage="Complete practice attempts with answered questions to see your accuracy trend."
+              />
             </div>
           </>
         ) : <p className="muted">Practice exam performance is unavailable right now.</p>}
@@ -179,6 +197,28 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
             <article className="stat-card"><div className="stat-label">Graded exams</div><div className="stat-value">{overview.formalExams.graded}</div><div className="stat-caption">Results finalized</div></article>
             <article className="stat-card"><div className="stat-label">Average exam score</div><div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : Math.round(overview.formalExams.scorePercentage) + "%"}</div><div className="stat-caption">{overview.formalExams.score ?? "—"} / {overview.formalExams.maximumScore ?? "—"} total points</div></article>
             <article className="stat-card"><div className="stat-label">Review required</div><div className="stat-value">{overview.formalExams.reviewRequired}</div><div className="stat-caption">Awaiting manual review</div></article>
+          </div>
+          <div className="analytics-chart-grid">
+            <AnalyticsStackedBar
+              title="Assigned exam answer breakdown"
+              segments={[
+                { label: "Correct", value: overview.formalExams.correct ?? 0, color: "var(--analytics-correct, #16a34a)" },
+                { label: "Incorrect", value: overview.formalExams.incorrect ?? 0, color: "var(--analytics-incorrect, #dc2626)" },
+                { label: "Unanswered", value: overview.formalExams.unanswered ?? 0, color: "var(--analytics-unanswered, #94a3b8)" },
+              ]}
+            />
+            <AnalyticsBarChart
+              title="Assigned exam subject accuracy"
+              description="Accuracy from graded assigned exams, by subject."
+              items={(overview.formalExams.subjects ?? []).filter((subject) => subject.accuracy !== null).map((subject) => ({
+                label: subject.subject,
+                value: Math.round((subject.accuracy ?? 0) * 100),
+                detail: subject.correct + " correct · " + subject.incorrect + " incorrect",
+              })).sort((a, b) => a.value - b.value)}
+              maxValue={100}
+              formatValue={(value) => value + "%"}
+              emptyMessage="Graded subject results will appear here when available."
+            />
           </div>
         ) : <p className="muted">Assigned exam results are unavailable right now.</p>}
       </section>
