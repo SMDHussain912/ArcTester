@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { request } from "./apiClient";
 
 type Session={id:string;deviceName:string;platform:string;loginMethod:string;ipAddress:string;createdAt:string;lastSeenAt:string;current:boolean};
@@ -12,8 +12,8 @@ export default function AccountSecurityPanel({email,onSignOut}:{email:string;onS
  const[sessions,setSessions]=useState<Session[]>([]);const[history,setHistory]=useState<LoginEvent[]>([]);const[passkeys,setPasskeys]=useState<Passkey[]>([]);
  const[secret,setSecret]=useState("");const[uri,setUri]=useState("");const[code,setCode]=useState("");const[recovery,setRecovery]=useState<string[]>([]);
  const[busy,setBusy]=useState(false);const[error,setError]=useState("");const[message,setMessage]=useState("");const[disablePassword,setDisablePassword]=useState("");const[disableCode,setDisableCode]=useState("");
- async function refresh(){const[a,b,c,d]=await Promise.all([request<{sessions:Session[]}>("/auth/sessions"),request<{events:LoginEvent[]}>("/auth/login-history"),request<{passkeys:Passkey[]}>("/auth/passkeys"),request<Status>("/auth/2fa/status")]);setSessions(a.sessions??[]);setHistory(b.events??[]);setPasskeys(c.passkeys??[]);setStatus(d)}
- useEffect(()=>{let alive=true;refresh().catch(e=>{if(alive)setError((e as Error).message)});return()=>{alive=false}},[]);
+ const refresh=useCallback(async()=>{const[a,b,c,d]=await Promise.all([request<{sessions:Session[]}>("/auth/sessions"),request<{events:LoginEvent[]}>("/auth/login-history"),request<{passkeys:Passkey[]}>("/auth/passkeys"),request<Status>("/auth/2fa/status")]);setSessions(a.sessions??[]);setHistory(b.events??[]);setPasskeys(c.passkeys??[]);setStatus(d)},[]);
+ useEffect(()=>{let alive=true;refresh().catch(e=>{if(alive)setError((e as Error).message)});return()=>{alive=false}},[refresh]);
  async function begin(){setBusy(true);setError("");setMessage("");try{const r=await request<{secret:string;otpauthUri:string}>("/auth/2fa/totp/setup",{method:"POST",body:"{}"});setSecret(r.secret);setUri(r.otpauthUri)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  async function verify(event:FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setError("");try{const r=await request<{recoveryCodes:string[];message:string}>("/auth/2fa/totp/verify-setup",{method:"POST",body:JSON.stringify({code})});setRecovery(r.recoveryCodes);setSecret("");setUri("");setCode("");setMessage(r.message);await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  async function disableAuthenticator(event:FormEvent<HTMLFormElement>){event.preventDefault();setBusy(true);setError("");try{const result=await request<{message:string}>("/auth/2fa/totp/disable",{method:"POST",body:JSON.stringify({password:disablePassword,code:disableCode})});setMessage(result.message);setDisablePassword("");setDisableCode("");await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
