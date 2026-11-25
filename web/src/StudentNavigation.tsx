@@ -45,7 +45,7 @@ export default function StudentNavigation({
 }: StudentNavigationProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const activeItem = NAV_ITEMS.find(({ page }) => page === activePage);
-  const activeLabel = activeItem?.label ?? "Learning features";
+  const activeLabel = activeItem?.label ?? (activePage === "notifications" ? "Notifications" : "ArcTester");
   const activeGroup = activeItem?.group ?? "HOME";
 
   useEffect(() => { setMoreOpen(false); }, [activePage]);
