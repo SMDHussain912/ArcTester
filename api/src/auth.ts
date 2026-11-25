@@ -624,7 +624,7 @@ export function authRouter(db: PrismaClient): Router {
         }
       }
       clearSessionCookie(res);
-      res.json({ ok: true, message: "Signed out. Existing sessions were revoked." });
+      res.json({ ok: true, message: "This device session was revoked." });
     } catch (error) {
       next(error);
     }
@@ -856,7 +856,9 @@ export function authRouter(db: PrismaClient): Router {
   function passkeyOrigin(req: Request): { origin: string; rpId: string } {
     const origin = String(req.headers.origin ?? "");
     const configured = (process.env.CORS_ORIGINS ?? "").split(",").map(value => value.trim()).filter(Boolean);
-    if (!origin || !configured.includes(origin)) throw forbidden("This origin is not configured for passkey sign-in.");
+    const parsedOrigin = origin ? new URL(origin) : null;
+    const localDevOrigin = process.env.NODE_ENV !== "production" && Boolean(parsedOrigin && parsedOrigin.hostname === "localhost");
+    if (!origin || (!configured.includes(origin) && !localDevOrigin)) throw forbidden("This origin is not configured for passkey sign-in.");
     const parsed = new URL(origin);
     if (parsed.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && parsed.hostname === "localhost")) throw forbidden("Passkeys require a secure origin.");
     return { origin, rpId: parsed.hostname };
