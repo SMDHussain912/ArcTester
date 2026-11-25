@@ -16,7 +16,7 @@
 - Store compact model artifacts and SHA-256 metadata in the PostgreSQL model registry; the worker automatically registers the completed model as an inactive candidate version.
 - Return only paginated rows from attested verification datasets.
 - Allow admin registration of external candidate artifacts by URI and SHA-256; registration never activates a candidate.
-- Record candidate-vs-baseline evaluation on an attested verification dataset.
+- Compute candidate-vs-baseline accuracy or MAE from actual native model predictions on an attested verification dataset; retain admin-attested evaluation only for external artifacts.
 - Activate one model version per `modelId` only after a passing evaluation and explicit confirmation.
 - Audit registration, evaluation, activation, and worker training completion. MCP artifact metadata is allowlisted; trained weights are not returned by list-model tools.
 
