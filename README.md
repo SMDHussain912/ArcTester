@@ -1,92 +1,112 @@
-# ArcTester — AP ECET CSE Learning & Practice
+# ArcTester
 
-ArcTester is a mobile-first AP ECET Computer Science preparation app. Android is the primary student experience; responsive web provides practice and administration.
+**Mobile-first AP ECET Computer Science preparation and assessment platform.**
 
-- `/mobile` — Expo + React Native + TypeScript (Android)
-- `/web` — React + TypeScript + Vite
-- `/api` — Node.js + Express + Prisma + PostgreSQL
-- Tests: Vitest; lint: ESLint; formatting: Prettier
+ArcTester helps students prepare for the Andhra Pradesh Engineering Common Entrance Test (AP ECET) through structured practice, timed full-length mock exams, exam-result analytics, and a reviewed question bank. Android is the primary student experience, supported by a responsive web application and an administration portal.
 
-## Learning and practice
+## Product overview
 
-- Short subject/topic practice with immediate answer review.
-- One timed 200-question AP ECET Full Mock Test using the CSE subject split.
-- Practice mistakes, question history and transparent rule-based study recommendations.
-- Student progress and question-bank export for offline practice.
-- Administrator question review, source-required approval, question import and mock-paper management.
-- Published study resources are HTTPS links. ArcTester stores the URL and metadata, not uploaded file bytes.
+- **Practice:** subject- and topic-based questions, immediate answer review, question history, and practice-mistake review.
+- **Full mock exams:** timed 200-question AP ECET practice using the configured CSE paper structure.
+- **Performance analytics:** separate reporting for practice attempts, completed full mocks, and graded assigned exams.
+- **Question bank:** import and manage questions, track review status, and require administrator approval before publication.
+- **Administration:** manage question content, mock papers, assigned exams, and result review.
+- **Study resources:** publish external HTTPS resource links with supporting metadata.
 
-Only human-approved questions are served to students. Imported or newly drafted questions remain in review until an administrator approves them with a real source.
+Only approved questions are available to students. Imported or drafted content remains in review until an administrator approves it. Performance Analytics reports exam outcomes; learning progress and study guidance are maintained separately.
 
-## AP ECET CSE paper pattern
+## Technology stack
 
-200 questions, 3 hours: Mathematics 50, Physics 25, Chemistry 25, and CSE 100.
+| Component | Technologies |
+| --- | --- |
+| Android app | Expo, React Native, TypeScript |
+| Web application | React, TypeScript, Vite |
+| API | Node.js, Express |
+| Data layer | Prisma ORM, PostgreSQL |
+| Testing | Vitest, Playwright |
+| Quality checks | ESLint, TypeScript, production builds |
 
-CSE split: Digital Electronics 6, Software Engineering 6, Computer Organisation and Microprocessors 8, Data Structures through C 10, Computer Networks 6, Operating Systems 10, DBMS 8, Java Programming 10, Web Technologies 8, Big-data & Cloud Computing 6, Android Programming 6, Internet of Things (IoT) 8, and Python Programming 8.
+Repository structure:
 
-When the bank is short for a quota, the test uses available questions and reports the shortfall.
+- `/mobile` — Android student application
+- `/web` — responsive student and administration web application
+- `/api` — backend API and Prisma schema
+- `/docs` — project roadmap, deployment guidance, and migration documentation
 
-## Local development
+## AP ECET CSE mock-paper structure
 
-Requirements: Node.js 20.9+, npm, PostgreSQL.
+The configured full mock contains **200 questions over 3 hours**:
+
+| Section | Questions |
+| --- | ---: |
+| Mathematics | 50 |
+| Physics | 25 |
+| Chemistry | 25 |
+| Computer Science & Engineering | 100 |
+| **Total** | **200** |
+
+The CSE allocation is: Digital Electronics (6), Software Engineering (6), Computer Organisation and Microprocessors (8), Data Structures through C (10), Computer Networks (6), Operating Systems (10), DBMS (8), Java Programming (10), Web Technologies (8), Big-data & Cloud Computing (6), Android Programming (6), Internet of Things (8), and Python Programming (8).
+
+When the question bank cannot satisfy a configured subject quota, the mock uses available questions and reports the shortfall rather than silently claiming a complete quota.
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20.9 or later
+- npm
+- PostgreSQL
+
+### Install and configure
+
+From the repository root:
 
 ```bash
 npm install
 cp api/.env.example api/.env
-# Set DATABASE_URL and a strong JWT_SECRET in api/.env.
+```
+
+Set the required database connection and a strong `JWT_SECRET` in `api/.env`. Then prepare the database:
+
+```bash
 npm run prisma:migrate --workspace=api
 npm run prisma:seed --workspace=api
+```
 
-# Terminal 1
+Start the API and web application in separate terminals:
+
+```bash
 npm run dev:api
+```
 
-# Terminal 2
+```bash
 npm run dev:web
 ```
 
-Open `http://localhost:3000`; the API listens on `http://localhost:4000`. Set `VITE_API_URL` in `web/.env.local` if the API is elsewhere.
+The web application is available at `http://localhost:3000`; the API listens on `http://localhost:4000`. If the API runs at a different address, configure `VITE_API_URL` in `web/.env.local`.
 
 ## Docker
 
+The repository includes a Docker Compose setup for local PostgreSQL-backed development:
+
 ```bash
 cp .env.docker.example .env
-# Replace JWT_SECRET and set the database credentials.
+# Set secure local credentials and JWT_SECRET.
 docker compose up --build -d
 docker compose logs -f
+```
+
+Stop the services with:
+
+```bash
 docker compose down
 ```
 
-PostgreSQL data is stored in the named `arc-tester-postgres` volume. `docker compose down -v` permanently removes it.
+PostgreSQL data is persisted in the `arc-tester-postgres` volume. **Do not use `docker compose down -v` unless you intend to permanently delete the local database volume.**
 
-## Hosted deployment
+## Testing and verification
 
-### Vercel web
-
-- Root directory: repository root.
-- Install: `npm ci`.
-- Build: `VITE_BASE_PATH=/ npm run build:web`.
-- Output: `web/dist`.
-- Environment: `VITE_API_URL=https://<your-api>.onrender.com`.
-
-### Render API
-
-Build from the repository root using `api/Dockerfile`. Configure `DATABASE_URL` (Render PostgreSQL internal URL with `?schema=public`), `JWT_SECRET`, exact `CORS_ORIGINS`, `COOKIE_SAME_SITE=None` for cross-site cookies, and `NODE_ENV=production`.
-
-The API applies PostgreSQL migrations on startup. Do not run SQLite migrations against the hosted PostgreSQL database. Verify login, refresh, logout and protected calls in a real browser; CI cannot verify provider settings or third-party cookie behavior.
-
-See `docs/PLATFORM_RELEASE_DEPLOYMENT.md`.
-
-## Android
-
-```bash
-npm install --prefix mobile
-npm run typecheck --prefix mobile
-npm test --prefix mobile
-```
-
-Android build scripts are maintained in `mobile/package.json`. The release APK must be generated and installed on a physical device for release verification.
-
-## Verification
+Run the repository checks from the root:
 
 ```bash
 npm test
@@ -96,8 +116,44 @@ npm run typecheck --prefix mobile
 npm test --prefix mobile
 ```
 
-GitHub Actions is the project verifier. A phase is complete only after its full scope is merged with green CI on the exact PR head and reported. Current phase scope and status live in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+GitHub Actions is the authoritative CI verification. A change should be considered complete only when all required checks pass on the exact pull-request head commit.
 
-## SQLite migration utility
+## Deployment
 
-The legacy SQLite schema is retained in `api/prisma-sqlite/`. The one-time migration helper copies data into an empty, already-migrated PostgreSQL database and never modifies the SQLite source. Back up the source database first and follow `docs/SQLITE_TO_POSTGRES_MIGRATION.md`.
+### Web application — Vercel
+
+Recommended project configuration:
+
+- Root directory: repository root
+- Install command: `npm ci`
+- Build command: `VITE_BASE_PATH=/ npm run build:web`
+- Output directory: `web/dist`
+- Environment variable: `VITE_API_URL` set to the deployed API URL
+
+### API — Render
+
+Build the API from the repository root using `api/Dockerfile`. Configure the PostgreSQL `DATABASE_URL`, a strong `JWT_SECRET`, exact `CORS_ORIGINS`, and `NODE_ENV=production`. For cross-site cookie deployments, configure `COOKIE_SAME_SITE=None` and ensure the cookie security settings match the HTTPS deployment.
+
+The API applies PostgreSQL migrations on startup. Do not run the legacy SQLite migration utility against the hosted PostgreSQL database. After deployment, verify authentication and protected API flows in a real browser; CI cannot validate provider configuration or third-party cookie behavior.
+
+See [Platform and Release Deployment](docs/PLATFORM_RELEASE_DEPLOYMENT.md) for the detailed release procedure.
+
+## Android builds
+
+Install the mobile dependencies and run local checks:
+
+```bash
+npm install --prefix mobile
+npm run typecheck --prefix mobile
+npm test --prefix mobile
+```
+
+Release build scripts are maintained in `mobile/package.json`. Validate a release APK by installing and testing it on a physical Android device before distribution.
+
+## Data migration
+
+The legacy SQLite schema is retained in `api/prisma-sqlite/`. The one-time migration utility copies data into an empty, already-migrated PostgreSQL database and leaves the SQLite source unchanged. Back up the source database before migration and follow [SQLite to PostgreSQL Migration](docs/SQLITE_TO_POSTGRES_MIGRATION.md).
+
+## Project status
+
+The active implementation scope and milestone status are maintained in [the project roadmap](docs/ROADMAP.md). Changes are developed through pull requests and verified by CI before merge.
