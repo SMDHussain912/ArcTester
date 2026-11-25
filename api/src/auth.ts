@@ -331,6 +331,10 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
       const activeSession = await db.authSession.findFirst({ where: { id: sessionId, userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, lastSeenAt: true } });
       if (!activeSession) return next(forbidden("This device session has been revoked. Sign in again."));
       if (activeSession.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000) await db.authSession.update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } });
+    } else {
+      const legacySessionId = "legacy-" + id + "-" + sha256(token).slice(0, 20);
+      const legacySession = await db.authSession.findUnique({ where: { id: legacySessionId }, select: { id: true, revokedAt: true, expiresAt: true } });
+      if (legacySession && (legacySession.revokedAt || legacySession.expiresAt <= new Date())) return next(forbidden("This legacy session has been revoked. Sign in again."));
     }
     if (user.accessStatus !== "APPROVED") {
       return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
@@ -951,7 +955,21 @@ export function authRouter(db: PrismaClient): Router {
     try {
       const token = readSessionToken(req);
       let currentId = "";
-      if (token) { try { currentId = String(verifyJwt(token).sid ?? ""); } catch { /* requireAuth already validated */ } }
+      if (token) {
+        try {
+          const payload = verifyJwt(token);
+          currentId = String(payload.sid ?? "");
+          if (!currentId) {
+            currentId = "legacy-" + req.user!.id + "-" + sha256(token).slice(0, 20);
+            const device = requestDevice(req);
+            await db.authSession.upsert({
+              where: { id: currentId },
+              create: { id: currentId, userId: req.user!.id, ...device, loginMethod: "legacy-session", createdAt: new Date(Number(payload.iat ?? nowSeconds()) * 1000), expiresAt: new Date(Number(payload.exp) * 1000) },
+              update: { lastSeenAt: new Date() },
+            });
+          }
+        } catch { /* requireAuth already validated */ }
+      }
       const sessions = await db.authSession.findMany({
         where: { userId: req.user!.id, revokedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { lastSeenAt: "desc" },
