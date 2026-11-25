@@ -4,8 +4,6 @@ import ArcTesterMascot from "./components/ArcTesterMascot";
 interface StudentDashboardWelcomeProps {
   visible: boolean;
   onNavigate: (page: StudentPage) => void;
-  unreadAnnouncementCount?: number;
-  unreadNotificationCount?: number;
   questionCount?: number;
   subjectCount?: number;
 }
@@ -13,8 +11,6 @@ interface StudentDashboardWelcomeProps {
 export default function StudentDashboardWelcome({
   visible,
   onNavigate,
-  unreadAnnouncementCount = 0,
-  unreadNotificationCount = 0,
   questionCount = 0,
   subjectCount = 0,
 }: StudentDashboardWelcomeProps) {
@@ -22,8 +18,6 @@ export default function StudentDashboardWelcome({
     { page: "practice", icon: "✦", eyebrow: "LEARNING", title: "Start practice", description: "Build a question paper from your subjects and topics.", count: "Create a test" },
     { page: "question-bank", icon: "▤", eyebrow: "STUDY", title: "Question bank", description: "Explore questions across your available subjects.", count: `${questionCount.toLocaleString()} questions · ${subjectCount} subjects` },
     { page: "progress", icon: "↗", eyebrow: "PERFORMANCE", title: "Your progress", description: "Review practice accuracy, exam scores and learning trends.", count: "View analytics" },
-    { page: "announcements", icon: "▧", eyebrow: "UPDATES", title: "Announcements", description: "Read important notices and academic updates.", count: `${unreadAnnouncementCount} unread` },
-    { page: "notifications", icon: "♧", eyebrow: "UPDATES", title: "Notifications", description: "See important account and learning updates.", count: `${unreadNotificationCount} unread` },
   ];
 
   return (
