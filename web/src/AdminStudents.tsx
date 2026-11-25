@@ -9,7 +9,7 @@ type Props = { onError: (message: string) => void; onNotice: (message: string) =
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const fields: Array<{ key: keyof Student; label: string }> = [
   { key: "fullName", label: "Full name" }, { key: "email", label: "Email" },
-  { key: "collegeName", label: "College name" }, { key: "collegeCode", label: "College PIN / institute code" },
+  { key: "collegeName", label: "College name" }, { key: "collegeCode", label: "College code" },
   { key: "branchName", label: "Branch" }, { key: "branchCode", label: "Branch code" },
 ];
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
