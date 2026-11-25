@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
+import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
 
 function makeResponse() {
@@ -8,26 +9,41 @@ function makeResponse() {
     status(code: number) { state.statusCode = code; return this; },
     json(body: unknown) { state.body = body; return this; },
   };
-  return { res, state };
+  return { res: res as unknown as Response, state };
 }
-function invoke(handler: any, req: any, res: any): Promise<void> {
+
+function handlerFor(router: ReturnType<typeof adminInstitutionRouter>, path: string): RequestHandler {
+  type RouteLayer = {
+    route?: {
+      path: string;
+      methods: Record<string, boolean>;
+      stack: Array<{ handle: RequestHandler }>;
+    };
+  };
+  const stack = (router as unknown as { stack: RouteLayer[] }).stack;
+  const layer = stack.find((item) => item.route?.path === path && item.route.methods.get);
+  if (!layer?.route) throw new Error("Route not found");
+  return layer.route.stack[layer.route.stack.length - 1].handle;
+}
+
+function invoke(handler: RequestHandler, req: Request, res: Response): Promise<void> {
   return new Promise((resolve, reject) => {
-    const next = (error?: unknown) => error ? reject(error) : resolve();
+    const next: NextFunction = (error?: unknown) => error ? reject(error) : resolve();
     Promise.resolve(handler(req, res, next)).then(resolve, reject);
   });
 }
+
 describe("admin institution directory", () => {
   it("groups registered profiles by college and branch with custom names preserved", async () => {
     const findMany = vi.fn().mockResolvedValue([
-      { collegeName: "Govt Polytechnic", collegeCode: "GPK", branchName: "Computer Engineering", branchCode: "CM", },
-      { collegeName: " Govt Polytechnic ", collegeCode: "GPK", branchName: "Computer Engineering", branchCode: "CM", },
-      { collegeName: "Govt Polytechnic", collegeCode: "GPK", branchName: "Electronics", branchCode: "EC", },
-      { collegeName: "Custom College", collegeCode: "X999", branchName: "Custom Branch", branchCode: "XB", },
+      { collegeName: "Govt Polytechnic", collegeCode: "GPK", branchName: "Computer Engineering", branchCode: "CM" },
+      { collegeName: " Govt Polytechnic ", collegeCode: "GPK", branchName: "Computer Engineering", branchCode: "CM" },
+      { collegeName: "Govt Polytechnic", collegeCode: "GPK", branchName: "Electronics", branchCode: "EC" },
+      { collegeName: "Custom College", collegeCode: "X999", branchName: "Custom Branch", branchCode: "XB" },
     ]);
     const router = adminInstitutionRouter({ user: { findMany } } as unknown as PrismaClient);
-    const route = (router as any).stack.find((layer: any) => layer.route?.path === "/admin/institutions" && layer.route?.methods?.get);
-    const handler = route.route.stack[route.route.stack.length - 1].handle;
-    const req = { query: {} };
+    const handler = handlerFor(router, "/admin/institutions");
+    const req = { query: {} } as unknown as Request;
     const { res, state } = makeResponse();
     await invoke(handler, req, res);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -49,21 +65,19 @@ describe("admin institution directory", () => {
       { collegeName: "Poly B", collegeCode: "B1", branchName: "Mechanical", branchCode: "ME" },
     ]);
     const router = adminInstitutionRouter({ user: { findMany } } as unknown as PrismaClient);
-    const route = (router as any).stack.find((layer: any) => layer.route?.path === "/admin/institutions" && layer.route?.methods?.get);
-    const handler = route.route.stack[route.route.stack.length - 1].handle;
-    const req = { query: { q: "Poly", branch: "computer", page: "1", limit: "1" } };
+    const handler = handlerFor(router, "/admin/institutions");
+    const req = { query: { q: "Poly", branch: "computer", page: "1", limit: "1" } } as unknown as Request;
     const { res, state } = makeResponse();
     await invoke(handler, req, res);
-    expect(state.body).toMatchObject({ total: 1, totalPages: 1, institutions: [ { collegeName: "Poly A" } ] });
+    expect(state.body).toMatchObject({ total: 1, totalPages: 1, institutions: [{ collegeName: "Poly A" }] });
   });
 
   it("does not return rejected student profiles to the query", async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     const router = adminInstitutionRouter({ user: { findMany } } as unknown as PrismaClient);
-    const route = (router as any).stack.find((layer: any) => layer.route?.path === "/admin/institutions" && layer.route?.methods?.get);
-    const handler = route.route.stack[route.route.stack.length - 1].handle;
+    const handler = handlerFor(router, "/admin/institutions");
     const { res, state } = makeResponse();
-    await invoke(handler, { query: {} }, res);
+    await invoke(handler, { query: {} } as unknown as Request, res);
     expect(findMany.mock.calls[0][0].where.accessStatus).toEqual({ not: "REJECTED" });
     expect(state.body).toMatchObject({ total: 0, institutions: [] });
   });
