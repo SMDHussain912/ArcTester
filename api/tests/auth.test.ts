@@ -519,4 +519,19 @@ describe("auth — bearer token (native/mobile clients)", () => {
     expect(verified.status).toBe(200);
     expect((verified.json as { user: { email: string } }).user.email).toBe(email);
   });
+  it("lists and revokes a legacy session issued before session tracking", async () => {
+    const user = await server.db.user.findUnique({ where: { email: "mobile@example.com" }, select: { id: true, email: true, sessionVersion: true } });
+    expect(user).toBeTruthy();
+    const legacyToken = signJwt({ sub: String(user!.id), email: user!.email, sv: user!.sessionVersion });
+    cookieJar.set("ecet_session", legacyToken);
+    const sessions = await getJsonWithCookie(`${server.baseUrl}/auth/sessions`);
+    expect(sessions.status).toBe(200);
+    const rows = (sessions.json as { sessions: { id: string; current: boolean; loginMethod: string }[] }).sessions;
+    expect(rows.some(row => row.current && row.loginMethod === "legacy-session")).toBe(true);
+    const legacy = rows.find(row => row.current)!;
+    const revoke = await fetch(`${server.baseUrl}/auth/sessions/${legacy.id}`, { method: "DELETE", headers: { cookie: `ecet_session=${legacyToken}` } });
+    expect(revoke.status).toBe(200);
+    expect((await getJsonWithCookie(`${server.baseUrl}/auth/me`)).status).toBe(403);
+  });
+
 });
