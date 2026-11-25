@@ -954,3 +954,6 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .about-footer{text-align:center;color:var(--muted);font-size:11px;padding:6px 0 14px}
 @media(max-width:760px){.about-hero{align-items:flex-start}.about-brand-mark{flex-basis:92px;width:92px;height:92px;border-radius:22px}.about-brand-mark span{width:52px;height:52px;border-radius:15px;font-size:20px}.about-brand-mark small{font-size:7px}.about-grid{grid-template-columns:1fr}.about-project-grid{grid-template-columns:1fr}.about-project-grid>div{padding:15px}}
 @media(max-width:440px){.about-hero{flex-direction:column-reverse;padding:22px}.about-hero h1{font-size:32px}.about-section{padding:20px}.about-contact-item{grid-template-columns:36px minmax(0,1fr) auto;gap:10px;padding:12px}.about-contact-icon{width:36px;height:36px}}
+
+.about-repository-link{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;color:var(--accent);font-size:12px;font-weight:850;text-decoration:none}
+.about-repository-link:hover{border-color:var(--accent);background:var(--accent-soft)}
