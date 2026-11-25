@@ -741,5 +741,51 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
+
+  router.get("/sessions", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const token = readSessionToken(req);
+      let currentId = "";
+      if (token) { try { currentId = String(verifyJwt(token).sid ?? ""); } catch { /* requireAuth already validated */ } }
+      const sessions = await db.authSession.findMany({
+        where: { userId: req.user!.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        orderBy: { lastSeenAt: "desc" },
+        select: { id: true, deviceName: true, platform: true, loginMethod: true, ipAddress: true, createdAt: true, lastSeenAt: true, expiresAt: true },
+      });
+      res.json({ ok: true, sessions: sessions.map(session => ({ ...session, current: session.id === currentId })) });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/sessions/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const result = await db.authSession.updateMany({
+        where: { id: req.params.id, userId: req.user!.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (result.count === 0) return next(notFound("Session not found or already revoked."));
+      res.json({ ok: true, message: "Session revoked." });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/sessions/revoke-all", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      await db.authSession.updateMany({ where: { userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await db.user.update({ where: { id: req.user!.id }, data: { sessionVersion: { increment: 1 } } });
+      res.json({ ok: true, message: "All sessions revoked. Sign in again on this device." });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/login-history", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const events = await db.loginEvent.findMany({
+        where: { userId: req.user!.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, email: true, result: true, method: true, ipAddress: true, userAgent: true, createdAt: true },
+      });
+      res.json({ ok: true, events });
+    } catch (error) { next(error); }
+  });
+
   return router;
 }
