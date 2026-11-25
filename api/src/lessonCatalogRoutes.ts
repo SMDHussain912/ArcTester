@@ -8,6 +8,7 @@ import {
   sha256Hex,
 } from "./lessonPackage.js";
 import { getR2StorageConfig, R2ObjectStorage } from "./r2ObjectStorage.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 
 const Identifier = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -21,6 +22,11 @@ async function getActiveLessonVersion(db: PrismaClient, lessonId: string, versio
     },
     select: {
       id: true,
+      audienceScope: true,
+      targetCollegeCode: true,
+      targetCollegeName: true,
+      targetBranchCode: true,
+      targetBranchName: true,
       activeVersion: {
         select: {
           id: true,
@@ -79,7 +85,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
 
   router.get("/lessons/:id/versions/:versionId/manifest", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
 
       const lessonId = req.params.id;
@@ -88,7 +94,8 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
         return res.status(400).json({ error: "Lesson or version ID is invalid." });
       }
       const lesson = await getActiveLessonVersion(db, lessonId, versionId);
-      if (!lesson?.activeVersion?.manifestKey || !lesson.activeVersion.manifestSha256) {
+      if (!lesson || !isContentAudienceVisible(lesson as ContentAudience, account)) return res.status(404).json({ error: "Published lesson package was not found." });
+      if (!lesson.activeVersion?.manifestKey || !lesson.activeVersion.manifestSha256) {
         return res.status(404).json({ error: "Published lesson package was not found." });
       }
 
@@ -112,7 +119,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
 
   router.get("/lessons/:id/versions/:versionId/objects/:assetId", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const { id: lessonId, versionId, assetId } = req.params;
       if (!lessonId || !Identifier.test(lessonId) || !versionId || !Identifier.test(versionId) || !assetId || !Identifier.test(assetId)) {
@@ -120,7 +127,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
       }
 
       const lesson = await getActiveLessonVersion(db, lessonId, versionId);
-      if (!lesson?.activeVersion) return res.status(404).json({ error: "Published lesson package was not found." });
+      if (!lesson?.activeVersion || !isContentAudienceVisible(lesson as ContentAudience, account)) return res.status(404).json({ error: "Published lesson package was not found." });
       let storage: R2ObjectStorage;
       try {
         storage = new R2ObjectStorage(getR2StorageConfig());

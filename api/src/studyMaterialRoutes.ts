@@ -4,11 +4,51 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 
 const ExternalHttpsUrl = z.string().trim().url().max(2048).refine((value) => {
   try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password; }
   catch { return false; }
 }, "Study material links must be valid HTTPS URLs without embedded credentials.");
+
+const AudienceTargetSchema = z.object({
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).default("ALL"),
+  targetCollegeCode: z.string().trim().max(40).default(""),
+  targetCollegeName: z.string().trim().max(160).default(""),
+  targetBranchCode: z.string().trim().max(40).default(""),
+  targetBranchName: z.string().trim().max(160).default(""),
+});
+
+function validateAudienceTarget(value: {
+  audienceScope: "ALL" | "COLLEGE" | "BRANCH";
+  targetCollegeCode?: string;
+  targetCollegeName?: string;
+  targetBranchCode?: string;
+  targetBranchName?: string;
+}, ctx: z.RefinementCtx) {
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Choose a college code or enter a college name.", path: ["targetCollegeName"] });
+  }
+  if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Choose a branch code or enter a branch name.", path: ["targetBranchName"] });
+  }
+}
+
+function audienceData(value: {
+  audienceScope: "ALL" | "COLLEGE" | "BRANCH";
+  targetCollegeCode?: string;
+  targetCollegeName?: string;
+  targetBranchCode?: string;
+  targetBranchName?: string;
+}) {
+  return {
+    audienceScope: value.audienceScope,
+    targetCollegeCode: value.targetCollegeCode?.trim() || null,
+    targetCollegeName: value.targetCollegeName?.trim() || null,
+    targetBranchCode: value.targetBranchCode?.trim() || null,
+    targetBranchName: value.targetBranchName?.trim() || null,
+  };
+}
 
 const LinkFields = z.object({
   title: z.string().trim().min(2).max(140),
@@ -16,7 +56,8 @@ const LinkFields = z.object({
   subject: z.string().trim().min(1).max(80),
   topic: z.string().trim().max(100).default(""),
   url: ExternalHttpsUrl,
-}).strict();
+  ...AudienceTargetSchema.shape,
+}).strict().superRefine(validateAudienceTarget);
 
 const FileMetadata = z.object({
   title: z.string().trim().min(2).max(140),
@@ -24,7 +65,8 @@ const FileMetadata = z.object({
   subject: z.string().trim().min(1).max(80),
   topic: z.string().trim().max(100).default(""),
   fileName: z.string().trim().min(1).max(180),
-}).strict();
+  ...AudienceTargetSchema.shape,
+}).strict().superRefine(validateAudienceTarget);
 
 const MaterialPatch = z.object({
   title: z.string().trim().min(2).max(140).optional(),
@@ -33,11 +75,24 @@ const MaterialPatch = z.object({
   topic: z.string().trim().max(100).optional(),
   url: z.string().trim().max(2048).optional(),
   status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
-}).strict().refine((value) => Object.keys(value).length > 0);
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).optional(),
+  targetCollegeCode: z.string().trim().max(40).nullable().optional(),
+  targetCollegeName: z.string().trim().max(160).nullable().optional(),
+  targetBranchCode: z.string().trim().max(40).nullable().optional(),
+  targetBranchName: z.string().trim().max(160).nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (Object.keys(value).length === 0) ctx.addIssue({ code: "custom", message: "Provide at least one field to update." });
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A college code or name is required for college-only content.", path: ["targetCollegeName"] });
+  }
+  if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A branch code or name is required for branch-only content.", path: ["targetBranchName"] });
+  }
+});
 
 const publicSelect = {
   id: true, title: true, description: true, subject: true, topic: true, url: true,
-  fileName: true, mimeType: true, sizeBytes: true, createdAt: true, updatedAt: true,
+  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, createdAt: true, updatedAt: true,
 } as const;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -75,13 +130,21 @@ function fileSelectHeaders(res: express.Response, fileName: string, mimeType: st
 export function studyMaterialRouter(db: PrismaClient): Router {
   const router = Router();
 
-  router.get("/study-materials", requireAuth, async (_req, res, next) => {
+  router.get("/study-materials", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const materials = await db.studyMaterial.findMany({
+      const profile = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
+      });
+      if (!profile) return next(notFound("Student profile was not found."));
+      const published = await db.studyMaterial.findMany({
         where: { status: "PUBLISHED", OR: [{ url: { not: "" } }, { fileName: { not: "" } }] },
         orderBy: [{ subject: "asc" }, { title: "asc" }],
         select: publicSelect,
       });
+      const materials = profile.role === "ADMIN" ? published : published.filter((item) =>
+        isContentAudienceVisible(item as ContentAudience, profile),
+      );
       res.json({ ok: true, materials });
     } catch (error) { next(error); }
   });
@@ -89,11 +152,18 @@ export function studyMaterialRouter(db: PrismaClient): Router {
   router.get("/study-materials/:id/file", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
-      const material = await db.studyMaterial.findUnique({ where: { id }, select: { status: true, fileName: true, mimeType: true, sizeBytes: true, contentBase64: true } });
+      const material = await db.studyMaterial.findUnique({ where: { id }, select: {
+        status: true, fileName: true, mimeType: true, sizeBytes: true, contentBase64: true,
+        audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true,
+      } });
       if (!material || !material.fileName || !material.contentBase64) return next(notFound("Study file was not found."));
-      if (material.status !== "PUBLISHED") {
-        const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
-        if (account?.role !== "ADMIN") return next(notFound("Study file was not found."));
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: {
+        role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true,
+      } });
+      if (!account) return next(notFound("Study file was not found."));
+      if (material.status !== "PUBLISHED" && account.role !== "ADMIN") return next(notFound("Study file was not found."));
+      if (material.status === "PUBLISHED" && account.role !== "ADMIN" && !isContentAudienceVisible(material as ContentAudience, account)) {
+        return next(notFound("Study file was not found."));
       }
       const bytes = Buffer.from(material.contentBase64, "base64");
       fileSelectHeaders(res, material.fileName, material.mimeType, bytes.length);
@@ -116,7 +186,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
     try {
       const input = LinkFields.parse(req.body);
       const material = await db.studyMaterial.create({
-        data: { uploadedById: req.user!.id, ...input, fileName: "", mimeType: "", sizeBytes: 0, contentBase64: "", status: "DRAFT" },
+        data: { uploadedById: req.user!.id, ...input, ...audienceData(input), fileName: "", mimeType: "", sizeBytes: 0, contentBase64: "", status: "DRAFT" },
         select: { ...publicSelect, status: true },
       });
       res.status(201).json({ ok: true, material });
@@ -133,7 +203,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const material = await db.studyMaterial.create({
         data: {
           uploadedById: req.user!.id, title: metadata.title, description: metadata.description,
-          subject: metadata.subject, topic: metadata.topic, url: "",
+          subject: metadata.subject, topic: metadata.topic, ...audienceData(metadata), url: "",
           fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length,
           contentBase64: file.bytes.toString("base64"), status: "DRAFT",
         },
@@ -155,7 +225,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const material = await db.studyMaterial.update({
         where: { id },
         data: {
-          title: metadata.title, description: metadata.description, subject: metadata.subject, topic: metadata.topic,
+          title: metadata.title, description: metadata.description, subject: metadata.subject, topic: metadata.topic, ...audienceData(metadata),
           url: "", fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length, contentBase64: file.bytes.toString("base64"),
         },
         select: { ...publicSelect, status: true },
@@ -173,7 +243,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const patch = MaterialPatch.parse(req.body);
       if (patch.url) ExternalHttpsUrl.parse(patch.url);
       if (!await db.studyMaterial.findUnique({ where: { id }, select: { id: true } })) return next(notFound("Study material was not found."));
-      const material = await db.studyMaterial.update({ where: { id }, data: patch, select: { ...publicSelect, status: true } });
+      const material = await db.studyMaterial.update({ where: { id }, data: { ...patch, ...(patch.audienceScope ? { audienceScope: patch.audienceScope } : {}) }, select: { ...publicSelect, status: true } });
       res.json({ ok: true, material });
     } catch (error) {
       if (error instanceof z.ZodError) return next(badRequest("Invalid study material update."));

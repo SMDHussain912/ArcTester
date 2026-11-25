@@ -34,6 +34,18 @@ describe("static lesson package import validation", () => {
     expect(imported.storyboard.scenes).toHaveLength(3);
   });
 
+  it("accepts and validates college/branch audience metadata for imported lesson packages", () => {
+    const imported = parseImportedLessonPackage({
+      title: "Stack operations", subject: "Computer Science", topic: "Stacks", script, storyboard,
+      audienceScope: "BRANCH", targetCollegeCode: "010", targetBranchCode: "CM",
+    });
+    expect(imported).toMatchObject({ audienceScope: "BRANCH", targetCollegeCode: "010", targetBranchCode: "CM" });
+    expect(() => parseImportedLessonPackage({
+      title: "Stack operations", subject: "Computer Science", topic: "Stacks", script, storyboard,
+      audienceScope: "BRANCH",
+    })).toThrow();
+  });
+
   it("rejects packages with invalid script or storyboard content", () => {
     expect(() => parseImportedLessonPackage({
       title: "Stack operations",

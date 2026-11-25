@@ -94,6 +94,8 @@ describe("AdminLessonStudio", () => {
     expect(screen.getByLabelText("Scene 3 on-screen text")).toHaveValue("Which pops first?");
 
     fireEvent.change(screen.getByLabelText("Lesson title"), { target: { value: "Stack operations" } });
+    fireEvent.change(screen.getByLabelText("Lesson audience scope"), { target: { value: "BRANCH" } });
+    fireEvent.change(screen.getByLabelText("Diploma branch"), { target: { value: "Diploma in Computer Engineering" } });
     fireEvent.change(screen.getByLabelText("Scene 2 title"), { target: { value: "Push operation visual" } });
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -102,7 +104,7 @@ describe("AdminLessonStudio", () => {
     ));
     const patchCall = fetchMock.mock.calls.find((call) => (call[1] as RequestInit | undefined)?.method === "PATCH");
     const saved = JSON.parse(String((patchCall?.[1] as RequestInit | undefined)?.body));
-    expect(saved).toMatchObject({ title: "Stack operations" });
+    expect(saved).toMatchObject({ title: "Stack operations", audienceScope: "BRANCH", targetBranchName: "Diploma in Computer Engineering" });
     expect(saved.storyboard.scenes[1].title).toBe("Push operation visual");
 
     vi.spyOn(window, "confirm").mockReturnValue(true);

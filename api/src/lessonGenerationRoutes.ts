@@ -5,12 +5,25 @@ import type { PrismaClient } from "@prisma/client";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { badRequest, notFound } from "./errors.js";
 import { LessonScriptSchema, LessonStoryboardSchema } from "./lessonGeneration.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 
 const UpdateLessonDraftSchema = z.object({
   title: z.string().trim().min(3).max(160),
   script: z.unknown(),
   storyboard: z.unknown(),
-}).strict();
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).optional(),
+  targetCollegeCode: z.string().trim().max(40).nullable().optional(),
+  targetCollegeName: z.string().trim().max(160).nullable().optional(),
+  targetBranchCode: z.string().trim().max(40).nullable().optional(),
+  targetBranchName: z.string().trim().max(160).nullable().optional(),
+}).strict().superRefine((input, ctx) => {
+  if (input.audienceScope === "COLLEGE" && !input.targetCollegeCode?.trim() && !input.targetCollegeName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A college code or name is required.", path: ["targetCollegeName"] });
+  }
+  if (input.audienceScope === "BRANCH" && !input.targetBranchCode?.trim() && !input.targetBranchName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A branch code or name is required.", path: ["targetBranchName"] });
+  }
+});
 
 const ImportLessonPackageSchema = z.object({
   title: z.string().trim().min(3).max(160),
@@ -19,9 +32,20 @@ const ImportLessonPackageSchema = z.object({
   fileName: z.string().trim().min(1).max(180).optional(),
   script: LessonScriptSchema,
   storyboard: LessonStoryboardSchema,
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).default("ALL"),
+  targetCollegeCode: z.string().trim().max(40).default(""),
+  targetCollegeName: z.string().trim().max(160).default(""),
+  targetBranchCode: z.string().trim().max(40).default(""),
+  targetBranchName: z.string().trim().max(160).default(""),
 }).strict().superRefine((input, ctx) => {
   if (input.title !== input.script.title) {
     ctx.addIssue({ code: "custom", message: "Package title must match the lesson script title.", path: ["title"] });
+  }
+  if (input.audienceScope === "COLLEGE" && !input.targetCollegeCode && !input.targetCollegeName) {
+    ctx.addIssue({ code: "custom", message: "A college code or name is required.", path: ["targetCollegeName"] });
+  }
+  if (input.audienceScope === "BRANCH" && !input.targetBranchCode && !input.targetBranchName) {
+    ctx.addIssue({ code: "custom", message: "A branch code or name is required.", path: ["targetBranchName"] });
   }
 });
 
@@ -53,11 +77,11 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
   router.get("/lessons/:id", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const id = z.string().trim().min(1).max(64).parse(req.params.id);
-      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true } });
-      if (!draft) return next(notFound("Published lesson was not found."));
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true } });
+      if (!draft || !isContentAudienceVisible(draft as ContentAudience, account)) return next(notFound("Published lesson was not found."));
       const script = LessonScriptSchema.parse(JSON.parse(draft.scriptJson) as unknown);
       const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
       return res.json({ ok: true, lesson: { id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, script, storyboard } });
@@ -68,18 +92,20 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   });
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const published = await db.lessonDraft.findMany({
         where: { status: "PUBLISHED" },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-        take: 100,
+        take: 300,
         select: {
           id: true, title: true, subject: true, topic: true, updatedAt: true,
+          audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true,
           activeVersion: { select: { id: true, version: true, packageSchemaVersion: true, manifestSha256: true } },
         },
       });
-      const lessons = published.map((draft) => ({
+      const visiblePublished = published.filter((draft) => isContentAudienceVisible(draft as ContentAudience, account));
+      const lessons = visiblePublished.map((draft) => ({
         id: draft.id, title: draft.title, subject: draft.subject, topic: draft.topic, updatedAt: draft.updatedAt,
         package: draft.activeVersion ? {
           versionId: draft.activeVersion.id,
@@ -93,12 +119,12 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   });
   router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Lesson narration is available to student accounts." });
       const id = z.string().trim().min(1).max(64).parse(req.params.id);
       const sceneIndex = z.coerce.number().int().min(0).max(23).parse(req.params.sceneIndex);
-      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { storyboardJson: true } });
-      if (!draft) return next(notFound("Published lesson was not found."));
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true } });
+      if (!draft || !isContentAudienceVisible(draft as ContentAudience, account)) return next(notFound("Published lesson was not found."));
       const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
       const scene = storyboard.scenes[sceneIndex];
       if (!scene) return next(notFound("Lesson scene was not found."));
@@ -186,7 +212,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     try {
       const drafts = await db.lessonDraft.findMany({
         orderBy: { updatedAt: "desc" }, take: 100,
-        select: { id: true, title: true, subject: true, topic: true, status: true, provider: true, model: true, createdAt: true, updatedAt: true },
+        select: { id: true, title: true, subject: true, topic: true, status: true, provider: true, model: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, createdAt: true, updatedAt: true },
       });
       res.json({ ok: true, drafts });
     } catch (error) { next(error); }
@@ -212,7 +238,14 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
       if (existing.status !== "DRAFT") return next(badRequest("Only unpublished lesson drafts can be edited."));
       const updated = await db.lessonDraft.updateMany({
         where: { id, status: "DRAFT" },
-        data: { title: input.title, scriptJson: JSON.stringify(script), storyboardJson: JSON.stringify(storyboard) },
+        data: {
+          title: input.title, scriptJson: JSON.stringify(script), storyboardJson: JSON.stringify(storyboard),
+          ...(input.audienceScope !== undefined ? { audienceScope: input.audienceScope } : {}),
+          ...(input.targetCollegeCode !== undefined ? { targetCollegeCode: input.targetCollegeCode || null } : {}),
+          ...(input.targetCollegeName !== undefined ? { targetCollegeName: input.targetCollegeName || null } : {}),
+          ...(input.targetBranchCode !== undefined ? { targetBranchCode: input.targetBranchCode || null } : {}),
+          ...(input.targetBranchName !== undefined ? { targetBranchName: input.targetBranchName || null } : {}),
+        },
       });
       if (updated.count !== 1) return next(badRequest("Only unpublished lesson drafts can be edited."));
       const draft = await db.lessonDraft.findUnique({ where: { id } });
@@ -283,6 +316,11 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
           sourceText: "Imported static lesson content. No AI generation was requested.",
           scriptJson: JSON.stringify(input.script),
           storyboardJson: JSON.stringify(input.storyboard),
+          audienceScope: input.audienceScope,
+          targetCollegeCode: input.targetCollegeCode || null,
+          targetCollegeName: input.targetCollegeName || null,
+          targetBranchCode: input.targetBranchCode || null,
+          targetBranchName: input.targetBranchName || null,
           provider: "admin-upload",
           model: "static-json-v1",
           status: "DRAFT",

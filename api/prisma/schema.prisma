@@ -471,10 +471,16 @@ model StudyMaterial {
   sizeBytes      Int      @default(0)
   contentBase64  String   @default("")
   status         String   @default("DRAFT")
+  audienceScope  String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([status, subject, title])
+  @@index([audienceScope, targetCollegeCode, targetBranchCode], map: "StudyMaterial_audience_target_idx")
   @@index([uploadedById, createdAt])
 }
 
@@ -666,10 +672,16 @@ model LessonDraft {
   provider        String
   model           String
   status          String   @default("DRAFT")
+  audienceScope   String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([status, updatedAt])
+  @@index([status, audienceScope, targetBranchCode])
   @@index([createdById])
   audioAssets LessonAudioAsset[]
 

@@ -394,10 +394,16 @@ model StudyMaterial {
   topic        String   @default("")
   url          String   @default("")
   status       String   @default("DRAFT")
+  audienceScope String  @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([status, subject, title])
+  @@index([audienceScope, targetCollegeCode, targetBranchCode], map: "StudyMaterial_audience_target_idx")
   @@index([uploadedById, createdAt])
 }
 

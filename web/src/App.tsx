@@ -27,6 +27,7 @@ import StudentAnalytics from "./StudentAnalytics";
 import StudentMcpAssistant from "./StudentMcpAssistant";
 import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
+import StudentConceptLibrary from "./StudentConceptLibrary";
 import StudentAccountSettings from "./StudentAccountSettings";
 import StudentAbout from "./StudentAbout";
 import AppSplash from "./components/AppSplash";
@@ -620,6 +621,8 @@ export default function App() {
           <StudentMastery />
         ) : activePage === "materials" ? (
           <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
+        ) : activePage === "concepts" ? (
+          <StudentConceptLibrary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
           <>
             <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />

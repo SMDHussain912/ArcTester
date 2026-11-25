@@ -22,7 +22,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
 import StudentExamCenter from "./src/StudentExamCenter";
-import ComingSoonScreen from "./src/ComingSoonScreen";
+import StudentConceptLibrary from "./src/StudentConceptLibrary";
 import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
 import { mobilePalette, radius, spacing, typeScale } from "./src/design/tokens";
@@ -155,7 +155,7 @@ export default function App() {
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "coming-soon" | "profile" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "learn" | "profile" | "settings">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
@@ -1424,8 +1424,8 @@ export default function App() {
            </Animated.View>
 ) : activeTab === "exams" ? (
             <StudentExamCenter api={api} darkMode={darkMode} disabled={busy || checkingPracticeRecovery || hasSavedPracticeAttempt} />
- ) : activeTab === "coming-soon" ? (
-          <Animated.View style={animatedEntrance(entrance)}><ComingSoonScreen darkMode={darkMode} /></Animated.View>
+ ) : activeTab === "learn" ? (
+          <Animated.View style={animatedEntrance(entrance)}><StudentConceptLibrary api={api} darkMode={darkMode} /></Animated.View>
  ) : activeTab === "settings" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
@@ -1536,12 +1536,12 @@ export default function App() {
             
             <TouchableOpacity
               accessibilityRole="button"
-              onPress={() => setActiveTab("coming-soon")}
+              onPress={() => setActiveTab("learn")}
               style={[styles.card, { marginTop: 14, padding: 16, borderColor: "#8b5cf6", backgroundColor: darkMode ? "#172235" : "#f5f3ff" }]}
             >
-              <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 4 }, darkMode && { color: "#f1f5f9" }]}>Learning & lessons are coming soon</Text>
-              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Learning path, lessons and learning summary are being prepared. View the roadmap.</Text>
-              <Text style={{ color: "#7c3aed", fontWeight: "800", marginTop: 10 }}>View roadmap →</Text>
+              <Text style={[styles.sectionTitle, { marginTop: 0, marginBottom: 4 }, darkMode && { color: "#f1f5f9" }]}>Concept library for your branch</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Explore explanations, examples and common mistakes curated for your diploma branch.</Text>
+              <Text style={{ color: "#7c3aed", fontWeight: "800", marginTop: 10 }}>Open learning hub →</Text>
             </TouchableOpacity>
             <TouchableOpacity
               accessibilityRole="button"
@@ -1651,7 +1651,7 @@ export default function App() {
 
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "exams" }} accessibilityLabel="Exams tab" style={styles.navItem} onPress={() => setActiveTab("exams")}><MaterialCommunityIcons name="clipboard-text-outline" size={23} color={activeTab === "exams" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "exams" && styles.navLabelActive]}>Exams</Text></TouchableOpacity>
 
-          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "coming-soon" }} accessibilityLabel="Coming Soon tab" style={styles.navItem} onPress={() => setActiveTab("coming-soon")}><MaterialCommunityIcons name="rocket-launch-outline" size={23} color={activeTab === "coming-soon" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "coming-soon" && styles.navLabelActive]}>Soon</Text></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "learn" }} accessibilityLabel="Learn tab" style={styles.navItem} onPress={() => setActiveTab("learn")}><MaterialCommunityIcons name="book-open-page-variant" size={23} color={activeTab === "learn" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "learn" && styles.navLabelActive]}>Learn</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "settings" }} accessibilityLabel="Settings tab" style={styles.navItem} onPress={() => setActiveTab("settings")}><MaterialCommunityIcons name="cog" size={23} color={activeTab === "settings" ? "#2563eb" : "#8993a5"} /><Text style={[styles.navLabel, activeTab === "settings" && styles.navLabelActive]}>Settings</Text></TouchableOpacity>
           <TouchableOpacity accessibilityRole="tab" accessibilityState={{ selected: activeTab === "profile" }} accessibilityLabel="Account tab" style={styles.navItem} onPress={() => setActiveTab("profile")}>
             <MaterialCommunityIcons name="account-circle" size={23} color={activeTab === "profile" ? "#2563eb" : "#8993a5"} />

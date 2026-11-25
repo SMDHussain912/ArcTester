@@ -6,7 +6,7 @@ export type StudentPage =
   | "dashboard" | "path" | "lessons" | "learning-summary" | "practice" | "ai-practice"
   | "history" | "assignments" | "question-bank" | "announcements" | "notifications"
   | "account" | "settings" | "about" | "progress" | "rewards" | "analytics" | "learning"
-  | "mastery" | "materials" | "coming-soon";
+  | "mastery" | "materials" | "concepts" | "coming-soon";
 
 interface StudentNavigationProps {
   activePage: StudentPage;
@@ -20,7 +20,7 @@ interface StudentNavigationProps {
   onSignOut: () => void;
 }
 
-type NavItem = { page: StudentPage; label: string; icon: string; group: "HOME" | "EXAMS" | "ACCOUNT" };
+type NavItem = { page: StudentPage; label: string; icon: string; group: "HOME" | "EXAMS" | "LEARNING" | "ACCOUNT" };
 const NAV_ITEMS: NavItem[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "HOME" },
   { page: "practice", label: "Practice exams", icon: "✎", group: "EXAMS" },
@@ -28,12 +28,14 @@ const NAV_ITEMS: NavItem[] = [
   { page: "analytics", label: "Performance analytics", icon: "▥", group: "EXAMS" },
   { page: "history", label: "Practice history", icon: "◷", group: "EXAMS" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "EXAMS" },
+  { page: "concepts", label: "Concept library", icon: "✧", group: "LEARNING" },
   { page: "account", label: "Account", icon: "◉", group: "ACCOUNT" },
   { page: "about", label: "About & contact", icon: "ⓘ", group: "ACCOUNT" },
 ];
 
 const GROUPS: { id: NavItem["group"]; label: string }[] = [
   { id: "EXAMS", label: "Exams & results" },
+  { id: "LEARNING", label: "Learning" },
   { id: "ACCOUNT", label: "Account" },
 ];
 const PRIMARY_MOBILE: StudentPage[] = ["dashboard", "practice", "analytics", "assignments"];

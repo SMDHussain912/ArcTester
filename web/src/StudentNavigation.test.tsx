@@ -23,7 +23,12 @@ describe("StudentNavigation", () => {
     expect(dashboard).toBeInTheDocument();
     expect(dashboard.closest("details")).toBeNull();
     expect(within(nav).queryByText("Home")).not.toBeInTheDocument();
-    expect(within(nav).queryByText("Learning")).not.toBeInTheDocument();
+    expect(within(nav).getByText("Learning")).toBeInTheDocument();
+    const learning = within(nav).getByText("Learning").closest("details")!;
+    fireEvent.click(within(learning).getByText("Learning"));
+    expect(within(learning).getByRole("button", { name: "Concept library" })).toBeEnabled();
+    fireEvent.click(within(learning).getByRole("button", { name: "Concept library" }));
+    expect(setActivePage).toHaveBeenCalledWith("concepts");
     const exams = within(nav).getByText("Exams & results").closest("details")!;
     expect(within(exams).getByRole("button", { name: "Practice exams" })).toBeEnabled();
     expect(within(exams).getByRole("button", { name: "Question bank" })).toBeEnabled();
@@ -50,6 +55,7 @@ describe("StudentNavigation", () => {
     const menu = within(mobile).getByRole("menu", { name: "More student pages" });
     expect(within(menu).queryByRole("button", { name: "Learning path" })).not.toBeInTheDocument();
     expect(within(menu).queryByRole("button", { name: "Learning progress" })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("button", { name: "Concept library" })).toBeEnabled();
     fireEvent.click(within(menu).getByRole("button", { name: "Account" }));
     expect(setActivePage).toHaveBeenCalledWith("account");
     expect(more).toHaveAttribute("aria-expanded", "false");

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AP_DIPLOMA_BRANCHES } from "./polytechnicCatalog";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const MAX_IMPORT_FILE_BYTES = 256 * 1024;
@@ -6,6 +7,7 @@ const MAX_IMPORT_FILE_BYTES = 256 * 1024;
 type DraftSummary = {
   id: string; title: string; subject: string; topic: string; status: string;
   provider: string; model: string; createdAt: string; updatedAt: string;
+  audienceScope?: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode?: string | null; targetCollegeName?: string | null; targetBranchCode?: string | null; targetBranchName?: string | null;
 };
 type DraftRecord = DraftSummary & {
   sourceTitle: string; sourceText: string; scriptJson: string; storyboardJson: string;
@@ -31,6 +33,11 @@ export default function AdminLessonStudio() {
   const [selectedId, setSelectedId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("DRAFT");
   const [title, setTitle] = useState("");
+  const [audienceScope, setAudienceScope] = useState<"ALL" | "COLLEGE" | "BRANCH">("ALL");
+  const [targetCollegeCode, setTargetCollegeCode] = useState("");
+  const [targetCollegeName, setTargetCollegeName] = useState("");
+  const [targetBranchCode, setTargetBranchCode] = useState("");
+  const [targetBranchName, setTargetBranchName] = useState("");
   const [scriptText, setScriptText] = useState("");
   const [storyboardText, setStoryboardText] = useState("");
   const [error, setError] = useState("");
@@ -48,6 +55,9 @@ export default function AdminLessonStudio() {
       const result = await request<{draft:DraftRecord}>(`/admin/lesson-drafts/${encodeURIComponent(id)}`);
       const draft = result.draft;
       setSelectedId(draft.id); setSelectedStatus(draft.status); setTitle(draft.title);
+      setAudienceScope(draft.audienceScope ?? "ALL");
+      setTargetCollegeCode(draft.targetCollegeCode ?? ""); setTargetCollegeName(draft.targetCollegeName ?? "");
+      setTargetBranchCode(draft.targetBranchCode ?? ""); setTargetBranchName(draft.targetBranchName ?? "");
       setScriptText(JSON.stringify(JSON.parse(draft.scriptJson), null, 2));
       setStoryboardText(JSON.stringify(JSON.parse(draft.storyboardJson), null, 2));
       setNotice(`Opened draft · ${draft.provider} / ${draft.model}`);
@@ -126,7 +136,7 @@ export default function AdminLessonStudio() {
     setBusy(true);
     try {
       await request(`/admin/lesson-drafts/${encodeURIComponent(selectedId)}`, {
-        method: "PATCH", body: JSON.stringify({ title: title.trim(), script, storyboard }),
+        method: "PATCH", body: JSON.stringify({ title: title.trim(), script, storyboard, audienceScope, targetCollegeCode, targetCollegeName, targetBranchCode, targetBranchName }),
       });
       await refreshDrafts();
       setNotice("Draft saved and validated by the server. It is still unpublished.");
@@ -184,6 +194,17 @@ export default function AdminLessonStudio() {
       <div className="admin-panel-head"><div><p className="eyebrow">STEP 2 · REVIEW & PUBLISH</p><h2>Review lesson draft</h2><p>Edits are schema-validated by the API. Scene JSON is data only—not code.</p><span className="status status-pending">{selectedStatus}</span></div><div className="row wrap">{selectedStatus === "DRAFT" ? <><button className="primary" disabled={busy || !title.trim()} onClick={() => void saveDraft()}>Save draft</button><button className="button button-secondary" disabled={busy || !!parsedStoryboard.error || !parsedStoryboard.scenes.length} onClick={() => void publishDraft()}>Publish lesson</button><button className="button button-danger" disabled={busy} onClick={() => void deleteDraft()}>Delete draft</button></> : <strong className="status status-used">Published · Student visible</strong>}</div></div>
       <fieldset disabled={selectedStatus !== "DRAFT"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <label>Lesson title<input value={title} onChange={e => setTitle(e.target.value)}/></label>
+      <label>Content audience<select aria-label="Lesson audience scope" value={audienceScope} onChange={e => setAudienceScope(e.target.value as typeof audienceScope)}><option value="ALL">All students</option><option value="COLLEGE">One college</option><option value="BRANCH">One diploma branch</option></select></label>
+      {audienceScope !== "ALL" && <div className="admin-two-col audience-target-fields">
+        <label>College name<input value={targetCollegeName} onChange={e => setTargetCollegeName(e.target.value)} placeholder="Institution name"/></label>
+        <label>College code<input value={targetCollegeCode} onChange={e => setTargetCollegeCode(e.target.value)} placeholder="Institute code"/></label>
+        {audienceScope === "BRANCH" && <>
+          <label>Diploma branch<input list="arctester-lesson-branches" value={targetBranchName} onChange={e => setTargetBranchName(e.target.value)} placeholder="Search or enter branch"/></label>
+          <label>Branch code<input value={targetBranchCode} onChange={e => setTargetBranchCode(e.target.value)} placeholder="Branch code"/></label>
+          <datalist id="arctester-lesson-branches">{AP_DIPLOMA_BRANCHES.map(item => <option key={item.code} value={item.name}>{item.code}</option>)}</datalist>
+        </>}
+        <small className="muted">College targets require a name or code. Branch targets require a branch name or code. College is optional for branch-wide content.</small>
+      </div>}
       <div className="admin-two-col lesson-editors">
         <label>Teaching script JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={scriptText} onChange={e => setScriptText(e.target.value)}/></label>
         <label>Storyboard JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={storyboardText} onChange={e => setStoryboardText(e.target.value)}/></label>

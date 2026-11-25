@@ -1023,3 +1023,62 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .auth-field-hint{margin:-8px 0 2px;color:var(--muted);font-size:11px;line-height:1.55}
 .auth-card input[list]{text-overflow:ellipsis}
 .auth-card input[list]:focus{border-color:var(--accent)}
+
+
+/* Branch-aware concept library */
+.student-concept-library .student-concept-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.student-concept-library .student-concept-card {
+  min-width: 0;
+  border: 1px solid var(--border, #2c3749);
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--surface, rgba(255,255,255,.025));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.student-concept-library .student-concept-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.student-concept-library .student-concept-card h3 {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.35;
+}
+.student-concept-library .student-concept-card p {
+  margin: 0;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.student-concept-library .student-concept-card section {
+  border-top: 1px solid var(--border, #2c3749);
+  padding-top: 12px;
+}
+.student-concept-library .student-concept-card h4 {
+  margin: 0 0 8px;
+  font-size: .82rem;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.student-concept-library .student-concept-card ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  line-height: 1.55;
+}
+.audience-target-fields {
+  border: 1px solid var(--border, #2c3749);
+  border-radius: 12px;
+  padding: 16px;
+  margin-block: 12px;
+}
