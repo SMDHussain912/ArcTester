@@ -18,7 +18,7 @@ type ResponseData = {
 
 type Props = { onError: (message: string) => void };
 
-const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(API + path, { credentials: "include" });
