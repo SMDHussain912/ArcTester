@@ -9,6 +9,7 @@ import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqua
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 import { decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, verifyTotp } from "./totp.js";
+import { base64urlDecode, base64urlEncode, createWebAuthnChallenge, parseNoneAttestation, verifyClientData, verifyPasskeyAssertion } from "./webauthn.js";
 
 const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
@@ -848,6 +849,98 @@ export function authRouter(db: PrismaClient): Router {
   };
   router.post("/login/2fa", completeTotpLogin(false));
   router.post("/token/2fa", completeTotpLogin(true));
+
+
+  function passkeyOrigin(req: Request): { origin: string; rpId: string } {
+    const origin = String(req.headers.origin ?? "");
+    const configured = (process.env.CORS_ORIGINS ?? "").split(",").map(value => value.trim()).filter(Boolean);
+    if (!origin || !configured.includes(origin)) throw forbidden("This origin is not configured for passkey sign-in.");
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && parsed.hostname === "localhost")) throw forbidden("Passkeys require a secure origin.");
+    return { origin, rpId: parsed.hostname };
+  }
+
+  router.post("/passkeys/register/options", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const { rpId } = passkeyOrigin(req);
+      const user = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, fullName: true } });
+      if (!user) return next(notFound("Account not found."));
+      const challenge = createWebAuthnChallenge();
+      await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "passkey-register", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+      const existing = await db.passkeyCredential.findMany({ where: { userId: user.id }, select: { credentialId: true } });
+      res.json({ ok: true, publicKey: { challenge, rp: { name: "ArcTester", id: rpId }, user: { id: base64urlEncode(Buffer.from(String(user.id))), name: user.email, displayName: user.fullName ?? user.email }, pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }], timeout: 300000, attestation: "none", authenticatorSelection: { residentKey: "preferred", userVerification: "required" }, excludeCredentials: existing.map(item => ({ type: "public-key", id: item.credentialId })) } });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/passkeys/register/verify", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ challenge: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), attestationObject: z.string().min(20), name: z.string().trim().min(1).max(80).optional(), transports: z.array(z.string().max(32)).max(8).optional() }).parse(req.body);
+      const { origin, rpId } = passkeyOrigin(req);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challenge) } });
+      if (!challenge || challenge.userId !== req.user!.id || challenge.purpose !== "passkey-register" || challenge.expiresAt <= new Date()) return next(forbidden("Passkey setup expired. Start again."));
+      verifyClientData(input.clientDataJSON, input.challenge, origin, "webauthn.create");
+      const attested = parseNoneAttestation(input.attestationObject, rpId);
+      if (attested.credentialId !== input.credentialId) return next(badRequest("Passkey credential ID does not match."));
+      const credential = await db.passkeyCredential.create({ data: { userId: req.user!.id, credentialId: attested.credentialId, publicKey: attested.publicKey, signCount: attested.signCount, name: input.name ?? "Passkey", transports: JSON.stringify(input.transports ?? []) } });
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      res.status(201).json({ ok: true, passkey: { id: credential.id, name: credential.name, createdAt: credential.createdAt } });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") return next(conflict("This passkey is already registered."));
+      next(error);
+    }
+  });
+
+  router.post("/passkeys/login/options", async (req, res, next) => {
+    try {
+      const input = z.object({ email: z.string().email().trim().toLowerCase() }).parse(req.body);
+      const { rpId } = passkeyOrigin(req);
+      const user = await db.user.findUnique({ where: { email: input.email }, select: { id: true, email: true } });
+      if (!user) return next(badRequest("No passkeys are available for this account."));
+      const credentials = await db.passkeyCredential.findMany({ where: { userId: user.id }, select: { credentialId: true, transports: true } });
+      if (!credentials.length) return next(badRequest("No passkeys are available for this account."));
+      const challenge = createWebAuthnChallenge();
+      await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "passkey-login", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+      res.json({ ok: true, challengeId: challenge, publicKey: { challenge, rpId, allowCredentials: credentials.map(item => ({ type: "public-key", id: item.credentialId, transports: JSON.parse(item.transports) as string[] })), timeout: 300000, userVerification: "required" } });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/passkeys/login/verify", async (req, res, next) => {
+    try {
+      const input = z.object({ challengeId: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), authenticatorData: z.string().min(20), signature: z.string().min(8) }).parse(req.body);
+      const { origin, rpId } = passkeyOrigin(req);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
+      if (!challenge || challenge.purpose !== "passkey-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("Passkey request expired. Start sign-in again."));
+      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const credential = await db.passkeyCredential.findUnique({ where: { credentialId: input.credentialId } });
+      if (!credential || credential.userId !== challenge.userId) return next(forbidden("Passkey could not be verified."));
+      const clientData = verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
+      const counter = verifyPasskeyAssertion({ authenticatorData: input.authenticatorData, clientDataJSON: input.clientDataJSON, signature: input.signature, publicKey: credential.publicKey, expectedChallenge: input.challengeId, expectedOrigin: origin, rpId });
+      if ((credential.signCount > 0 || counter > 0) && counter <= credential.signCount) return next(forbidden("Passkey counter did not advance. Use another passkey or contact support."));
+      await db.passkeyCredential.update({ where: { id: credential.id }, data: { signCount: counter, lastUsedAt: new Date() } });
+      const user = await db.user.findUnique({ where: { id: challenge.userId } });
+      if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Account access is not approved."));
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      await recordLoginEvent(db, req, user.email, user.id, "success", "passkey");
+      const { token } = await createAuthSession(db, req, user, "passkey");
+      setSessionCookie(res, token);
+      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/passkeys", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const passkeys = await db.passkeyCredential.findMany({ where: { userId: req.user!.id }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, createdAt: true, lastUsedAt: true, transports: true } });
+      res.json({ ok: true, passkeys: passkeys.map(item => ({ ...item, transports: JSON.parse(item.transports) as string[] })) });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/passkeys/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const result = await db.passkeyCredential.deleteMany({ where: { id: req.params.id, userId: req.user!.id } });
+      if (!result.count) return next(notFound("Passkey not found."));
+      res.json({ ok: true });
+    } catch (error) { next(error); }
+  });
 
   router.get("/sessions", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
