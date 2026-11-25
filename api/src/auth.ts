@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
+import { decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, verifyTotp } from "./totp.js";
 
 const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
@@ -550,6 +551,13 @@ export function authRouter(db: PrismaClient): Router {
       }
       clearLoginFailures(ip, input.email);
       if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
+      const totp = await db.totpCredential.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
+      if (totp?.enabledAt) {
+        const challenge = randomBytes(32).toString("base64url");
+        await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "totp-login", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+        await recordLoginEvent(db, req, input.email, user.id, "second-factor-required", "password");
+        return res.json({ ok: true, twoFactorRequired: true, challengeId: challenge, expiresIn: 300 });
+      }
       await recordLoginEvent(db, req, input.email, user.id, "success", "password");
       const { token } = await createAuthSession(db, req, user, "password");
       setSessionCookie(res, token);
@@ -741,6 +749,105 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
+
+
+  router.post("/2fa/totp/setup", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const existing = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (existing?.enabledAt) return next(conflict("Authenticator is already enabled. Disable it before re-enrolling."));
+      const secret = generateTotpSecret();
+      const encrypted = encryptTotpSecret(secret);
+      await db.totpCredential.upsert({
+        where: { userId: req.user!.id },
+        create: { userId: req.user!.id, secretEncrypted: encrypted },
+        update: { secretEncrypted: encrypted, enabledAt: null, recoveryCodesJson: "[]", lastUsedCounter: -1 },
+      });
+      const account = encodeURIComponent(req.user!.email);
+      const issuer = encodeURIComponent("ArcTester");
+      const uri = `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+      res.json({ ok: true, secret, otpauthUri: uri });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ code: z.string().regex(/^\\d{6}$/) }).parse(req.body);
+      const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (!credential || credential.enabledAt) return next(badRequest("Start authenticator setup first."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code);
+      if (counter === null) return next(badRequest("The authenticator code is incorrect or expired."));
+      const recoveryCodes = generateRecoveryCodes();
+      await db.totpCredential.update({ where: { userId: req.user!.id }, data: { enabledAt: new Date(), lastUsedCounter: counter, recoveryCodesJson: JSON.stringify(recoveryCodes.map(hashRecoveryCode)) } });
+      res.json({ ok: true, enabled: true, recoveryCodes, message: "Save these recovery codes now. Each code can be used once." });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/2fa/status", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const [totp, passkeyCount] = await Promise.all([
+        db.totpCredential.findUnique({ where: { userId: req.user!.id }, select: { enabledAt: true, recoveryCodesJson: true } }),
+        db.passkeyCredential.count({ where: { userId: req.user!.id } }),
+      ]);
+      const recoveryCodesRemaining = totp?.enabledAt ? (JSON.parse(totp.recoveryCodesJson) as string[]).length : 0;
+      res.json({ ok: true, authenticatorEnabled: Boolean(totp?.enabledAt), recoveryCodesRemaining, passkeyCount });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/2fa/totp/disable", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ password: z.string().min(1).max(128), code: z.string().min(6).max(32) }).parse(req.body);
+      const user = await db.user.findUnique({ where: { id: req.user!.id }, select: { passwordHash: true } });
+      const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) return next(forbidden("Password is incorrect."));
+      if (!credential?.enabledAt) return next(badRequest("Authenticator is not enabled."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code, Date.now(), credential.lastUsedCounter);
+      const recovery = (JSON.parse(credential.recoveryCodesJson) as string[]).map(hash => hash === hashRecoveryCode(input.code));
+      if (counter === null && !recovery.some(Boolean)) return next(forbidden("Authenticator or recovery code is incorrect."));
+      await db.totpCredential.delete({ where: { userId: req.user!.id } });
+      res.json({ ok: true, message: "Two-step verification disabled." });
+    } catch (error) { next(error); }
+  });
+
+  const completeTotpLogin = (nativeClient: boolean) => async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = z.object({ challengeId: z.string().min(20).max(100), code: z.string().min(6).max(32) }).parse(req.body);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
+      if (!challenge || challenge.purpose !== "totp-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("The verification request expired. Sign in again."));
+      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const credential = await db.totpCredential.findUnique({ where: { userId: challenge.userId } });
+      const user = await db.user.findUnique({ where: { id: challenge.userId } });
+      if (!credential?.enabledAt || !user || user.accessStatus !== "APPROVED") return next(forbidden("Two-step verification is unavailable for this account."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code, Date.now(), credential.lastUsedCounter);
+      let valid = counter !== null;
+      if (counter !== null) {
+        const updated = await db.totpCredential.updateMany({ where: { id: credential.id, lastUsedCounter: { lt: counter } }, data: { lastUsedCounter: counter } });
+        valid = updated.count === 1;
+      } else {
+        const recovery = JSON.parse(credential.recoveryCodesJson) as string[];
+        const hash = hashRecoveryCode(input.code);
+        const index = recovery.indexOf(hash);
+        if (index >= 0) {
+          recovery.splice(index, 1);
+          await db.totpCredential.update({ where: { id: credential.id }, data: { recoveryCodesJson: JSON.stringify(recovery) } });
+          valid = true;
+        }
+      }
+      if (!valid) {
+        if (challenge.attempts + 1 >= 5) await db.authChallenge.deleteMany({ where: { id: challenge.id } });
+        return next(forbidden("Authenticator or recovery code is incorrect."));
+      }
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      await recordLoginEvent(db, req, user.email, user.id, "success", "password+totp");
+      const { token } = await createAuthSession(db, req, user, "password+totp");
+      if (!nativeClient) setSessionCookie(res, token);
+      res.json({ ok: true, ...(nativeClient ? { token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS } : {}), user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
+    } catch (error) { next(error); }
+  };
+  router.post("/login/2fa", completeTotpLogin(false));
+  router.post("/token/2fa", completeTotpLogin(true));
 
   router.get("/sessions", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
