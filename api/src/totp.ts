@@ -17,7 +17,7 @@ export function generateTotpSecret(): string {
   return output;
 }
 function decodeBase32(input: string): Buffer {
-  const clean = input.toUpperCase().replace(/=+$/g, "").replace(/\\s/g, "");
+  const clean = input.toUpperCase().replace(/=+$/g, "").replace(/\s/g, "");
   let bits = 0, value = 0; const output: number[] = [];
   for (const char of clean) {
     const index = BASE32.indexOf(char); if (index < 0) throw new Error("Invalid base32 secret.");
@@ -46,7 +46,7 @@ export function totpAt(secret: string, counter: number): string {
   return String(binary % 1_000_000).padStart(6, "0");
 }
 export function verifyTotp(secret: string, code: string, now = Date.now(), lastCounter = -1): number | null {
-  if (!/^\\d{6}$/.test(code)) return null;
+  if (!/^\d{6}$/.test(code)) return null;
   const current = Math.floor(now / 30_000);
   for (const counter of [current, current - 1, current + 1]) {
     if (counter <= lastCounter) continue;
