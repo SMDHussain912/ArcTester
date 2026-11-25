@@ -432,8 +432,8 @@ describe("live Vite application", () => {
     expect(questionCard).not.toBeNull();
     fireEvent.click(within(questionCard!).getByRole("button", { name: /Queue/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Announcements" }));
-    expect(await screen.findByRole("heading", { name: "Announcements" })).toBeInTheDocument();
+    fireEvent.click(within(await screen.findByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: "Account" }));
+    expect(await screen.findByRole("heading", { name: "Account" })).toBeInTheDocument();
     expect(screen.queryByText("Which structure follows FIFO?")).not.toBeInTheDocument();
 
     fireEvent.click(within(screen.getByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: "Practice exams" }));
