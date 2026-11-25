@@ -648,6 +648,10 @@ export function authRouter(db: PrismaClient): Router {
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
         return next(forbidden("This session has been revoked. Sign in again."));
       }
+      const sessionId = typeof payload.sid === "string" ? payload.sid : "";
+      const trackedId = sessionId || "legacy-" + user.id + "-" + sha256(token).slice(0, 20);
+      const trackedSession = await db.authSession.findUnique({ where: { id: trackedId }, select: { revokedAt: true, expiresAt: true } });
+      if (trackedSession && (trackedSession.revokedAt || trackedSession.expiresAt <= new Date())) return next(forbidden("This device session has been revoked. Sign in again."));
       if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       res.json({ ok: true, user });
     } catch {
