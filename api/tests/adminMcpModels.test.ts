@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/index.js";
+import { stableModelJson, trainModel } from "../src/modelTraining.js";
 import { startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
@@ -115,5 +116,56 @@ describe("administrator MCP model control", () => {
       sourceDescription: "Malformed fixture intentionally missing one feature.", datasetKind: "synthetic",
     })).rejects.toThrow();
     expect(await server.db.modelDataset.count({ where: { name: "bad-fixture" } })).toBe(0);
+  });
+
+  it("computes native candidate evaluation from held-out verification rows", async () => {
+    const trainingRows = Array.from({ length: 20 }, (_value, index) => {
+      const practiceAccuracy = index / 19;
+      return { practiceAccuracy, completedTests: index + 1, ready: practiceAccuracy < 0.5 ? "no" : "yes" };
+    });
+    const training = await callTool("create_model_dataset", {
+      name: "native-evaluation-training", task: "classification", targetColumn: "ready", targetType: "string",
+      featureSchema, samples: trainingRows, sourceDescription: "Synthetic fixture for native evaluation test.", datasetKind: "synthetic",
+    });
+    const verification = await callTool("create_model_dataset", {
+      name: "native-evaluation-verification", task: "classification", targetColumn: "ready", targetType: "string",
+      featureSchema, samples: verificationSamples, sourceDescription: "Attested held-out fixture for native evaluation test.",
+      sourceAttested: true, confirmSourceAttestation: true, datasetKind: "verification",
+    });
+    const modelInput = {
+      task: "classification" as const,
+      targetColumn: "ready",
+      featureSchemaJson: JSON.stringify({ features: featureSchema, targetColumn: "ready", targetType: "string" }),
+      samplesJson: JSON.stringify(trainingRows),
+    };
+    const candidate = trainModel(modelInput, { seed: 7, epochs: 100, batchSize: 8 });
+    const baseline = trainModel(modelInput, { seed: 13, epochs: 1, batchSize: 8 });
+    const modelId = "native_eval_fixture";
+    for (const [version, trained] of [[1, candidate], [2, baseline]] as const) {
+      const artifactJson = stableModelJson({
+        uri: "db://test-model/" + modelId + "/" + version,
+        sha256: digest(stableModelJson(trained.artifact)),
+        framework: "arctester-native",
+        metrics: trained.metrics,
+        version,
+        algorithm: trained.algorithm,
+        modelArtifact: trained.artifact,
+      });
+      await server.db.registeredModel.create({
+        data: {
+          id: randomBytes(16).toString("hex"), modelId, version, algorithm: trained.algorithm,
+          task: "classification", dataset: training.dataset.name, trainingDatasetId: training.dataset.id,
+          artifactJson, isActive: false,
+        },
+      });
+    }
+    const result = await callTool("evaluate_registered_model", {
+      modelId, candidateVersion: 1, baselineVersion: 2, datasetId: verification.dataset.id, confirm: true,
+    });
+    expect(result.evaluation).toMatchObject({ status: expect.stringMatching(/PASSED|FAILED/), sampleCount: verification.dataset.rowCount });
+    expect(result.metrics.accuracy).toBeGreaterThanOrEqual(0);
+    expect(result.metrics.accuracy).toBeLessThanOrEqual(1);
+    expect(result.metrics.baselineAccuracy).toBeGreaterThanOrEqual(0);
+    expect(result.metrics.baselineAccuracy).toBeLessThanOrEqual(1);
   });
 });
