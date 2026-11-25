@@ -189,7 +189,7 @@ export default function StudentAccountSettings(props: Props) {
         </SettingSection>
         <SettingSection title="Security overview" description="Protect your account and review access.">
           <div className="account-security-summary"><span className="security-summary-dot" /><div><strong>Password and sessions</strong><p>Change your password in Settings. Changing it revokes previously issued sessions.</p></div></div>
-          <div className="account-security-summary"><span className="security-summary-dot muted-dot" /><div><strong>Authenticator and passkeys</strong><p>These sign-in methods are not enabled on the server yet. Setup controls will appear when login enforcement is ready.</p></div></div>
+          <div className="account-security-summary"><span className="security-summary-dot muted-dot" /><div><strong>Authenticator and passkeys</strong><p>Manage authenticator setup, passkeys, active sessions and previous sign-ins in Settings.</p></div></div>
           <button className="ghost account-signout" disabled={busy} onClick={onSignOut}>{busy ? "Signing out…" : "Sign out"}</button>
         </SettingSection>
       </section>
