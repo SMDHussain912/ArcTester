@@ -404,10 +404,11 @@ function maskedIp(ip: string): string {
 }
 function requestDevice(req: Request): { deviceName: string; platform: string; userAgent: string; ipAddress: string } {
   const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
-  const platform = /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
+  const nativeClient = req.header("x-arctester-client") === "mobile";
+  const platform = nativeClient ? (/iphone|ipad|ios/i.test(userAgent) ? "ios" : /android/i.test(userAgent) ? "android" : "mobile") : /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
   const ua = userAgent.toLowerCase();
-  const browser = ua.includes("edg/") ? "Edge" : ua.includes("firefox/") ? "Firefox" : ua.includes("chrome/") ? "Chrome" : ua.includes("safari/") ? "Safari" : "Browser";
-  const deviceName = /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
+  const browser = nativeClient ? "ArcTester" : ua.includes("edg/") ? "Edge" : ua.includes("firefox/") ? "Firefox" : ua.includes("chrome/") ? "Chrome" : ua.includes("safari/") ? "Safari" : "Browser";
+  const deviceName = nativeClient ? "ArcTester mobile app" : /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
   return { deviceName, platform, userAgent, ipAddress: maskedIp(req.ip ?? "") };
 }
 async function recordLoginEvent(db: PrismaClient, req: Request, email: string, userId: number | null, result: string, method = "password"): Promise<void> {
