@@ -9,7 +9,7 @@ import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqua
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
 import { decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, verifyTotp } from "./totp.js";
-import { base64urlDecode, base64urlEncode, createWebAuthnChallenge, parseNoneAttestation, verifyClientData, verifyPasskeyAssertion } from "./webauthn.js";
+import { base64urlEncode, createWebAuthnChallenge, parseNoneAttestation, verifyClientData, verifyPasskeyAssertion } from "./webauthn.js";
 
 const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
@@ -544,6 +544,7 @@ export function authRouter(db: PrismaClient): Router {
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
+        await recordLoginEvent(db, req, input.email, user?.id ?? null, "failed", "password");
         recordLoginFailure(emailKey);
         recordLoginFailure(ipKey);
         const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
@@ -913,7 +914,7 @@ export function authRouter(db: PrismaClient): Router {
       await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
       const credential = await db.passkeyCredential.findUnique({ where: { credentialId: input.credentialId } });
       if (!credential || credential.userId !== challenge.userId) return next(forbidden("Passkey could not be verified."));
-      const clientData = verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
+      verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
       const counter = verifyPasskeyAssertion({ authenticatorData: input.authenticatorData, clientDataJSON: input.clientDataJSON, signature: input.signature, publicKey: credential.publicKey, expectedChallenge: input.challengeId, expectedOrigin: origin, rpId });
       if ((credential.signCount > 0 || counter > 0) && counter <= credential.signCount) return next(forbidden("Passkey counter did not advance. Use another passkey or contact support."));
       await db.passkeyCredential.update({ where: { id: credential.id }, data: { signCount: counter, lastUsedAt: new Date() } });
