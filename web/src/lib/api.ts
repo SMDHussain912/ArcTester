@@ -35,13 +35,19 @@ export interface PerformanceOverview {
     incorrect: number;
     unanswered: number;
     accuracy: number | null;
+    trend?: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
   };
   formalExams: {
+    submissions?: number;
     graded: number;
     scorePercentage: number | null;
     score: number | null;
     maximumScore: number | null;
     reviewRequired: number;
+    correct?: number;
+    incorrect?: number;
+    unanswered?: number;
+    subjects?: { subject: string; correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number; accuracy: number | null }[];
   };
 }
 
