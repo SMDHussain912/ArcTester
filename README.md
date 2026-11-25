@@ -157,3 +157,7 @@ The legacy SQLite schema is retained in `api/prisma-sqlite/`. The one-time migra
 ## Project status
 
 The active implementation scope and milestone status are maintained in [the project roadmap](docs/ROADMAP.md). Changes are developed through pull requests and verified by CI before merge.
+
+### Contribution workflow
+
+Use a feature branch and open a pull request against `main`. Review the changed files, confirm that the required GitHub Actions checks pass on the current PR head, and merge only after the implementation and verification are complete. Avoid committing secrets, production credentials, or real student records.
