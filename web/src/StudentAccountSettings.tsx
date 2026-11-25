@@ -19,7 +19,12 @@ function SettingSection({ title, description, children }: { title: string; descr
   return <section className="panel account-setting-section"><div className="account-section-heading"><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>{children}</section>;
 }
 
-type Device = { id: string; deviceName: string; platform: string; createdAt: string; lastSeenAt: string };
+type Device = { id: string; deviceName: string; platform: string; loginMethod: string; ipAddress: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
+type LoginEvent = { id:string; email:string; result:string; method:string; ipAddress:string; userAgent:string; createdAt:string };
+type Passkey = { id:string; name:string; createdAt:string; lastUsedAt:string|null; transports:string[] };
+type SecurityStatus = { authenticatorEnabled:boolean; recoveryCodesRemaining:number; passkeyCount:number };
+function fromBase64Url(value:string):Uint8Array{const base=value.replace(/-/g,"+").replace(/_/g,"/");const padded=base+"=".repeat((4-base.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
+function toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/g,"")}
 type Props = {
   page: "account" | "settings";
   email: string;
@@ -59,16 +64,35 @@ export default function StudentAccountSettings(props: Props) {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [deviceError, setDeviceError] = useState("");
   const [revokingDevice, setRevokingDevice] = useState<string | null>(null);
+  const [loginEvents,setLoginEvents]=useState<LoginEvent[]>([]);
+  const [passkeys,setPasskeys]=useState<Passkey[]>([]);
+  const [securityStatus,setSecurityStatus]=useState<SecurityStatus>({authenticatorEnabled:false,recoveryCodesRemaining:0,passkeyCount:0});
+  const [securityBusy,setSecurityBusy]=useState(false);
+  const [securityError,setSecurityError]=useState("");
+  const [securityMessage,setSecurityMessage]=useState("");
+  const [totpSecret,setTotpSecret]=useState("");
+  const [totpUri,setTotpUri]=useState("");
+  const [totpCode,setTotpCode]=useState("");
+  const [recoveryCodes,setRecoveryCodes]=useState<string[]>([]);
+  const [disablePassword,setDisablePassword]=useState("");
+  const [disableCode,setDisableCode]=useState("");
 
   useEffect(() => {
     if (!isSettings) return;
     let cancelled = false;
     setDevicesLoading(true);
     setDeviceError("");
-    request<{ devices: Device[] }>("/auth/devices")
-      .then((result) => { if (!cancelled) setDevices(result.devices ?? []); })
-      .catch((error: unknown) => { if (!cancelled) setDeviceError(error instanceof Error ? error.message : "Could not load signed-in devices."); })
-      .finally(() => { if (!cancelled) setDevicesLoading(false); });
+    Promise.all([
+      request<{ sessions: Device[] }>("/auth/sessions"),
+      request<{ events: LoginEvent[] }>("/auth/login-history"),
+      request<{ passkeys: Passkey[] }>("/auth/passkeys"),
+      request<SecurityStatus>("/auth/2fa/status"),
+    ]).then(([sessionResult,historyResult,passkeyResult,statusResult]) => {
+      if(cancelled)return;
+      setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
+      setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
+    }).catch((error:unknown)=>{if(!cancelled)setDeviceError(error instanceof Error?error.message:"Could not load account security.");})
+      .finally(()=>{if(!cancelled)setDevicesLoading(false);});
     return () => { cancelled = true; };
   }, [isSettings]);
 
@@ -105,13 +129,60 @@ export default function StudentAccountSettings(props: Props) {
     setDeviceError("");
     setRevokingDevice(deviceId);
     try {
-      await request("/auth/devices/" + encodeURIComponent(deviceId), { method: "DELETE" });
+      await request("/auth/sessions/" + encodeURIComponent(deviceId), { method: "DELETE" });
       setDevices((current) => current.filter((device) => device.id !== deviceId));
     } catch (error) {
       setDeviceError(error instanceof Error ? error.message : "Could not revoke this device.");
     } finally {
       setRevokingDevice(null);
     }
+  }
+
+
+  async function reloadSecurity() {
+    const [sessionResult,historyResult,passkeyResult,statusResult]=await Promise.all([
+      request<{sessions:Device[]}>("/auth/sessions"),request<{events:LoginEvent[]}>("/auth/login-history"),
+      request<{passkeys:Passkey[]}>("/auth/passkeys"),request<SecurityStatus>("/auth/2fa/status"),
+    ]);
+    setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
+    setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
+  }
+  async function beginTotpSetup(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");setRecoveryCodes([]);
+    try{const result=await request<{secret:string;otpauthUri:string}>("/auth/2fa/totp/setup",{method:"POST",body:"{}"});setTotpSecret(result.secret);setTotpUri(result.otpauthUri);setTotpCode("");}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not start authenticator setup.");}finally{setSecurityBusy(false);}
+  }
+  async function verifyTotpSetup(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{const result=await request<{recoveryCodes:string[];message:string}>("/auth/2fa/totp/verify-setup",{method:"POST",body:JSON.stringify({code:totpCode})});setRecoveryCodes(result.recoveryCodes);setTotpSecret("");setTotpUri("");setTotpCode("");setSecurityMessage(result.message);await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not verify authenticator code.");}finally{setSecurityBusy(false);}
+  }
+  async function disableTotp(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{const result=await request<{message:string}>("/auth/2fa/totp/disable",{method:"POST",body:JSON.stringify({password:disablePassword,code:disableCode})});setSecurityMessage(result.message);setDisablePassword("");setDisableCode("");await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not disable authenticator.");}finally{setSecurityBusy(false);}
+  }
+  async function addPasskey(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{
+      if(!navigator.credentials)throw new Error("Passkeys are not supported by this browser.");
+      const options=await request<{publicKey:{challenge:string;rp:{name:string;id:string};user:{id:string;name:string;displayName:string};pubKeyCredParams:PublicKeyCredentialParameters[];timeout:number;attestation:AttestationConveyancePreference;authenticatorSelection:AuthenticatorSelectionCriteria;excludeCredentials:{type:"public-key";id:string}[]}}>("/auth/passkeys/register/options",{method:"POST",body:"{}"});
+      const publicKey:PublicKeyCredentialCreationOptions={...options.publicKey,challenge:fromBase64Url(options.publicKey.challenge),user:{...options.publicKey.user,id:fromBase64Url(options.publicKey.user.id)},excludeCredentials:options.publicKey.excludeCredentials.map(item=>({...item,id:fromBase64Url(item.id)}))};
+      const credential=await navigator.credentials.create({publicKey}) as PublicKeyCredential|null;if(!credential)throw new Error("Passkey creation was cancelled.");
+      const response=credential.response as AuthenticatorAttestationResponse;
+      await request("/auth/passkeys/register/verify",{method:"POST",body:JSON.stringify({challenge:options.publicKey.challenge,credentialId:credential.id,clientDataJSON:toBase64Url(response.clientDataJSON),attestationObject:toBase64Url(response.attestationObject),name:"This device",transports:response.getTransports?.()??[]})});
+      setSecurityMessage("Passkey added to your account.");await reloadSecurity();
+    }catch(error){setSecurityError(error instanceof Error?error.message:"Could not add passkey.");}finally{setSecurityBusy(false);}
+  }
+  async function removePasskey(id:string){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{await request("/auth/passkeys/"+encodeURIComponent(id),{method:"DELETE"});setSecurityMessage("Passkey removed.");await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not remove passkey.");}finally{setSecurityBusy(false);}
+  }
+  async function revokeAllSessions(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{await request("/auth/sessions/revoke-all",{method:"POST",body:"{}"});setSecurityMessage("All sessions revoked. You will need to sign in again.");setDevices([]);}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not revoke sessions.");}finally{setSecurityBusy(false);}
   }
 
   if (page === "account" && !isSettings) {
