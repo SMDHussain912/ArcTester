@@ -177,7 +177,10 @@ async function verifyRegistrationCaptcha(token: string | undefined, ip: string, 
   // Browser registration uses Turnstile when both public/private keys are configured.
   if (nativeClient) return;
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
-  if (!secret) return;
+  if (!secret) {
+    if (token?.trim()) throw badRequest("CAPTCHA verification is not configured. Try again later.");
+    return;
+  }
   if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
   const body = new URLSearchParams({ secret, response: token });
   if (ip && ip !== "unknown") body.set("remoteip", ip);
