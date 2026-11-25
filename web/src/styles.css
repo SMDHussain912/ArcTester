@@ -1185,3 +1185,21 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
  .admin-institution-branches{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.admin-sidebar{transition:none}}
+
+/* Apply administrator display preferences */
+@media(min-width:901px){
+ html[data-admin-compact-nav="true"] .admin-shell{grid-template-columns:82px minmax(0,1fr)}
+ html[data-admin-compact-nav="true"] .admin-sidebar{padding-inline:10px}
+ html[data-admin-compact-nav="true"] .admin-brand{justify-content:center;padding-inline:0}
+ html[data-admin-compact-nav="true"] .admin-brand>div,
+ html[data-admin-compact-nav="true"] .admin-nav-label,
+ html[data-admin-compact-nav="true"] .admin-nav-text,
+ html[data-admin-compact-nav="true"] .admin-nav small,
+ html[data-admin-compact-nav="true"] .sidebar-bottom>div{display:none}
+ html[data-admin-compact-nav="true"] .admin-nav{justify-content:center;padding-inline:8px}
+ html[data-admin-compact-nav="true"] .admin-nav>span:first-child{flex:0 0 auto}
+ html[data-admin-compact-nav="true"] .sidebar-bottom{justify-content:center;padding-inline:0}
+}
+html[data-admin-density="compact"] .admin-panel{padding:15px}
+html[data-admin-density="compact"] .admin-stat-grid article{padding:14px}
+html[data-admin-density="compact"] .bank-question{padding:12px 16px}
