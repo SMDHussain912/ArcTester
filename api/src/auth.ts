@@ -564,8 +564,13 @@ export function authRouter(db: PrismaClient): Router {
       });
       // Rotate the current session while revoking every other previously issued session.
       const token = signJwt({ sub: String(updated.id), email: updated.email, sv: updated.sessionVersion });
-      if (readSessionToken(req) && getCookie(req, COOKIE_NAME)) setSessionCookie(res, token);
-      res.json({ ok: true, message: "Password changed. Other sessions have been revoked.", token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS });
+      const cookieSession = Boolean(getCookie(req, COOKIE_NAME));
+      if (cookieSession) setSessionCookie(res, token);
+      res.json({
+        ok: true,
+        message: "Password changed. Other sessions have been revoked.",
+        ...(cookieSession ? {} : { token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS }),
+      });
     } catch (error) {
       next(error);
     }
