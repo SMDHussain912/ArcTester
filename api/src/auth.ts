@@ -169,7 +169,32 @@ export const StudentAcademicProfileSchema = z.object({
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
+  captchaToken: z.string().optional(),
 }).merge(StudentAcademicProfileSchema);
+
+async function verifyRegistrationCaptcha(token: string | undefined, ip: string): Promise<void> {
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") throw badRequest("Registration CAPTCHA is not configured. Please contact an administrator.");
+    return;
+  }
+  if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
+  const body = new URLSearchParams({ secret, response: token });
+  if (ip && ip !== "unknown") body.set("remoteip", ip);
+  let response: Response;
+  try {
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+  } catch {
+    throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
+  }
+  if (!response.ok) throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
+  const result = await response.json() as { success?: boolean };
+  if (!result.success) throw badRequest("CAPTCHA verification failed. Please try again.");
+}
 
 export const LoginSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
@@ -430,6 +455,7 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/register", async (req, res, next) => {
     try {
       const input = RegisterSchema.parse(req.body);
+      await verifyRegistrationCaptcha(input.captchaToken, req.ip ?? "unknown");
       const passwordHash = await hashPasswordAsync(input.password);
       const user = await db.user.create({
         data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING", fullName: input.fullName, collegeName: input.collegeName, collegeCode: input.collegeCode, postalPin: input.postalPin || null, branchName: input.branchName, branchCode: input.branchCode || null },
