@@ -87,6 +87,15 @@ describe("administrator MCP model control", () => {
     await expect(callTool("queue_model_training", { datasetId: verification.dataset.id, modelId: "readiness_classifier", confirm: true })).rejects.toThrow(/training or synthetic dataset/i);
   });
 
+  it("rejects direct student identifiers in dataset columns", async () => {
+    await expect(callTool("create_model_dataset", {
+      name: "private-id-fixture", task: "classification", targetColumn: "ready", targetType: "string",
+      featureSchema: [{ name: "studentId", type: "number" }], samples: [{ studentId: 42, ready: "yes" }],
+      sourceDescription: "Identifier fixture used to verify privacy validation.", datasetKind: "synthetic",
+    })).rejects.toThrow(/identifier|personal/i);
+    expect(await server.db.modelDataset.count({ where: { name: "private-id-fixture" } })).toBe(0);
+  });
+
   it("rejects malformed dataset columns before persistence", async () => {
     await expect(callTool("create_model_dataset", {
       name: "bad-fixture", task: "classification", targetColumn: "ready", targetType: "string",
