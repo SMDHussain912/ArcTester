@@ -20,7 +20,7 @@ Only approved questions are available to students. Imported or drafted content r
 | Component | Technologies |
 | --- | --- |
 | Android app | Expo, React Native, TypeScript |
-| Web application | React, TypeScript, Vite |
+| Web application | React + TypeScript + Vite |
 | API | Node.js, Express |
 | Data layer | Prisma ORM, PostgreSQL |
 | Testing | Vitest, Playwright |
