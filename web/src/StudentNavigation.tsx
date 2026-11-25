@@ -32,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const GROUPS: { id: NavItem["group"]; label: string }[] = [
-  { id: "HOME", label: "Home" },
   { id: "EXAMS", label: "Exams & results" },
   { id: "ACCOUNT", label: "Account" },
 ];
@@ -80,6 +79,7 @@ export default function StudentNavigation({
         </button>
         <div className="student-sidebar-navigation">
           <nav aria-label="Student navigation" className="student-nav-groups">
+            {renderItem(NAV_ITEMS.find((item) => item.page === "dashboard")!)}
             {GROUPS.map(({ id, label }) => (
               <details key={id} className="student-nav-group" open={activeGroup === id || id === "EXAMS"}>
                 <summary><span>{label}</span><span className="student-nav-chevron" aria-hidden="true">⌄</span></summary>
