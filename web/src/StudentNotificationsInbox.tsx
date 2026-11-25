@@ -6,6 +6,7 @@ interface StudentNotificationsInboxProps {
   onRead: (id: string) => void;
   onMarkAllRead: () => void;
   onOpen: (notification: StudentNotification) => void;
+  onBack: () => void;
 }
 
 export default function StudentNotificationsInbox({
@@ -14,6 +15,7 @@ export default function StudentNotificationsInbox({
   onRead,
   onMarkAllRead,
   onOpen,
+  onBack,
 }: StudentNotificationsInboxProps) {
   return (
     <section className="student-notifications-page" aria-labelledby="student-notifications-heading">
@@ -24,6 +26,7 @@ export default function StudentNotificationsInbox({
           <p className="muted">Important learning updates and account messages.</p>
         </div>
         <div className="row">
+          <button className="ghost" onClick={onBack}>← Back to dashboard</button>
           <button className="ghost" onClick={onRefresh}>Refresh</button>
           {items.some((item) => !item.readAt) ? <button className="ghost" onClick={onMarkAllRead}>Mark all as read</button> : null}
         </div>
