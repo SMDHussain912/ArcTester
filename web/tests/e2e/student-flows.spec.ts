@@ -67,9 +67,10 @@ async function setupStudent(page: Page) {
     fullName: "E2E Student",
     collegeName: "Andhra Polytechnic, Kakinada",
     collegeCode: "010",
+    registrationNumber: "24010-CM-053",
     postalPin: "533001",
-    branchName: "Diploma in Computer Engineering",
-    branchCode: "DCME",
+    branchName: "Computer Engineering (CME)",
+    branchCode: "CM",
   });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
   const studentId = register.json.user?.id;
