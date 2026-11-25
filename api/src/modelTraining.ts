@@ -7,7 +7,7 @@ export type ModelDatasetInput = {
   featureSchemaJson: string;
   samplesJson: string;
 };
-export type TrainingOptions = { seed: number; epochs: number };
+export type TrainingOptions = { seed: number; epochs: number; batchSize?: number };
 export type TrainedModel = {
   algorithm: "logistic_regression" | "linear_regression";
   artifact: Record<string, unknown>;
@@ -182,6 +182,8 @@ function prepare(data: ModelDatasetInput, options: TrainingOptions): PreparedDat
 export function trainModel(data: ModelDatasetInput, options: TrainingOptions): TrainedModel {
   if (!Number.isInteger(options.seed) || options.seed < 0 || options.seed > 1_000_000) throw new Error("Training seed is out of range.");
   if (!Number.isInteger(options.epochs) || options.epochs < 1 || options.epochs > 200) throw new Error("Training epochs must be between 1 and 200.");
+  const batchSize = options.batchSize ?? 32;
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 512) throw new Error("Training batch size must be between 1 and 512.");
   const prepared = prepare(data, options);
   const { xTrain, xValidation, yTrain, yValidation, classes, encoders } = prepared;
   const dimension = (xTrain[0]?.length ?? 0) + 1;
@@ -191,21 +193,26 @@ export function trainModel(data: ModelDatasetInput, options: TrainingOptions): T
   const validationWithBias = xValidation.map(row => [...row, 1]);
   if (data.task === "classification") {
     const weights = classes.map(() => Array.from({ length: dimension }, () => 0));
+    const rng = random(options.seed ^ 0x9e3779b9);
     for (let epoch = 0; epoch < options.epochs; epoch++) {
-      const gradients = weights.map(() => Array.from({ length: dimension }, () => 0));
-      for (let rowIndex = 0; rowIndex < xWithBias.length; rowIndex++) {
-        const vector = xWithBias[rowIndex];
-        const probabilities = softmax(weights.map(weight => weight.reduce((sum, value, index) => sum + value * vector[index], 0)));
-        for (let classIndex = 0; classIndex < classes.length; classIndex++) {
-          const error = probabilities[classIndex] - (yTrain[rowIndex] === classIndex ? 1 : 0);
-          for (let featureIndex = 0; featureIndex < dimension; featureIndex++) gradients[classIndex][featureIndex] += error * vector[featureIndex];
-        }
-      }
+      const order = shuffled(Array.from({ length: xWithBias.length }, (_value, index) => index), rng);
       const rate = 0.15 / Math.sqrt(1 + epoch / 20);
-      for (let classIndex = 0; classIndex < classes.length; classIndex++) {
-        for (let featureIndex = 0; featureIndex < dimension; featureIndex++) {
-          const regularization = featureIndex === dimension - 1 ? 0 : 0.001 * weights[classIndex][featureIndex];
-          weights[classIndex][featureIndex] -= rate * (gradients[classIndex][featureIndex] / xWithBias.length + regularization);
+      for (let start = 0; start < order.length; start += batchSize) {
+        const batch = order.slice(start, start + batchSize);
+        const gradients = weights.map(() => Array.from({ length: dimension }, () => 0));
+        for (const rowIndex of batch) {
+          const vector = xWithBias[rowIndex];
+          const probabilities = softmax(weights.map(weight => weight.reduce((sum, value, index) => sum + value * vector[index], 0)));
+          for (let classIndex = 0; classIndex < classes.length; classIndex++) {
+            const error = probabilities[classIndex] - (yTrain[rowIndex] === classIndex ? 1 : 0);
+            for (let featureIndex = 0; featureIndex < dimension; featureIndex++) gradients[classIndex][featureIndex] += error * vector[featureIndex];
+          }
+        }
+        for (let classIndex = 0; classIndex < classes.length; classIndex++) {
+          for (let featureIndex = 0; featureIndex < dimension; featureIndex++) {
+            const regularization = featureIndex === dimension - 1 ? 0 : 0.001 * weights[classIndex][featureIndex];
+            weights[classIndex][featureIndex] -= rate * (gradients[classIndex][featureIndex] / batch.length + regularization);
+          }
         }
       }
     }
@@ -225,18 +232,23 @@ export function trainModel(data: ModelDatasetInput, options: TrainingOptions): T
   const targetScale = Math.sqrt(targetVariance) || 1;
   const normalizedTargets = yTrain.map(value => (value - targetMean) / targetScale);
   const weights = Array.from({ length: dimension }, () => 0);
+  const rng = random(options.seed ^ 0x85ebca6b);
   for (let epoch = 0; epoch < options.epochs; epoch++) {
-    const gradient = Array.from({ length: dimension }, () => 0);
-    for (let rowIndex = 0; rowIndex < xWithBias.length; rowIndex++) {
-      const vector = xWithBias[rowIndex];
-      const prediction = weights.reduce((sum, value, index) => sum + value * vector[index], 0);
-      const error = prediction - normalizedTargets[rowIndex];
-      for (let featureIndex = 0; featureIndex < dimension; featureIndex++) gradient[featureIndex] += error * vector[featureIndex];
-    }
+    const order = shuffled(Array.from({ length: xWithBias.length }, (_value, index) => index), rng);
     const rate = 0.08 / Math.sqrt(1 + epoch / 20);
-    for (let featureIndex = 0; featureIndex < dimension; featureIndex++) {
-      const regularization = featureIndex === dimension - 1 ? 0 : 0.001 * weights[featureIndex];
-      weights[featureIndex] -= rate * (gradient[featureIndex] / xWithBias.length + regularization);
+    for (let start = 0; start < order.length; start += batchSize) {
+      const batch = order.slice(start, start + batchSize);
+      const gradient = Array.from({ length: dimension }, () => 0);
+      for (const rowIndex of batch) {
+        const vector = xWithBias[rowIndex];
+        const prediction = weights.reduce((sum, value, index) => sum + value * vector[index], 0);
+        const error = prediction - normalizedTargets[rowIndex];
+        for (let featureIndex = 0; featureIndex < dimension; featureIndex++) gradient[featureIndex] += error * vector[featureIndex];
+      }
+      for (let featureIndex = 0; featureIndex < dimension; featureIndex++) {
+        const regularization = featureIndex === dimension - 1 ? 0 : 0.001 * weights[featureIndex];
+        weights[featureIndex] -= rate * (gradient[featureIndex] / batch.length + regularization);
+      }
     }
   }
   const mae = validationWithBias.reduce((sum, vector, index) => {
