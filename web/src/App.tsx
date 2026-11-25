@@ -601,6 +601,7 @@ export default function App() {
             onRead={(id) => void markNotificationRead(id)}
             onMarkAllRead={() => void markAllNotificationsRead()}
             onOpen={(id) => void openStudentNotification(id)}
+            onBack={() => setActivePage("dashboard")}
           />
         ) : activePage === "history" ? (
           <StudentPracticeHistory />
