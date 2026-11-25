@@ -32,7 +32,7 @@ export default function StudentAbout() {
           </ul>
         </AboutSection>
 
-        <AboutSection title="About the developer" eyebrow="THE BUILDER">
+        <AboutSection title="About me" eyebrow="THE BUILDER">
           <div className="about-developer">
             <div className="about-developer-avatar" aria-hidden="true">A</div>
             <div><h3>Arc</h3><p className="about-role">Student developer · Full-stack programmer</p></div>
@@ -48,7 +48,7 @@ export default function StudentAbout() {
           <div><span>EXPERIENCE</span><strong>Mobile-first</strong><p>Web and mobile learning workflow</p></div>
           <div><span>FOCUS</span><strong>Practice → Insight</strong><p>Practice, review and improve</p></div>
         </div>
-        <p className="about-project-note">ArcTester is actively developed. Some learning modules and advanced features may be marked as coming soon until they are released.</p>
+        <p className="about-project-note">ArcTester is actively developed. Some learning modules and advanced features may be marked as coming soon until they are released.</p><a className="about-repository-link" href="https://github.com/smdgamekingindo-TN/ArcTester" target="_blank" rel="noreferrer">View the ArcTester project on GitHub <span aria-hidden="true">↗</span></a>
       </AboutSection>
 
       <AboutSection title="Contact" eyebrow="GET IN TOUCH">
