@@ -22,13 +22,16 @@ describe("Performance analytics", () => {
   it("shows separate practice, mock and assigned exam performance sections", async () => {
     vi.mocked(request).mockResolvedValueOnce(overview).mockResolvedValueOnce(fullMock);
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Performance Analytics" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice Exam Analytics" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Mock Test Analytics" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Assigned / Real Exam Results" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice answer breakdown" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Mock test answer breakdown" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Subject-wise mock accuracy" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Performance" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice performance" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Full mock results" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Assigned / real exam results" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Practice accuracy: 71%/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Answer mix" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Accuracy trend" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Mock accuracy: 67%/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mock answer mix" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Subject accuracy" })).toBeInTheDocument();
     expect(screen.getByText("76%")).toBeInTheDocument();
     expect(screen.queryByText(/topic mastery|learning progress|your next study steps|areas to strengthen/i)).not.toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(2);
@@ -40,8 +43,8 @@ describe("Performance analytics", () => {
     vi.mocked(request).mockRejectedValueOnce(new Error("Overview unavailable")).mockResolvedValueOnce(fullMock);
     render(<StudentAnalytics setActivePage={vi.fn()} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Practice and assigned exam results: Overview unavailable");
-    expect(screen.getByRole("heading", { name: "Mock Test Analytics" })).toBeInTheDocument();
-    expect(screen.getByText("120 correct / 180 answered")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Full mock results" })).toBeInTheDocument();
+    expect(screen.getByText("120 correct of 180 answered")).toBeInTheDocument();
   });
 
   it("retries performance data", async () => {
@@ -50,15 +53,15 @@ describe("Performance analytics", () => {
       .mockResolvedValueOnce(overview).mockResolvedValueOnce(fullMock);
     render(<StudentAnalytics setActivePage={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network unavailable"));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh performance" }));
-    expect(await screen.findByText("Practice attempts")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Performance data is up to date"));
+    fireEvent.click(screen.getByRole("button", { name: "↻ Refresh" }));
+    expect(await screen.findByText("Completed attempts")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Latest results loaded"));
   });
 
   it("normalizes missing API data without showing learning recommendations", async () => {
     vi.mocked(request).mockResolvedValueOnce({} as never).mockResolvedValueOnce({} as never);
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByText("Practice attempts")).toBeInTheDocument();
+    expect(await screen.findByText("Completed attempts")).toBeInTheDocument();
     expect(screen.getByText("0 completed")).toBeInTheDocument();
     expect(screen.getByText("Graded exams")).toBeInTheDocument();
     expect(screen.queryByText(/focus area|study recommendation/i)).not.toBeInTheDocument();

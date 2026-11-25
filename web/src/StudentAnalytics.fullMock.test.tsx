@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import StudentAnalytics from "./StudentAnalytics";
 import { request } from "./apiClient";
 
@@ -21,9 +21,10 @@ describe("Mock test performance analytics", () => {
       throw new Error("Unexpected analytics endpoint: " + path);
     });
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Mock Test Analytics" })).toBeInTheDocument();
-    expect(screen.getByText("80 correct / 180 answered")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Subject-wise mock accuracy" })).toBeInTheDocument();
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Full mock results", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByText("80 correct of 180 answered")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Subject accuracy" })).toBeInTheDocument();
     expect(screen.getByText("Maths")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
     expect(screen.queryByText(/topic breakdown|topic mastery/i)).not.toBeInTheDocument();

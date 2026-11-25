@@ -5,10 +5,10 @@ import StudentNavigation from "./StudentNavigation";
 const props = {
   activePage: "dashboard" as const,
   setActivePage: vi.fn(),
-  unreadAnnouncementCount: 2,
   unreadNotificationCount: 3,
   theme: "light" as const,
   onToggleTheme: vi.fn(),
+  onOpenNotifications: vi.fn(),
   email: "student@example.com",
   busy: false,
   onSignOut: vi.fn(),
@@ -19,9 +19,12 @@ describe("StudentNavigation", () => {
     const setActivePage = vi.fn();
     render(<StudentNavigation {...props} setActivePage={setActivePage} />);
     const nav = screen.getByRole("navigation", { name: "Student navigation" });
-    expect(within(nav).getByText("Home")).toBeInTheDocument();
+    const dashboard = within(nav).getByRole("button", { name: "Dashboard" });
+    expect(dashboard).toBeInTheDocument();
+    expect(dashboard.closest("details")).toBeNull();
+    expect(within(nav).queryByText("Home")).not.toBeInTheDocument();
+    expect(within(nav).queryByText("Learning")).not.toBeInTheDocument();
     const exams = within(nav).getByText("Exams & results").closest("details")!;
-    fireEvent.click(within(exams).getByText("Exams & results"));
     expect(within(exams).getByRole("button", { name: "Practice exams" })).toBeEnabled();
     expect(within(exams).getByRole("button", { name: "Question bank" })).toBeEnabled();
     expect(within(exams).getByRole("button", { name: "Assigned / real exams" })).toBeEnabled();
@@ -32,9 +35,10 @@ describe("StudentNavigation", () => {
     expect(setActivePage).toHaveBeenCalledWith("assignments");
   });
 
-  it("shows a compact mobile bottom navigation and routes remaining pages through More", () => {
+  it("keeps unfinished learning pages out of More and puts account access there", () => {
     const setActivePage = vi.fn();
-    render(<StudentNavigation {...props} setActivePage={setActivePage} />);
+    const onOpenNotifications = vi.fn();
+    render(<StudentNavigation {...props} setActivePage={setActivePage} onOpenNotifications={onOpenNotifications} />);
     const mobile = screen.getByRole("navigation", { name: "Mobile student navigation" });
     expect(within(mobile).getByRole("button", { name: "Dashboard" })).toBeEnabled();
     expect(within(mobile).getByRole("button", { name: "Practice exams" })).toBeEnabled();
@@ -44,8 +48,12 @@ describe("StudentNavigation", () => {
     fireEvent.click(more);
     expect(more).toHaveAttribute("aria-expanded", "true");
     const menu = within(mobile).getByRole("menu", { name: "More student pages" });
-    fireEvent.click(within(menu).getByRole("button", { name: "Learning progress" }));
-    expect(setActivePage).toHaveBeenCalledWith("progress");
+    expect(within(menu).queryByRole("button", { name: "Learning path" })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole("button", { name: "Learning progress" })).not.toBeInTheDocument();
+    fireEvent.click(within(menu).getByRole("button", { name: "Account" }));
+    expect(setActivePage).toHaveBeenCalledWith("account");
     expect(more).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications, 3 unread" }));
+    expect(onOpenNotifications).toHaveBeenCalled();
   });
 });

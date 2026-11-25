@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import StudentAnalytics from "./StudentAnalytics";
 import { request } from "./apiClient";
 
@@ -19,7 +19,8 @@ describe("Performance analytics scope", () => {
       throw new Error("Learning endpoint must not be requested from performance analytics: " + path);
     });
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Practice Exam Analytics" })).toBeInTheDocument();
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Practice performance", { selector: "h2" })).toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(2);
     expect(screen.queryByText("Your next study steps")).not.toBeInTheDocument();
     expect(screen.queryByText("Areas to strengthen")).not.toBeInTheDocument();

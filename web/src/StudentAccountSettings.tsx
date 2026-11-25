@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 type ToggleRowProps = {
   title: string;
@@ -27,8 +27,6 @@ type Props = {
   onThemeChange: (theme: "light" | "dark") => void;
   reduceMotion: boolean;
   onReduceMotionChange: (value: boolean) => void;
-  showNotificationBanners: boolean;
-  onShowNotificationBannersChange: (value: boolean) => void;
   showAnnouncementPopups: boolean;
   onShowAnnouncementPopupsChange: (value: boolean) => void;
   busy: boolean;
@@ -37,13 +35,15 @@ type Props = {
 
 export default function StudentAccountSettings(props: Props) {
   const { page, email, userId, role, theme, onThemeChange, reduceMotion, onReduceMotionChange,
-    showNotificationBanners, onShowNotificationBannersChange, showAnnouncementPopups,
+    showAnnouncementPopups,
     onShowAnnouncementPopupsChange, busy, onSignOut } = props;
-  if (page === "account") {
+  const [isSettings, setIsSettings] = useState(page === "settings");
+  if (page === "account" && !isSettings) {
     return (
       <section className="account-settings-page">
         <header className="page-heading">
           <div><p className="eyebrow">YOUR ACCOUNT</p><h1>Account</h1><p className="muted">Manage your ArcTester account and sign-in details.</p></div>
+          <button type="button" className="ghost" onClick={() => setIsSettings(true)}>Settings</button>
         </header>
         <SettingSection title="Profile">
           <div className="account-profile-summary"><span className="account-profile-avatar" aria-hidden="true">{email.slice(0, 1).toUpperCase()}</span><div><strong>Student account</strong><p>{email}</p></div></div>
@@ -61,6 +61,7 @@ export default function StudentAccountSettings(props: Props) {
     <section className="account-settings-page">
       <header className="page-heading">
         <div><p className="eyebrow">PREFERENCES</p><h1>Settings</h1><p className="muted">Make ArcTester comfortable and accessible on your device.</p></div>
+        <button type="button" className="ghost" onClick={() => setIsSettings(false)}>Back to account</button>
       </header>
       <SettingSection title="Appearance">
         <div className="account-theme-picker"><div><strong>Theme</strong><small>Choose how ArcTester looks.</small></div><div className="account-theme-options">
@@ -68,9 +69,8 @@ export default function StudentAccountSettings(props: Props) {
           <button type="button" className={theme === "dark" ? "selected" : ""} aria-pressed={theme === "dark"} onClick={() => onThemeChange("dark")}>☾ Dark</button>
         </div></div>
       </SettingSection>
-      <SettingSection title="Notifications">
-        <ToggleRow title="Notification banners" description="Show unread account and learning messages in the app." checked={showNotificationBanners} onChange={onShowNotificationBannersChange} />
-        <ToggleRow title="Announcement pop-ups" description="Show new announcements when you open ArcTester." checked={showAnnouncementPopups} onChange={onShowAnnouncementPopupsChange} />
+      <SettingSection title="Announcements">
+        <ToggleRow title="Announcement pop-ups" description="Show new administrator announcements once, until you acknowledge them." checked={showAnnouncementPopups} onChange={onShowAnnouncementPopupsChange} />
       </SettingSection>
       <SettingSection title="Accessibility">
         <ToggleRow title="Reduce motion" description="Reduce animated transitions and movement." checked={reduceMotion} onChange={onReduceMotionChange} />

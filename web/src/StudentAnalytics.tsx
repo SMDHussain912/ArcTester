@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
 import type { PerformanceOverview, FullMockPerformanceReport } from "./lib/api";
 import Skeleton from "./components/Skeleton";
-import { AnalyticsBarChart, AnalyticsStackedBar } from "./AnalyticsCharts";
+import { AnalyticsBarChart, AnalyticsDonutChart, AnalyticsLineChart, AnalyticsProgressRing } from "./AnalyticsCharts";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
@@ -81,153 +81,107 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
 
   useEffect(() => {
     void loadAnalytics();
-    return () => { generationRef.current += 1; };
   }, [loadAnalytics]);
 
-  const percent = (value: number | null | undefined) => value == null ? "—" : Math.round(value * 100) + "%";
+  const ratioPercent = (value: number | null | undefined) => value == null ? null : Math.max(0, Math.min(100, value * 100));
+  const formalAccuracy = overview?.formalExams.scorePercentage ?? null;
 
   return (
-    <div className="stack performance-analytics">
-      <section className="page-intro">
-        <p className="eyebrow">EXAM PERFORMANCE</p>
-        <h1>Performance Analytics</h1>
-        <p className="muted">Compare results from practice attempts, full mock tests and assigned exams.</p>
+    <div className="stack performance-analytics student-analytics">
+      <section className="analytics-page-heading">
+        <div>
+          <p className="eyebrow">YOUR EXAM INSIGHTS</p>
+          <h1>Performance</h1>
+          <p className="muted">A clear view of your practice, mock tests and assigned exam results.</p>
+        </div>
+        <button type="button" className="button button-secondary analytics-refresh" onClick={() => void loadAnalytics()} disabled={loading}>
+          {loading ? "Updating…" : "↻ Refresh"}
+        </button>
       </section>
 
-      <div className="row analytics-toolbar">
-        <span className="muted" role="status">{loading ? "Updating performance…" : "Performance data is up to date"}</span>
-        <button type="button" className="button button-secondary" onClick={() => void loadAnalytics()} disabled={loading}>
-          {loading ? "Refreshing…" : "Refresh performance"}
-        </button>
+      <div className="analytics-status-line" role="status">
+        <span className={"analytics-status-dot" + (loading ? " updating" : "")} />
+        {loading ? "Updating performance data" : "Latest results loaded"}
       </div>
 
       {errors.length ? (
         <div className="error analytics-errors" role="alert">
           <strong>Some performance data could not be loaded.</strong>
           <ul>{errors.map((message) => <li key={message}>{message}</li>)}</ul>
-          <span>Available sections remain visible. Refresh to retry.</span>
+          <span>Other available sections remain visible. Refresh to retry.</span>
         </div>
       ) : null}
 
       {loading && !overview && !fullMock ? (
-        <div className="stack" style={{ gap: 10 }}>
-          <Skeleton variant="stat-tile" className="skeleton-stat" />
-          <Skeleton variant="stat-tile" className="skeleton-stat" />
-        </div>
+        <div className="analytics-loading-grid"><Skeleton variant="stat-tile" className="skeleton-stat" /><Skeleton variant="stat-tile" className="skeleton-stat" /></div>
       ) : null}
 
-      <section className="panel" aria-labelledby="practice-exam-analytics-title">
-        <div className="panel-header"><h2 id="practice-exam-analytics-title">Practice Exam Analytics</h2></div>
-        <p className="muted">Performance from completed practice sessions only.</p>
-        {overview ? (
-          <>
-            <div className="stat-grid">
-              <article className="stat-card"><div className="stat-label">Practice attempts</div><div className="stat-value">{overview.practice.completedAttempts}</div><div className="stat-caption">Completed practice sessions</div></article>
-              <article className="stat-card"><div className="stat-label">Questions answered</div><div className="stat-value">{overview.practice.correct + overview.practice.incorrect}</div><div className="stat-caption">{overview.practice.correct} correct · {overview.practice.incorrect} incorrect</div></article>
-              <article className="stat-card"><div className="stat-label">Practice accuracy</div><div className="stat-value">{percent(overview.practice.accuracy)}</div><div className="stat-caption">Correct / answered questions</div></article>
+      {overview ? (
+        <section className="analytics-section panel" aria-labelledby="practice-exam-analytics-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">01 · PRACTICE</span><h2 id="practice-exam-analytics-title">Practice performance</h2><p>Completed practice sessions only.</p></div>
+            <span className="analytics-section-count">{overview.practice.completedAttempts} attempts</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={ratioPercent(overview.practice.accuracy)} label="Practice accuracy" detail={overview.practice.correct + " correct of " + (overview.practice.correct + overview.practice.incorrect) + " answered"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Questions answered</span><strong>{(overview.practice.correct + overview.practice.incorrect).toLocaleString()}</strong><small>{overview.practice.questions.toLocaleString()} total in completed sessions</small></article>
+              <article className="analytics-kpi"><span>Correct answers</span><strong className="analytics-kpi-positive">{overview.practice.correct.toLocaleString()}</strong><small>{overview.practice.incorrect.toLocaleString()} incorrect · {overview.practice.unanswered.toLocaleString()} skipped</small></article>
+              <article className="analytics-kpi"><span>Completed attempts</span><strong>{overview.practice.completedAttempts.toLocaleString()}</strong><small>Practice sessions submitted</small></article>
             </div>
-            <div className="analytics-chart-grid">
-              <AnalyticsStackedBar
-                title="Practice answer breakdown"
-                segments={[
-                  { label: "Correct", value: overview.practice.correct, color: "var(--analytics-correct, #16a34a)" },
-                  { label: "Incorrect", value: overview.practice.incorrect, color: "var(--analytics-incorrect, #dc2626)" },
-                  { label: "Unanswered", value: overview.practice.unanswered, color: "var(--analytics-unanswered, #94a3b8)" },
-                ]}
-              />
-              <AnalyticsBarChart
-                title="Practice accuracy by attempt"
-                description="Recent completed practice attempts, shown in chronological order."
-                items={(overview.practice.trend ?? []).filter((attempt) => attempt.accuracy !== null).map((attempt, index) => ({
-                  label: "Attempt " + (index + 1),
-                  value: Math.round((attempt.accuracy ?? 0) * 100),
-                  detail: new Date(attempt.finishedAt).toLocaleDateString() + " · " + attempt.correct + "/" + attempt.total + " correct",
-                }))}
-                maxValue={100}
-                formatValue={(value) => value + "%"}
-                emptyMessage="Complete practice attempts with answered questions to see your accuracy trend."
-              />
-            </div>
-          </>
-        ) : <p className="muted">Practice exam performance is unavailable right now.</p>}
-      </section>
+          </div>
+          <div className="analytics-chart-grid analytics-practice-charts">
+            <AnalyticsLineChart title="Accuracy trend" description="Your recent practice attempts, in order." items={(overview.practice.trend ?? []).filter((attempt) => attempt.accuracy !== null).map((attempt,index)=>({label:"Attempt "+(index+1),value:Math.round((attempt.accuracy??0)*100),detail:new Date(attempt.finishedAt).toLocaleDateString()}))} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Finish more practice attempts to build your trend." />
+            <AnalyticsDonutChart title="Answer mix" segments={[{label:"Correct",value:overview.practice.correct,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:overview.practice.incorrect,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:overview.practice.unanswered,color:"var(--analytics-unanswered,#94a3b8)"}]} />
+          </div>
+        </section>
+      ) : <section className="analytics-section panel"><h2>Practice performance</h2><p className="muted">Practice exam performance is unavailable right now.</p></section>}
 
-      <section className="panel" aria-labelledby="mock-test-analytics-title">
-        <div className="panel-header"><h2 id="mock-test-analytics-title">Mock Test Analytics</h2><span className="pill">{fullMock?.completedFullMocks ?? 0} completed</span></div>
-        <p className="muted">Results from completed full-length mock tests. Unanswered questions are tracked separately and are not counted as incorrect.</p>
-        {fullMock ? (
-          <>
-            <div className="stat-grid">
-              <article className="stat-card"><div className="stat-label">Full mock accuracy</div><div className="stat-value">{percent(fullMock.accuracy)}</div><div className="stat-caption">{fullMock.correct} correct / {fullMock.answeredQuestions} answered</div></article>
-              <article className="stat-card"><div className="stat-label">Mock papers</div><div className="stat-value">{fullMock.completedFullMocks}</div><div className="stat-caption">{fullMock.questionCount} paper questions total</div></article>
-              <article className="stat-card"><div className="stat-label">Unanswered</div><div className="stat-value">{fullMock.unanswered}</div><div className="stat-caption">Shown separately from incorrect</div></article>
+      {fullMock ? (
+        <section className="analytics-section panel" aria-labelledby="mock-test-analytics-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">02 · MOCK TESTS</span><h2 id="mock-test-analytics-title">Full mock results</h2><p>Completed full-length mock tests. Unanswered questions stay separate from incorrect answers.</p></div>
+            <span className="analytics-section-count">{fullMock.completedFullMocks} completed</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={ratioPercent(fullMock.accuracy)} label="Mock accuracy" detail={fullMock.correct + " correct of " + fullMock.answeredQuestions + " answered"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Questions in papers</span><strong>{fullMock.questionCount.toLocaleString()}</strong><small>Across completed mock papers</small></article>
+              <article className="analytics-kpi"><span>Answered</span><strong>{fullMock.answeredQuestions.toLocaleString()}</strong><small>{fullMock.unanswered.toLocaleString()} unanswered</small></article>
+              <article className="analytics-kpi"><span>Incorrect</span><strong className="analytics-kpi-negative">{fullMock.incorrect.toLocaleString()}</strong><small>Questions answered incorrectly</small></article>
             </div>
-            <div className="analytics-chart-grid">
-              <AnalyticsStackedBar
-                title="Mock test answer breakdown"
-                segments={[
-                  { label: "Correct", value: fullMock.correct, color: "var(--analytics-correct, #16a34a)" },
-                  { label: "Incorrect", value: fullMock.incorrect, color: "var(--analytics-incorrect, #dc2626)" },
-                  { label: "Unanswered", value: fullMock.unanswered, color: "var(--analytics-unanswered, #94a3b8)" },
-                ]}
-              />
-              <AnalyticsBarChart
-                title="Subject-wise mock accuracy"
-                description="Accuracy is based on answered questions in completed full mocks."
-                items={fullMock.subjects.filter((subject) => subject.accuracy !== null).map((subject) => ({
-                  label: subject.subject,
-                  value: Math.round((subject.accuracy ?? 0) * 100),
-                  detail: subject.answeredQuestions + " answered",
-                })).sort((a, b) => a.value - b.value)}
-                maxValue={100}
-                formatValue={(value) => value + "%"}
-                emptyMessage="Complete a full mock with answered questions to see subject results."
-              />
-            </div>
-            {fullMock.latestMockAt ? <p className="muted">Most recent completed mock: {new Date(fullMock.latestMockAt).toLocaleDateString()}</p> : null}
-          </>
-        ) : <p className="muted">Mock test performance is unavailable right now.</p>}
-      </section>
-
-      <section className="panel" aria-labelledby="assigned-exam-performance-title">
-        <div className="panel-header"><h2 id="assigned-exam-performance-title">Assigned / Real Exam Results</h2></div>
-        <p className="muted">Graded results from exams assigned through the exam system. This is exam performance data, not a learning-progress score.</p>
-        {overview ? (
-          <>
-          <div className="stat-grid">
-            <article className="stat-card"><div className="stat-label">Graded exams</div><div className="stat-value">{overview.formalExams.graded}</div><div className="stat-caption">Results finalized</div></article>
-            <article className="stat-card"><div className="stat-label">Average exam score</div><div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : Math.round(overview.formalExams.scorePercentage) + "%"}</div><div className="stat-caption">{overview.formalExams.score ?? "—"} / {overview.formalExams.maximumScore ?? "—"} total points</div></article>
-            <article className="stat-card"><div className="stat-label">Review required</div><div className="stat-value">{overview.formalExams.reviewRequired}</div><div className="stat-caption">Awaiting manual review</div></article>
           </div>
           <div className="analytics-chart-grid">
-            <AnalyticsStackedBar
-              title="Assigned exam answer breakdown"
-              segments={[
-                { label: "Correct", value: overview.formalExams.correct ?? 0, color: "var(--analytics-correct, #16a34a)" },
-                { label: "Incorrect", value: overview.formalExams.incorrect ?? 0, color: "var(--analytics-incorrect, #dc2626)" },
-                { label: "Unanswered", value: overview.formalExams.unanswered ?? 0, color: "var(--analytics-unanswered, #94a3b8)" },
-              ]}
-            />
-            <AnalyticsBarChart
-              title="Assigned exam subject accuracy"
-              description="Accuracy from graded assigned exams, by subject."
-              items={(overview.formalExams.subjects ?? []).filter((subject) => subject.accuracy !== null).map((subject) => ({
-                label: subject.subject,
-                value: Math.round((subject.accuracy ?? 0) * 100),
-                detail: subject.correct + " correct · " + subject.incorrect + " incorrect",
-              })).sort((a, b) => a.value - b.value)}
-              maxValue={100}
-              formatValue={(value) => value + "%"}
-              emptyMessage="Graded subject results will appear here when available."
-            />
+            <AnalyticsBarChart title="Subject accuracy" description="Accuracy from answered questions in completed full mocks." items={fullMock.subjects.filter(subject=>subject.accuracy!==null).map(subject=>({label:subject.subject,value:Math.round((subject.accuracy??0)*100),detail:subject.answeredQuestions+" answered"})).sort((a,b)=>a.value-b.value)} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Subject results appear after you complete a full mock." />
+            <AnalyticsDonutChart title="Mock answer mix" segments={[{label:"Correct",value:fullMock.correct,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:fullMock.incorrect,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:fullMock.unanswered,color:"var(--analytics-unanswered,#94a3b8)"}]} />
           </div>
-          </>
-        ) : <p className="muted">Assigned exam results are unavailable right now.</p>}
-      </section>
+          {fullMock.latestMockAt ? <p className="analytics-last-updated">Latest completed mock: {new Date(fullMock.latestMockAt).toLocaleDateString()}</p> : null}
+        </section>
+      ) : <section className="analytics-section panel"><h2>Full mock results</h2><p className="muted">Mock test performance is unavailable right now.</p></section>}
 
-      <div className="row">
-        <button className="button button-secondary" onClick={() => setActivePage("assignments")}>View assigned exams</button>
-        <button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Back to dashboard</button>
+      {overview ? (
+        <section className="analytics-section panel" aria-labelledby="assigned-exam-performance-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">03 · ASSIGNED EXAMS</span><h2 id="assigned-exam-performance-title">Assigned / real exam results</h2><p>Finalized results from exams assigned through your exam system.</p></div>
+            <span className="analytics-section-count">{overview.formalExams.graded} graded</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={formalAccuracy} label="Average exam score" detail={(overview.formalExams.score ?? "—") + " of " + (overview.formalExams.maximumScore ?? "—") + " points"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Graded exams</span><strong>{overview.formalExams.graded.toLocaleString()}</strong><small>Results finalized</small></article>
+              <article className="analytics-kpi"><span>Awaiting review</span><strong>{overview.formalExams.reviewRequired.toLocaleString()}</strong><small>Pending manual marking</small></article>
+              <article className="analytics-kpi"><span>Exam submissions</span><strong>(overview.formalExams.submissions ?? 0).toLocaleString()</strong><small>Assigned / real exams submitted</small></article>
+            </div>
+          </div>
+          <div className="analytics-chart-grid">
+            <AnalyticsBarChart title="Subject score" description="Accuracy from graded assigned exams, by subject." items={(overview.formalExams.subjects??[]).filter(subject=>subject.accuracy!==null).map(subject=>({label:subject.subject,value:Math.round((subject.accuracy??0)*100),detail:subject.correct+" correct · "+subject.incorrect+" incorrect"})).sort((a,b)=>a.value-b.value)} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Subject scores will appear after assigned exams are graded." />
+            <AnalyticsDonutChart title="Exam answer mix" segments={[{label:"Correct",value:overview.formalExams.correct??0,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:overview.formalExams.incorrect??0,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:overview.formalExams.unanswered??0,color:"var(--analytics-unanswered,#94a3b8)"}]} />
+          </div>
+        </section>
+      ) : <section className="analytics-section panel"><h2>Assigned / real exam results</h2><p className="muted">Assigned exam results are unavailable right now.</p></section>}
+
+      <div className="analytics-footer-action">
+        <button className="button button-secondary" onClick={() => setActivePage("assignments")}>View assigned exams <span aria-hidden="true">→</span></button>
       </div>
     </div>
   );

@@ -11,8 +11,6 @@ import AdminWorkspace from "./AdminWorkspace";
 import AuthScreen from "./AuthScreen";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
-import StudentNotificationBanner from "./StudentNotificationBanner";
-import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications, type StudentNotification } from "./useStudentCommunications";
 import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
@@ -25,13 +23,12 @@ import StudentPracticeQuickActions from "./StudentPracticeQuickActions";
 import StudentPracticeSubjectTopicFilters from "./StudentPracticeSubjectTopicFilters";
 import StudentPracticePaperConfiguration from "./StudentPracticePaperConfiguration";
 import StudentPracticeResumePreview from "./StudentPracticeResumePreview";
-import StudentAnnouncementPreview from "./StudentAnnouncementPreview";
 import StudentAnalytics from "./StudentAnalytics";
 import StudentMcpAssistant from "./StudentMcpAssistant";
 import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
-import StudentComingSoon from "./StudentComingSoon";
 import StudentAccountSettings from "./StudentAccountSettings";
+import StudentAbout from "./StudentAbout";
 import AppSplash from "./components/AppSplash";
 import Toast from "./components/Toast";
 import { OnlineStatusContext } from "./OnlineStatusContext";
@@ -94,14 +91,11 @@ export default function App() {
 
   const [activePage, setActivePage] = useState<StudentPage>("dashboard");
   const {
-    announcements,
     activeAnnouncements,
     notifications: studentNotifications,
     unreadNotificationCount,
-    refreshAnnouncements,
     refreshNotifications,
     dismissAnnouncement,
-    acknowledgeAnnouncement,
     markNotificationRead,
     markAllNotificationsRead,
     clear: clearStudentCommunications,
@@ -117,7 +111,6 @@ export default function App() {
     () => (safeStorage.getItem("arctester-theme") as "light" | "dark") || "light"
   );
   const [reduceMotion, setReduceMotion] = useState(() => safeStorage.getItem("arctester-reduce-motion") === "true");
-  const [showNotificationBanners, setShowNotificationBanners] = useState(() => safeStorage.getItem("arctester-show-notification-banners") !== "false");
   const [showAnnouncementPopups, setShowAnnouncementPopups] = useState(() => safeStorage.getItem("arctester-show-announcement-popups") !== "false");
 
 
@@ -129,10 +122,6 @@ export default function App() {
     document.documentElement.dataset.reduceMotion = reduceMotion ? "true" : "false";
     safeStorage.setItem("arctester-reduce-motion", String(reduceMotion));
   }, [reduceMotion]);
-  function updateNotificationBanners(value: boolean) {
-    setShowNotificationBanners(value);
-    safeStorage.setItem("arctester-show-notification-banners", String(value));
-  }
   function updateAnnouncementPopups(value: boolean) {
     setShowAnnouncementPopups(value);
     safeStorage.setItem("arctester-show-announcement-popups", String(value));
@@ -256,9 +245,9 @@ export default function App() {
       "/exam": "assignments",
       "/question-bank": "question-bank",
       "/notifications": "notifications",
-      "/announcements": "announcements",
+      "/announcements": "dashboard",
       "/account": "account",
-      "/settings": "settings",
+      "/settings": "account",
       "/progress": "progress",
       "/learning": "learning",
       "/lessons": "lessons",
@@ -560,8 +549,8 @@ export default function App() {
       <StudentNavigation
         activePage={activePage}
         setActivePage={setActivePage}
-        unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length}
         unreadNotificationCount={unreadNotificationCount}
+        onOpenNotifications={() => setActivePage("notifications")}
         theme={theme}
         onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
         email={user.email}
@@ -569,27 +558,11 @@ export default function App() {
         onSignOut={signOut}
       />
 
-      {user.role === "STUDENT" && !test && !result && announcements.some((item) => !item.seenAt) ? (() => {
-        const notice = announcements.find((item) => !item.seenAt)!;
-        return (
-          <div className="announcement-overlay">
-            <section className="announcement-popup panel" role="dialog" aria-modal="true" aria-labelledby="announcement-popup-title">
-              <div className="announcement-popup-top"><span className="status status-pending">NEW ANNOUNCEMENT</span><span className="muted">{new Date(notice.publishedAt).toLocaleString()}</span></div>
-              <p className="eyebrow">FROM ARCTESTER ADMIN</p>
-              <h2 id="announcement-popup-title">{notice.title}</h2>
-              <p className="announcement-popup-message">{notice.message}</p>
-              {notice.expiresAt ? <p className="announcement-popup-expiry">Expires {new Date(notice.expiresAt).toLocaleString()}</p> : null}
-              <button className="primary" disabled={busy} onClick={() => void acknowledgeAnnouncement(notice.id)}>{busy ? "Saving…" : "Got it · Mark as seen"}</button>
-              <p className="muted announcement-popup-footnote">You won't see this announcement again after marking it as seen.</p>
-            </section>
-          </div>
-        );
-      })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "coming-soon" || activePage === "learning" || activePage === "learning-summary" || activePage === "path" || activePage === "lessons" ? (
-          <StudentComingSoon />
-        ) : activePage === "account" || activePage === "settings" ? (
+        {activePage === "about" ? (
+          <StudentAbout />
+        ) : activePage === "account" ? (
           <StudentAccountSettings
             page={activePage}
             email={user.email}
@@ -599,8 +572,6 @@ export default function App() {
             onThemeChange={setTheme}
             reduceMotion={reduceMotion}
             onReduceMotionChange={setReduceMotion}
-            showNotificationBanners={showNotificationBanners}
-            onShowNotificationBannersChange={updateNotificationBanners}
             showAnnouncementPopups={showAnnouncementPopups}
             onShowAnnouncementPopupsChange={updateAnnouncementPopups}
             busy={busy}
@@ -631,12 +602,6 @@ export default function App() {
             onMarkAllRead={() => void markAllNotificationsRead()}
             onOpen={(id) => void openStudentNotification(id)}
           />
-        ) : activePage === "announcements" ? (
-          <StudentAnnouncementsInbox
-            items={announcements}
-            onRefresh={() => void refreshAnnouncements().catch((cause) => setError((cause as Error).message))}
-            onAcknowledge={(id) => void acknowledgeAnnouncement(id)}
-          />
         ) : activePage === "history" ? (
           <StudentPracticeHistory />
         ) : activePage === "ai-practice" ? (
@@ -653,14 +618,7 @@ export default function App() {
           <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
           <>
-            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} unreadAnnouncementCount={announcements.filter((item) => !item.seenAt).length} unreadNotificationCount={unreadNotificationCount} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
-            {activePage === "dashboard" && announcements.length > 0 ? (
-              <StudentAnnouncementPreview
-                announcement={announcements[0]}
-                announcementCount={announcements.length}
-                onViewAll={() => setActivePage("announcements")}
-              />
-            ) : null}
+            <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
             {activePage === "dashboard" ? <DashboardProgressSummary onOpenProgress={() => setActivePage("progress")} /> : null}
             {activePage === "dashboard" && test ? (
               <StudentPracticeResumePreview
@@ -718,13 +676,6 @@ export default function App() {
           </>
         )}
 
-        {showNotificationBanners && activePage !== "notifications" && !test && !result && studentNotifications.find((item) => !item.readAt) && (
-          <StudentNotificationBanner
-            notification={studentNotifications.find((item) => !item.readAt)!}
-            onRead={(id) => void markNotificationRead(id)}
-            onOpen={(notification) => void openStudentNotification(notification)}
-          />
-        )}
       </main>
       {showAnnouncementPopups && activeAnnouncements[0] && (
         <StudentAnnouncementDialog
