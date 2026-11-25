@@ -8,7 +8,10 @@ function response() {
   return { res, state };
 }
 function handlerFor(router: ReturnType<typeof adminStudentRouter>, method: "get" | "patch" | "delete", path: string) {
-  const layer = (router as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: (req: unknown, res: unknown, next: (error?: unknown) => void) => unknown }> }> }).stack.find((item) => item.route?.path === path && item.route.methods[method]);
+  type RouteHandler = (req: unknown, res: unknown, next: (error?: unknown) => void) => unknown;
+  type RouteLayer = { route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: RouteHandler }> } };
+  const stack = (router as unknown as { stack: RouteLayer[] }).stack;
+  const layer = stack.find((item) => item.route?.path === path && item.route.methods[method]);
   if (!layer?.route) throw new Error("Route not found");
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
