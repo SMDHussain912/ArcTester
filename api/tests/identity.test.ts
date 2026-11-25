@@ -14,9 +14,10 @@ const STUDENT_PROFILE = {
   fullName: "Test Student",
   collegeName: "Test Polytechnic",
   collegeCode: "999",
+  registrationNumber: "24999-CM-050",
   postalPin: "533001",
-  branchName: "Diploma in Computer Engineering",
-  branchCode: "DCME",
+  branchName: "Computer Engineering (CME)",
+  branchCode: "CM",
 };
 
 async function request(
