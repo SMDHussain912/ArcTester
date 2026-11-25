@@ -1018,3 +1018,8 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .about-developer-avatar svg{display:block}
 @media(max-width:900px){.security-settings-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.account-setting-section{padding:18px}.security-settings-card{padding:14px}.security-feature-row{grid-template-columns:28px minmax(0,1fr)}.security-feature-state{grid-column:2;justify-items:start;display:flex;align-items:center;flex-wrap:wrap}.account-device-row{grid-template-columns:32px minmax(0,1fr) auto;gap:8px}.account-device-icon{width:32px;height:32px}.account-danger-zone{align-items:flex-start;flex-direction:column}.about-brand-mark{flex-basis:120px;width:120px;height:120px}.about-brand-mark img{max-height:92px}}
+
+/* Student registration academic identity fields */
+.auth-field-hint{margin:-8px 0 2px;color:var(--muted);font-size:11px;line-height:1.55}
+.auth-card input[list]{text-overflow:ellipsis}
+.auth-card input[list]:focus{border-color:var(--accent)}

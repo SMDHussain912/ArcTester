@@ -157,10 +157,19 @@ export async function verifyPasswordAsync(password: string, stored: string): Pro
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
+export const StudentAcademicProfileSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter your full name.").max(100),
+  collegeName: z.string().trim().min(2, "Enter your college name.").max(180),
+  collegeCode: z.string().trim().min(1, "Enter your college PIN / institute code.").max(16),
+  postalPin: z.string().trim().regex(/^\d{6}$/, "Postal PIN must contain 6 digits.").or(z.literal("")).optional(),
+  branchName: z.string().trim().min(2, "Choose or enter your diploma branch.").max(120),
+  branchCode: z.string().trim().max(24).or(z.literal("")).optional(),
+});
+
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
-});
+}).merge(StudentAcademicProfileSchema);
 
 export const LoginSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
@@ -423,8 +432,8 @@ export function authRouter(db: PrismaClient): Router {
       const input = RegisterSchema.parse(req.body);
       const passwordHash = await hashPasswordAsync(input.password);
       const user = await db.user.create({
-        data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING" },
-        select: { id: true, email: true, role: true, accessStatus: true },
+        data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING", fullName: input.fullName, collegeName: input.collegeName, collegeCode: input.collegeCode, postalPin: input.postalPin || null, branchName: input.branchName, branchCode: input.branchCode || null },
+        select: { id: true, email: true, role: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
       });
       res.status(201).json({
         ok: true,
@@ -457,7 +466,7 @@ export function authRouter(db: PrismaClient): Router {
       if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
-      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role } });
+      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode } });
     } catch (error) {
       next(error);
     }
@@ -487,7 +496,7 @@ export function authRouter(db: PrismaClient): Router {
         token,
         tokenType: "Bearer",
         expiresIn: JWT_TTL_SECONDS,
-        user: { id: user.id, email: user.email, role: user.role },
+        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode },
       });
     } catch (error) {
       next(error);
@@ -532,7 +541,7 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true },
+        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
       });
       const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
@@ -571,6 +580,24 @@ export function authRouter(db: PrismaClient): Router {
         message: "Password changed. Other sessions have been revoked.",
         ...(cookieSession ? {} : { token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS }),
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/profile", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = StudentAcademicProfileSchema.parse(req.body);
+      const profile = await db.user.update({
+        where: { id: req.user!.id },
+        data: {
+          ...input,
+          postalPin: input.postalPin || null,
+          branchCode: input.branchCode || null,
+        },
+        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+      });
+      res.json({ ok: true, profile });
     } catch (error) {
       next(error);
     }

@@ -10,6 +10,15 @@ let invitationToken = "";
 let invitationId = "";
 let studentId = 0;
 
+const STUDENT_PROFILE = {
+  fullName: "Test Student",
+  collegeName: "Test Polytechnic",
+  collegeCode: "999",
+  postalPin: "533001",
+  branchName: "Diploma in Computer Engineering",
+  branchCode: "DCME",
+};
+
 async function request(
   path: string,
   method: string,
@@ -55,6 +64,7 @@ describe("identity foundation", () => {
 
   it("allows self-registration without an invitation and leaves the account pending", async () => {
     const response = await request("/auth/register", "POST", {
+      ...STUDENT_PROFILE,
       email: "self-signup@arctester.test",
       password: "student-password-123",
     });
@@ -129,6 +139,7 @@ describe("identity foundation", () => {
 
   it("self-registers a student, requires approval, and prevents duplicate registration", async () => {
     const registered = await request("/auth/register", "POST", {
+      ...STUDENT_PROFILE,
       email: "student@arctester.test",
       password: "student-password-123",
     });
@@ -147,6 +158,7 @@ describe("identity foundation", () => {
     expect(approval.json.student).toMatchObject({ id: studentId, accessStatus: "APPROVED" });
 
     const reused = await request("/auth/register", "POST", {
+      ...STUDENT_PROFILE,
       email: "student@arctester.test",
       password: "another-password-123",
     });

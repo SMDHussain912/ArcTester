@@ -73,6 +73,12 @@ model User {
   passwordHash       String
   role               String       @default("STUDENT")
   accessStatus        String       @default("APPROVED")
+  fullName           String?
+  collegeName         String?
+  collegeCode         String?
+  postalPin           String?
+  branchName          String?
+  branchCode          String?
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
@@ -88,6 +94,8 @@ model User {
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
 
+  @@index([collegeName])
+  @@index([branchName])
   @@index([role, accessStatus])
 }
 

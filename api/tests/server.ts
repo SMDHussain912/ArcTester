@@ -169,7 +169,16 @@ export async function signUp(
   const reg = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      fullName: "Test Student",
+      collegeName: "Test Polytechnic",
+      collegeCode: "999",
+      postalPin: "533001",
+      branchName: "Diploma in Computer Engineering",
+      branchCode: "DCME",
+    }),
   });
   if (reg.status !== 201) {
     throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);

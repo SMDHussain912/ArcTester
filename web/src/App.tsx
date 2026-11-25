@@ -8,7 +8,7 @@ import { buildPracticeConfig, type PracticeConfig, type PracticeQuestionType } f
 import { ApiRequestError, createApiClient } from "./apiClient";
 import { getRemainingPracticeSeconds } from "./practiceTimer";
 import AdminWorkspace from "./AdminWorkspace";
-import AuthScreen from "./AuthScreen";
+import AuthScreen, { type AcademicRegistration } from "./AuthScreen";
 import StudentNavigation, { type StudentPage } from "./StudentNavigation";
 import StudentAnnouncementDialog from "./StudentAnnouncementDialog";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
@@ -35,7 +35,7 @@ import { OnlineStatusContext } from "./OnlineStatusContext";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
-type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Test = PracticeSessionTest;
 type RestoredTest = Omit<Test, "warnings"> & { warnings?: string[]; serverNow: string; saved: { questionId: number; selectedIndex: number | null; response?: unknown }[] };
@@ -68,6 +68,7 @@ export default function App() {
   const [bank, setBank] = useState<Bank | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
   const [practiceSubjects, setPracticeSubjects] = useState<string[]>([]);
   const [practiceTopicKeys, setPracticeTopicKeys] = useState<string[]>([]);
   const [practiceQuestionCount, setPracticeQuestionCount] = useState(20);
@@ -273,7 +274,7 @@ export default function App() {
         await Promise.all([
           request("/auth/register", {
             method: "POST",
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify({ email, password, ...academicProfile }),
           }),
           animationMinimum,
         ]);
@@ -525,6 +526,8 @@ export default function App() {
         email={email}
         password={password}
         register={register}
+        academicProfile={academicProfile}
+        onAcademicChange={(field, value) => setAcademicProfile((current) => ({ ...current, [field]: value }))}
         busy={busy}
         error={error}
         onEmailChange={setEmail}

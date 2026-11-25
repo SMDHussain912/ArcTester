@@ -24,6 +24,15 @@ const BANK: unknown[] = [
 
 const cookieJar = new Map<string, string>();
 
+const STUDENT_PROFILE = {
+  fullName: "Test Student",
+  collegeName: "Test Polytechnic",
+  collegeCode: "999",
+  postalPin: "533001",
+  branchName: "Diploma in Computer Engineering",
+  branchCode: "DCME",
+};
+
 function setCookieFromResponse(res: Response): void {
   const setCookie = res.headers.getSetCookie?.() ?? [];
   for (const cookie of setCookie) {
@@ -106,6 +115,7 @@ describe("auth", () => {
 
   it("registers a student without an invitation and leaves approval pending", async () => {
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
       email: "alice@example.com",
       password: "secret1234",
     });
@@ -114,9 +124,46 @@ describe("auth", () => {
     expect((res.json as { user: { accessStatus: string } }).user.accessStatus).toBe("PENDING");
   });
 
+  it("requires academic identity fields for new student registration", async () => {
+    const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      email: "missing-profile@example.com",
+      password: "secret1234",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("updates and returns the student's academic profile", async () => {
+    const email = "profile-update@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
+      email,
+      password: "profile-password-123",
+    });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "profile-password-123" });
+    expect(login.status).toBe(200);
+    const updatedProfile = {
+      fullName: "Updated Test Student",
+      collegeName: "New Polytechnic",
+      collegeCode: "321",
+      postalPin: "522001",
+      branchName: "Diploma in Electrical and Electronics Engineering",
+      branchCode: "DEEE",
+    };
+    const patch = await fetch(`${server.baseUrl}/auth/profile`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: `ecet_session=${cookieJar.get("ecet_session")}` },
+      body: JSON.stringify(updatedProfile),
+    });
+    expect(patch.status).toBe(200);
+    const me = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
+    expect((me.json as { user: typeof updatedProfile }).user).toMatchObject(updatedProfile);
+  });
+
   it("rejects duplicate email", async () => {
     const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
       email: "alice@example.com",
       password: "secret1234",
       invitationToken,
@@ -128,6 +175,7 @@ describe("auth", () => {
   it("rejects weak password", async () => {
     const invitationToken = await issueTestInvitation(server.db, "bob@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
       email: "bob@example.com",
       password: "short",
       invitationToken,
@@ -162,6 +210,7 @@ describe("auth", () => {
   it("throttles failures per account: one account's failures do not lock out another", async () => {
     const bobToken = await issueTestInvitation(server.db, "bob@example.com");
     await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
       email: "bob@example.com",
       password: "secret1234",
       invitationToken: bobToken,
@@ -226,7 +275,7 @@ describe("auth", () => {
 
   it("changes password, rotates the current session and revokes the previous session", async () => {
     const email = "password-change@example.com";
-    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { email, password: "old-password-123" });
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "old-password-123" });
     await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
     const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "old-password-123" });
     expect(login.status).toBe(200);
@@ -301,6 +350,7 @@ describe("auth — bearer token (native/mobile clients)", () => {
   it("/auth/token returns a JWT without setting a cookie", async () => {
     const invitationToken = await issueTestInvitation(server.db, "mobile@example.com");
     await postJson(`${server.baseUrl}/auth/register`, {
+      ...STUDENT_PROFILE,
       email: "mobile@example.com",
       password: "secret1234",
       invitationToken,

@@ -31,6 +31,7 @@ import { triggerHapticFeedback } from "./src/feedback";
 import { filterResultReview } from "./src/resultReview";
 import { clearPendingPracticeProgress, getPendingPracticeProgress, markPracticeProgressSynced, queuePracticeProgress } from "./src/offlineProgressQueue";
 import { toggleMultiSelectAnswer } from "./src/multiSelectAnswer";
+import { getBranchCode, getCollegeCode, searchBranches, searchColleges, validateAcademicRegistration, type AcademicRegistration } from "./src/academicRegistration";
 
 const API_URL = (() => {
   const url = process.env.EXPO_PUBLIC_API_URL;
@@ -40,7 +41,7 @@ const API_URL = (() => {
   if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
   return url.replace(/\/+$/, "");
 })();
-type User = { id: number; email: string; role: "ADMIN" | "STUDENT" };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null };
 type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[]; dailyChallengeCompleted: boolean };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Announcement = {
@@ -131,6 +132,7 @@ async function clearPracticeRecoveryIfMatches(userId: number, attemptId: number)
 export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
   const [register, setRegister] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -691,6 +693,10 @@ export default function App() {
   }
 
   async function authenticate() {
+    if (register) {
+      const validationError = validateAcademicRegistration(academicProfile);
+      if (validationError) { setError(validationError); return; }
+    }
     setBusy(true);
     setError("");
     try {
@@ -700,6 +706,7 @@ export default function App() {
           body: JSON.stringify({
             email: email.trim(),
             password,
+            ...academicProfile,
           }),
         });
         setRegister(false);
@@ -1076,6 +1083,85 @@ export default function App() {
                 ? "Register with your email. An administrator will review your account before you can sign in."
                 : "Sign in to continue your preparation."}
             </Text>
+            {register ? (
+              <View>
+                <TextInput
+                  accessibilityLabel="Full name"
+                  autoCapitalize="words"
+                  placeholder="Full name"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.fullName}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, fullName: value }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+                <TextInput
+                  accessibilityLabel="College / Polytechnic"
+                  autoCapitalize="words"
+                  placeholder="Search or type college / polytechnic"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.collegeName}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, collegeName: value, collegeCode: getCollegeCode(value) }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+                {searchColleges(academicProfile.collegeName).length > 0 ? (
+                  <View style={[styles.suggestionList, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
+                    {searchColleges(academicProfile.collegeName).map((college) => (
+                      <TouchableOpacity key={college.code} accessibilityRole="button" onPress={() => setAcademicProfile((current) => ({ ...current, collegeName: college.name, collegeCode: college.code }))} style={[styles.suggestionItem, darkMode && { borderBottomColor: "#334155" }]}>
+                        <Text style={[styles.suggestionName, darkMode && { color: "#f1f5f9" }]}>{college.name}</Text>
+                        <Text style={[styles.suggestionCode, darkMode && { color: "#94a3b8" }]}>{college.code}{college.district ? " · " + college.district : ""}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+                <Text style={[styles.fieldHint, darkMode && { color: "#94a3b8" }]}>If your college is missing, type its name and enter its institute PIN/code below.</Text>
+                <TextInput
+                  accessibilityLabel="College PIN / institute code"
+                  placeholder="College PIN / institute code (e.g. 010)"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.collegeCode}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, collegeCode: value }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+                <TextInput
+                  accessibilityLabel="Postal PIN code"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  placeholder="Postal PIN code (optional, 6 digits)"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.postalPin}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, postalPin: value.replace(/\D/g, "") }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+                <TextInput
+                  accessibilityLabel="Diploma branch"
+                  autoCapitalize="words"
+                  placeholder="Search or type diploma branch"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.branchName}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, branchName: value, branchCode: getBranchCode(value) }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+                {searchBranches(academicProfile.branchName).length > 0 ? (
+                  <View style={[styles.suggestionList, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155" }]}>
+                    {searchBranches(academicProfile.branchName).map((branch, index) => (
+                      <TouchableOpacity key={branch.code + branch.name + index} accessibilityRole="button" onPress={() => setAcademicProfile((current) => ({ ...current, branchName: branch.name, branchCode: branch.code }))} style={[styles.suggestionItem, darkMode && { borderBottomColor: "#334155" }]}>
+                        <Text style={[styles.suggestionName, darkMode && { color: "#f1f5f9" }]}>{branch.name}</Text>
+                        <Text style={[styles.suggestionCode, darkMode && { color: "#94a3b8" }]}>{branch.code}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+                <Text style={[styles.fieldHint, darkMode && { color: "#94a3b8" }]}>You can type a custom branch if it is not in the suggestions.</Text>
+                <TextInput
+                  accessibilityLabel="Branch code"
+                  placeholder="Branch code (optional)"
+                  placeholderTextColor="#8b95a7"
+                  value={academicProfile.branchCode}
+                  onChangeText={(value) => setAcademicProfile((current) => ({ ...current, branchCode: value }))}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+              </View>
+            ) : null}
             <TextInput
               autoCapitalize="none"
               keyboardType="email-address"
@@ -1704,6 +1790,11 @@ const styles = StyleSheet.create({
     borderColor: mobilePalette.light.border,
   },
   heading: { color: mobilePalette.light.text, fontSize: typeScale.size["2xl"], fontWeight: "800", marginTop: 6, marginBottom: 5 },
+  fieldHint: { color: "#8993a5", fontSize: 11, lineHeight: 16, marginTop: 7 },
+  suggestionList: { marginTop: 6, borderWidth: 1, borderColor: "#dce2eb", borderRadius: 12, overflow: "hidden", backgroundColor: "#fff" },
+  suggestionItem: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#e6ebf2" },
+  suggestionName: { color: "#293449", fontSize: 12, fontWeight: "700", lineHeight: 17 },
+  suggestionCode: { color: "#8993a5", fontSize: 10, marginTop: 3 },
   input: {
     borderWidth: 1,
     borderColor: "#dce2eb",

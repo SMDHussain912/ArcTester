@@ -78,6 +78,12 @@ model User {
   passwordHash       String
   role               String       @default("STUDENT")
   accessStatus        String       @default("APPROVED")
+  fullName           String?
+  collegeName         String?
+  collegeCode         String?
+  postalPin           String?
+  branchName          String?
+  branchCode          String?
   // Incremented on logout to invalidate previously issued cookie and bearer JWTs.
   sessionVersion     Int          @default(0)
   createdAt          DateTime     @default(now())
@@ -116,6 +122,8 @@ model User {
   modelRegistryAudits ModelRegistryAudit[]
   modelEvaluations ModelEvaluation[]
 
+  @@index([collegeName])
+  @@index([branchName])
   @@index([role, accessStatus])
 }
 

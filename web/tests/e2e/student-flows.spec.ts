@@ -64,6 +64,12 @@ async function setupStudent(page: Page) {
   const register = await apiRequest(page, "/auth/register", "POST", {
     email: studentEmail,
     password: "StudentPass123!",
+    fullName: "E2E Student",
+    collegeName: "Andhra Polytechnic, Kakinada",
+    collegeCode: "010",
+    postalPin: "533001",
+    branchName: "Diploma in Computer Engineering",
+    branchCode: "DCME",
   });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
   const studentId = register.json.user?.id;
