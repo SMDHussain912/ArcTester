@@ -328,9 +328,9 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
     }
     const sessionId = typeof payload.sid === "string" ? payload.sid : "";
     if (sessionId) {
-      const activeSession = await db.authSession.findFirst({ where: { id: sessionId, userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } });
+      const activeSession = await db.authSession.findFirst({ where: { id: sessionId, userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, lastSeenAt: true } });
       if (!activeSession) return next(forbidden("This device session has been revoked. Sign in again."));
-      await db.authSession.update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } });
+      if (activeSession.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000) await db.authSession.update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } });
     }
     if (user.accessStatus !== "APPROVED") {
       return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
