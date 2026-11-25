@@ -193,6 +193,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
         <div className="panel-header"><h2 id="assigned-exam-performance-title">Assigned / Real Exam Results</h2></div>
         <p className="muted">Graded results from exams assigned through the exam system. This is exam performance data, not a learning-progress score.</p>
         {overview ? (
+          <>
           <div className="stat-grid">
             <article className="stat-card"><div className="stat-label">Graded exams</div><div className="stat-value">{overview.formalExams.graded}</div><div className="stat-caption">Results finalized</div></article>
             <article className="stat-card"><div className="stat-label">Average exam score</div><div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : Math.round(overview.formalExams.scorePercentage) + "%"}</div><div className="stat-caption">{overview.formalExams.score ?? "—"} / {overview.formalExams.maximumScore ?? "—"} total points</div></article>
@@ -220,6 +221,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
               emptyMessage="Graded subject results will appear here when available."
             />
           </div>
+          </>
         ) : <p className="muted">Assigned exam results are unavailable right now.</p>}
       </section>
 
