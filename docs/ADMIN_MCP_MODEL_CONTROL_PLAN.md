@@ -49,7 +49,7 @@ Remaining before calling this phase production-complete:
 - Compute task-specific metrics from actual predictions, not manually supplied claims.
 - Record traceable evaluation evidence with dataset fingerprint, sample count, baseline version and candidate version.
 - Add feature-to-model assignments (e.g. `readiness_classifier`, `question_difficulty`, `recommendation_ranker`) with versioned configuration.
-- Make each feature explicitly load its assigned registered model; keep deterministic/rule-based fallback.
+- Make each feature explicitly load its assigned registered model through the prediction runtime; keep deterministic/rule-based fallback.
 - Add shadow mode, inference telemetry, rollback and stale-model handling before student-facing rollout.
 
 ### Phase 4 — Dataset governance and quality
