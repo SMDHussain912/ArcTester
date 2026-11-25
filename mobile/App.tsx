@@ -717,6 +717,7 @@ export default function App() {
       } else {
         if (twoFactorChallenge) {
           const verified = await api<{ token: string; user: User }>("/auth/token/2fa", { method: "POST", headers: { "x-arctester-client": "mobile" }, body: JSON.stringify({ challengeId: twoFactorChallenge, code: twoFactorCode.trim() }) });
+          if (verified.user.role !== "STUDENT") { setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web."); setTwoFactorChallenge(""); setPassword(""); return; }
           await SecureStore.setItemAsync("arctester-token", verified.token).catch(() => { throw new Error("Secure sign-in storage is unavailable. Update or reinstall ArcTester, then sign in again."); });
           setToken(verified.token); setUser(verified.user); setTwoFactorChallenge(""); setTwoFactorCode("");
           return;
