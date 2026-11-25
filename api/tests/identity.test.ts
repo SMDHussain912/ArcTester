@@ -67,6 +67,7 @@ describe("identity foundation", () => {
     const response = await request("/auth/register", "POST", {
       ...STUDENT_PROFILE,
       email: "self-signup@arctester.test",
+      registrationNumber: "24999-CM-051",
       password: "student-password-123",
     });
     expect(response.status).toBe(201);
