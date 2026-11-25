@@ -6,6 +6,8 @@
     "dev": "NODE_OPTIONS='--require dotenv/config' tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "model:worker": "node dist/modelTrainingWorker.js",
+    "model:worker:dev": "tsx src/modelTrainingWorker.ts",
     "lint": "eslint src tests prisma/seed.ts prisma/seedLearningPathDemo.ts prisma/baseQuestions.ts prisma/bootstrapAdmin.ts",
     "test": "vitest run",
     "prisma:generate": "prisma generate",
