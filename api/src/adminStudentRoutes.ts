@@ -40,7 +40,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
         },
         select: {
           id: true, email: true, fullName: true, collegeName: true, collegeCode: true,
-          postalPin: true, branchName: true, branchCode: true, accessStatus: true, createdAt: true,
+          postalPin: true, branchName: true, branchCode: true, registrationNumber: true, accessStatus: true, createdAt: true,
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: (query.page - 1) * query.limit,
@@ -92,7 +92,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
           email: `deleted-${id.data}-${randomUUID()}@account.deleted.invalid`,
           passwordHash: `deleted:${randomUUID()}`,
           fullName: "Deleted student",
-          collegeName: null, collegeCode: null, postalPin: null, branchName: null, branchCode: null,
+          collegeName: null, collegeCode: null, postalPin: null, branchName: null, branchCode: null, registrationNumber: null,
           accessStatus: "REJECTED",
           sessionVersion: { increment: 1 },
         },
