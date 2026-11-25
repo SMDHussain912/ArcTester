@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AuthScreen from "./AuthScreen";
 function renderAuth(overrides: Partial<React.ComponentProps<typeof AuthScreen>> = {}) {
-  const props = { email: "", password: "", register: false, busy: false, error: "", academicProfile: { fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" }, onAcademicChange: vi.fn(), onEmailChange: vi.fn(), onPasswordChange: vi.fn(), onRegisterChange: vi.fn(), onAuthenticate: vi.fn(), ...overrides };
+  const props = { email: "", password: "", register: false, busy: false, error: "", academicProfile: { fullName: "", collegeName: "", collegeCode: "", registrationNumber: "", branchName: "", branchCode: "" }, onAcademicChange: vi.fn(), onEmailChange: vi.fn(), onPasswordChange: vi.fn(), onRegisterChange: vi.fn(), onAuthenticate: vi.fn(), ...overrides };
   render(<AuthScreen {...props} />); return props;
 }
 describe("AuthScreen", () => {
@@ -24,9 +24,9 @@ describe("AuthScreen", () => {
     expect(screen.getByRole("button", { name: "Show password" })).toBeTruthy();
     expect(screen.getByText("Security check")).toBeTruthy();
     expect(screen.getByLabelText("Full name")).toBeTruthy();
-    expect(screen.getByLabelText("College / Polytechnic")).toBeTruthy();
-    expect(screen.getByLabelText("College PIN / institute code")).toBeTruthy();
-    expect(screen.getByLabelText("Diploma branch")).toBeTruthy();
+    expect(screen.getByLabelText("College / Polytechnic")).toBeTruthy();\n    expect(screen.getByLabelText("Diploma registration number")).toBeTruthy();
+    expect(screen.queryByLabelText("College PIN / institute code")).toBeNull();\n    expect(screen.queryByLabelText("Postal PIN (optional)")).toBeNull();
+    expect(screen.getByLabelText("Diploma branch (6 main branches)")).toBeTruthy();
     expect(screen.getByLabelText("College / Polytechnic").getAttribute("list")).toBe("ap-polytechnic-options");
     expect(screen.getByLabelText("Diploma branch").getAttribute("list")).toBe("ap-diploma-branch-options");
     expect(screen.getByText(/administrator will review your account/i)).toBeTruthy();
@@ -41,9 +41,9 @@ describe("AuthScreen", () => {
   it("autofills institute and course codes from known catalog matches", () => {
     const props = renderAuth({ register: true });
     fireEvent.change(screen.getByLabelText("College / Polytechnic"), { target: { value: "Andhra Polytechnic, Kakinada" } });
-    fireEvent.change(screen.getByLabelText("Diploma branch"), { target: { value: "Diploma in Computer Engineering (Artificial Intelligence)" } });
+    fireEvent.change(screen.getByLabelText("Diploma branch"), { target: { value: "Computer Engineering (CME)" } });
     expect(props.onAcademicChange).toHaveBeenCalledWith("collegeCode", "010");
-    expect(props.onAcademicChange).toHaveBeenCalledWith("branchCode", "CAI");
+    expect(props.onAcademicChange).toHaveBeenCalledWith("branchCode", "CM");
   });
   it("disables submission while busy and exposes API errors", () => {
     renderAuth({ busy: true, error: "The invitation has expired." });
