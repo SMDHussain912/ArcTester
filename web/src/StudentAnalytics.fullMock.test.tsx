@@ -21,9 +21,9 @@ describe("Mock test performance analytics", () => {
       throw new Error("Unexpected analytics endpoint: " + path);
     });
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Mock Test Analytics" })).toBeInTheDocument();
-    expect(screen.getByText("80 correct / 180 answered")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Subject-wise mock accuracy" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Full mock results" })).toBeInTheDocument();
+    expect(screen.getByText("80 correct of 180 answered")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Subject accuracy" })).toBeInTheDocument();
     expect(screen.getByText("Maths")).toBeInTheDocument();
     expect(screen.getByText("25%")).toBeInTheDocument();
     expect(screen.queryByText(/topic breakdown|topic mastery/i)).not.toBeInTheDocument();
