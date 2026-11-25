@@ -28,9 +28,10 @@ const STUDENT_PROFILE = {
   fullName: "Test Student",
   collegeName: "Test Polytechnic",
   collegeCode: "999",
-  postalPin: "533001",
-  branchName: "Diploma in Computer Engineering",
-  branchCode: "DCME",
+  registrationNumber: "24999-CM-053",
+  postalPin: "",
+  branchName: "Computer Engineering (CME)",
+  branchCode: "CM",
 };
 
 function setCookieFromResponse(res: Response): void {
