@@ -15,7 +15,7 @@ import StudentNotificationBanner from "./StudentNotificationBanner";
 import StudentAnnouncementsInbox from "./StudentAnnouncementsInbox";
 import StudentNotificationsInbox from "./StudentNotificationsInbox";
 import { useStudentCommunications, type StudentNotification } from "./useStudentCommunications";
-import { DashboardProgressSummary } from "./StudentProgress";
+import StudentProgress, { DashboardProgressSummary } from "./StudentProgress";
 import StudentGamification from "./StudentGamification";
 import StudentMastery from "./StudentMastery";
 import StudentQuestionBankBrowser from "./StudentQuestionBankBrowser";
@@ -587,7 +587,7 @@ export default function App() {
       })() : null}
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "coming-soon" || activePage === "progress" || activePage === "learning" || activePage === "learning-summary" || activePage === "path" || activePage === "lessons" ? (
+        {activePage === "coming-soon" || activePage === "learning" || activePage === "learning-summary" || activePage === "path" || activePage === "lessons" ? (
           <StudentComingSoon />
         ) : activePage === "account" || activePage === "settings" ? (
           <StudentAccountSettings
@@ -641,6 +641,8 @@ export default function App() {
           <StudentPracticeHistory />
         ) : activePage === "ai-practice" ? (
           <StudentMcpAssistant />
+        ) : activePage === "progress" ? (
+          <StudentProgress />
         ) : activePage === "analytics" ? (
           <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} onStartRecommendedPractice={(item) => {
             if (!item.subject) { setActivePage("practice"); return; }

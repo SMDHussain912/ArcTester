@@ -749,3 +749,12 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
  .mcp-key-row{flex-wrap:wrap}
  .mcp-key-row>div{flex-basis:100%}
 }
+
+/* Student practice accuracy trend chart */
+.student-progress .practice-trend-chart{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(24px,1fr);align-items:end;gap:clamp(6px,1.5vw,14px);height:190px;margin:18px 0 22px;padding:12px 12px 0;border:1px solid var(--border);border-radius:12px;background:var(--bg);overflow-x:auto}
+.student-progress .practice-trend-column{display:grid;grid-template-rows:18px minmax(0,1fr) 22px;align-items:end;justify-items:center;gap:7px;min-width:24px;height:100%;color:var(--muted);font-size:10px}
+.student-progress .practice-trend-value{font-size:10px;font-weight:800;color:var(--text);white-space:nowrap}
+.student-progress .practice-trend-track{display:flex;align-items:end;width:min(100%,32px);height:100%;overflow:hidden;border-radius:7px 7px 2px 2px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));border:1px solid var(--border)}
+.student-progress .practice-trend-track>i{display:block;width:100%;min-height:3px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 55%,var(--surface)));transition:height .35s ease}
+.student-progress .practice-trend-column>small{align-self:center;font-size:10px}
+@media(prefers-reduced-motion:reduce){.student-progress .practice-trend-track>i{transition:none}}

@@ -572,7 +572,10 @@ describe("live Vite application", () => {
       generatedAt: new Date().toISOString(),
       practice: {
         completedAttempts: 5, questions: 30, correct: 24, incorrect: 6, unanswered: 0,
-        accuracy: 0.8, subjects: [], difficulty: [], trend: [],
+        accuracy: 0.8, subjects: [], difficulty: [], trend: [
+          { attemptId: 1, finishedAt: "2026-11-20T10:00:00.000Z", accuracy: 0.6, correct: 6, total: 10 },
+          { attemptId: 2, finishedAt: "2026-11-21T10:00:00.000Z", accuracy: 0.8, correct: 8, total: 10 },
+        ],
       },
       formalExams: {
         submissions: 3, graded: 2, reviewRequired: 1, score: 36, maximumScore: 40,
@@ -600,9 +603,12 @@ describe("live Vite application", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /View detailed progress/ }));
-    expect(await screen.findByRole("heading", { name: "More ways to learn are on the way" })).toBeInTheDocument();
-    expect(screen.getByText("Learning summary")).toBeInTheDocument();
-    expect(screen.getByText("Progress dashboard")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Your progress" })).toBeInTheDocument();
+    expect(screen.getByText("Completed practice tests")).toBeInTheDocument();
+    expect(screen.getByText("Practice accuracy")).toBeInTheDocument();
+    expect(screen.getByText("Official submissions")).toBeInTheDocument();
+    expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("img", { name: "Practice accuracy across recent completed attempts" })).toBeInTheDocument();
   });
 
   it("retries dashboard analytics after an incomplete response", async () => {
