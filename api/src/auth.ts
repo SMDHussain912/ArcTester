@@ -172,12 +172,12 @@ export const RegisterSchema = z.object({
   captchaToken: z.string().optional(),
 }).merge(StudentAcademicProfileSchema);
 
-async function verifyRegistrationCaptcha(token: string | undefined, ip: string): Promise<void> {
+async function verifyRegistrationCaptcha(token: string | undefined, ip: string, nativeClient = false): Promise<void> {
+  // Native app registration remains supported separately and is rate-limited.
+  // Browser registration uses Turnstile when both public/private keys are configured.
+  if (nativeClient) return;
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") throw badRequest("Registration CAPTCHA is not configured. Please contact an administrator.");
-    return;
-  }
+  if (!secret) return;
   if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
   const body = new URLSearchParams({ secret, response: token });
   if (ip && ip !== "unknown") body.set("remoteip", ip);
@@ -455,7 +455,7 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/register", async (req, res, next) => {
     try {
       const input = RegisterSchema.parse(req.body);
-      await verifyRegistrationCaptcha(input.captchaToken, req.ip ?? "unknown");
+      await verifyRegistrationCaptcha(input.captchaToken, req.ip ?? "unknown", req.header("x-arctester-client") === "mobile");
       const passwordHash = await hashPasswordAsync(input.password);
       const user = await db.user.create({
         data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING", fullName: input.fullName, collegeName: input.collegeName, collegeCode: input.collegeCode, postalPin: input.postalPin || null, branchName: input.branchName, branchCode: input.branchCode || null },
