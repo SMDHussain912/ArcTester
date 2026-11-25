@@ -36,7 +36,7 @@ ON DELETE RESTRICT ON UPDATE CASCADE;
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'ModelDataset_createdById_fkey'
+    SELECT 1 FROM pg_constraint WHERE conname = 'ModelDataset_createdById_fkey' AND conrelid = '"ModelDataset"'::regclass
   ) THEN
     ALTER TABLE "ModelDataset"
     ADD CONSTRAINT "ModelDataset_createdById_fkey"
