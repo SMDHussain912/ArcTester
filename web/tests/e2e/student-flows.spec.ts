@@ -87,7 +87,7 @@ test.describe("Student Practice Flow", () => {
 
     // Navigate to practice
     await page.getByRole("navigation", { name: "Student navigation" })
-      .getByRole("button", { name: "Practice", exact: true }).click();
+      .getByRole("button", { name: "Practice exams", exact: true }).click();
 
     // Select a seeded subject and request one question so the test does not
     // depend on the size or distribution of the CI starter question bank.
@@ -122,7 +122,7 @@ test.describe("Full Mock Test", () => {
 
     await expect(page.getByRole("navigation", { name: "Student navigation" })).toBeVisible();
     await page.getByRole("navigation", { name: "Student navigation" })
-      .getByRole("button", { name: "Practice", exact: true }).click();
+      .getByRole("button", { name: "Practice exams", exact: true }).click();
     await page.getByRole("button", { name: "Start mock test" }).click();
 
     // CI intentionally seeds a small starter bank. A full mock must fail closed

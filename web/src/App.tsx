@@ -644,11 +644,7 @@ export default function App() {
         ) : activePage === "progress" ? (
           <StudentProgress />
         ) : activePage === "analytics" ? (
-          <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} onStartRecommendedPractice={(item) => {
-            if (!item.subject) { setActivePage("practice"); return; }
-            const topicKeys = item.topic ? [JSON.stringify([item.subject, item.topic])] : [];
-            void startTest("practice", undefined, buildPracticeConfig([item.subject], topicKeys, item.questionCount, "any"));
-          }} />
+          <StudentAnalytics setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : activePage === "rewards" ? (
           <StudentGamification />
         ) : activePage === "mastery" ? (

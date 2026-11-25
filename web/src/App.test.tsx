@@ -342,7 +342,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(await within(await screen.findByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: "Practice exams" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Maths 3 questions available/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Physics 2 questions available/ }));
     fireEvent.click(screen.getAllByLabelText(/Algebra/)[0]);
@@ -388,7 +388,7 @@ describe("live Vite application", () => {
 
     expect(await screen.findByText(/Secure sign-out failed/)).toBeInTheDocument();
     expect(screen.getByText("learner@example.com")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Practice" })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: "Practice exams" })).toBeInTheDocument();
   });
 
   it("lets students switch tabs during a mock test and resume with answers intact", async () => {
@@ -427,7 +427,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(await within(await screen.findByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: "Practice exams" }));
     fireEvent.click(await screen.findByRole("button", { name: "Start mock test" }));
     const question = await screen.findByText("Which structure follows FIFO?");
     const questionCard = question.closest("article");
@@ -438,7 +438,7 @@ describe("live Vite application", () => {
     expect(await screen.findByRole("heading", { name: "Announcements" })).toBeInTheDocument();
     expect(screen.queryByText("Which structure follows FIFO?")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Practice" }));
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: "Practice exams" }));
     const resumedQuestion = await screen.findByText("Which structure follows FIFO?");
     const resumedCard = resumedQuestion.closest("article");
     expect(resumedCard).not.toBeNull();
@@ -538,7 +538,7 @@ describe("live Vite application", () => {
     });
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Practice" }));
+    fireEvent.click(await within(await screen.findByRole("complementary", { name: "Student workspace" })).findByRole("button", { name: "Practice exams" }));
     fireEvent.click(await screen.findByRole("button", { name: "Start mock test" }));
     expect(await screen.findByText("Timed question?")).toBeInTheDocument();
     expect(screen.getByText("01:00 remaining")).toBeInTheDocument();

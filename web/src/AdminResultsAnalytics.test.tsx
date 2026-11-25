@@ -12,8 +12,12 @@ describe("AdminResultsAnalytics", () => {
     render(<AdminResultsAnalytics results={results} onRefresh={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Results & analytics" })).toBeTruthy();
     expect(screen.getByText("82 / 100")).toBeTruthy();
-    expect(screen.getByText("GRADED")).toBeTruthy();
-    expect(screen.getByText("REVIEW REQUIRED")).toBeTruthy();
+    expect(screen.getByText("82%")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Submission activity" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Graded score bands" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Submission status" })).toBeTruthy();
+    expect(screen.getAllByText("GRADED").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("REVIEW REQUIRED").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("graded@example.test")).toBeTruthy();
     expect(screen.getByText("review@example.test")).toBeTruthy();
   });
@@ -22,7 +26,9 @@ describe("AdminResultsAnalytics", () => {
     const onRefresh = vi.fn();
     render(<AdminResultsAnalytics results={[]} onRefresh={onRefresh} />);
     expect(screen.getByText("No submissions have been received yet.")).toBeTruthy();
-    expect(screen.getAllByText("0")).toHaveLength(4);
+    expect(screen.getByText("Average graded score")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Submission activity" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Refresh results" }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
