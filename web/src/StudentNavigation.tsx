@@ -11,16 +11,16 @@ export type StudentPage =
 interface StudentNavigationProps {
   activePage: StudentPage;
   setActivePage: Dispatch<SetStateAction<StudentPage>>;
-  unreadAnnouncementCount: number;
   unreadNotificationCount: number;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  onOpenNotifications: () => void;
   email: string;
   busy: boolean;
   onSignOut: () => void;
 }
 
-type NavItem = { page: StudentPage; label: string; icon: string; group: "HOME" | "EXAMS" | "LEARNING" | "ACCOUNT" };
+type NavItem = { page: StudentPage; label: string; icon: string; group: "HOME" | "EXAMS" | "ACCOUNT" };
 const NAV_ITEMS: NavItem[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "HOME" },
   { page: "practice", label: "Practice exams", icon: "✎", group: "EXAMS" },
@@ -28,44 +28,29 @@ const NAV_ITEMS: NavItem[] = [
   { page: "analytics", label: "Performance analytics", icon: "▥", group: "EXAMS" },
   { page: "history", label: "Practice history", icon: "◷", group: "EXAMS" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "EXAMS" },
-  { page: "progress", label: "Learning progress", icon: "↗", group: "LEARNING" },
-  { page: "mastery", label: "Topic mastery", icon: "◎", group: "LEARNING" },
-  { page: "path", label: "Learning path", icon: "⌁", group: "LEARNING" },
-  { page: "lessons", label: "Lessons", icon: "▤", group: "LEARNING" },
-  { page: "learning-summary", label: "Learning summary", icon: "▥", group: "LEARNING" },
-  { page: "materials", label: "Learning materials", icon: "▧", group: "LEARNING" },
-  { page: "ai-practice", label: "AI Practice & MCP", icon: "✧", group: "LEARNING" },
-  { page: "coming-soon", label: "Learning features", icon: "✦", group: "LEARNING" },
-  { page: "rewards", label: "Rewards", icon: "◇", group: "LEARNING" },
-  { page: "announcements", label: "Announcements", icon: "◉", group: "ACCOUNT" },
-  { page: "notifications", label: "Notifications", icon: "♢", group: "ACCOUNT" },
   { page: "account", label: "Account", icon: "◉", group: "ACCOUNT" },
-  { page: "settings", label: "Settings", icon: "⚙", group: "ACCOUNT" },
 ];
 
 const GROUPS: { id: NavItem["group"]; label: string }[] = [
   { id: "HOME", label: "Home" },
   { id: "EXAMS", label: "Exams & results" },
-  { id: "LEARNING", label: "Learning" },
-  { id: "ACCOUNT", label: "Account & updates" },
+  { id: "ACCOUNT", label: "Account" },
 ];
 const PRIMARY_MOBILE: StudentPage[] = ["dashboard", "practice", "analytics", "assignments"];
 const MOBILE_MORE = NAV_ITEMS.filter(({ page }) => !PRIMARY_MOBILE.includes(page));
 
 export default function StudentNavigation({
-  activePage, setActivePage, unreadAnnouncementCount, unreadNotificationCount,
-  theme, onToggleTheme, email, busy, onSignOut,
+  activePage, setActivePage, unreadNotificationCount,
+  theme, onToggleTheme, onOpenNotifications, email, busy, onSignOut,
 }: StudentNavigationProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const activeItem = NAV_ITEMS.find(({ page }) => page === activePage);
   const activeLabel = activeItem?.label ?? "Learning features";
-  const activeGroup = activeItem?.group ?? "LEARNING";
+  const activeGroup = activeItem?.group ?? "HOME";
 
   useEffect(() => { setMoreOpen(false); }, [activePage]);
 
-  const countFor = (page: StudentPage) => page === "announcements"
-    ? unreadAnnouncementCount
-    : page === "notifications" ? unreadNotificationCount : 0;
+  const countFor = (page: StudentPage) => page === "notifications" ? unreadNotificationCount : 0;
 
   const renderItem = (item: NavItem, mobile = false) => {
     const count = countFor(item.page);
@@ -114,6 +99,7 @@ export default function StudentNavigation({
       <header className="student-topbar">
         <div className="student-breadcrumb"><span>ArcTester /</span><strong>{activeLabel}</strong></div>
         <div className="student-top-actions">
+          {activePage === "dashboard" ? <button type="button" className="icon-button student-notification-button" onClick={onOpenNotifications} aria-label={unreadNotificationCount > 0 ? `Open notifications, ${unreadNotificationCount} unread` : "Open notifications"} title="Notifications">♢{unreadNotificationCount > 0 ? <small>{unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}</small> : null}</button> : null}
           <button type="button" className="icon-button" onClick={onToggleTheme} aria-label="Toggle theme">{theme === "light" ? "☾" : "☀"}</button>
           <FeedbackSettings />
           <span className="user-email">{email}</span>
