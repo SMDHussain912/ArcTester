@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
-import type { PerformanceOverview, FullMockPerformanceReport, StudyRecommendation } from "./lib/api";
+import type { PerformanceOverview, FullMockPerformanceReport } from "./lib/api";
 import Skeleton from "./components/Skeleton";
 import { AnalyticsBarChart, AnalyticsStackedBar } from "./AnalyticsCharts";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
-  /** Kept for App compatibility; performance analytics no longer launches study recommendations. */
-  onStartRecommendedPractice?: (item: StudyRecommendation) => void;
 }
 
 export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProps) {
