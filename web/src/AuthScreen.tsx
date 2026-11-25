@@ -77,8 +77,8 @@ export default function AuthScreen({ email, password, register, busy, error, aca
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (register && (!TURNSTILE_SITE_KEY || !captchaToken)) {
-      setCaptchaError(!TURNSTILE_SITE_KEY ? "CAPTCHA is not configured yet. Registration is temporarily unavailable." : "Complete the security check before requesting an account.");
+    if (register && TURNSTILE_SITE_KEY && !captchaToken) {
+      setCaptchaError("Complete the security check before requesting an account.");
       return;
     }
     onAuthenticate(register ? captchaToken : undefined);
@@ -146,10 +146,10 @@ export default function AuthScreen({ email, password, register, busy, error, aca
         )}
         {register ? <div className="auth-captcha auth-field-wide">
           <strong>Security check</strong>
-          {TURNSTILE_SITE_KEY ? <div ref={captchaContainerRef} /> : <p className="auth-captcha-unconfigured">CAPTCHA site key is not configured.</p>}
+          {TURNSTILE_SITE_KEY ? <div ref={captchaContainerRef} /> : <p className="auth-captcha-unconfigured">Security challenge will be enabled after configuration.</p>}
           {captchaError ? <p className="auth-captcha-error" role="alert">{captchaError}</p> : null}
         </div> : null}
-        <Button className="auth-submit" fullWidth type="submit" loading={busy} disabled={busy || (register && !TURNSTILE_SITE_KEY)}>{busy ? "Please wait…" : register ? "Request account" : "Sign in"}</Button>
+        <Button className="auth-submit" fullWidth type="submit" loading={busy} disabled={busy}>{busy ? "Please wait…" : register ? "Request account" : "Sign in"}</Button>
       </form>
       <button className="text-button" onClick={toggleRegister}>{register ? "Already have an account? Sign in" : "New student? Create an account"}</button>
       {error && <p className={/submitted for administrator approval|account created/i.test(error) ? "success auth-feedback" : "error auth-feedback"} role="status">{error}</p>}
