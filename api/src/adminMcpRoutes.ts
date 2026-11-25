@@ -340,6 +340,8 @@ export function adminMcpRouter(db: PrismaClient): Router {
             db.modelDataset.findUnique({ where: { id: input.datasetId } }),
           ]);
           if (!candidate || !baseline || !dataset || dataset.datasetKind !== "verification" || !dataset.sourceAttested || candidate.task !== baseline.task || candidate.task !== dataset.task) return res.json(rpcError(id, -32002, "Candidate, baseline, and attested verification dataset must exist and have matching tasks."));
+          const candidateArtifactMetadata = JSON.parse(candidate.artifactJson) as { modelArtifact?: unknown };
+          if (candidateArtifactMetadata.modelArtifact) return res.json(rpcError(id, -32002, "Native model artifacts must use evaluate_registered_model so metrics are computed from predictions."));
           if (input.sampleCount !== dataset.rowCount) return res.json(rpcError(id, -32602, "Evaluation sampleCount must equal the verification dataset row count."));
           const metrics = input.metrics;
           let passed = false;
