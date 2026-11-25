@@ -25,7 +25,7 @@ import { adminMcpRouter } from "./adminMcpRoutes.js";
 import { modelInferenceRouter } from "./modelInferenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
-import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
+import { adminStudentRouter } from "./adminStudentRoutes.js";
 
 const db = new PrismaClient();
 
@@ -175,7 +175,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(masteryRouter(database));
   app.use(studentMcpRouter(database));
   app.use(adminInstitutionRouter(database));
-  app.use(adminInstitutionRouter(database));
+  app.use(adminStudentRouter(database));
   app.use(adminMcpRouter(database));
   app.use(modelInferenceRouter(database));
 
