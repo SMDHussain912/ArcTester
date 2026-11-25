@@ -9,7 +9,7 @@ import { QuestionInputSchema, hashQuestion, encodeOptions } from "./questions.js
 import { evaluateModelArtifacts } from "./modelInference.js";
 
 const PREFIX = "arc_admin_";
-const SCOPES = ["questions:read", "questions:create", "questions:review", "papers:create", "papers:read", "papers:publish", "exams:assign", "announcements:write", "activity:read", "models:read", "models:dataset:create", "models:verification:read", "models:train", "models:register", "models:evaluate", "models:activate"] as const;
+const SCOPES = ["questions:read", "questions:create", "questions:review", "papers:create", "papers:read", "papers:publish", "exams:assign", "announcements:write", "activity:read", "models:read", "models:monitoring:read", "models:dataset:create", "models:verification:read", "models:train", "models:register", "models:evaluate", "models:activate"] as const;
 const sha = (v: string) => createHash("sha256").update(v).digest("hex");
 type KeyContext = { id: string; userId: number; scopes: string[] };
 function scope(key: KeyContext, required: string) { return key.scopes.includes(required); }
@@ -95,6 +95,8 @@ export function adminMcpRouter(db: PrismaClient): Router {
         { name: "create_announcement", description: "Create an administrator announcement for students.", inputSchema: { type: "object", required: ["title","message"], properties: { title: { type: "string" }, message: { type: "string" }, expiresAt: { type: "string" } } } },
         { name: "read_mcp_audit", description: "Read recent tool names and sanitized audit summaries. Secrets and request bodies are never included.", inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } } } },
         { name: "list_registered_models", description: "List registered model versions and active assignment by modelId. Does not run inference.", inputSchema: { type: "object", properties: { modelId: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 100 } } } },
+        { name: "read_model_drift", description: "Read privacy-preserving hourly feature-bucket counters for model inference. Values are coarse or hashed; raw feature values are not stored.", inputSchema: { type: "object", properties: { modelId: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 500 } } } },
+        { name: "queue_model_retraining", description: "Queue a new training job using the active model's original training dataset. Requires explicit confirmation and a running worker; does not train inline or activate the new candidate.", inputSchema: { type: "object", required: ["modelId","confirm"], properties: { modelId: { type: "string" }, seed: { type: "integer", minimum: 0, maximum: 1000000 }, epochs: { type: "integer", minimum: 1, maximum: 200 }, batchSize: { type: "integer", minimum: 1, maximum: 512 }, confirm: { type: "boolean" } } } },
         { name: "create_model_dataset", description: "Create a fingerprinted, provenance-labelled dataset from supplied rows. Never import raw student records; provide de-identified or synthetic samples.", inputSchema: { type: "object", required: ["name","task","targetColumn","targetType","featureSchema","samples","sourceDescription","datasetKind"], properties: { name: { type: "string" }, task: { type: "string", enum: ["classification","regression"] }, targetColumn: { type: "string" }, targetType: { type: "string", enum: ["string","number"] }, featureSchema: { type: "array", items: { type: "object", required: ["name","type"], properties: { name: { type: "string" }, type: { type: "string", enum: ["string","number","boolean"] } } } }, samples: { type: "array", minItems: 1, maxItems: 500, items: { type: "object" } }, sourceDescription: { type: "string" }, sourceAttested: { type: "boolean" }, confirmSourceAttestation: { type: "boolean" }, datasetKind: { type: "string", enum: ["training","validation","verification","synthetic"] } } } },
         { name: "get_model_verification_data", description: "Read a page of rows from an attested verification dataset for offline evaluation.", inputSchema: { type: "object", required: ["datasetId"], properties: { datasetId: { type: "string" }, offset: { type: "integer", minimum: 0, maximum: 10000 }, limit: { type: "integer", minimum: 1, maximum: 100 } } } },
         { name: "queue_model_training", description: "Queue a training job. It remains QUEUED until a configured worker claims and completes it; this tool does not train inline.", inputSchema: { type: "object", required: ["datasetId","modelId","confirm"], properties: { datasetId: { type: "string" }, modelId: { type: "string" }, seed: { type: "integer", minimum: 0, maximum: 1000000 }, epochs: { type: "integer", minimum: 1, maximum: 200 }, batchSize: { type: "integer", minimum: 1, maximum: 512 }, confirm: { type: "boolean" } } } },
@@ -249,6 +251,42 @@ export function adminMcpRouter(db: PrismaClient): Router {
           if(!scope(key,"activity:read"))return res.json(rpcError(id,-32003,"Missing activity:read scope."));
           const input=z.object({limit:z.number().int().min(1).max(100).default(50)}).parse(args);
           output={logs:await db.adminMcpAuditLog.findMany({take:input.limit,orderBy:{createdAt:"desc"},select:{id:true,actorId:true,tool:true,success:true,summary:true,createdAt:true}})};summary="read audit log";break;
+        }
+        case "read_model_drift": {
+          if (!scope(key, "models:monitoring:read")) return res.json(rpcError(id, -32003, "Missing models:monitoring:read scope."));
+          const input = z.object({ modelId: z.string().regex(/^[a-z][a-z0-9_-]{1,63}$/).optional(), limit: z.number().int().min(1).max(500).default(100) }).parse(args);
+          const rows = await db.modelDriftBucket.findMany({
+            where: input.modelId ? { modelId: input.modelId } : {},
+            take: input.limit,
+            orderBy: [{ periodStart: "desc" }, { featureName: "asc" }],
+            select: { modelId: true, version: true, featureName: true, bucket: true, periodStart: true, count: true },
+          });
+          output = { buckets: rows, note: "Aggregated feature counts only; no raw inputs or predictions are retained." };
+          summary = "read " + rows.length + " model monitoring buckets"; break;
+        }
+        case "queue_model_retraining": {
+          if (!scope(key, "models:train")) return res.json(rpcError(id, -32003, "Missing models:train scope."));
+          const input = z.object({
+            modelId: z.string().regex(/^[a-z][a-z0-9_-]{1,63}$/),
+            seed: z.number().int().min(0).max(1000000).default(42),
+            epochs: z.number().int().min(1).max(200).default(80),
+            batchSize: z.number().int().min(1).max(512).default(32),
+            confirm: z.literal(true),
+          }).parse(args);
+          const active = await db.registeredModel.findFirst({
+            where: { modelId: input.modelId, isActive: true },
+            orderBy: { version: "desc" },
+            select: { version: true, trainingDatasetId: true },
+          });
+          if (!active?.trainingDatasetId) return res.json(rpcError(id, -32004, "The active model has no linked training dataset; create a reviewed training dataset and queue training explicitly."));
+          const dataset = await db.modelDataset.findUnique({ where: { id: active.trainingDatasetId }, select: { id: true, datasetKind: true } });
+          if (!dataset || !["training", "synthetic"].includes(dataset.datasetKind)) return res.json(rpcError(id, -32002, "Retraining requires the active model's original training or synthetic dataset. Verification data is never used."));
+          const job = await db.modelTrainingJob.create({
+            data: { id: modelAuditId(), datasetId: dataset.id, createdById: key.userId, modelId: input.modelId, seed: input.seed, epochs: input.epochs, batchSize: input.batchSize },
+            select: { id: true, modelId: true, datasetId: true, status: true, createdAt: true },
+          });
+          output = { job, previousActiveVersion: active.version, note: "The worker will create an inactive candidate. Evaluate and explicitly activate it before student inference." };
+          summary = "queued retraining for " + input.modelId; break;
         }
         case "list_registered_models": {
           if (!scope(key, "models:read")) return res.json(rpcError(id, -32003, "Missing models:read scope."));
