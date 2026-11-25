@@ -167,6 +167,14 @@ export const LoginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required.").max(128),
+  newPassword: z.string().min(12, "New password must be at least 12 characters.").max(128),
+}).refine((input) => input.currentPassword !== input.newPassword, {
+  message: "Choose a new password different from your current password.",
+  path: ["newPassword"],
+});
+
 const InvitationSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
 });
@@ -534,6 +542,32 @@ export function authRouter(db: PrismaClient): Router {
       res.json({ ok: true, user });
     } catch {
       next(forbidden("Invalid session."));
+    }
+  });
+
+  router.post("/change-password", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = ChangePasswordSchema.parse(req.body);
+      const user = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, email: true, passwordHash: true, sessionVersion: true },
+      });
+      if (!user || !await verifyPasswordAsync(input.currentPassword, user.passwordHash)) {
+        return next(forbidden("Current password is incorrect."));
+      }
+
+      const passwordHash = await hashPasswordAsync(input.newPassword);
+      const updated = await db.user.update({
+        where: { id: user.id },
+        data: { passwordHash, sessionVersion: { increment: 1 } },
+        select: { id: true, email: true, sessionVersion: true },
+      });
+      // Rotate the current session while revoking every other previously issued session.
+      const token = signJwt({ sub: String(updated.id), email: updated.email, sv: updated.sessionVersion });
+      if (readSessionToken(req) && getCookie(req, COOKIE_NAME)) setSessionCookie(res, token);
+      res.json({ ok: true, message: "Password changed. Other sessions have been revoked.", token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS });
+    } catch (error) {
+      next(error);
     }
   });
 
