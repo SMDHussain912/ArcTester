@@ -170,7 +170,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
             <div className="analytics-kpi-grid">
               <article className="analytics-kpi"><span>Graded exams</span><strong>{overview.formalExams.graded.toLocaleString()}</strong><small>Results finalized</small></article>
               <article className="analytics-kpi"><span>Awaiting review</span><strong>{overview.formalExams.reviewRequired.toLocaleString()}</strong><small>Pending manual marking</small></article>
-              <article className="analytics-kpi"><span>Exam submissions</span><strong>(overview.formalExams.submissions ?? 0).toLocaleString()</strong><small>Assigned / real exams submitted</small></article>
+              <article className="analytics-kpi"><span>Exam submissions</span><strong>{(overview.formalExams.submissions ?? 0).toLocaleString()}</strong><small>Assigned / real exams submitted</small></article>
             </div>
           </div>
           <div className="analytics-chart-grid">
