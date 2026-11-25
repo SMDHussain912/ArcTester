@@ -1,8 +1,8 @@
 # ArcTester Admin MCP — Model Control Plan
 
-**Status:** Model-control MCP slice under implementation  
+**Status:** Admin MCP control plane plus initial asynchronous training worker implemented on this branch  
 **Owner surface:** Administrator MCP at `/mcp/admin`  
-**Principle:** The MCP is a model control plane. It must not claim to train or run inference unless a real worker/runtime has done so.
+**Principle:** The MCP is a model control plane. It must not claim evaluation or student inference unless a real evaluator/runtime has done so.
 
 ## Current implementation in this branch
 
@@ -11,15 +11,18 @@
 - Create bounded, schema-checked, fingerprinted datasets with explicit provenance and dataset kind.
 - Prevent verification datasets from being used as training inputs.
 - Queue asynchronous training jobs and expose honest job/worker state.
+- Run the separate `api/src/modelTrainingWorker.ts` process using `npm run model:worker`; it claims queued/expired jobs with a database lease.
+- Train deterministic, native logistic-regression classification or linear-regression models with a seeded train/validation split and held-out metrics.
+- Store compact model artifacts and SHA-256 metadata in the PostgreSQL model registry; the worker automatically registers the completed model as an inactive candidate version.
 - Return only paginated rows from attested verification datasets.
-- Register candidate artifacts by URI and SHA-256; registration never activates a candidate.
+- Allow admin registration of external candidate artifacts by URI and SHA-256; registration never activates a candidate.
 - Record candidate-vs-baseline evaluation on an attested verification dataset.
 - Activate one model version per `modelId` only after a passing evaluation and explicit confirmation.
-- Audit registration, evaluation, and activation. Artifact metadata is allowlisted; secrets and model binaries are never returned.
+- Audit registration, evaluation, activation, and worker training completion. MCP artifact metadata is allowlisted; trained weights are not returned by list-model tools.
 
 ## Delivery phases
 
-### Phase 1 — Admin MCP control plane (this branch)
+### Phase 1 — Admin MCP control plane
 Acceptance:
 - Prisma schema matches existing PostgreSQL migrations and generated client.
 - Dataset validation enforces exact columns, feature types, target type, size/row limits, and deterministic fingerprint.
@@ -27,19 +30,24 @@ Acceptance:
 - Model candidates can be registered, evaluated, and activated only through scoped tools and audit entries.
 - CI tests, lint, build, migration checks and E2E pass.
 
-### Phase 2 — Real training worker
-- Add a separate worker process/service; do not train inside the web API request.
-- Start with supported scikit-learn algorithms (classification/regression) and explicit train/validation split.
-- Claim jobs with leases, heartbeat, bounded CPU/memory/time, cancellation and retry policy.
-- Train only on `training` or `synthetic` datasets; never on `verification` rows.
-- Save model artifact to private object storage; store URI, SHA-256, framework, feature schema and metrics in job result.
-- Mark job completed only after artifact checksum and output schema are verified.
-- Add worker tests for invalid data, expired leases, failed training, retries and reproducible seeds.
+### Phase 2 — Real training worker (initial slice implemented)
+Implemented:
+- Separate worker process; training does not run inside an API request.
+- Supported tasks: classification (logistic regression) and regression (linear regression).
+- Deterministic split, feature encoding/normalization, held-out accuracy/MAE, and reproducible seed.
+- Job claiming uses conditional updates and leases so multiple workers do not claim the same live job.
+- Completed jobs create an inactive registered candidate with checksum and training metrics.
 
-### Phase 3 — Verification and model assignment
+Remaining before calling this phase production-complete:
+- Object storage for larger artifacts; current native linear artifacts are stored in PostgreSQL and intended only for compact models.
+- Heartbeat, cancellation, explicit retry/backoff policy, and deployment resource limits.
+- Worker integration tests for lease expiry and failure recovery.
+- Deployment of a separate worker process with its own resource budget and monitoring.
+
+### Phase 3 — Trusted evaluation and student inference
 - Add an evaluator worker that consumes verification datasets without training on them.
-- Compute task-specific metrics from predictions, not from manually supplied claims.
-- Record a signed/traceable evaluation result with dataset fingerprint, sample count, baseline version and candidate version.
+- Compute task-specific metrics from actual predictions, not manually supplied claims.
+- Record traceable evaluation evidence with dataset fingerprint, sample count, baseline version and candidate version.
 - Add feature-to-model assignments (e.g. `readiness_classifier`, `question_difficulty`, `recommendation_ranker`) with versioned configuration.
 - Make each feature explicitly load its assigned registered model; keep deterministic/rule-based fallback.
 - Add shadow mode, inference telemetry, rollback and stale-model handling before student-facing rollout.
