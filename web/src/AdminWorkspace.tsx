@@ -16,6 +16,9 @@ import AdminMcpAssistant from "./AdminMcpAssistant";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
+import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
+import AdminStudents from "./AdminStudents";
+import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -37,7 +40,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
 type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string };
 
 export default function AdminWorkspace(p:Props){
- const [tab,setTab]=useState("overview"),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}"});
@@ -170,15 +173,20 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"]];
+ const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["institutions","Institutions & branches","▦"],["students","Manage students","♙"],["settings","Settings","⚙"]];
  return <div className="admin-shell">
-  <aside className="admin-sidebar"><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
-   <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>setTab(id)}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
+  <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
+  {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
+  <aside className={"admin-sidebar"+(mobileMenuOpen?" is-open":"")}><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
+   <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
    <div className="sidebar-bottom"><span className="admin-avatar">{p.email.slice(0,1).toUpperCase()}</span><div><b>Administrator</b><small>{p.email}</small></div></div>
   </aside>
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
+   {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
+    {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
+   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
     total={liveSessionsTotal}
