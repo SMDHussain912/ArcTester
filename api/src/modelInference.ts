@@ -120,6 +120,57 @@ export function evaluateModelArtifacts(candidateArtifact: unknown, baselineArtif
   return { mae: candidateError / rows.length, baselineMae: baselineError / rows.length };
 }
 
+const SENSITIVE_MONITORING_FEATURE = /(?:studentid|userid|email|phone|name|address|ipaddress|password|token|freetext|rawanswer|answertext)/i;
+
+function monitoringBucket(value: unknown): string {
+  if (typeof value === "boolean") return value ? "boolean:true" : "boolean:false";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value <= -100) return "number:le_-100";
+    if (value <= -10) return "number:-100_to_-10";
+    if (value <= -1) return "number:-10_to_-1";
+    if (value < 0) return "number:-1_to_0";
+    if (value === 0) return "number:zero";
+    if (value < 1) return "number:0_to_1";
+    if (value < 10) return "number:1_to_10";
+    if (value < 100) return "number:10_to_100";
+    return "number:ge_100";
+  }
+  if (typeof value === "string") {
+    // Store a one-way category token, never the original feature value.
+    return "category:" + sha256(value).slice(0, 12);
+  }
+  return "other";
+}
+
+/**
+ * Persist only coarse feature distribution counters, grouped by UTC hour.
+ * Feature values and prediction outputs are never stored in monitoring rows.
+ * Monitoring failures must not make a valid prediction fail.
+ */
+export async function recordModelDriftBuckets(
+  db: PrismaClient,
+  modelId: string,
+  version: number,
+  input: Record<string, unknown>,
+  now = new Date(),
+): Promise<void> {
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
+  const entries = Object.entries(input).filter(([name, value]) =>
+    /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) &&
+    !SENSITIVE_MONITORING_FEATURE.test(name.replace(/[^a-z0-9]/gi, "")) &&
+    (typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && value.length <= 128))
+  );
+  await Promise.all(entries.map(([featureName, value]) => {
+    const bucket = monitoringBucket(value);
+    const key = { modelId, version, featureName, bucket, periodStart };
+    return db.modelDriftBucket.upsert({
+      where: { modelId_version_featureName_bucket_periodStart: key },
+      create: { id: sha256(stableModelJson(key)).slice(0, 32), ...key, count: 1 },
+      update: { count: { increment: 1 } },
+    });
+  }));
+}
+
 export async function predictActiveModel(db: PrismaClient, modelId: string, input: Record<string, unknown>): Promise<{ modelId: string; version: number; prediction: ModelPrediction } | null> {
   const model = await db.registeredModel.findFirst({
     where: { modelId, isActive: true },
@@ -130,5 +181,8 @@ export async function predictActiveModel(db: PrismaClient, modelId: string, inpu
   if (typeof metadata.sha256 !== "string" || !metadata.modelArtifact || sha256(stableModelJson(metadata.modelArtifact)) !== metadata.sha256) {
     throw new Error("Active model artifact checksum verification failed.");
   }
-  return { modelId: model.modelId, version: model.version, prediction: predictModelArtifact(metadata.modelArtifact, input) };
+  const prediction = predictModelArtifact(metadata.modelArtifact, input);
+  // Aggregate monitoring is best-effort: a metrics write must never block inference.
+  void recordModelDriftBuckets(db, model.modelId, model.version, input).catch(() => undefined);
+  return { modelId: model.modelId, version: model.version, prediction };
 }
