@@ -35,7 +35,7 @@ function stableJson(value: unknown): string {
     const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
     return "{" + entries.map(([k, v]) => JSON.stringify(k) + ":" + stableJson(v)).join(",") + "}";
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 function modelAuditId() { return randomBytes(16).toString("hex"); }
 function safeArtifactJson(raw: string) {
