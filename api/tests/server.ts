@@ -92,18 +92,29 @@ export async function startTestServer(
   return { baseUrl: base, db, close };
 }
 
+function testRegistrationNumber(email: string): string {
+  let hash = 0;
+  for (const character of email.trim().toLowerCase()) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
+  return "24999-CM-" + String(hash % 1000).padStart(3, "0");
+}
+
 export async function postJson(
   url: string,
   body: unknown,
   cookie?: string
 ): Promise<{ status: number; json: unknown }> {
+  let payload = body;
+  if (url.endsWith("/auth/register") && body && typeof body === "object" && !Array.isArray(body)) {
+    const input = body as Record<string, unknown>;
+    if (input.registrationNumber === "24999-CM-053" && typeof input.email === "string" && input.email !== "alice@example.com") payload = { ...input, registrationNumber: testRegistrationNumber(input.email) };
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(cookie ? { cookie } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   return { status: res.status, json: await res.json() };
 }
@@ -175,7 +186,7 @@ export async function signUp(
       fullName: "Test Student",
       collegeName: "Test Polytechnic",
       collegeCode: "999",
-      registrationNumber: "24999-CM-053",
+      registrationNumber: testRegistrationNumber(email),
       postalPin: "533001",
       branchName: "Computer Engineering (CME)",
       branchCode: "CM",
