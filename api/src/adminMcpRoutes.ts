@@ -41,7 +41,7 @@ function modelAuditId() { return randomBytes(16).toString("hex"); }
 function safeArtifactJson(raw: string) {
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
-    const allowed = ["uri", "sha256", "framework", "inputSchema", "outputSchema", "metrics"];
+    const allowed = ["uri", "sha256", "framework", "inputSchema", "outputSchema", "metrics", "version", "algorithm"];
     return Object.fromEntries(allowed.filter(key => value[key] !== undefined).map(key => [key, value[key]]));
   } catch { return {}; }
 }
