@@ -159,6 +159,10 @@ describe("administrator MCP model control", () => {
         },
       });
     }
+    await expect(callTool("record_model_evaluation", {
+      modelId, candidateVersion: 1, baselineVersion: 2, datasetId: verification.dataset.id,
+      sampleCount: verification.dataset.rowCount, metrics: { accuracy: 1, baselineAccuracy: 0, precision: 1, recall: 1, f1: 1 }, confirm: true,
+    })).rejects.toThrow(/Native model artifacts must use evaluate_registered_model/);
     const result = await callTool("evaluate_registered_model", {
       modelId, candidateVersion: 1, baselineVersion: 2, datasetId: verification.dataset.id, confirm: true,
     });
