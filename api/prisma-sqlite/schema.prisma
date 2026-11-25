@@ -79,6 +79,7 @@ model User {
   postalPin           String?
   branchName          String?
   branchCode          String?
+  registrationNumber  String?       @unique
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
