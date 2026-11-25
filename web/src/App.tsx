@@ -27,7 +27,6 @@ import StudentAnalytics from "./StudentAnalytics";
 import StudentMcpAssistant from "./StudentMcpAssistant";
 import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
-import StudentConceptLibrary from "./StudentConceptLibrary";
 import StudentAccountSettings from "./StudentAccountSettings";
 import StudentAbout from "./StudentAbout";
 import AppSplash from "./components/AppSplash";
@@ -264,7 +263,7 @@ export default function App() {
     setActivePage(page);
   }
 
-  async function authenticate() {
+  async function authenticate(captchaToken?: string) {
     setBusy(true);
     setError("");
     // Keep the connection/creation animation visible for a deliberate 5 seconds
@@ -275,7 +274,7 @@ export default function App() {
         await Promise.all([
           request("/auth/register", {
             method: "POST",
-            body: JSON.stringify({ email, password, ...academicProfile }),
+            body: JSON.stringify({ email, password, ...academicProfile, captchaToken }),
           }),
           animationMinimum,
         ]);
@@ -534,7 +533,7 @@ export default function App() {
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onRegisterChange={setRegister}
-        onAuthenticate={() => void authenticate()}
+        onAuthenticate={(captchaToken) => void authenticate(captchaToken)}
       />
     );
   }
@@ -621,8 +620,6 @@ export default function App() {
           <StudentMastery />
         ) : activePage === "materials" ? (
           <StudentMaterials setActivePage={(page: string) => setActivePage(page as StudentPage)} />
-        ) : activePage === "concepts" ? (
-          <StudentConceptLibrary setActivePage={(page: string) => setActivePage(page as StudentPage)} />
         ) : (
           <>
             <StudentDashboardWelcome visible={activePage === "dashboard"} onNavigate={setActivePage} questionCount={bank?.total ?? 0} subjectCount={bank?.subjects.length ?? 0} />
