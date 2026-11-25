@@ -324,6 +324,12 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
     if (!user || user.email !== email || user.sessionVersion !== sessionVersion) {
       return next(forbidden("This session has been revoked. Sign in again."));
     }
+    const sessionId = typeof payload.sid === "string" ? payload.sid : "";
+    if (sessionId) {
+      const activeSession = await db.authSession.findFirst({ where: { id: sessionId, userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true } });
+      if (!activeSession) return next(forbidden("This device session has been revoked. Sign in again."));
+      await db.authSession.update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } });
+    }
     if (user.accessStatus !== "APPROVED") {
       return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
     }
@@ -382,6 +388,31 @@ function clearSessionCookie(res: Response): void {
     "Set-Cookie",
     `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=${sameSite}${secure ? "; Secure" : ""}`
   );
+}
+
+
+function maskedIp(ip: string): string {
+  if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(ip)) return ip.replace(/\\.\\d+$/, ".0");
+  if (ip.includes(":")) return ip.split(":").slice(0, 4).join(":") + "::";
+  return "";
+}
+function requestDevice(req: Request): { deviceName: string; platform: string; userAgent: string; ipAddress: string } {
+  const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
+  const platform = /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
+  const browser = /edg\\//i.test(userAgent) ? "Edge" : /firefox\\//i.test(userAgent) ? "Firefox" : /chrome\\//i.test(userAgent) ? "Chrome" : /safari\\//i.test(userAgent) ? "Safari" : "Browser";
+  const deviceName = /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
+  return { deviceName, platform, userAgent, ipAddress: maskedIp(req.ip ?? "") };
+}
+async function recordLoginEvent(db: PrismaClient, req: Request, email: string, userId: number | null, result: string, method = "password"): Promise<void> {
+  const device = requestDevice(req);
+  await db.loginEvent.create({ data: { email: email.slice(0, 254), userId, result, method, ipAddress: device.ipAddress, userAgent: device.userAgent } });
+}
+async function createAuthSession(db: PrismaClient, req: Request, user: { id: number; email: string; sessionVersion: number }, method = "password"): Promise<{ token: string; sessionId: string }> {
+  const device = requestDevice(req);
+  const expiresAt = new Date(Date.now() + JWT_TTL_SECONDS * 1000);
+  const session = await db.authSession.create({ data: { userId: user.id, ...device, loginMethod: method, expiresAt } });
+  const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion, sid: session.id });
+  return { token, sessionId: session.id };
 }
 
 export function authRouter(db: PrismaClient): Router {
@@ -518,8 +549,9 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
-      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
-      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
+      if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
+      await recordLoginEvent(db, req, input.email, user.id, "success", "password");
+      const { token } = await createAuthSession(db, req, user, "password");
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
     } catch (error) {
@@ -544,8 +576,9 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
-      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
-      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
+      if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
+      await recordLoginEvent(db, req, input.email, user.id, "success", "password");
+      const { token } = await createAuthSession(db, req, user, "password");
       res.json({
         ok: true,
         token,
@@ -571,14 +604,12 @@ export function authRouter(db: PrismaClient): Router {
         if (payload) {
           const userId = Number(payload.sub);
           const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
-          if (Number.isSafeInteger(userId) && userId > 0 &&
-              Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
-            // Only revoke tokens from the version presented by this request.
-            // Replaying logout cannot invalidate a later sign-in.
-            await db.user.updateMany({
-              where: { id: userId, sessionVersion },
-              data: { sessionVersion: { increment: 1 } },
-            });
+          if (Number.isSafeInteger(userId) && userId > 0 && Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
+            if (typeof payload.sid === "string") {
+              await db.authSession.updateMany({ where: { id: payload.sid, userId, revokedAt: null }, data: { revokedAt: new Date() } });
+            } else {
+              await db.user.updateMany({ where: { id: userId, sessionVersion }, data: { sessionVersion: { increment: 1 } } });
+            }
           }
         }
       }
