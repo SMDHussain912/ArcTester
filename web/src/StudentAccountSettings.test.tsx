@@ -35,7 +35,7 @@ describe("StudentAccountSettings", () => {
   });
 
   it("changes password and shows authenticator and passkey security controls", async () => {
-    vi.mocked(request).mockResolvedValue({ devices: [] });
+    vi.mocked(request).mockResolvedValue({ sessions: [], events: [], passkeys: [], authenticatorEnabled: false, recoveryCodesRemaining: 0, passkeyCount: 0 });
     render(<StudentAccountSettings page="settings" email="student@example.com" userId={12} role="STUDENT" theme="light" onThemeChange={vi.fn()} reduceMotion={false} onReduceMotionChange={vi.fn()} showAnnouncementPopups onShowAnnouncementPopupsChange={vi.fn()} busy={false} onSignOut={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "old-password" } });
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password-12345" } });
