@@ -33,7 +33,7 @@ describe("administrator MCP model control", () => {
     const admin = await server.db.user.create({ data: { email: "admin-model-mcp@arctester.test", passwordHash: "test-only", role: "ADMIN" } });
     bearer = "arc_admin_" + randomBytes(32).toString("base64url");
     await server.db.adminMcpKey.create({ data: {
-      userId: adminId,
+      userId: admin.id,
       name: "model-control-test",
       keyHash: digest(bearer),
       scopes: ["models:read", "models:dataset:create", "models:verification:read", "models:train", "models:register", "models:evaluate", "models:activate"],
