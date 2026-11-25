@@ -39,7 +39,7 @@ interface StudentNavigationProps {
 const NAV_ITEMS: { page: StudentPage; label: string; icon: string; group: "LEARN" | "ACCOUNT" }[] = [
   { page: "dashboard", label: "Dashboard", icon: "⌂", group: "LEARN" },
   { page: "progress", label: "Progress", icon: "↗", group: "LEARN" },
-  { page: "analytics", label: "Study analytics", icon: "▥", group: "LEARN" },
+  { page: "analytics", label: "Performance analytics", icon: "▥", group: "LEARN" },
   { page: "mastery", label: "Topic mastery", icon: "◎", group: "LEARN" },
   { page: "practice", label: "Practice", icon: "✎", group: "LEARN" },
   { page: "ai-practice", label: "AI Practice & MCP", icon: "✧", group: "LEARN" },
