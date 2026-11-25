@@ -91,7 +91,7 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
       <section className="page-intro">
         <p className="eyebrow">EXAM PERFORMANCE</p>
         <h1>Performance Analytics</h1>
-        <p className="muted">Review your practice exam results, mock test performance and assigned exam scores.</p>
+        <p className="muted">Compare results from practice attempts, full mock tests and assigned exams.</p>
       </section>
 
       <div className="row analytics-toolbar">
