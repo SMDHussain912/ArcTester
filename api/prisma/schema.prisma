@@ -84,6 +84,7 @@ model User {
   postalPin           String?
   branchName          String?
   branchCode          String?
+  registrationNumber  String?       @unique
   // Incremented on logout to invalidate previously issued cookie and bearer JWTs.
   sessionVersion     Int          @default(0)
   createdAt          DateTime     @default(now())

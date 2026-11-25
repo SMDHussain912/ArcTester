@@ -1,71 +1,52 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./components/ui";
-import { AP_DIPLOMA_BRANCHES, AP_POLYTECHNIC_COLLEGES } from "./polytechnicCatalog";
-
-export type AcademicRegistration = {
-  fullName: string;
-  collegeName: string;
-  collegeCode: string;
-  postalPin: string;
-  branchName: string;
-  branchCode: string;
-};
-type AcademicField = keyof AcademicRegistration;
-type AuthScreenProps = {
-  email: string; password: string; register: boolean; busy: boolean; error: string;
-  academicProfile: AcademicRegistration;
-  onAcademicChange: (field: AcademicField, value: string) => void;
-  onEmailChange: (value: string) => void; onPasswordChange: (value: string) => void;
-  onRegisterChange: (value: boolean) => void; onAuthenticate: () => void;
-};
-export default function AuthScreen({ email, password, register, busy, error, academicProfile, onAcademicChange, onEmailChange, onPasswordChange, onRegisterChange, onAuthenticate }: AuthScreenProps) {
-  function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); onAuthenticate(); }
-  function changeAcademic(field: AcademicField, value: string) {
-    onAcademicChange(field, value);
-    if (field === "collegeName") {
-      const match = AP_POLYTECHNIC_COLLEGES.find((college) => college.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase());
-      if (match) onAcademicChange("collegeCode", match.code);
-    }
-    if (field === "branchName") {
-      const matches = AP_DIPLOMA_BRANCHES.filter((branch) => branch.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase());
-      const uniqueCodes = [...new Set(matches.map((branch) => branch.code))];
-      // A branch name may exist in both C-23 and C-26 with different codes.
-      // Do not silently pick the wrong scheme when the name is ambiguous.
-      onAcademicChange("branchCode", uniqueCodes.length === 1 ? uniqueCodes[0] : "");
-    }
-  }
-  return (
-    <main className="auth-shell"><section className="auth-card">
-      <a className="brand" href="#dashboard"><span className="brand-mark">A</span><span>ArcTester</span></a>
-      <p className="eyebrow">{register ? "YOUR COLLEGE. YOUR BRANCH. YOUR PREPARATION." : "YOUR PERSONAL PRACTICE SPACE"}</p>
-      <h1>{register ? "Create your account" : "Welcome back"}</h1>
-      <p className="muted">{register ? "Join ArcTester with your institute and diploma branch. An administrator will review your account before student access." : "Sign in to continue your preparation."}</p>
-      <form onSubmit={handleSubmit}>
-        {register ? <>
-          <label>Full name<input autoComplete="name" required minLength={2} maxLength={100} value={academicProfile.fullName} onChange={(event) => onAcademicChange("fullName", event.target.value)} /></label>
-          <label>College / Polytechnic<input list="ap-polytechnic-options" autoComplete="organization" required minLength={2} maxLength={180} placeholder="Search or type your college name" value={academicProfile.collegeName} onChange={(event) => changeAcademic("collegeName", event.target.value)} /></label>
-          <datalist id="ap-polytechnic-options">{AP_POLYTECHNIC_COLLEGES.map((college) => <option key={college.code} value={college.name} label={college.code + (college.district ? " · " + college.district : "")} />)}</datalist>
-          <p className="auth-field-hint">College not listed? Type its full name. You can register with a custom college.</p>
-          <label>College PIN / institute code<input required maxLength={16} inputMode="text" autoComplete="off" placeholder="SBTET institute code, e.g. 010" value={academicProfile.collegeCode} onChange={(event) => onAcademicChange("collegeCode", event.target.value)} /></label>
-          <label>Postal PIN code (optional)<input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="postal-code" placeholder="6-digit postal PIN" value={academicProfile.postalPin} onChange={(event) => onAcademicChange("postalPin", event.target.value)} /></label>
-          <label>Diploma branch<input list="ap-diploma-branch-options" required minLength={2} maxLength={120} placeholder="Search or type your branch" value={academicProfile.branchName} onChange={(event) => changeAcademic("branchName", event.target.value)} /></label>
-          <datalist id="ap-diploma-branch-options">{AP_DIPLOMA_BRANCHES.map((branch) => <option key={branch.code} value={branch.name} label={branch.code} />)}</datalist>
-          <p className="auth-field-hint">Branch not listed? Enter the official branch name. The list is a starter catalog and will expand.</p>
-          <label>Branch code (optional)<input maxLength={24} placeholder="Auto-filled for listed branches" value={academicProfile.branchCode} onChange={(event) => onAcademicChange("branchCode", event.target.value)} /></label>
-        </> : null}
-        <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => onEmailChange(event.target.value)} /></label>
-        <label>Password<input type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : 1} required value={password} onChange={(event) => onPasswordChange(event.target.value)} /></label>
-        <Button className="auth-submit" fullWidth type="submit" loading={busy}>{busy ? "Please wait…" : register ? "Request account" : "Sign in"}</Button>
-      </form>
-      <button className="text-button" onClick={() => onRegisterChange(!register)}>{register ? "Already have an account? Sign in" : "New student? Create an account"}</button>
-      {error && <p className={/submitted for administrator approval|account created/i.test(error) ? "success auth-feedback" : "error auth-feedback"} role="status">{error}</p>}
-      {busy && <div className="auth-connecting" role="status" aria-live="polite">
-        <div className="auth-orbit"><span /><i /><b /></div>
-        <strong>{register ? "Creating your account request" : "Connecting securely"}</strong>
-        <p>{register ? "Submitting your registration for review…" : "Verifying your credentials and preparing your workspace…"}</p>
-        <div className="auth-connecting-track"><span /></div>
-        <small>Please keep this page open</small>
-      </div>}
-    </section></main>
-  );
-}
+import { AP_POLYTECHNIC_COLLEGES } from "./polytechnicCatalog";
+export type AcademicRegistration = { fullName:string; collegeName:string; collegeCode:string; registrationNumber:string; branchName:string; branchCode:string };
+type AcademicField=keyof AcademicRegistration;
+type AuthScreenProps={email:string;password:string;register:boolean;busy:boolean;error:string;academicProfile:AcademicRegistration;onAcademicChange:(field:AcademicField,value:string)=>void;onEmailChange:(value:string)=>void;onPasswordChange:(value:string)=>void;onRegisterChange:(value:boolean)=>void;onAuthenticate:(captchaToken?:string)=>void};
+type SearchOption={value:string;label:string;detail?:string;code?:string};
+const TURNSTILE_SITE_KEY=import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim()??"";
+const BRANCH_OPTIONS:SearchOption[]=[
+{value:"Computer Engineering (CME)",label:"Computer Engineering (CME)",detail:"Registration code: CM",code:"CM"},
+{value:"Electronics and Communication Engineering (ECE)",label:"Electronics and Communication Engineering (ECE)",detail:"Registration code: EC",code:"EC"},
+{value:"Electrical and Electronics Engineering (EEE)",label:"Electrical and Electronics Engineering (EEE)",detail:"Registration code: EE",code:"EE"},
+{value:"Mechanical Engineering",label:"Mechanical Engineering",detail:"Registration code: M",code:"M"},
+{value:"Civil Engineering",label:"Civil Engineering",detail:"Registration code: C",code:"C"},
+{value:"Automobile Engineering",label:"Automobile Engineering",detail:"Registration code: A",code:"A"}];
+const BRANCH_BY_REGISTRATION_CODE=new Map(BRANCH_OPTIONS.map(item=>[item.code!,item]));
+const REGISTRATION_PATTERN=/^(\d{2})(\d{3})-([A-Z]{1,3})-(\d{3})$/;
+declare global{interface Window{turnstile?:{render:(container:HTMLElement,options:{sitekey:string;callback:(token:string)=>void;"expired-callback"?:()=>void;"error-callback"?:()=>void})=>string;remove:(widgetId:string)=>void}}}
+function SearchableSelect({label,value,options,placeholder,allowCustom=false,onChange,onSelect}:{label:string;value:string;options:SearchOption[];placeholder:string;allowCustom?:boolean;onChange:(value:string)=>void;onSelect:(option:SearchOption)=>void}){
+const[open,setOpen]=useState(false);const[activeIndex,setActiveIndex]=useState(0);const filtered=options.filter(o=>(o.label+" "+o.value+" "+(o.detail??"")).toLocaleLowerCase().includes(value.trim().toLocaleLowerCase())).slice(0,8);
+function choose(option:SearchOption){onSelect(option);setOpen(false);setActiveIndex(0)}
+function keyDown(e:KeyboardEvent<HTMLInputElement>){if(e.key==="ArrowDown"){e.preventDefault();setOpen(true);setActiveIndex(i=>Math.min(i+1,Math.max(filtered.length-1,0)))}else if(e.key==="ArrowUp"){e.preventDefault();setActiveIndex(i=>Math.max(i-1,0))}else if(e.key==="Enter"&&open&&filtered.length){e.preventDefault();choose(filtered[activeIndex]??filtered[0])}else if(e.key==="Escape")setOpen(false)}
+const listId=label.replace(/\W+/g,"-").toLowerCase()+"-options";
+return <div className="auth-search-select"><label htmlFor={listId+"-input"}>{label}</label><span className="auth-search-input-wrap"><input id={listId+"-input"} role="combobox" aria-label={label} aria-expanded={open} aria-controls={listId} aria-autocomplete="list" autoComplete="off" required value={value} placeholder={placeholder} onFocus={()=>setOpen(true)} onChange={e=>{onChange(e.target.value);setOpen(true);setActiveIndex(0)}} onKeyDown={keyDown}/><span className="auth-search-chevron" aria-hidden="true">⌄</span></span>{open?<div className="auth-search-options" role="listbox" aria-label={label} id={listId}>{filtered.length?filtered.map((o,i)=><button type="button" role="option" aria-selected={i===activeIndex} className={i===activeIndex?"auth-search-option active":"auth-search-option"} key={o.value} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(o)}><span className="auth-search-option-label">{o.label}</span>{o.detail?<span className="auth-search-option-detail">{o.detail}</span>:null}</button>):<p className="auth-search-no-results">{allowCustom?"No match. Your typed college name will be used.":"No match. Choose one of the six branches."}</p>}{filtered.length===8?<p className="auth-search-hint">Keep typing to narrow the results</p>:null}</div>:null}</div>}
+export default function AuthScreen({email,password,register,busy,error,academicProfile,onAcademicChange,onEmailChange,onPasswordChange,onRegisterChange,onAuthenticate}:AuthScreenProps){
+const[passwordVisible,setPasswordVisible]=useState(false);const[captchaToken,setCaptchaToken]=useState("");const[captchaError,setCaptchaError]=useState("");const[registrationError,setRegistrationError]=useState("");const captchaContainerRef=useRef<HTMLDivElement>(null);
+useEffect(()=>{if(!register||!TURNSTILE_SITE_KEY||!captchaContainerRef.current)return;let widgetId:string|undefined;let cancelled=false;const renderWidget=()=>{if(cancelled||!window.turnstile||!captchaContainerRef.current)return;widgetId=window.turnstile.render(captchaContainerRef.current,{sitekey:TURNSTILE_SITE_KEY,callback:token=>{setCaptchaToken(token);setCaptchaError("")},"expired-callback":()=>setCaptchaToken(""),"error-callback":()=>{setCaptchaToken("");setCaptchaError("The security check failed. Please retry.")}})};let script=document.querySelector<HTMLScriptElement>('script[data-arctester-turnstile="true"]');if(window.turnstile)renderWidget();else{if(!script){script=document.createElement("script");script.src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";script.async=true;script.defer=true;script.dataset.arctesterTurnstile="true";document.head.appendChild(script)}script.addEventListener("load",renderWidget)}return()=>{cancelled=true;script?.removeEventListener("load",renderWidget);if(widgetId&&window.turnstile)window.turnstile.remove(widgetId)}},[register]);
+function changeRegistrationNumber(raw:string){const value=raw.toUpperCase().replace(/\s+/g,"");onAcademicChange("registrationNumber",value);setRegistrationError("");const m=value.match(REGISTRATION_PATTERN);if(!m){onAcademicChange("collegeCode","");onAcademicChange("branchCode","");onAcademicChange("branchName","");return}const collegeCode=m[2];const b=BRANCH_BY_REGISTRATION_CODE.get(m[3]);onAcademicChange("collegeCode",collegeCode);if(b){onAcademicChange("branchCode",b.code!);onAcademicChange("branchName",b.value)}else{onAcademicChange("branchCode","");onAcademicChange("branchName","")}const c=AP_POLYTECHNIC_COLLEGES.find(x=>x.code===collegeCode);if(c)onAcademicChange("collegeName",c.name)}
+function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();if(register){const m=academicProfile.registrationNumber.match(REGISTRATION_PATTERN);if(!m){setRegistrationError("Use the registration number format 24010-CM-053.");return}const b=BRANCH_BY_REGISTRATION_CODE.get(m[3]);if(!b){setRegistrationError("Branch code must be CM, EC, EE, M, C, or A.");return}if(academicProfile.branchCode!==b.code||academicProfile.branchName!==b.value){setRegistrationError("Select the branch that matches your registration number.");return}const c=AP_POLYTECHNIC_COLLEGES.find(x=>x.name.toLocaleLowerCase()===academicProfile.collegeName.trim().toLocaleLowerCase());if(c&&c.code!==m[2]){setRegistrationError("Selected college code does not match your registration number.");return}if(TURNSTILE_SITE_KEY&&!captchaToken){setCaptchaError("Complete the security check before requesting an account.");return}}onAuthenticate(register?captchaToken:undefined)}
+function changeCollege(value:string){onAcademicChange("collegeName",value);const c=AP_POLYTECHNIC_COLLEGES.find(x=>x.name.toLocaleLowerCase()===value.trim().toLocaleLowerCase());if(c)onAcademicChange("collegeCode",c.code)}
+function selectCollege(o:SearchOption){onAcademicChange("collegeName",o.value);if(o.code)onAcademicChange("collegeCode",o.code)}
+function changeBranch(value:string){onAcademicChange("branchName",value);onAcademicChange("branchCode",BRANCH_OPTIONS.find(x=>x.value===value)?.code??"")}
+function selectBranch(o:SearchOption){onAcademicChange("branchName",o.value);onAcademicChange("branchCode",o.code??"")}
+function toggleRegister(){setCaptchaToken("");setCaptchaError("");setRegistrationError("");setPasswordVisible(false);onRegisterChange(!register)}
+const colleges:SearchOption[]=AP_POLYTECHNIC_COLLEGES.map(c=>({value:c.name,label:c.name,code:c.code,detail:[c.code,c.district].filter(Boolean).join(" · ")}));
+const registrationParts=academicProfile.registrationNumber.match(REGISTRATION_PATTERN);
+return <main className="auth-shell"><section className="auth-card"><a className="brand" href="#dashboard"><span className="brand-mark">A</span><span>ArcTester</span></a><p className="eyebrow">{register?"YOUR COLLEGE. YOUR BRANCH. YOUR PREPARATION.":"YOUR PERSONAL PRACTICE SPACE"}</p><h1>{register?"Create your account":"Welcome back"}</h1><p className="muted">{register?"Enter your diploma registration number and institute. An administrator will review your account before student access.":"Sign in to continue your preparation."}</p>
+<form onSubmit={submit} className={register?"auth-register-form":""}>{register?<div className="auth-register-grid">
+<label>Full name<input autoComplete="name" required minLength={2} maxLength={100} value={academicProfile.fullName} onChange={e=>onAcademicChange("fullName",e.target.value)}/></label>
+<SearchableSelect label="College / Polytechnic" value={academicProfile.collegeName} options={colleges} placeholder="Search by college name or code" allowCustom onChange={changeCollege} onSelect={selectCollege}/>
+<label className="auth-field-wide">Diploma registration number<input aria-label="Diploma registration number" required maxLength={12} autoComplete="off" spellCheck={false} placeholder="24010-CM-053" value={academicProfile.registrationNumber} onChange={e=>changeRegistrationNumber(e.target.value)}/><span className="auth-field-hint">24 = batch year · 010 = college · CM = branch · 053 = roll number</span></label>
+<div className="auth-registration-preview auth-field-wide">{registrationParts?<><span>Batch year <strong>{registrationParts[1]}</strong></span><span>College code <strong>{registrationParts[2]}</strong></span><span>Branch code <strong>{registrationParts[3]}</strong></span><span>Roll number <strong>{registrationParts[4]}</strong></span></>:<span>Batch, college, branch and roll number will be extracted here</span>}</div>
+<SearchableSelect label="Diploma branch (6 main branches)" value={academicProfile.branchName} options={BRANCH_OPTIONS} placeholder="Search and select your branch" onChange={changeBranch} onSelect={selectBranch}/>
+<label>Email address<input type="email" autoComplete="email" required value={email} onChange={e=>onEmailChange(e.target.value)}/></label>
+<label className="auth-field-wide">Password<span className="auth-password-input-wrap"><input type={passwordVisible?"text":"password"} aria-label="Password" autoComplete="new-password" minLength={8} maxLength={128} required value={password} onChange={e=>onPasswordChange(e.target.value)}/><button type="button" className="auth-password-toggle" onClick={()=>setPasswordVisible(v=>!v)} aria-label={passwordVisible?"Hide password":"Show password"}>{passwordVisible?"Hide":"Show"}</button></span></label>
+</div>:<><label>Email address<input type="email" autoComplete="email" required value={email} onChange={e=>onEmailChange(e.target.value)}/></label><label>Password<span className="auth-password-input-wrap"><input type={passwordVisible?"text":"password"} aria-label="Password" autoComplete="current-password" minLength={1} required value={password} onChange={e=>onPasswordChange(e.target.value)}/><button type="button" className="auth-password-toggle" onClick={()=>setPasswordVisible(v=>!v)} aria-label={passwordVisible?"Hide password":"Show password"}>{passwordVisible?"Hide":"Show"}</button></span></label></>}
+{register?<div className="auth-captcha auth-field-wide"><strong>Security check</strong>{TURNSTILE_SITE_KEY?<div ref={captchaContainerRef}/>:<p className="auth-captcha-unconfigured">Security challenge will be enabled after configuration.</p>}{captchaError?<p className="auth-captcha-error" role="alert">{captchaError}</p>:null}</div>:null}
+{registrationError?<p className="auth-captcha-error auth-field-wide" role="alert">{registrationError}</p>:null}<Button className="auth-submit" fullWidth type="submit" loading={busy} disabled={busy}>{busy?"Please wait…":register?"Request account":"Sign in"}</Button></form>
+<button className="text-button" onClick={toggleRegister}>{register?"Already have an account? Sign in":"New student? Create an account"}</button>
+{error&&<p className={/submitted for administrator approval|account created/i.test(error)?"success auth-feedback":"error auth-feedback"} role="status">{error}</p>}
+{busy&&<div className="auth-connecting" role="status" aria-live="polite"><div className="auth-orbit"><span/><i/><b/></div><strong>{register?"Creating your account request":"Connecting securely"}</strong><p>{register?"Submitting your registration for review…":"Verifying your credentials and preparing your workspace…"}</p><div className="auth-connecting-track"><span/></div><small>Please keep this page open</small></div>}
+</section></main>}

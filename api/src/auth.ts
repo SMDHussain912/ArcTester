@@ -169,7 +169,36 @@ export const StudentAcademicProfileSchema = z.object({
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
+  captchaToken: z.string().optional(),
+  registrationNumber: z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\d{3}$/i, "Enter your diploma registration number, e.g. 24010-CM-053.").optional(),
 }).merge(StudentAcademicProfileSchema);
+
+async function verifyRegistrationCaptcha(token: string | undefined, ip: string, nativeClient = false): Promise<void> {
+  // Native app registration remains supported separately and is rate-limited.
+  // Browser registration uses Turnstile when both public/private keys are configured.
+  if (nativeClient) return;
+  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
+  if (!secret) {
+    if (token?.trim()) throw badRequest("CAPTCHA verification is not configured. Try again later.");
+    return;
+  }
+  if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
+  const body = new URLSearchParams({ secret, response: token });
+  if (ip && ip !== "unknown") body.set("remoteip", ip);
+  let response: Response;
+  try {
+    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+  } catch {
+    throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
+  }
+  if (!response.ok) throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
+  const result = await response.json() as { success?: boolean };
+  if (!result.success) throw badRequest("CAPTCHA verification failed. Please try again.");
+}
 
 export const LoginSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
@@ -430,10 +459,36 @@ export function authRouter(db: PrismaClient): Router {
   router.post("/register", async (req, res, next) => {
     try {
       const input = RegisterSchema.parse(req.body);
+      const nativeClient = req.header("x-arctester-client") === "mobile";
+      if (!input.registrationNumber && !nativeClient) throw badRequest("Enter your diploma registration number.");
+      let registrationNumber: string | null = input.registrationNumber?.toUpperCase() ?? null;
+      let registrationCollegeCode = input.collegeCode;
+      let registrationBranchCode = input.branchCode || null;
+      let registrationBranchName = input.branchName;
+      if (registrationNumber) {
+        const parts = registrationNumber.match(/^(\d{2})(\d{3})-([A-Z]{1,3})-(\d{3})$/);
+        if (!parts) throw badRequest("Registration number must look like 24010-CM-053.");
+        registrationCollegeCode = parts[2];
+        const branches: Record<string, { code: string; name: string }> = {
+          CM: { code: "CM", name: "Computer Engineering (CME)" },
+          EC: { code: "EC", name: "Electronics and Communication Engineering (ECE)" },
+          EE: { code: "EE", name: "Electrical and Electronics Engineering (EEE)" },
+          M: { code: "M", name: "Mechanical Engineering" },
+          C: { code: "C", name: "Civil Engineering" },
+          A: { code: "A", name: "Automobile Engineering" },
+        };
+        const branch = branches[parts[3]];
+        if (!branch) throw badRequest("Registration number branch code must be CM, EC, EE, M, C, or A.");
+        if (input.collegeCode !== registrationCollegeCode) throw badRequest("College code does not match your registration number.");
+        if (input.branchCode !== branch.code || input.branchName !== branch.name) throw badRequest("Diploma branch does not match the branch code in your registration number.");
+        registrationBranchCode = branch.code;
+        registrationBranchName = branch.name;
+      }
+      await verifyRegistrationCaptcha(input.captchaToken, req.ip ?? "unknown", nativeClient);
       const passwordHash = await hashPasswordAsync(input.password);
       const user = await db.user.create({
-        data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING", fullName: input.fullName, collegeName: input.collegeName, collegeCode: input.collegeCode, postalPin: input.postalPin || null, branchName: input.branchName, branchCode: input.branchCode || null },
-        select: { id: true, email: true, role: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+        data: { email: input.email, passwordHash, role: "STUDENT", accessStatus: "PENDING", fullName: input.fullName, collegeName: input.collegeName, collegeCode: registrationCollegeCode, postalPin: input.postalPin || null, branchName: registrationBranchName, branchCode: registrationBranchCode, registrationNumber },
+        select: { id: true, email: true, role: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
       res.status(201).json({
         ok: true,
@@ -466,7 +521,7 @@ export function authRouter(db: PrismaClient): Router {
       if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
       setSessionCookie(res, token);
-      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode } });
+      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
     } catch (error) {
       next(error);
     }
@@ -496,7 +551,7 @@ export function authRouter(db: PrismaClient): Router {
         token,
         tokenType: "Bearer",
         expiresIn: JWT_TTL_SECONDS,
-        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode },
+        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber },
       });
     } catch (error) {
       next(error);
@@ -541,7 +596,7 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
       const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
@@ -595,7 +650,7 @@ export function authRouter(db: PrismaClient): Router {
           postalPin: input.postalPin || null,
           branchCode: input.branchCode || null,
         },
-        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
       res.json({ ok: true, profile });
     } catch (error) {

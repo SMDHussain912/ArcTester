@@ -14,6 +14,7 @@ const ListSchema = z.object({
 
 const UpdateSchema = StudentAcademicProfileSchema.partial().extend({
   email: z.string().email().trim().toLowerCase().optional(),
+  registrationNumber: z.preprocess((value) => value === "" ? null : value, z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\d{3}$/i, "Enter a valid diploma registration number.").nullable().optional()),
 }).strict().refine((value) => Object.keys(value).length > 0, {
   message: "Provide at least one field to update.",
 });
@@ -34,13 +35,15 @@ export function adminStudentRouter(db: PrismaClient): Router {
             { email: { contains: q, mode: "insensitive" } },
             { collegeName: { contains: q, mode: "insensitive" } },
             { collegeCode: { contains: q, mode: "insensitive" } },
+            { registrationNumber: { contains: q, mode: "insensitive" } },
+            { registrationNumber: { contains: q, mode: "insensitive" } },
           ] } : {}),
           ...(query.college ? { collegeName: { contains: query.college, mode: "insensitive" } } : {}),
           ...(query.branch ? { branchName: { contains: query.branch, mode: "insensitive" } } : {}),
         },
         select: {
           id: true, email: true, fullName: true, collegeName: true, collegeCode: true,
-          postalPin: true, branchName: true, branchCode: true, accessStatus: true, createdAt: true,
+          postalPin: true, branchName: true, branchCode: true, registrationNumber: true, accessStatus: true, createdAt: true,
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: (query.page - 1) * query.limit,
@@ -92,7 +95,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
           email: `deleted-${id.data}-${randomUUID()}@account.deleted.invalid`,
           passwordHash: `deleted:${randomUUID()}`,
           fullName: "Deleted student",
-          collegeName: null, collegeCode: null, postalPin: null, branchName: null, branchCode: null,
+          collegeName: null, collegeCode: null, postalPin: null, branchName: null, branchCode: null, registrationNumber: null,
           accessStatus: "REJECTED",
           sessionVersion: { increment: 1 },
         },

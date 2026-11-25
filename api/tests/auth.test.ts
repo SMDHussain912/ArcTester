@@ -28,9 +28,10 @@ const STUDENT_PROFILE = {
   fullName: "Test Student",
   collegeName: "Test Polytechnic",
   collegeCode: "999",
-  postalPin: "533001",
-  branchName: "Diploma in Computer Engineering",
-  branchCode: "DCME",
+  registrationNumber: "24999-CM-053",
+  postalPin: "",
+  branchName: "Computer Engineering (CME)",
+  branchCode: "CM",
 };
 
 function setCookieFromResponse(res: Response): void {
@@ -122,6 +123,12 @@ describe("auth", () => {
     expect(res.status).toBe(201);
     expect((res.json as { ok: boolean; user: { accessStatus: string } }).ok).toBe(true);
     expect((res.json as { user: { accessStatus: string } }).user.accessStatus).toBe("PENDING");
+    expect((res.json as { user: { registrationNumber: string } }).user.registrationNumber).toBe("24999-CM-053");
+  });
+
+  it("rejects a registration number with an unsupported branch code", async () => {
+    const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, registrationNumber: "24999-XX-053", email: "wrong-branch@example.com", password: "secret1234" });
+    expect(res.status).toBe(400);
   });
 
   it("requires academic identity fields for new student registration", async () => {
