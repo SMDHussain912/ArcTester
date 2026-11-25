@@ -55,7 +55,7 @@ describe("Performance analytics", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Network unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "↻ Refresh" }));
     expect(await screen.findByText("Completed attempts")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Performance data is up to date"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Latest results loaded"));
   });
 
   it("normalizes missing API data without showing learning recommendations", async () => {
