@@ -37,6 +37,7 @@ export default function StudentAccountSettings(props: Props) {
   const { page, email, userId, role, theme, onThemeChange, reduceMotion, onReduceMotionChange,
     showAnnouncementPopups,
     onShowAnnouncementPopupsChange, busy, onSignOut } = props;
+  const [isSettings, setIsSettings] = useState(page === "settings");
   if (page === "account" && !isSettings) {
     return (
       <section className="account-settings-page">
