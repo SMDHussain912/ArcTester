@@ -28,6 +28,7 @@ import StudentMcpAssistant from "./StudentMcpAssistant";
 import StudentPracticeHistory from "./StudentPracticeHistory";
 import StudentMaterials from "./StudentMaterials";
 import StudentAccountSettings from "./StudentAccountSettings";
+import StudentAbout from "./StudentAbout";
 import AppSplash from "./components/AppSplash";
 import Toast from "./components/Toast";
 import { OnlineStatusContext } from "./OnlineStatusContext";
@@ -559,7 +560,9 @@ export default function App() {
 
       <main className={`main-content page-enter ${theme === "dark" ? "dark" : ""}`} key={activePage}>
         <OnlineStatusBanner />
-        {activePage === "account" ? (
+        {activePage === "about" ? (
+          <StudentAbout />
+        ) : activePage === "account" ? (
           <StudentAccountSettings
             page={activePage}
             email={user.email}
