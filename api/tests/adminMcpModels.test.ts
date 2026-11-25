@@ -4,7 +4,6 @@ import { buildApp } from "../src/index.js";
 import { startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
-let adminId = 0;
 let bearer = "";
 
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
@@ -32,7 +31,6 @@ describe("administrator MCP model control", () => {
   beforeAll(async () => {
     server = await startTestServer(buildApp);
     const admin = await server.db.user.create({ data: { email: "admin-model-mcp@arctester.test", passwordHash: "test-only", role: "ADMIN" } });
-    adminId = admin.id;
     bearer = "arc_admin_" + randomBytes(32).toString("base64url");
     await server.db.adminMcpKey.create({ data: {
       userId: adminId,
