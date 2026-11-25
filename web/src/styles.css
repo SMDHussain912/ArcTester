@@ -765,3 +765,24 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
 .admin-mcp-assistant .mcp-scope-list label{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--bg);font-size:11px;font-weight:500;min-width:0}
 .admin-mcp-assistant .mcp-scope-list input[type=checkbox]{width:15px;min-width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .admin-mcp-assistant .mcp-scope-list span{border:0;background:transparent;padding:0;overflow-wrap:anywhere}
+
+
+/* Analytics visualizations */
+.analytics-chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:18px 0}
+.analytics-chart{min-width:0}
+.analytics-chart .panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.analytics-chart .panel-header h3{margin:0;font-size:1rem}
+.analytics-bar-list{display:grid;gap:14px;margin-top:16px}
+.analytics-bar-row{display:grid;gap:6px;min-width:0}
+.analytics-bar-label{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.9rem}
+.analytics-bar-label span{overflow-wrap:anywhere}
+.analytics-bar-track{height:10px;border-radius:999px;background:var(--surface-muted,#e8edf4);overflow:hidden}
+.analytics-bar-fill{display:block;height:100%;border-radius:inherit;background:var(--accent,#6558d3);min-width:0;transition:width .35s ease}
+.analytics-stacked-track{display:flex;width:100%;height:18px;border-radius:999px;overflow:hidden;background:var(--surface-muted,#e8edf4);margin:16px 0}
+.analytics-stacked-track span{display:block;height:100%;min-width:0}
+.analytics-legend{display:grid;gap:9px}
+.analytics-legend span{display:flex;align-items:center;gap:8px;font-size:.88rem}
+.analytics-legend i{width:10px;height:10px;border-radius:50%;flex:0 0 10px}
+.analytics-legend strong{margin-left:auto;font-variant-numeric:tabular-nums}
+@media(max-width:640px){.analytics-chart-grid{grid-template-columns:minmax(0,1fr)}.analytics-chart{padding:16px}}
+@media(prefers-reduced-motion:reduce){.analytics-bar-fill{transition:none}}
