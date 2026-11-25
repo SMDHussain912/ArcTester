@@ -624,6 +624,7 @@ export function authRouter(db: PrismaClient): Router {
             if (typeof payload.sid === "string") {
               await db.authSession.updateMany({ where: { id: payload.sid, userId, revokedAt: null }, data: { revokedAt: new Date() } });
             } else {
+              await db.authSession.updateMany({ where: { userId, loginMethod: "legacy-session", revokedAt: null }, data: { revokedAt: new Date() } });
               await db.user.updateMany({ where: { id: userId, sessionVersion }, data: { sessionVersion: { increment: 1 } } });
             }
           }
@@ -930,7 +931,12 @@ export function authRouter(db: PrismaClient): Router {
       verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
       const counter = verifyPasskeyAssertion({ authenticatorData: input.authenticatorData, clientDataJSON: input.clientDataJSON, signature: input.signature, publicKey: credential.publicKey, expectedChallenge: input.challengeId, expectedOrigin: origin, rpId });
       if ((credential.signCount > 0 || counter > 0) && counter <= credential.signCount) return next(forbidden("Passkey counter did not advance. Use another passkey or contact support."));
-      await db.passkeyCredential.update({ where: { id: credential.id }, data: { signCount: counter, lastUsedAt: new Date() } });
+      if (counter > 0) {
+        const counterUpdate = await db.passkeyCredential.updateMany({ where: { id: credential.id, signCount: credential.signCount }, data: { signCount: counter, lastUsedAt: new Date() } });
+        if (counterUpdate.count !== 1) return next(forbidden("Passkey was used concurrently or its counter changed. Try signing in again."));
+      } else {
+        await db.passkeyCredential.update({ where: { id: credential.id }, data: { lastUsedAt: new Date() } });
+      }
       const user = await db.user.findUnique({ where: { id: challenge.userId } });
       if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Account access is not approved."));
       await db.authChallenge.delete({ where: { id: challenge.id } });
