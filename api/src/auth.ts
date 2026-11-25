@@ -401,7 +401,8 @@ function maskedIp(ip: string): string {
 function requestDevice(req: Request): { deviceName: string; platform: string; userAgent: string; ipAddress: string } {
   const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
   const platform = /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
-  const browser = /edg\//i.test(userAgent) ? "Edge" : /firefox\//i.test(userAgent) ? "Firefox" : /chrome\//i.test(userAgent) ? "Chrome" : /safari\//i.test(userAgent) ? "Safari" : "Browser";
+  const ua = userAgent.toLowerCase();
+  const browser = ua.includes("edg/") ? "Edge" : ua.includes("firefox/") ? "Firefox" : ua.includes("chrome/") ? "Chrome" : ua.includes("safari/") ? "Safari" : "Browser";
   const deviceName = /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
   return { deviceName, platform, userAgent, ipAddress: maskedIp(req.ip ?? "") };
 }
