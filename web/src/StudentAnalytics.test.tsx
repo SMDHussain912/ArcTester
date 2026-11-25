@@ -26,8 +26,11 @@ describe("Performance analytics", () => {
     expect(screen.getByRole("heading", { name: "Practice Exam Analytics" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mock Test Analytics" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Assigned / Real Exam Results" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice answer breakdown" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Mock test answer breakdown" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Practice accuracy: 71%/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Answer mix" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Accuracy trend" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Mock accuracy: 67%/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mock answer mix" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Subject-wise mock accuracy" })).toBeInTheDocument();
     expect(screen.getByText("76%")).toBeInTheDocument();
     expect(screen.queryByText(/topic mastery|learning progress|your next study steps|areas to strengthen/i)).not.toBeInTheDocument();
