@@ -19,7 +19,7 @@ describe("Performance analytics scope", () => {
       throw new Error("Learning endpoint must not be requested from performance analytics: " + path);
     });
     render(<StudentAnalytics setActivePage={vi.fn()} />);
-    expect(await screen.findByRole("heading", { name: "Practice Exam Analytics" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Practice performance" })).toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(2);
     expect(screen.queryByText("Your next study steps")).not.toBeInTheDocument();
     expect(screen.queryByText("Areas to strengthen")).not.toBeInTheDocument();
