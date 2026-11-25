@@ -18,8 +18,6 @@ import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } fro
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
 import AdminSettings from "./AdminSettings";
-import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
-import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -185,8 +183,6 @@ export default function AdminWorkspace(p:Props){
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
-   {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
-   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
