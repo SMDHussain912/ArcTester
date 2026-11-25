@@ -26,6 +26,16 @@ const samples = [
   { practiceAccuracy: 0.7, completedTests: 5, ready: "yes" },
   { practiceAccuracy: 0.9, completedTests: 8, ready: "yes" },
 ];
+const verificationSamples = [
+  { practiceAccuracy: 0.35, completedTests: 3, ready: "no" },
+  { practiceAccuracy: 0.65, completedTests: 6, ready: "yes" },
+  { practiceAccuracy: 0.85, completedTests: 9, ready: "yes" },
+];
+const verificationSamplesTwo = [
+  { practiceAccuracy: 0.25, completedTests: 1, ready: "no" },
+  { practiceAccuracy: 0.55, completedTests: 4, ready: "yes" },
+  { practiceAccuracy: 0.75, completedTests: 7, ready: "yes" },
+];
 
 describe("administrator MCP model control", () => {
   beforeAll(async () => {
@@ -53,7 +63,7 @@ describe("administrator MCP model control", () => {
 
     const verification = await callTool("create_model_dataset", {
       name: "readiness-verification-fixture", task: "classification", targetColumn: "ready", targetType: "string",
-      featureSchema, samples, sourceDescription: "Human-reviewed verification fixture for isolated tests.",
+      featureSchema, samples: verificationSamples, sourceDescription: "Human-reviewed verification fixture for isolated tests.",
       sourceAttested: true, confirmSourceAttestation: true, datasetKind: "verification",
     });
     const page = await callTool("get_model_verification_data", { datasetId: verification.dataset.id, offset: 0, limit: 2 });
@@ -81,7 +91,7 @@ describe("administrator MCP model control", () => {
   it("rejects verification data as a training source", async () => {
     const verification = await callTool("create_model_dataset", {
       name: "verification-not-training", task: "classification", targetColumn: "ready", targetType: "string",
-      featureSchema, samples, sourceDescription: "Synthetic verification fixture with labels held out from training.",
+      featureSchema, samples: verificationSamplesTwo, sourceDescription: "Synthetic verification fixture with labels held out from training.",
       sourceAttested: true, confirmSourceAttestation: true, datasetKind: "verification",
     });
     await expect(callTool("queue_model_training", { datasetId: verification.dataset.id, modelId: "readiness_classifier", confirm: true })).rejects.toThrow(/training or synthetic dataset/i);
