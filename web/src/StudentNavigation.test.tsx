@@ -25,7 +25,6 @@ describe("StudentNavigation", () => {
     expect(within(nav).queryByText("Home")).not.toBeInTheDocument();
     expect(within(nav).queryByText("Learning")).not.toBeInTheDocument();
     const exams = within(nav).getByText("Exams & results").closest("details")!;
-    fireEvent.click(within(exams).getByText("Exams & results"));
     expect(within(exams).getByRole("button", { name: "Practice exams" })).toBeEnabled();
     expect(within(exams).getByRole("button", { name: "Question bank" })).toBeEnabled();
     expect(within(exams).getByRole("button", { name: "Assigned / real exams" })).toBeEnabled();
