@@ -703,6 +703,7 @@ export default function App() {
       if (register) {
         await api("/auth/register", {
           method: "POST",
+          headers: { "x-arctester-client": "mobile" },
           body: JSON.stringify({
             email: email.trim(),
             password,
