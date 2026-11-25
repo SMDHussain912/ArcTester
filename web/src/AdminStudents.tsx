@@ -10,7 +10,7 @@ const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").r
 const fields: Array<{ key: keyof Student; label: string }> = [
   { key: "fullName", label: "Full name" }, { key: "email", label: "Email" },
   { key: "collegeName", label: "College name" }, { key: "collegeCode", label: "College PIN / institute code" },
-  { key: "postalPin", label: "Postal PIN" }, { key: "branchName", label: "Branch" }, { key: "branchCode", label: "Branch code" },
+  { key: "branchName", label: "Branch" }, { key: "branchCode", label: "Branch code" },
 ];
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(API + path, { ...init, credentials: "include", headers: { "content-type": "application/json", ...init.headers } });
