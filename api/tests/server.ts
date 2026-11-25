@@ -175,9 +175,10 @@ export async function signUp(
       fullName: "Test Student",
       collegeName: "Test Polytechnic",
       collegeCode: "999",
+      registrationNumber: "24999-CM-053",
       postalPin: "533001",
-      branchName: "Diploma in Computer Engineering",
-      branchCode: "DCME",
+      branchName: "Computer Engineering (CME)",
+      branchCode: "CM",
     }),
   });
   if (reg.status !== 201) {
