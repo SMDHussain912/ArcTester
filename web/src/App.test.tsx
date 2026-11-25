@@ -38,7 +38,7 @@ describe("live Vite application", () => {
 
 
 
-  it("loads published announcements into the student dashboard and announcements view", async () => {
+  it("shows an announcement once and opens notifications from the dashboard header", async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith("/auth/me")) {
@@ -76,12 +76,10 @@ describe("live Vite application", () => {
     await waitFor(() => expect(document.querySelector('[aria-labelledby="announcement-popup-title"]')).not.toBeInTheDocument());
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements/notice-1/acknowledge"))).toBe(true);
 
-    fireEvent.click(within(await screen.findByRole("complementary", { name: "Student workspace" })).getByRole("button", { name: /Announcements/ }));
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Announcements" })).toBeInTheDocument();
-    });
-    expect(screen.getAllByText("ECET mock exam schedule").length).toBeGreaterThan(0);
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/announcements"))).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "ECET mock exam schedule" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Announcements/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open notifications" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Notification inbox" })).toBeInTheDocument());
   });
   it("lets an administrator add a question and build a mock exam from it", async () => {
     const createdQuestion = {
