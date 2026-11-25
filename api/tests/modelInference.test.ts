@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { predictModelArtifact } from "../src/modelInference.js";
+import { evaluateModelArtifacts, predictModelArtifact } from "../src/modelInference.js";
 import { trainModel, type ModelDatasetInput } from "../src/modelTraining.js";
 
 function makeDataset(task: "classification" | "regression", rows: Record<string, unknown>[]): ModelDatasetInput {
@@ -36,5 +36,20 @@ describe("registered model inference", () => {
     expect(prediction.type).toBe("regression");
     if (prediction.type === "regression") expect(prediction.value).toBeCloseTo(11, 0);
     expect(() => predictModelArtifact(trained.artifact, { score: 4, other: 1 })).toThrow(/exactly match/);
+  });
+
+  it("computes candidate and baseline metrics from actual verification predictions", () => {
+    const rows = Array.from({ length: 30 }, (_value, index) => {
+      const score = index / 29;
+      return { score, target: score < 0.5 ? "not-ready" : "ready" };
+    });
+    const input = makeDataset("classification", rows);
+    const candidate = trainModel(input, { seed: 11, epochs: 120 });
+    const baseline = trainModel(input, { seed: 27, epochs: 10 });
+    const metrics = evaluateModelArtifacts(candidate.artifact, baseline.artifact, rows, "target", "classification");
+    expect(metrics.accuracy).toBeGreaterThanOrEqual(0);
+    expect(metrics.accuracy).toBeLessThanOrEqual(1);
+    expect(metrics.baselineAccuracy).toBeGreaterThanOrEqual(0);
+    expect(metrics.baselineAccuracy).toBeLessThanOrEqual(1);
   });
 });
