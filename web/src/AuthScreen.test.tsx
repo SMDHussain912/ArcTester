@@ -21,6 +21,8 @@ describe("AuthScreen", () => {
     expect(screen.getByRole("heading", { name: "Create your account" })).toBeTruthy();
     expect(screen.queryByLabelText("Invitation code")).toBeNull();
     expect(screen.getByLabelText("Password").getAttribute("minLength")).toBe("8");
+    expect(screen.getByRole("button", { name: "Show password" })).toBeTruthy();
+    expect(screen.getByText("Security check")).toBeTruthy();
     expect(screen.getByLabelText("Full name")).toBeTruthy();
     expect(screen.getByLabelText("College / Polytechnic")).toBeTruthy();
     expect(screen.getByLabelText("College PIN / institute code")).toBeTruthy();
@@ -47,6 +49,15 @@ describe("AuthScreen", () => {
     renderAuth({ busy: true, error: "The invitation has expired." });
     expect(screen.getByRole("button", { name: "Please wait…" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("The invitation has expired.")).toBeTruthy();
+  });
+  it("toggles password visibility without changing the password value", () => {
+    renderAuth();
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    fireEvent.change(password, { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password.type).toBe("text");
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password.type).toBe("password");
   });
   it("delegates switching between sign-in and registration", () => {
     const props = renderAuth();
