@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { request } from "./apiClient";
 
 type ToggleRowProps = {
@@ -72,7 +72,7 @@ export default function StudentAccountSettings(props: Props) {
     return () => { cancelled = true; };
   }, [isSettings]);
 
-  async function changePassword(event: React.FormEvent<HTMLFormElement>) {
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPasswordError("");
     setPasswordMessage("");
