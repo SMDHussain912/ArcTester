@@ -551,7 +551,7 @@ export function authRouter(db: PrismaClient): Router {
         token,
         tokenType: "Bearer",
         expiresIn: JWT_TTL_SECONDS,
-        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode },
+        user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber },
       });
     } catch (error) {
       next(error);
@@ -650,7 +650,7 @@ export function authRouter(db: PrismaClient): Router {
           postalPin: input.postalPin || null,
           branchCode: input.branchCode || null,
         },
-        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
       res.json({ ok: true, profile });
     } catch (error) {
