@@ -21,6 +21,7 @@ import { gamificationRouter } from "./gamificationRoutes.js";
 import { masteryRouter } from "./masteryRoutes.js";
 import { studentMcpRouter } from "./studentMcpRoutes.js";
 import { adminMcpRouter } from "./adminMcpRoutes.js";
+import { modelInferenceRouter } from "./modelInferenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 
 const db = new PrismaClient();
@@ -170,6 +171,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(masteryRouter(database));
   app.use(studentMcpRouter(database));
   app.use(adminMcpRouter(database));
+  app.use(modelInferenceRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);

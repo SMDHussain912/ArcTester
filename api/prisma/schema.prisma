@@ -111,6 +111,10 @@ model User {
   mcpKeys StudentMcpKey[]
   adminMcpKeys AdminMcpKey[]
   adminMcpAuditLogs AdminMcpAuditLog[]
+  modelDatasets ModelDataset[]
+  modelTrainingJobs ModelTrainingJob[]
+  modelRegistryAudits ModelRegistryAudit[]
+  modelEvaluations ModelEvaluation[]
 
   @@index([role, accessStatus])
 }
@@ -818,3 +822,118 @@ model AdminMcpAuditLog {
   @@index([actorId, createdAt])
   @@index([createdAt])
 }
+
+
+/// Versioned ML model artifacts. The artifact JSON stores a URI and integrity metadata,
+/// never model binaries or credentials.
+model RegisteredModel {
+  id                String   @id
+  modelId            String
+  version            Int
+  algorithm           String
+  task                String
+  dataset             String
+  trainingDatasetId   String?
+  artifactJson        String
+  isActive            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  activatedAt         DateTime?
+  @@unique([modelId, version])
+  @@index([modelId, isActive])
+  @@index([createdAt])
+}
+
+/// Admin action trail for model registration, evaluation and activation.
+model ModelRegistryAudit {
+  id        String   @id
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
+  modelId   String
+  version   Int
+  action    String
+  details   String   @default("{}")
+  createdAt DateTime @default(now())
+  @@index([modelId, version, createdAt])
+  @@index([actorId, createdAt])
+}
+
+/// Immutable dataset snapshots with explicit provenance and a content fingerprint.
+model ModelDataset {
+  id                 String   @id
+  createdBy           User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById         Int?
+  name                String
+  task                String
+  targetColumn        String   @default("target")
+  featureSchemaJson   String
+  samplesJson         String
+  rowCount            Int
+  sourceDescription  String
+  sourceAttested      Boolean  @default(false)
+  datasetKind         String   @default("synthetic")
+  fingerprint         String   @unique
+  createdAt            DateTime @default(now())
+  trainingJobs        ModelTrainingJob[]
+  @@index([name, createdAt])
+  @@index([createdById, createdAt])
+}
+
+/// Training is asynchronous. A queued job is not reported as trained until a worker
+/// completes it and writes a result.
+model ModelTrainingJob {
+  id              String   @id
+  dataset         ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  datasetId       String
+  createdBy       User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById     Int?
+  modelId         String
+  seed            Int      @default(42)
+  epochs          Int      @default(80)
+  batchSize       Int      @default(32)
+  status          String   @default("QUEUED")
+  progress        Int      @default(0)
+  errorMessage    String   @default("")
+  workerId        String   @default("")
+  leaseExpiresAt  DateTime?
+  resultJson      String   @default("{}")
+  createdAt       DateTime @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([datasetId, createdAt])
+}
+
+/// Evaluation records require an explicitly designated verification dataset.
+model ModelEvaluation {
+  id                  String   @id
+  actor               User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId             Int?
+  modelId             String
+  candidateVersion    Int
+  baselineVersion     Int
+  datasetId           String   @default("")
+  evaluationDataset   String
+  datasetFingerprint  String
+  sampleCount         Int
+  metricsJson         String
+  status              String
+  evaluatedAt         DateTime @default(now())
+  @@index([modelId, candidateVersion, evaluatedAt])
+  @@index([actorId, evaluatedAt])
+}
+
+/// Aggregated, non-identifying model input drift counters.
+model ModelDriftBucket {
+  id          String   @id
+  modelId     String
+  version     Int
+  featureName String
+  bucket      String
+  periodStart DateTime
+  count       Int      @default(0)
+  @@unique([modelId, version, featureName, bucket, periodStart])
+  @@index([modelId, version, periodStart])
+}
+
