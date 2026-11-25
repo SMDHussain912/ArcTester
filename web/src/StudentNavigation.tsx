@@ -96,7 +96,7 @@ export default function StudentNavigation({
         <div className="student-sidebar-navigation">
           <nav aria-label="Student navigation" className="student-nav-groups">
             {GROUPS.map(({ id, label }) => (
-              <details key={id} className="student-nav-group" open={activeGroup === id}>
+              <details key={id} className="student-nav-group" open={activeGroup === id || id === "EXAMS"}>
                 <summary><span>{label}</span><span className="student-nav-chevron" aria-hidden="true">⌄</span></summary>
                 <div className="student-nav-group-items">
                   {NAV_ITEMS.filter((item) => item.group === id).map((item) => renderItem(item))}
