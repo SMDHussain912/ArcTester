@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = { theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void };
 
@@ -10,6 +10,15 @@ export default function AdminSettings({ theme, onThemeChange }: Props) {
   const [density, setDensity] = useState<"comfortable" | "compact">(() => {
     try { return window.localStorage.getItem("arctester-admin-density") === "compact" ? "compact" : "comfortable"; } catch { return "comfortable"; }
   });
+
+  useEffect(() => {
+    document.documentElement.dataset.adminCompactNav = String(compactNavigation);
+    document.documentElement.dataset.adminDensity = density;
+    return () => {
+      delete document.documentElement.dataset.adminCompactNav;
+      delete document.documentElement.dataset.adminDensity;
+    };
+  }, [compactNavigation, density]);
 
   function updateCompact(value: boolean) {
     setCompactNavigation(value);
