@@ -128,7 +128,7 @@ export default function AuthScreen({ email, password, register, busy, error, aca
             <label className="auth-field-wide">Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => onEmailChange(event.target.value)} /></label>
             <label className="auth-field-wide">Password
               <span className="auth-password-input-wrap">
-                <input type={passwordVisible ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={128} required value={password} onChange={(event) => onPasswordChange(event.target.value)} />
+                <input type={passwordVisible ? "text" : "password"} aria-label="Password" autoComplete="new-password" minLength={8} maxLength={128} required value={password} onChange={(event) => onPasswordChange(event.target.value)} />
                 <button type="button" className="auth-password-toggle" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={passwordVisible ? "Hide password" : "Show password"}>{passwordVisible ? "Hide" : "Show"}</button>
               </span>
             </label>
@@ -138,7 +138,7 @@ export default function AuthScreen({ email, password, register, busy, error, aca
             <label>Email address<input type="email" autoComplete="email" required value={email} onChange={(event) => onEmailChange(event.target.value)} /></label>
             <label>Password
               <span className="auth-password-input-wrap">
-                <input type={passwordVisible ? "text" : "password"} autoComplete="current-password" minLength={1} required value={password} onChange={(event) => onPasswordChange(event.target.value)} />
+                <input type={passwordVisible ? "text" : "password"} aria-label="Password" autoComplete="current-password" minLength={1} required value={password} onChange={(event) => onPasswordChange(event.target.value)} />
                 <button type="button" className="auth-password-toggle" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={passwordVisible ? "Hide password" : "Show password"}>{passwordVisible ? "Hide" : "Show"}</button>
               </span>
             </label>
