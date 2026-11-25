@@ -56,10 +56,6 @@ describe("administrator MCP model control", () => {
   afterAll(async () => { await server.close(); });
 
   it("creates fingerprinted datasets, queues training, verifies and activates a candidate", async () => {
-    const verificationRows = Array.from({ length: 8 }, (_value, index) => {
-      const practiceAccuracy = (index + 0.25) / 8;
-      return { practiceAccuracy, completedTests: index + 2, ready: practiceAccuracy < 0.5 ? "no" : "yes" };
-    });
     const training = await callTool("create_model_dataset", {
       name: "readiness-training-fixture", task: "classification", targetColumn: "ready", targetType: "string",
       featureSchema, samples, sourceDescription: "Synthetic test fixture generated for model-control tests.",
@@ -126,6 +122,10 @@ describe("administrator MCP model control", () => {
     const trainingRows = Array.from({ length: 20 }, (_value, index) => {
       const practiceAccuracy = index / 19;
       return { practiceAccuracy, completedTests: index + 1, ready: practiceAccuracy < 0.5 ? "no" : "yes" };
+    });
+    const verificationRows = Array.from({ length: 8 }, (_value, index) => {
+      const practiceAccuracy = (index + 0.25) / 8;
+      return { practiceAccuracy, completedTests: index + 2, ready: practiceAccuracy < 0.5 ? "no" : "yes" };
     });
     const training = await callTool("create_model_dataset", {
       name: "native-evaluation-training", task: "classification", targetColumn: "ready", targetType: "string",
