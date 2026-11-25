@@ -19,7 +19,10 @@ describe("StudentNavigation", () => {
     const setActivePage = vi.fn();
     render(<StudentNavigation {...props} setActivePage={setActivePage} />);
     const nav = screen.getByRole("navigation", { name: "Student navigation" });
-    expect(within(nav).getByText("Home")).toBeInTheDocument();
+    const dashboard = within(nav).getByRole("button", { name: "Dashboard" });
+    expect(dashboard).toBeInTheDocument();
+    expect(dashboard.closest("details")).toBeNull();
+    expect(within(nav).queryByText("Home")).not.toBeInTheDocument();
     expect(within(nav).queryByText("Learning")).not.toBeInTheDocument();
     const exams = within(nav).getByText("Exams & results").closest("details")!;
     fireEvent.click(within(exams).getByText("Exams & results"));
