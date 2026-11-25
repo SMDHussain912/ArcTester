@@ -32,7 +32,8 @@ function selectCollege(o:SearchOption){onAcademicChange("collegeName",o.value);i
 function changeBranch(value:string){onAcademicChange("branchName",value);onAcademicChange("branchCode",BRANCH_OPTIONS.find(x=>x.value===value)?.code??"")}
 function selectBranch(o:SearchOption){onAcademicChange("branchName",o.value);onAcademicChange("branchCode",o.code??"")}
 function toggleRegister(){setCaptchaToken("");setCaptchaError("");setRegistrationError("");setPasswordVisible(false);onRegisterChange(!register)}
-const colleges:SearchOption[]=AP_POLYTECHNIC_COLLEGES.map(c=>({value:c.name,label:c.name,code:c.code,detail:[c.code,c.district].filter(Boolean).join(" · ")}));\nconst registrationParts=academicProfile.registrationNumber.match(REGISTRATION_PATTERN);
+const colleges:SearchOption[]=AP_POLYTECHNIC_COLLEGES.map(c=>({value:c.name,label:c.name,code:c.code,detail:[c.code,c.district].filter(Boolean).join(" · ")}));
+const registrationParts=academicProfile.registrationNumber.match(REGISTRATION_PATTERN);
 return <main className="auth-shell"><section className="auth-card"><a className="brand" href="#dashboard"><span className="brand-mark">A</span><span>ArcTester</span></a><p className="eyebrow">{register?"YOUR COLLEGE. YOUR BRANCH. YOUR PREPARATION.":"YOUR PERSONAL PRACTICE SPACE"}</p><h1>{register?"Create your account":"Welcome back"}</h1><p className="muted">{register?"Enter your diploma registration number and institute. An administrator will review your account before student access.":"Sign in to continue your preparation."}</p>
 <form onSubmit={submit} className={register?"auth-register-form":""}>{register?<div className="auth-register-grid">
 <label>Full name<input autoComplete="name" required minLength={2} maxLength={100} value={academicProfile.fullName} onChange={e=>onAcademicChange("fullName",e.target.value)}/></label>
