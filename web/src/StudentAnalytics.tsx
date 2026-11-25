@@ -81,7 +81,9 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
 
   useEffect(() => {
     void loadAnalytics();
-    const ratioPercent = (value: number | null | undefined) => value == null ? null : Math.max(0, Math.min(100, value * 100));
+  }, [loadAnalytics]);
+
+  const ratioPercent = (value: number | null | undefined) => value == null ? null : Math.max(0, Math.min(100, value * 100));
   const formalAccuracy = overview?.formalExams.scorePercentage ?? null;
 
   return (
