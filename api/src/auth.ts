@@ -596,7 +596,7 @@ export function authRouter(db: PrismaClient): Router {
       const payload = verifyJwt(token);
       const user = await db.user.findUnique({
         where: { id: Number(payload.sub) },
-        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true },
+        select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
       const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
