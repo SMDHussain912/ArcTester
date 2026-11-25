@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import ArcTesterMascot from "./components/ArcTesterMascot";
 
 function AboutSection({ title, eyebrow, children }: { title: string; eyebrow: string; children: ReactNode }) {
   return (
@@ -18,7 +19,7 @@ export default function StudentAbout() {
           <h1>Built to make exam preparation clearer.</h1>
           <p>ArcTester is a student-focused exam preparation platform designed to turn practice into measurable progress.</p>
         </div>
-        <div className="about-brand-mark" aria-hidden="true"><span>AT</span><small>ARCTESTER</small></div>
+        <div className="about-brand-mark"><ArcTesterMascot variant="mascot" size={116} alt="Aster, the ArcTester owl mascot" /><small>ARCTESTER</small></div>
       </header>
 
       <div className="about-grid">
@@ -34,10 +35,10 @@ export default function StudentAbout() {
 
         <AboutSection title="About me" eyebrow="THE BUILDER">
           <div className="about-developer">
-            <div className="about-developer-avatar" aria-hidden="true">A</div>
-            <div><h3>Arc</h3><p className="about-role">Student developer · Full-stack programmer</p></div>
+            <div className="about-developer-avatar"><ArcTesterMascot variant="mark" size={56} decorative /></div>
+            <div><h3>Shaik Mahammad Hussain</h3><p className="about-role">Student developer · Full-stack programmer</p></div>
           </div>
-          <p>Arc is an engineering student and developer interested in building useful software, web and mobile applications, game systems and applied AI.</p>
+          <p>Shaik Mahammad Hussain is an engineering student and developer interested in building useful software, web and mobile applications, game systems and applied AI.</p>
           <p>ArcTester is an independent project created to make exam preparation more organized, accessible and data-informed.</p>
         </AboutSection>
       </div>

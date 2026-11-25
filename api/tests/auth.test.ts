@@ -224,6 +224,36 @@ describe("auth", () => {
     );
   });
 
+  it("changes password, rotates the current session and revokes the previous session", async () => {
+    const email = "password-change@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { email, password: "old-password-123" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "old-password-123" });
+    expect(login.status).toBe(200);
+    const oldToken = cookieJar.get("ecet_session");
+    expect(oldToken).toBeTruthy();
+
+    const changed = await postJsonWithCookie(`${server.baseUrl}/auth/change-password`, {
+      currentPassword: "old-password-123",
+      newPassword: "new-password-12345",
+    });
+    expect(changed.status).toBe(200);
+    expect((changed.json as { ok: boolean }).ok).toBe(true);
+    const rotatedToken = cookieJar.get("ecet_session");
+    expect(rotatedToken).toBeTruthy();
+    expect(rotatedToken).not.toBe(oldToken);
+
+    const oldSession = await fetch(`${server.baseUrl}/auth/me`, {
+      headers: { cookie: `ecet_session=${oldToken}` },
+    });
+    expect(oldSession.status).toBe(403);
+    const newSession = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
+    expect(newSession.status).toBe(200);
+
+    const newLogin = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "new-password-12345" });
+    expect(newLogin.status).toBe(200);
+  });
+
   it("logs out, clears the cookie, and revokes the previously issued JWT", async () => {
     const oldToken = cookieJar.get("ecet_session");
     expect(oldToken).toBeTruthy();
