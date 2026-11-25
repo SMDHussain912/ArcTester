@@ -41,7 +41,7 @@ export async function runOneTrainingJob(db: PrismaClient, workerId: string, now 
       targetColumn: job.dataset.targetColumn,
       featureSchemaJson: job.dataset.featureSchemaJson,
       samplesJson: job.dataset.samplesJson,
-    }, { seed: job.seed, epochs: job.epochs });
+    }, { seed: job.seed, epochs: job.epochs, batchSize: job.batchSize });
     const artifactJson = stableModelJson(trained.artifact);
     const checksum = sha256(artifactJson);
     const inputSchema = JSON.parse(job.dataset.featureSchemaJson) as Record<string, unknown>;
