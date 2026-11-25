@@ -7,7 +7,7 @@ vi.mock("./apiClient", () => ({ request: vi.fn() }));
 
 const overview = {
   practice: { completedAttempts: 3, questions: 30, correct: 20, incorrect: 8, unanswered: 2, accuracy: 20 / 28 },
-  formalExams: { graded: 2, scorePercentage: 76, score: 152, maximumScore: 200, reviewRequired: 1 },
+  formalExams: { graded: 2, scorePercentage: 76, score: 152, maximumScore: 200, reviewRequired: 1, submissions: 4 },
 };
 const fullMock = {
   generatedAt: "2026-11-22T00:00:00.000Z", completedFullMocks: 1, latestMockAt: "2026-11-21T00:00:00.000Z",
@@ -33,6 +33,8 @@ describe("Performance analytics", () => {
     expect(screen.getByRole("heading", { name: "Mock answer mix" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Subject accuracy" })).toBeInTheDocument();
     expect(screen.getByText("76%")).toBeInTheDocument();
+    expect(screen.getByText("4", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.queryByText(/overview\\.formalExams\\.submissions/)).not.toBeInTheDocument();
     expect(screen.queryByText(/topic mastery|learning progress|your next study steps|areas to strengthen/i)).not.toBeInTheDocument();
     expect(request).toHaveBeenCalledTimes(2);
     expect(request).toHaveBeenCalledWith("/analytics/overview");
