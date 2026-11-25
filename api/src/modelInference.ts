@@ -89,6 +89,37 @@ export function predictModelArtifact(rawArtifact: unknown, input: Record<string,
   throw new Error("Unsupported model task.");
 }
 
+export function evaluateModelArtifacts(candidateArtifact: unknown, baselineArtifact: unknown, rows: Record<string, unknown>[], targetColumn: string, task: "classification" | "regression"): Record<string, number> {
+  if (rows.length < 1 || rows.length > 500) throw new Error("Evaluation requires 1 to 500 verification rows.");
+  if (task === "classification") {
+    let candidateCorrect = 0;
+    let baselineCorrect = 0;
+    for (const row of rows) {
+      const expected = String(row[targetColumn]);
+      const features = Object.fromEntries(Object.entries(row).filter(([name]) => name !== targetColumn));
+      const candidate = predictModelArtifact(candidateArtifact, features);
+      const baseline = predictModelArtifact(baselineArtifact, features);
+      if (candidate.type !== "classification" || baseline.type !== "classification") throw new Error("Classification evaluation requires classification artifacts.");
+      if (candidate.label === expected) candidateCorrect++;
+      if (baseline.label === expected) baselineCorrect++;
+    }
+    return { accuracy: candidateCorrect / rows.length, baselineAccuracy: baselineCorrect / rows.length };
+  }
+  let candidateError = 0;
+  let baselineError = 0;
+  for (const row of rows) {
+    const expected = row[targetColumn];
+    if (typeof expected !== "number" || !Number.isFinite(expected)) throw new Error("Regression verification targets must be numeric.");
+    const features = Object.fromEntries(Object.entries(row).filter(([name]) => name !== targetColumn));
+    const candidate = predictModelArtifact(candidateArtifact, features);
+    const baseline = predictModelArtifact(baselineArtifact, features);
+    if (candidate.type !== "regression" || baseline.type !== "regression") throw new Error("Regression evaluation requires regression artifacts.");
+    candidateError += Math.abs(candidate.value - expected);
+    baselineError += Math.abs(baseline.value - expected);
+  }
+  return { mae: candidateError / rows.length, baselineMae: baselineError / rows.length };
+}
+
 export async function predictActiveModel(db: PrismaClient, modelId: string, input: Record<string, unknown>): Promise<{ modelId: string; version: number; prediction: ModelPrediction } | null> {
   const model = await db.registeredModel.findFirst({
     where: { modelId, isActive: true },
