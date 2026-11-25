@@ -43,7 +43,7 @@ describe("StudentAccountSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Update password" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/auth/change-password", expect.objectContaining({ method: "POST", body: JSON.stringify({ currentPassword: "old-password", newPassword: "new-password-12345" }) })));
     expect(screen.getByText("Two-factor authentication")).toBeInTheDocument();
-    expect(screen.getByText("Authenticator app")).toBeInTheDocument();
+    expect(screen.getByText(/Authenticator app/)).toBeInTheDocument();
     expect(screen.getByText("Passkeys")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set up authenticator" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add a passkey" })).toBeInTheDocument();
