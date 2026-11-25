@@ -84,6 +84,11 @@ model User {
   attempts           Attempt[]
   stats              Stat[]
   devices            Device[]
+  authSessions        AuthSession[]
+  loginEvents         LoginEvent[]
+  totpCredential      TotpCredential?
+  passkeyCredentials  PasskeyCredential[]
+  authChallenges      AuthChallenge[]
   invitationsCreated Invitation[] @relation("InvitationCreator")
   examsCreated       Exam[]       @relation("ExamCreator")
   assignments        ExamAssignment[] @relation("StudentAssignments")
@@ -128,6 +133,76 @@ model Device {
 
   @@unique([userId, fingerprint])
   @@index([userId, revokedAt])
+}
+
+
+model AuthSession {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  deviceName  String
+  platform    String
+  userAgent   String    @default("")
+  ipAddress   String    @default("")
+  loginMethod String   @default("password")
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  @@index([userId, revokedAt, lastSeenAt])
+  @@index([expiresAt])
+}
+
+model LoginEvent {
+  id          String   @id @default(cuid())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      Int?
+  email       String
+  result      String
+  method      String   @default("password")
+  ipAddress   String   @default("")
+  userAgent   String   @default("")
+  createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+}
+
+model TotpCredential {
+  id                   String   @id @default(cuid())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  secretEncrypted      String
+  enabledAt            DateTime?
+  recoveryCodesJson    String   @default("[]")
+  lastUsedCounter      Int      @default(-1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model PasskeyCredential {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  credentialId   String   @unique
+  publicKey      String
+  signCount      Int      @default(0)
+  transports     String   @default("[]")
+  name           String   @default("Passkey")
+  createdAt      DateTime @default(now())
+  lastUsedAt     DateTime?
+  @@index([userId, createdAt])
+}
+
+model AuthChallenge {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  challenge   String   @unique
+  purpose     String
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@index([userId, purpose, expiresAt])
 }
 
 // Exam content is versioned. Each version stores immutable question snapshots so
