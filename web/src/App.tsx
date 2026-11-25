@@ -62,6 +62,17 @@ function OnlineStatusBanner() {
   );
 }
 
+function base64UrlToBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+function bytesToBase64Url(value: ArrayBuffer): string {
+  const bytes = new Uint8Array(value); let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [sessionRestoring, setSessionRestoring] = useState(true);
@@ -75,7 +86,7 @@ export default function App() {
   const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
   const [practiceDurationMinutes, setPracticeDurationMinutes] = useState(20);
   const [practiceQuestionTypes, setPracticeQuestionTypes] = useState<PracticeQuestionType[]>([]);
-  const [register, setRegister] = useState(false);
+  const [register, setRegister] = useState(false);\n  const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, unknown>>({});
@@ -282,13 +293,15 @@ export default function App() {
         setError("Account submitted for administrator approval. You can sign in after approval.");
       } else {
         const [session] = await Promise.all([
-          request<{ user: User }>("/auth/login", {
+          request<{ user?: User; twoFactorRequired?: boolean; challengeId?: string }>("/auth/login", {
             method: "POST",
             body: JSON.stringify({ email, password }),
           }),
           animationMinimum,
         ]);
-        setUser(session.user);
+        if (session.twoFactorRequired && session.challengeId) setTwoFactorChallenge(session.challengeId);
+        else if (session.user) setUser(session.user);
+        else throw new Error("Sign-in response was incomplete.");
       }
       setPassword("");
     } catch (cause) {
@@ -297,6 +310,31 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function completeTwoFactor(challengeId: string, code: string) {
+    setBusy(true); setError("");
+    try {
+      const session = await request<{ user: User }>("/auth/login/2fa", { method: "POST", body: JSON.stringify({ challengeId, code }) });
+      setUser(session.user); setTwoFactorChallenge(""); setPassword("");
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function authenticateWithPasskey() {
+    setBusy(true); setError("");
+    try {
+      if (!email.trim()) throw new Error("Enter your email address first.");
+      if (!navigator.credentials) throw new Error("Passkeys are not supported by this browser.");
+      const options = await request<{ challengeId: string; publicKey: { challenge: string; rpId: string; allowCredentials: { type: "public-key"; id: string; transports?: AuthenticatorTransport[] }[]; timeout: number; userVerification: UserVerificationRequirement } }>("/auth/passkeys/login/options", { method: "POST", body: JSON.stringify({ email }) });
+      const publicKey: PublicKeyCredentialRequestOptions = { ...options.publicKey, challenge: base64UrlToBytes(options.publicKey.challenge), allowCredentials: options.publicKey.allowCredentials.map(item => ({ ...item, id: base64UrlToBytes(item.id) })) };
+      const credential = await navigator.credentials.get({ publicKey }) as PublicKeyCredential | null;
+      if (!credential) throw new Error("Passkey sign-in was cancelled.");
+      const response = credential.response as AuthenticatorAssertionResponse;
+      const session = await request<{ user: User }>("/auth/passkeys/login/verify", { method: "POST", body: JSON.stringify({ challengeId: options.challengeId, credentialId: bytesToBase64Url(credential.rawId), clientDataJSON: bytesToBase64Url(response.clientDataJSON), authenticatorData: bytesToBase64Url(response.authenticatorData), signature: bytesToBase64Url(response.signature) }) });
+      setUser(session.user);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
   }
 
   async function startTest(mode: "mock" | "practice" | "mistakes", subject?: string, practiceConfig?: PracticeConfig) {
@@ -533,7 +571,7 @@ export default function App() {
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onRegisterChange={setRegister}
-        onAuthenticate={(captchaToken) => void authenticate(captchaToken)}
+        onAuthenticate={(captchaToken) => void authenticate(captchaToken)}\n        twoFactorChallenge={twoFactorChallenge}\n        onCompleteTwoFactor={(challengeId, code) => void completeTwoFactor(challengeId, code)}\n        onPasskeyAuthenticate={() => void authenticateWithPasskey()}
       />
     );
   }
