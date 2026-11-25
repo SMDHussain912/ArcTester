@@ -274,6 +274,8 @@ export function adminMcpRouter(db: PrismaClient): Router {
           if (input.sourceAttested && !input.confirmSourceAttestation) return res.json(rpcError(id, -32002, "Explicitly confirm source attestation before marking a dataset attested."));
           const featureNames = input.featureSchema.map(feature => feature.name);
           if (new Set(featureNames).size !== featureNames.length || featureNames.includes(input.targetColumn)) return res.json(rpcError(id, -32602, "Feature names must be unique and must not contain the target column."));
+          const sensitiveColumn = (name: string) => /(?:studentid|userid|email|phone|name|address|ipaddress|password|token|freetext|rawanswer|answertext)/.test(name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+          if ([...featureNames, input.targetColumn].some(sensitiveColumn)) return res.json(rpcError(id, -32602, "Dataset columns must not contain direct student identifiers or raw personal/free-text fields; use de-identified aggregate features."));
           const expectedKeys = [...featureNames, input.targetColumn].sort();
           for (let index = 0; index < input.samples.length; index++) {
             const row = input.samples[index];
