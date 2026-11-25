@@ -86,7 +86,8 @@ export default function App() {
   const [practiceDifficulty, setPracticeDifficulty] = useState<"any" | "easy" | "medium" | "hard">("any");
   const [practiceDurationMinutes, setPracticeDurationMinutes] = useState(20);
   const [practiceQuestionTypes, setPracticeQuestionTypes] = useState<PracticeQuestionType[]>([]);
-  const [register, setRegister] = useState(false);\n  const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
+  const [register, setRegister] = useState(false);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
   const [test, setTest] = useState<Test | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [answers, setAnswers] = useState<Record<number, unknown>>({});
@@ -571,7 +572,10 @@ export default function App() {
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onRegisterChange={setRegister}
-        onAuthenticate={(captchaToken) => void authenticate(captchaToken)}\n        twoFactorChallenge={twoFactorChallenge}\n        onCompleteTwoFactor={(challengeId, code) => void completeTwoFactor(challengeId, code)}\n        onPasskeyAuthenticate={() => void authenticateWithPasskey()}
+        onAuthenticate={(captchaToken) => void authenticate(captchaToken)}
+        twoFactorChallenge={twoFactorChallenge}
+        onCompleteTwoFactor={(challengeId, code) => void completeTwoFactor(challengeId, code)}
+        onPasskeyAuthenticate={() => void authenticateWithPasskey()}
       />
     );
   }
