@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 type Student = {
   id: number; email: string; fullName: string | null; collegeName: string | null; collegeCode: string | null;
-  postalPin: string | null; branchName: string | null; branchCode: string | null; accessStatus: string; createdAt: string;
+  postalPin: string | null; branchName: string | null; branchCode: string | null; registrationNumber: string | null; accessStatus: string; createdAt: string;
 };
 type Page = { students: Student[]; page: number; total: number; totalPages: number };
 type Props = { onError: (message: string) => void; onNotice: (message: string) => void };
@@ -74,7 +74,7 @@ export default function AdminStudents({ onError, onNotice }: Props) {
       <button className="ghost" type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}>Refresh</button>
     </div>
     <div className="admin-panel">
-      <div className="admin-toolbar"><input aria-label="Search students" placeholder="Search name, email, college or PIN…" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
+      <div className="admin-toolbar"><input aria-label="Search students" placeholder="Search name, email, college or registration number…" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></div>
       <p className="muted">{data ? data.total.toLocaleString() + " student accounts" : "Loading students…"}</p>
       {editing && <div className="admin-panel" role="dialog" aria-label="Edit student profile">
         <h2>Edit student profile</h2><p className="muted">Changes apply to the student account and academic profile.</p>
@@ -83,7 +83,7 @@ export default function AdminStudents({ onError, onNotice }: Props) {
       </div>}
       {busy && <p role="status" className="muted">Working…</p>}
       <div className="admin-student-list">{(data?.students ?? []).map((student) => <article className="admin-student-row" key={student.id}>
-        <div><strong>{student.fullName || "Unnamed student"}</strong><span>{student.email}</span><small>{student.collegeName || "College not set"} · {student.collegeCode || "No institute PIN"} · {student.branchName || "Branch not set"} · {student.accessStatus}</small></div>
+        <div><strong>{student.fullName || "Unnamed student"}</strong><span>{student.email}</span><small>{student.collegeName || "College not set"} · {student.registrationNumber || "Registration number not set"} · {student.branchName || "Branch not set"} · {student.accessStatus}</small></div>
         <div className="admin-student-actions"><button className="ghost" type="button" disabled={busy} onClick={() => beginEdit(student)}>Edit</button><button className="danger" type="button" disabled={busy} onClick={() => void remove(student)}>Remove</button></div>
       </article>)}</div>
       {!busy && data?.students.length === 0 && <div className="empty-state"><h3>No students found</h3><p>Try another name, email, college, or PIN.</p></div>}
