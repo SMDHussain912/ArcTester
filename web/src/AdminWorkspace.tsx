@@ -18,6 +18,8 @@ import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } fro
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
 import AdminSettings from "./AdminSettings";
+import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
+import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -39,7 +41,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
 type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string };
 
 export default function AdminWorkspace(p:Props){
- const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
  const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}"});
@@ -183,6 +185,8 @@ export default function AdminWorkspace(p:Props){
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
+   {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
+   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
