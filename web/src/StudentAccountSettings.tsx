@@ -120,7 +120,7 @@ export default function StudentAccountSettings(props: Props) {
     setRevokingDevice(deviceId);
     try {
       await request("/auth/sessions/" + encodeURIComponent(deviceId), { method: "DELETE" });
-      setDevices((current) => current.filter((device) => device.id !== deviceId));
+      const wasCurrent=devices.find(device=>device.id===deviceId)?.current;setDevices((current) => current.filter((device) => device.id !== deviceId));if(wasCurrent)onSignOut();
     } catch (error) {
       setDeviceError(error instanceof Error ? error.message : "Could not revoke this device.");
     } finally {
@@ -171,7 +171,7 @@ export default function StudentAccountSettings(props: Props) {
   }
   async function revokeAllSessions(){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
-    try{await request("/auth/sessions/revoke-all",{method:"POST",body:"{}"});setSecurityMessage("All sessions revoked. You will need to sign in again.");setDevices([]);}
+    try{await request("/auth/sessions/revoke-all",{method:"POST",body:"{}"});setSecurityMessage("All sessions revoked. Signing out this device too.");setDevices([]);onSignOut();}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not revoke sessions.");}finally{setSecurityBusy(false);}
   }
 
