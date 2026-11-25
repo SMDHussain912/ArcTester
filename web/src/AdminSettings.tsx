@@ -68,5 +68,6 @@ export default function AdminSettings({ theme, onThemeChange, email, onSignOut }
           }}>Confirm reset</button><button type="button" className="ghost" onClick={() => setConfirmClear(false)}>Cancel</button></div>}
       </article>
     </div>
+    <AccountSecurityPanel email={email} onSignOut={onSignOut} />
   </section>;
 }
