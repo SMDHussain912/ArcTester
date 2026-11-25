@@ -17,6 +17,8 @@ async function callTool(name: string, args: Record<string, unknown>) {
   if (!response.ok || body.error) throw new Error(body.error?.message ?? "MCP request failed");
   const text = body.result?.content?.[0]?.text ?? "";
   if (body.result?.isError) throw new Error(text);
+  // MCP tool results are JSON-decoded test fixtures with dynamic fields.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return JSON.parse(text) as Record<string, any>;
 }
 
