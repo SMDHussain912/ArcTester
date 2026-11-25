@@ -6,6 +6,7 @@ import { forbidden, badRequest, notFound } from "./errors.js";
 import { requireAuth, requireAdmin, type AuthedRequest } from "./auth.js";
 import { importFromJson } from "./importService.js";
 import { QuestionInputSchema, hashQuestion, encodeOptions } from "./questions.js";
+import { evaluateModelArtifacts } from "./modelInference.js";
 
 const PREFIX = "arc_admin_";
 const SCOPES = ["questions:read", "questions:create", "questions:review", "papers:create", "papers:read", "papers:publish", "exams:assign", "announcements:write", "activity:read", "models:read", "models:dataset:create", "models:verification:read", "models:train", "models:register", "models:evaluate", "models:activate"] as const;
@@ -100,6 +101,7 @@ export function adminMcpRouter(db: PrismaClient): Router {
         { name: "list_model_training_jobs", description: "Read recent model training jobs and worker status.", inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 100 } } } },
         { name: "register_model_version", description: "Register a candidate artifact URI and SHA-256 for a model version. Registration does not activate it.", inputSchema: { type: "object", required: ["modelId","version","algorithm","task","datasetId","artifactUri","sha256","confirm"], properties: { modelId: { type: "string" }, version: { type: "integer", minimum: 1 }, algorithm: { type: "string", enum: ["random_forest","gradient_boosting","logistic_regression","linear_regression","xgboost","pytorch","custom"] }, task: { type: "string", enum: ["classification","regression"] }, datasetId: { type: "string" }, artifactUri: { type: "string" }, sha256: { type: "string" }, framework: { type: "string" }, inputSchema: { type: "object" }, outputSchema: { type: "object" }, confirm: { type: "boolean" } } } },
         { name: "record_model_evaluation", description: "Record an admin-attested candidate-vs-baseline result on an attested verification dataset. Candidate must not regress on the primary metric.", inputSchema: { type: "object", required: ["modelId","candidateVersion","baselineVersion","datasetId","sampleCount","metrics","confirm"], properties: { modelId: { type: "string" }, candidateVersion: { type: "integer", minimum: 1 }, baselineVersion: { type: "integer", minimum: 1 }, datasetId: { type: "string" }, sampleCount: { type: "integer", minimum: 1 }, metrics: { type: "object" }, confirm: { type: "boolean" } } } },
+        { name: "evaluate_registered_model", description: "Compute candidate and baseline predictions from registered native artifacts on an attested verification dataset. Records real accuracy or MAE; does not train or activate.", inputSchema: { type: "object", required: ["modelId","candidateVersion","baselineVersion","datasetId","confirm"], properties: { modelId: { type: "string" }, candidateVersion: { type: "integer", minimum: 1 }, baselineVersion: { type: "integer", minimum: 1 }, datasetId: { type: "string" }, confirm: { type: "boolean" } } } },
         { name: "activate_model_version", description: "Assign a registered version as active for its modelId only after a passing verification evaluation and explicit confirmation. This updates registry assignment; inference consumers must separately support the modelId.", inputSchema: { type: "object", required: ["modelId","version","confirm"], properties: { modelId: { type: "string" }, version: { type: "integer", minimum: 1 }, confirm: { type: "boolean" } } } },
       ] } });
     }
@@ -351,6 +353,69 @@ export function adminMcpRouter(db: PrismaClient): Router {
           const evaluation = await db.modelEvaluation.create({ data: { id: modelAuditId(), actorId: key.userId, modelId: input.modelId, candidateVersion: input.candidateVersion, baselineVersion: input.baselineVersion, datasetId: dataset.id, evaluationDataset: dataset.name, datasetFingerprint: dataset.fingerprint, sampleCount: input.sampleCount, metricsJson: stableJson(metrics), status: passed ? "PASSED" : "FAILED" }, select: { id: true, modelId: true, candidateVersion: true, baselineVersion: true, datasetId: true, sampleCount: true, status: true, evaluatedAt: true } });
           await db.modelRegistryAudit.create({ data: { id: modelAuditId(), actorId: key.userId, modelId: input.modelId, version: input.candidateVersion, action: "EVALUATED", details: stableJson({ evaluationId: evaluation.id, datasetId: dataset.id, status: evaluation.status }) } });
           output = { evaluation, primaryMetric: candidate.task === "classification" ? "accuracy" : "mae", note: "Metrics are admin-attested; this MCP tool records them but does not run model inference." }; summary = "recorded model evaluation " + evaluation.status; break;
+        }
+        case "evaluate_registered_model": {
+          if (!scope(key, "models:evaluate")) return res.json(rpcError(id, -32003, "Missing models:evaluate scope."));
+          const input = z.object({
+            modelId: z.string().regex(/^[a-z][a-z0-9_-]{1,63}$/),
+            candidateVersion: z.number().int().min(1),
+            baselineVersion: z.number().int().min(1),
+            datasetId: z.string().min(1),
+            confirm: z.literal(true),
+          }).parse(args);
+          if (input.candidateVersion === input.baselineVersion) return res.json(rpcError(id, -32602, "Candidate and baseline versions must differ."));
+          const [candidate, baseline, dataset] = await Promise.all([
+            db.registeredModel.findUnique({ where: { modelId_version: { modelId: input.modelId, version: input.candidateVersion } } }),
+            db.registeredModel.findUnique({ where: { modelId_version: { modelId: input.modelId, version: input.baselineVersion } } }),
+            db.modelDataset.findUnique({ where: { id: input.datasetId } }),
+          ]);
+          if (!candidate || !baseline || !dataset) return res.json(rpcError(id, -32004, "Candidate, baseline, or verification dataset was not found."));
+          if (dataset.datasetKind !== "verification" || !dataset.sourceAttested || candidate.task !== baseline.task || candidate.task !== dataset.task) {
+            return res.json(rpcError(id, -32002, "Candidate, baseline, and attested verification dataset must have matching tasks."));
+          }
+          const candidateMetadata = JSON.parse(candidate.artifactJson) as { sha256?: unknown; modelArtifact?: unknown };
+          const baselineMetadata = JSON.parse(baseline.artifactJson) as { sha256?: unknown; modelArtifact?: unknown };
+          if (typeof candidateMetadata.sha256 !== "string" || !candidateMetadata.modelArtifact ||
+              sha(stableJson(candidateMetadata.modelArtifact)) !== candidateMetadata.sha256 ||
+              typeof baselineMetadata.sha256 !== "string" || !baselineMetadata.modelArtifact ||
+              sha(stableJson(baselineMetadata.modelArtifact)) !== baselineMetadata.sha256) {
+            return res.json(rpcError(id, -32002, "Automated evaluation requires checksum-valid native model artifacts."));
+          }
+          const rows = JSON.parse(dataset.samplesJson) as Record<string, unknown>[];
+          if (rows.length !== dataset.rowCount) return res.json(rpcError(id, -32602, "Verification dataset row count does not match its stored metadata."));
+          const metrics = evaluateModelArtifacts(candidateMetadata.modelArtifact, baselineMetadata.modelArtifact, rows, dataset.targetColumn, candidate.task as "classification" | "regression");
+          const passed = candidate.task === "classification"
+            ? metrics.accuracy >= metrics.baselineAccuracy
+            : metrics.mae <= metrics.baselineMae;
+          const evaluation = await db.modelEvaluation.create({
+            data: {
+              id: modelAuditId(),
+              actorId: key.userId,
+              modelId: input.modelId,
+              candidateVersion: input.candidateVersion,
+              baselineVersion: input.baselineVersion,
+              datasetId: dataset.id,
+              evaluationDataset: dataset.name,
+              datasetFingerprint: dataset.fingerprint,
+              sampleCount: dataset.rowCount,
+              metricsJson: stableJson(metrics),
+              status: passed ? "PASSED" : "FAILED",
+            },
+            select: { id: true, modelId: true, candidateVersion: true, baselineVersion: true, datasetId: true, sampleCount: true, status: true, evaluatedAt: true },
+          });
+          await db.modelRegistryAudit.create({
+            data: {
+              id: modelAuditId(),
+              actorId: key.userId,
+              modelId: input.modelId,
+              version: input.candidateVersion,
+              action: "EVALUATED",
+              details: stableJson({ evaluationId: evaluation.id, datasetId: dataset.id, status: evaluation.status, metrics }),
+            },
+          });
+          output = { evaluation, metrics, primaryMetric: candidate.task === "classification" ? "accuracy" : "mae", note: "Metrics were computed from candidate and baseline predictions on the attested verification dataset." };
+          summary = "computed model evaluation " + evaluation.status;
+          break;
         }
         case "activate_model_version": {
           if (!scope(key, "models:activate")) return res.json(rpcError(id, -32003, "Missing models:activate scope."));
