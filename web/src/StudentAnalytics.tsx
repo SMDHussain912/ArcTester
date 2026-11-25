@@ -9,6 +9,7 @@ import type {
   WeakTopicsReport,
 } from "./lib/api";
 import Skeleton from "./components/Skeleton";
+import { AnalyticsBarChart, AnalyticsStackedBar } from "./AnalyticsCharts";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
@@ -58,7 +59,7 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
       const raw = results[1].value as Partial<WeakTopicsReport> | null;
       setWeakTopics({ subjects: Array.isArray(raw?.subjects) ? raw.subjects.filter(Boolean) : [], topics: Array.isArray(raw?.topics) ? raw.topics.filter(Boolean) : [], weakest: raw?.weakest ?? null });
     }
-    else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
+    else failures.push("Focus-area analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
     if (results[2].status === "fulfilled") {
       const raw = results[2].value as Partial<StudyRecommendationsReport> | null;
       setRecommendations({
@@ -156,6 +157,39 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
         </>
       )}
 
+      {overview && (
+        <div className="analytics-chart-grid">
+          <AnalyticsStackedBar
+            title="Practice answer breakdown"
+            segments={[
+              { label: "Correct", value: overview.practice.correct, color: "var(--analytics-correct, #16a34a)" },
+              { label: "Incorrect", value: overview.practice.incorrect, color: "var(--analytics-incorrect, #dc2626)" },
+              { label: "Unanswered", value: overview.practice.unanswered, color: "var(--analytics-unanswered, #94a3b8)" },
+            ]}
+          />
+          {fullMockPerformance && fullMockPerformance.completedFullMocks > 0 ? (
+            <AnalyticsBarChart
+              title="Full-mock subject accuracy"
+              description="Based on completed full mocks only. Unanswered items are not counted as incorrect."
+              items={fullMockPerformance.subjects
+                .filter((subject) => subject.accuracy !== null)
+                .map((subject) => ({ label: subject.subject, value: Math.round((subject.accuracy ?? 0) * 100), detail: subject.answeredQuestions + " answered" }))
+                .sort((a, b) => a.value - b.value)}
+              maxValue={100}
+              formatValue={(value) => value + "%"}
+              emptyMessage="Complete more full mocks with answered questions to see subject accuracy."
+            />
+          ) : (
+            <AnalyticsBarChart
+              title="Full-mock subject accuracy"
+              description="This chart unlocks after a completed full mock."
+              items={[]}
+              emptyMessage="Complete a full 200-question mock to compare your subject accuracy."
+            />
+          )}
+        </div>
+      )}
+
       {fullMockPerformance && (
         <section className="panel" aria-labelledby="full-mock-performance-title">
           <div className="panel-header">
@@ -235,8 +269,9 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
           {recommendations && (
             <>
               <p className="muted">
-                Recommendations use completed answers and verified full-mock results. A weak area is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%. Unanswered questions do not count as incorrect.
+                Recommendations use completed answers and verified full-mock results. A focus area is highlighted only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%. Unanswered questions do not count as incorrect.
               </p>
+              <p className="muted">These focus areas are rule-based study hints, not an AI model judging you. They use your answer accuracy and a minimum sample size; more answered questions make the signal more reliable.</p>
               {recommendations.latestFullMockAt ? <p className="muted">Full-mock evidence: {new Date(recommendations.latestFullMockAt).toLocaleDateString()} · {recommendations.basedOnFullMocks ?? 0} completed full mocks.</p> : null}
               <div className="performance-explanation">
                 <strong>{recommendations.performanceExplanation.headline}</strong>
@@ -263,10 +298,10 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
             </>
           )}
           <div className="stack">
-            <h3>Subjects to revise</h3>
+            <h3>Areas to strengthen</h3>
             {weakTopics.weakest ? (
               <p className="warn">
-                Focus next on <strong>{weakTopics.weakest.topic || weakTopics.weakest.subject}</strong>{" "}
+                Practice next in <strong>{weakTopics.weakest.topic || weakTopics.weakest.subject}</strong>{" "}
                 in {weakTopics.weakest.subject} — {weakTopics.weakest.accuracy === null ? "not enough answered questions" : Math.round(weakTopics.weakest.accuracy * 100) + "% accuracy"} across {weakTopics.weakest.seen} answered questions.
               </p>
             ) : null}
@@ -283,7 +318,7 @@ export default function StudentAnalytics({ setActivePage, onStartRecommendedPrac
         </section>
       )}
 
-      {!loading && !weakTopics ? <section className="panel" aria-live="polite"><h2>Study recommendations unavailable</h2><p className="muted">Weak-topic analysis could not be loaded. Refresh analytics to try again.</p></section> : null}
+      {!loading && !weakTopics ? <section className="panel" aria-live="polite"><h2>Study recommendations unavailable</h2><p className="muted">Focus-area analysis could not be loaded. Refresh analytics to try again.</p></section> : null}
 
       <div className="row">
         <button className="button button-secondary" onClick={() => setActivePage("learning")}>Open concept library</button>
