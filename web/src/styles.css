@@ -837,3 +837,7 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *::before,html
   .student-mobile-nav>.student-nav-item,.student-mobile-nav-button{font-size:9px}
 }
 @media(prefers-reduced-motion:reduce){.student-nav-chevron{transition:none}}
+
+/* Student dashboard notification shortcut */
+.student-notification-button{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.student-notification-button small{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;display:grid;place-items:center;border-radius:999px;background:var(--accent);color:#fff;font-size:9px;font-weight:850;line-height:1}
