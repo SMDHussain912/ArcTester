@@ -30,7 +30,7 @@ describe("StudentAccountSettings", () => {
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "☾ Dark" }));
     expect(onThemeChange).toHaveBeenCalledWith("dark");
-    fireEvent.click(screen.getByRole("button", { name: "Back to account" }));
+    fireEvent.click(screen.getByRole("button", { name: "← Back to account" }));
     expect(screen.getByRole("heading", { name: "Account" })).toBeInTheDocument();
   });
 
