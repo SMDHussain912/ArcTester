@@ -394,14 +394,14 @@ function clearSessionCookie(res: Response): void {
 
 
 function maskedIp(ip: string): string {
-  if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(ip)) return ip.replace(/\\.\\d+$/, ".0");
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) return ip.replace(/\.\d+$/, ".0");
   if (ip.includes(":")) return ip.split(":").slice(0, 4).join(":") + "::";
   return "";
 }
 function requestDevice(req: Request): { deviceName: string; platform: string; userAgent: string; ipAddress: string } {
   const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
   const platform = /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
-  const browser = /edg\\//i.test(userAgent) ? "Edge" : /firefox\\//i.test(userAgent) ? "Firefox" : /chrome\\//i.test(userAgent) ? "Chrome" : /safari\\//i.test(userAgent) ? "Safari" : "Browser";
+  const browser = /edg\//i.test(userAgent) ? "Edge" : /firefox\//i.test(userAgent) ? "Firefox" : /chrome\//i.test(userAgent) ? "Chrome" : /safari\//i.test(userAgent) ? "Safari" : "Browser";
   const deviceName = /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
   return { deviceName, platform, userAgent, ipAddress: maskedIp(req.ip ?? "") };
 }
@@ -774,7 +774,7 @@ export function authRouter(db: PrismaClient): Router {
 
   router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const input = z.object({ code: z.string().regex(/^\\d{6}$/) }).parse(req.body);
+      const input = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
       const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
       if (!credential || credential.enabledAt) return next(badRequest("Start authenticator setup first."));
       const secret = decryptTotpSecret(credential.secretEncrypted);
