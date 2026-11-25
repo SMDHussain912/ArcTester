@@ -5,7 +5,7 @@ import ArcTesterMascot from "./components/ArcTesterMascot";
 export type StudentPage =
   | "dashboard" | "path" | "lessons" | "learning-summary" | "practice" | "ai-practice"
   | "history" | "assignments" | "question-bank" | "announcements" | "notifications"
-  | "account" | "settings" | "progress" | "rewards" | "analytics" | "learning"
+  | "account" | "settings" | "about" | "progress" | "rewards" | "analytics" | "learning"
   | "mastery" | "materials" | "coming-soon";
 
 interface StudentNavigationProps {
@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: "history", label: "Practice history", icon: "◷", group: "EXAMS" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "EXAMS" },
   { page: "account", label: "Account", icon: "◉", group: "ACCOUNT" },
+  { page: "about", label: "About & contact", icon: "ⓘ", group: "ACCOUNT" },
 ];
 
 const GROUPS: { id: NavItem["group"]; label: string }[] = [
