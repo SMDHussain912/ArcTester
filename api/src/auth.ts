@@ -669,7 +669,7 @@ export function authRouter(db: PrismaClient): Router {
       });
       await db.authSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
       // Rotate the current session while revoking every other previously issued session.
-      const token = signJwt({ sub: String(updated.id), email: updated.email, sv: updated.sessionVersion });
+      const { token } = await createAuthSession(db, req, updated, "password-change");
       const cookieSession = Boolean(getCookie(req, COOKIE_NAME));
       if (cookieSession) setSessionCookie(res, token);
       res.json({
