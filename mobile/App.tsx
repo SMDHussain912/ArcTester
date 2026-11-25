@@ -716,14 +716,14 @@ export default function App() {
         setError("Account request submitted. You can sign in after an administrator approves your account.");
       } else {
         if (twoFactorChallenge) {
-          const verified = await api<{ token: string; user: User }>("/auth/token/2fa", { method: "POST", body: JSON.stringify({ challengeId: twoFactorChallenge, code: twoFactorCode.trim() }) });
+          const verified = await api<{ token: string; user: User }>("/auth/token/2fa", { method: "POST", headers: { "x-arctester-client": "mobile" }, body: JSON.stringify({ challengeId: twoFactorChallenge, code: twoFactorCode.trim() }) });
           await SecureStore.setItemAsync("arctester-token", verified.token).catch(() => { throw new Error("Secure sign-in storage is unavailable. Update or reinstall ArcTester, then sign in again."); });
           setToken(verified.token); setUser(verified.user); setTwoFactorChallenge(""); setTwoFactorCode("");
           return;
         }
         const result = await api<{ token?: string; user?: User; twoFactorRequired?: boolean; challengeId?: string }>("/auth/token", {
           method: "POST",
-          body: JSON.stringify({ email: email.trim(), password }),
+          headers: { "x-arctester-client": "mobile" }, body: JSON.stringify({ email: email.trim(), password }),
         });
         if (result.twoFactorRequired && result.challengeId) {
           setTwoFactorChallenge(result.challengeId); setPassword(""); setTwoFactorCode("");
