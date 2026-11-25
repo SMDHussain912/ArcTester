@@ -17,6 +17,7 @@ import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
+import AdminStudents from "./AdminStudents";
 import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
@@ -172,7 +173,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["institutions","Institutions & branches","▦"],["settings","Settings","⚙"]];
+ const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["institutions","Institutions & branches","▦"],["students","Manage students","♙"],["settings","Settings","⚙"]];
  return <div className="admin-shell">
   <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
   {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
@@ -184,6 +185,7 @@ export default function AdminWorkspace(p:Props){
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
    {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
+    {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
