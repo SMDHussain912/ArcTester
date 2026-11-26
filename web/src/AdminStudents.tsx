@@ -26,6 +26,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 export default function AdminStudents({ onError, onNotice }: Props) {
   const [query, setQuery] = useState("");
+  const [collegeFilter, setCollegeFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
   const [status, setStatus] = useState<AccessStatus | "ALL">("PENDING");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Page | null>(null);
@@ -39,13 +41,15 @@ export default function AdminStudents({ onError, onNotice }: Props) {
     setBusy(true);
     const params = new URLSearchParams({ page: String(page), limit: "25" });
     if (query.trim()) params.set("q", query.trim());
+    if (collegeFilter.trim()) params.set("college", collegeFilter.trim());
+    if (branchFilter.trim()) params.set("branch", branchFilter.trim());
     if (status !== "ALL") params.set("status", status);
     request<Page>("/admin/students?" + params.toString())
       .then((result) => { if (active) setData(result); })
       .catch((error: unknown) => { if (active) onError(error instanceof Error ? error.message : "Could not load students."); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [query, status, page, reload, onError]);
+  }, [query, collegeFilter, branchFilter, status, page, reload, onError]);
   function beginEdit(student: Student) {
     setEditing(student);
     setDraft(Object.fromEntries(fields.map(({ key }) => [key, String(student[key] ?? "")])));
@@ -119,6 +123,8 @@ export default function AdminStudents({ onError, onNotice }: Props) {
         <select aria-label="Filter student status" value={status} onChange={(event) => { setStatus(event.target.value as AccessStatus | "ALL"); setPage(1); setSelected([]); }}>
           <option value="PENDING">Pending approval</option><option value="APPROVED">Approved students</option><option value="REJECTED">Rejected / disabled</option><option value="ALL">All students</option>
         </select>
+        <input aria-label="Filter by college" placeholder="Filter college…" value={collegeFilter} onChange={(event) => { setCollegeFilter(event.target.value); setPage(1); setSelected([]); }} />
+        <input aria-label="Filter by branch" placeholder="Filter branch…" value={branchFilter} onChange={(event) => { setBranchFilter(event.target.value); setPage(1); setSelected([]); }} />
       </div>
       <div className="table-top"><span>{data ? (data.total ?? 0).toLocaleString() + " student account(s)" : "Loading students…"}</span>
         <button className="primary" type="button" disabled={busy || !selected.length || status !== "PENDING"} onClick={() => void approveSelected()}>Approve selected ({selected.length})</button>
