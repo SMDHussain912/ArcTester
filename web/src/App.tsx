@@ -67,7 +67,8 @@ function base64UrlToBytes(value: string): Uint8Array {
   const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
   return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
 }
-function toWebAuthnBufferSource(value: Uint8Array): ArrayBuffer {\n  const buffer = new ArrayBuffer(value.byteLength);\n  new Uint8Array(buffer).set(value);\n  return buffer;
+function toWebAuthnBufferSource(value: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(value.byteLength);\n  new Uint8Array(buffer).set(value);\n  return buffer;
 }
 function bytesToBase64Url(value: ArrayBuffer): string {
   const bytes = new Uint8Array(value); let binary = "";
