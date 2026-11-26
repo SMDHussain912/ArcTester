@@ -53,9 +53,11 @@ function setCookieFromResponse(res: Response): void {
 
 async function postJsonWithCookie(
   url: string,
-  body: unknown
+  body: unknown,
+  origin?: string
 ): Promise<{ status: number; json: unknown; headers: Headers }> {
   const headers: Record<string, string> = { "content-type": "application/json" };
+  if (origin) headers.origin = origin;
   const session = cookieJar.get("ecet_session");
   if (session) headers.cookie = `ecet_session=${session}`;
   let payload = body;
@@ -228,6 +230,7 @@ describe("auth", () => {
     const previousKey = process.env.TOTP_ENCRYPTION_KEY;
     const previousNodeEnv = process.env.NODE_ENV;
     const previousSameSite = process.env.COOKIE_SAME_SITE;
+    const previousCorsOrigins = process.env.CORS_ORIGINS;
     process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
     try {
       const email = "reauth-session@example.com";
@@ -235,13 +238,16 @@ describe("auth", () => {
       await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
       process.env.NODE_ENV = "production";
       process.env.COOKIE_SAME_SITE = "Lax";
-      const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" });
+      process.env.CORS_ORIGINS = "https://arctester.vercel.app";
+      const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" }, "https://arctester.vercel.app");
       expect(login.status).toBe(200);
       expect(login.headers.get("set-cookie")).toMatch(/SameSite=None; Secure/);
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;
       if (previousSameSite === undefined) delete process.env.COOKIE_SAME_SITE;
       else process.env.COOKIE_SAME_SITE = previousSameSite;
+      if (previousCorsOrigins === undefined) delete process.env.CORS_ORIGINS;
+      else process.env.CORS_ORIGINS = previousCorsOrigins;
       const oldToken = cookieJar.get("ecet_session");
       expect(oldToken).toBeTruthy();
       const user = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
@@ -270,6 +276,8 @@ describe("auth", () => {
       else process.env.NODE_ENV = previousNodeEnv;
       if (previousSameSite === undefined) delete process.env.COOKIE_SAME_SITE;
       else process.env.COOKIE_SAME_SITE = previousSameSite;
+      if (previousCorsOrigins === undefined) delete process.env.CORS_ORIGINS;
+      else process.env.CORS_ORIGINS = previousCorsOrigins;
     }
   });
 
