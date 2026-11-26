@@ -6,7 +6,7 @@ type Key={id:string;name:string;scopes:string[];createdAt:string;lastUsedAt:stri
 async function call<T>(path:string,init:RequestInit={}):Promise<T>{const r=await fetch(API+path,{...init,credentials:"include",headers:{"content-type":"application/json",...init.headers}});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(typeof b.error==="string"?b.error:"Request failed.");return b as T;}
 export default function AdminMcpAssistant(){
  const [keys,setKeys]=useState<Key[]>([]),[name,setName]=useState("ArcTester admin assistant"),[selectedScopes,setSelectedScopes]=useState<string[]>(scopes),[secret,setSecret]=useState(""),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
- async function refresh(){const r=await call<{keys:Key[]}>("/admin/mcp-keys");setKeys(r.keys);}
+ async function refresh(){const r=await call<{keys?:Key[]}>("/admin/mcp-keys");setKeys(Array.isArray(r.keys)?r.keys:[]);}
  useEffect(()=>{void refresh().catch(e=>setError((e as Error).message));},[]);
  async function create(){setBusy(true);setError("");setSecret("");try{const r=await call<{key:Key&{secret:string}}>("/admin/mcp-keys",{method:"POST",body:JSON.stringify({name,scopes:selectedScopes})});setSecret(r.key.secret);setNotice("Key created. Copy it now; it is displayed only once.");await refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function revoke(id:string){setBusy(true);try{await call("/admin/mcp-keys/"+encodeURIComponent(id)+"/revoke",{method:"POST"});await refresh();setNotice("Key revoked.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
