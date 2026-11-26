@@ -24,6 +24,7 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [integrity, setIntegrity] = useState<{ valid: boolean; checkedEvents: number; checkedAt: string; firstInvalidEventId: string | null } | null>(null);
   const params = new URLSearchParams({ page: String(page), limit: "25" });
   if (action) params.set("action", action);
   if (outcome) params.set("outcome", outcome);
@@ -40,6 +41,12 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [student.id, page, action, outcome, from, to, collegeCode, branchCode, refresh, onError]);
+  async function verifyIntegrity() {
+    try {
+      const result = await request<{ valid: boolean; checkedEvents: number; checkedAt: string; firstInvalidEventId: string | null }>("/admin/audit/integrity");
+      setIntegrity(result);
+    } catch (error) { onError(error instanceof Error ? error.message : "Could not verify audit integrity."); }
+  }
   async function exportLogs(format: "csv" | "json") {
     setExporting(true);
     try {
@@ -75,7 +82,8 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
       <label>College code<input value={collegeCode} onChange={event => { setCollegeCode(event.target.value); setPage(1); }} /></label>
       <label>Branch code<input value={branchCode} onChange={event => { setBranchCode(event.target.value); setPage(1); }} /></label>
     </div>
-    <div className="admin-toolbar"><span>{data ? data.total.toLocaleString() + " matching events" : "Loading events…"}</span><button className="ghost" type="button" disabled={exporting} onClick={() => void exportLogs("csv")}>Export CSV</button><button className="ghost" type="button" disabled={exporting} onClick={() => void exportLogs("json")}>Export JSON</button><button className="ghost" type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button></div>
+    <div className="admin-toolbar"><span>{data ? data.total.toLocaleString() + " matching events" : "Loading events…"}</span><button className="ghost" type="button" disabled={exporting} onClick={() => void verifyIntegrity()}>Verify log integrity</button><button className="ghost" type="button" disabled={exporting} onClick={() => void exportLogs("csv")}>Export CSV</button><button className="ghost" type="button" disabled={exporting} onClick={() => void exportLogs("json")}>Export JSON</button><button className="ghost" type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh</button></div>
+    {integrity && <p role="status" className={integrity.valid ? "admin-alert success" : "admin-alert error"}>{integrity.valid ? "Audit chain verified: " + integrity.checkedEvents.toLocaleString() + " events checked." : "Audit chain integrity failure at event " + integrity.firstInvalidEventId + "."} Checked {new Date(integrity.checkedAt).toLocaleString()}.</p>}
     {loading && <p role="status" className="admin-muted">Loading timeline…</p>}
     <div className="admin-student-audit-list">{data?.events.map(event=><article className="admin-panel" key={event.id}>
       <div className="admin-panel-head"><div><strong>{event.action.replaceAll("_"," ")}</strong><p className="admin-muted">{new Date(event.createdAt).toLocaleString()} · Actor {event.actorId ?? "unknown"} ({event.actorRole})</p></div><span className={event.outcome==="SUCCESS"?"status-pill success":"status-pill danger"}>{event.outcome}</span></div>
