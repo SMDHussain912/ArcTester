@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach } from "vitest";
+import { flushAuditEvents } from "../src/audit.js";
 import { PrismaClient } from "@prisma/client";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
@@ -85,6 +86,7 @@ export async function startTestServer(
   const close = async () => {
     testDatabases.delete(base);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await flushAuditEvents(db);
     await db.$disconnect();
     await dropSchema(baseUrl, schema);
   };

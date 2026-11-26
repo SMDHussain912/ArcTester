@@ -16,7 +16,8 @@
     "path:demo-seed": "tsx prisma/seedLearningPathDemo.ts",
     "import:questions": "tsx prisma/seed.ts",
     "admin:bootstrap": "tsx prisma/bootstrapAdmin.ts",
-    "prebuild": "node scripts/recoverStudyMaterialUrlMigration.mjs"
+    "prebuild": "node scripts/recoverStudyMaterialUrlMigration.mjs",
+    "audit:prune": "tsx scripts/pruneAuditEvents.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",

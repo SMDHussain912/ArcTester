@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AdminStudentAudit from "./AdminStudentAudit";
 
 type AccessStatus = "PENDING" | "APPROVED" | "REJECTED";
 type Student = {
@@ -36,6 +37,7 @@ export default function AdminStudents({ onError, onNotice }: Props) {
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
+  const [auditStudent, setAuditStudent] = useState<Student | null>(null);
   useEffect(() => {
     let active = true;
     setBusy(true);
@@ -142,10 +144,12 @@ export default function AdminStudents({ onError, onNotice }: Props) {
           {student.accessStatus !== "APPROVED" && <button className="primary" type="button" disabled={busy} onClick={() => void changeAccess(student, "APPROVED")}>Approve</button>}
           {student.accessStatus !== "REJECTED" && <button className="ghost" type="button" disabled={busy} onClick={() => void changeAccess(student, "REJECTED")}>Reject</button>}
           {student.accessStatus === "REJECTED" && <button className="ghost" type="button" disabled={busy} onClick={() => void changeAccess(student, "PENDING")}>Reset approval</button>}
+          <button className="ghost" type="button" disabled={busy} onClick={() => setAuditStudent(current => current?.id === student.id ? null : student)}>View activity</button>
           <button className="ghost" type="button" disabled={busy} onClick={() => beginEdit(student)}>Edit</button>
           <button className="danger" type="button" disabled={busy} onClick={() => void remove(student)}>Remove</button>
         </div>
       </article>)}</div>
+      {auditStudent && <AdminStudentAudit student={auditStudent} onClose={() => setAuditStudent(null)} onError={onError} />}
       {!busy && visibleStudents.length === 0 && <div className="empty-state"><h3>No students found</h3><p>Try another search or status filter.</p></div>}
       {data && (data.totalPages ?? 1) > 1 && <div className="pagination"><button className="ghost" disabled={page <= 1 || busy} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {data.totalPages}</span><button className="ghost" disabled={page >= data.totalPages || busy} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
     </div>

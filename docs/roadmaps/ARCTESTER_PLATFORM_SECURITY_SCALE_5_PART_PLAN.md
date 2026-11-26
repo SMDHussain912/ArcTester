@@ -1,6 +1,6 @@
 # ArcTester Platform Consolidation, Security and Scale Plan
 
-**Status:** Part 1 implementation in progress on `feat/part-1-admin-students-content-scope`. Existing combined Students navigation and server-side audience checks were verified; this branch adds searchable approved-student selection to content targeting and college/branch filters to student management. CI and review are pending.  
+**Status:** Part 1 merged and verified. Part 2 merged in PR #196 (`88f657ce34c18ff1a69cc8277769bab898680d7e`); exact-head CI and standalone Android APK build passed. Part 3 implementation is in progress on `feat/part-3-student-audit-timeline-exports`; CI and review are pending.  
 **Implementation rule:** Deliver one part at a time on a feature branch/PR. Keep CI green before merge; do not deploy unmerged changes to production.
 
 This roadmap consolidates the requested admin UX, academic content targeting, account security, auditability, infrastructure monitoring, and Android parity.
@@ -57,12 +57,17 @@ This roadmap consolidates the requested admin UX, academic content targeting, ac
 - Use stable internal IDs in general activity logs. Keep IP/device/security details in a restricted security log with limited access and retention.
 - Never log passwords, JWTs, cookies, OTPs, recovery codes, private keys, or unfiltered request bodies.
 - Derive identity from the authenticated server-side session/token and database. Do not trust client-supplied name, college, registration number, or role as log identity.
-- Apply retention, deletion, access, and export policies; restrict admin access and protect log integrity.
+- Restrict timeline and export routes to administrators; audit timeline views, exports, and integrity checks.
+- Chain events with SHA-256 hashes under a PostgreSQL advisory lock; verify the retained chain and retention checkpoints.
+- Provide a configurable retention prune command (`AUDIT_RETENTION_DAYS`, default 365; allowed 30–3650 days) that checkpoints the chain before deleting expired records. Schedule it as a managed cron job and export data before expiry when longer retention is required.
+- Keep IP/device security details out of the general activity log; do not persist secrets or request bodies.
 
 **Acceptance checks**
 - Admin can inspect a student's timeline and download filtered logs.
-- Logs are attributable to a verified user and cannot be forged by changing request fields.
+- Logs are attributable to server-resolved users and cannot be forged by changing request fields.
+- Hash-chain integrity checks detect altered retained records and missing links; retention checkpoints preserve continuity after scheduled pruning.
 - Sensitive authentication material never appears in logs.
+- Admin-only CSV/JSON exports are filtered, capped, formula-safe, and themselves audited.
 
 ## Part 4 — Complete security and compliance hardening
 
