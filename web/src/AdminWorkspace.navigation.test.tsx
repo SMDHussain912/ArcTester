@@ -36,7 +36,7 @@ describe("administrator workspace navigation", () => {
       ["Announcements", "Announcements"],
       ["Subjects & topics", "Subjects & topics"],
       ["Students", "Students"],
-      ["Model Lab & MCP", "Model Lab & MCP"],
+      ["Model Lab", "Model Lab & MCP"],
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
