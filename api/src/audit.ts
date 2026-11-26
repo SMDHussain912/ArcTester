@@ -31,13 +31,13 @@ export async function writeAuditEvent(db: PrismaClient, input: AuditWrite) {
     const id = input.id ?? randomUUID();
     const previousHash = latest?.eventHash ?? "GENESIS";
     const fields: AuditHashFields = {
-      id, actorId: input.actorId ?? null, actorRole: input.actorRole, subjectUserId: input.subjectUserId ?? null,
-      action: input.action, outcome: input.outcome, resourceType: input.resourceType, resourceId: input.resourceId,
-      requestId: input.requestId, route: input.route, collegeCode: input.collegeCode, branchCode: input.branchCode,
-      contextJson: input.contextJson, createdAt, previousHash,
+      id, actorId: input.actorId ?? null, actorRole: input.actorRole ?? "UNKNOWN", subjectUserId: input.subjectUserId ?? null,
+      action: input.action, outcome: input.outcome, resourceType: input.resourceType ?? "", resourceId: input.resourceId ?? "",
+      requestId: input.requestId, route: input.route, collegeCode: input.collegeCode ?? "", branchCode: input.branchCode ?? "",
+      contextJson: input.contextJson ?? "{}", createdAt, previousHash,
     };
     const eventHash = computeAuditEventHash(fields);
-    return tx.auditEvent.create({ data: { ...input, id, createdAt, previousHash, eventHash } });
+    return tx.auditEvent.create({ data: { ...input, ...fields, id, createdAt, previousHash, eventHash } });
   });
 }
 
