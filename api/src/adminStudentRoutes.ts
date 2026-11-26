@@ -86,7 +86,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
       if (new Set(input.ids).size !== input.ids.length) return res.status(400).json({ error: "Student IDs must be unique." });
       const result = await db.user.updateMany({
         where: { id: { in: input.ids }, role: "STUDENT", accessStatus: "PENDING", NOT: { email: { endsWith: ".deleted.invalid" } } },
-        data: { accessStatus: "APPROVED" },
+        data: { accessStatus: "APPROVED", sessionVersion: { increment: 1 } },
       });
       res.json({ ok: true, approvedCount: result.count });
     } catch (error) { next(error); }
