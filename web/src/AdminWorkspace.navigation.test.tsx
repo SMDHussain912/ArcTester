@@ -36,17 +36,25 @@ describe("administrator workspace navigation", () => {
       ["Announcements", "Announcements"],
       ["Subjects & topics", "Subjects & topics"],
       ["Students", "Students"],
-      ["Model Lab", "Model Lab & MCP"],
+      ["Model Lab", "Model Lab"],
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
       ["Lesson Studio", "Lesson Studio"],
+      ["API Handling", "API Handling"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
       fireEvent.click(screen.getByRole("button", { name: navigationLabel }));
       expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Model Lab" }));
+    expect(screen.getByText(/analytics model workspace—not API Handling/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create dataset" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Train a model" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "API Handling" }));
+    expect(screen.getByText(/only handles access keys and API integration/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Create datasets, queue training/i)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalled();
   });
 });

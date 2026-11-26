@@ -13,6 +13,7 @@ import AdminPaperBuilder, { type AdminPaperDraft, type AdminPaperQuestion, type 
 import AdminQuestionImport, { type AdminImportReport } from "./AdminQuestionImport";
 import AdminOverview from "./AdminOverview";
 import AdminMcpAssistant from "./AdminMcpAssistant";
+import AdminModelLab from "./AdminModelLab";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
@@ -193,7 +194,7 @@ export default function AdminWorkspace(p:Props){
   {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
   {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
   {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
-  {label:"System",items:[["system-monitor","Server monitor","▥"],["settings","Settings","⚙"]]},{label:"Account",items:[["account-security","Account","♙"]]}
+  {label:"System",items:[["system-monitor","Server monitor","▥"],["api-handling","API Handling","⌘"]]},{label:"Account",items:[["account-security","Account","♙"]]}
  ];
  const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
@@ -207,8 +208,7 @@ export default function AdminWorkspace(p:Props){
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
-   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
-    {tab==="account-security"&&<AccountSecurityPanel email={p.email} onSignOut={p.signOut} />}
+   {tab==="account-security"&&<section className="admin-account-page"><AccountSecurityPanel email={p.email} onSignOut={p.signOut} /><AdminSettings theme={p.theme} onThemeChange={p.setTheme} /></section>}
    {tab==="system-monitor"&&<AdminSystemMonitor />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
@@ -265,7 +265,8 @@ export default function AdminWorkspace(p:Props){
       <p className="admin-muted">Snapshot generated {new Date(notificationHealth.generatedAt).toLocaleString()}.</p>
     </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
    </section>}
-   {tab==="model-lab"&&<AdminMcpAssistant />}
+   {tab==="model-lab"&&<AdminModelLab />}
+   {tab==="api-handling"&&<AdminMcpAssistant />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
