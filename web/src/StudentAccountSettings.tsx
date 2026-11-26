@@ -31,6 +31,13 @@ type Props = {
   email: string;
   userId: number;
   role: string;
+  fullName?: string | null;
+  registrationNumber?: string | null;
+  collegeName?: string | null;
+  collegeCode?: string | null;
+  postalPin?: string | null;
+  branchName?: string | null;
+  branchCode?: string | null;
   theme: "light" | "dark";
   onThemeChange: (theme: "light" | "dark") => void;
   reduceMotion: boolean;
@@ -39,11 +46,13 @@ type Props = {
   onShowAnnouncementPopupsChange: (value: boolean) => void;
   busy: boolean;
   onSignOut: () => void;
+  onProfileChanged: () => void;
 };
 
 export default function StudentAccountSettings(props: Props) {
-  const { page, email, userId, role, theme, onThemeChange, reduceMotion, onReduceMotionChange,
-    showAnnouncementPopups, onShowAnnouncementPopupsChange, busy, onSignOut } = props;
+  const { page, email, userId, role, fullName, registrationNumber, collegeName, collegeCode, postalPin, branchName, branchCode,
+    theme, onThemeChange, reduceMotion, onReduceMotionChange,
+    showAnnouncementPopups, onShowAnnouncementPopupsChange, busy, onSignOut, onProfileChanged } = props;
   const [isSettings, setIsSettings] = useState(page === "settings");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -67,6 +76,18 @@ export default function StudentAccountSettings(props: Props) {
   const [recoveryCodes,setRecoveryCodes]=useState<string[]>([]);
   const [disablePassword,setDisablePassword]=useState("");
   const [disableCode,setDisableCode]=useState("");
+  const [profileDraft, setProfileDraft] = useState({
+    fullName: fullName ?? "",
+    registrationNumber: registrationNumber ?? "",
+    collegeName: collegeName ?? "",
+    collegeCode: collegeCode ?? "",
+    postalPin: postalPin ?? "",
+    branchName: branchName ?? "",
+    branchCode: branchCode ?? "",
+  });
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileConfirming, setProfileConfirming] = useState(false);
 
   useEffect(() => {
     if (!isSettings) return;
@@ -86,6 +107,35 @@ export default function StudentAccountSettings(props: Props) {
       .finally(()=>{if(!cancelled)setDevicesLoading(false);});
     return () => { cancelled = true; };
   }, [isSettings]);
+
+  async function saveAcademicProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setProfileError("");
+    if (profileDraft.fullName.trim().length < 2 || profileDraft.collegeName.trim().length < 2 ||
+      !profileDraft.collegeCode.trim() || profileDraft.branchName.trim().length < 2 ||
+      (profileDraft.postalPin && !/^\d{6}$/.test(profileDraft.postalPin.trim())) ||
+      (profileDraft.registrationNumber && !/^\d{5}-[A-Z]{1,3}-\d{3}$/i.test(profileDraft.registrationNumber.trim()))) {
+      setProfileError("Check your name, diploma registration number, college and branch details.");
+      return;
+    }
+    setProfileBusy(true);
+    try {
+      const result = await request<{ changed: boolean; requiresReauthentication?: boolean }>("/auth/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...profileDraft,
+          fullName: profileDraft.fullName.trim(),
+          registrationNumber: profileDraft.registrationNumber.trim(),
+        }),
+      });
+      if (result.changed && result.requiresReauthentication) setProfileConfirming(true);
+      else setProfileError("No profile changes were made.");
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Could not update your academic profile.");
+    } finally {
+      setProfileBusy(false);
+    }
+  }
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -184,7 +234,11 @@ export default function StudentAccountSettings(props: Props) {
           <button type="button" className="ghost" onClick={() => setIsSettings(true)}>Settings</button>
         </header>
         <SettingSection title="Profile" description="Your account identity and access.">
-          <div className="account-profile-summary"><span className="account-profile-avatar">SH</span><div><strong>Shaik Mahammad Hussain</strong><p>{email}</p></div></div>
+          <div className="account-profile-summary"><span className="account-profile-avatar">SH</span><div><strong>{fullName || "Student"}</strong><p>{email}</p></div></div>
+          <div className="account-detail-row"><span>Diploma registration</span><strong>{registrationNumber || "Not set"}</strong></div>
+          <div className="account-detail-row"><span>College / Polytechnic</span><strong>{collegeName || "Not set"} · {collegeCode || "No code"}</strong></div>
+          <div className="account-detail-row"><span>Diploma branch</span><strong>{branchName || "Not set"}{branchCode ? " · " + branchCode : ""}</strong></div>
+          <button type="button" className="button button-primary" onClick={() => setIsSettings(true)}>Edit academic profile</button>
           <div className="account-detail-row"><span>Account ID</span><strong>{userId}</strong></div>
           <div className="account-detail-row"><span>Account type</span><strong>{role === "ADMIN" ? "Administrator" : "Student"}</strong></div>
         </SettingSection>
@@ -203,6 +257,20 @@ export default function StudentAccountSettings(props: Props) {
         <div><p className="eyebrow">ACCOUNT CONTROL CENTER</p><h1>Settings</h1><p className="muted">Security, privacy, notifications and accessibility preferences.</p></div>
         <button type="button" className="ghost" onClick={() => setIsSettings(false)}>← Back to account</button>
       </header>
+
+      <SettingSection title="Academic profile" description="Keep your diploma identity accurate. Saving a change signs out every device so you must sign in again.">
+        <form className="security-password-form" onSubmit={(event) => void saveAcademicProfile(event)}>
+          <label>Full name<input value={profileDraft.fullName} onChange={(event) => setProfileDraft((current) => ({ ...current, fullName: event.target.value }))} autoComplete="name" required maxLength={100} /></label>
+          <label>Diploma registration number<input value={profileDraft.registrationNumber} onChange={(event) => setProfileDraft((current) => ({ ...current, registrationNumber: event.target.value.toUpperCase() }))} placeholder="24010-CM-053" maxLength={16} /></label>
+          <label>College / Polytechnic<input value={profileDraft.collegeName} onChange={(event) => setProfileDraft((current) => ({ ...current, collegeName: event.target.value }))} required maxLength={180} /></label>
+          <label>College PIN / institute code<input value={profileDraft.collegeCode} onChange={(event) => setProfileDraft((current) => ({ ...current, collegeCode: event.target.value.toUpperCase() }))} required maxLength={16} /></label>
+          <label>Postal PIN (optional)<input inputMode="numeric" value={profileDraft.postalPin} onChange={(event) => setProfileDraft((current) => ({ ...current, postalPin: event.target.value.replace(/[^0-9]/g, "").slice(0, 6) }))} maxLength={6} /></label>
+          <label>Diploma branch<input value={profileDraft.branchName} onChange={(event) => setProfileDraft((current) => ({ ...current, branchName: event.target.value }))} required maxLength={120} /></label>
+          <label>Branch code<input value={profileDraft.branchCode} onChange={(event) => setProfileDraft((current) => ({ ...current, branchCode: event.target.value.toUpperCase() }))} maxLength={24} /></label>
+          {profileError ? <p className="security-form-message error" role="alert">{profileError}</p> : null}
+          <button className="button button-primary" type="submit" disabled={profileBusy || busy}>{profileBusy ? "Saving profile…" : "Save academic profile"}</button>
+        </form>
+      </SettingSection>
 
       <SettingSection title="Sign-in security" description="Change credentials and review the protections available on your account.">
         <div className="security-settings-grid">
@@ -261,7 +329,7 @@ export default function StudentAccountSettings(props: Props) {
       </SettingSection>
 
       <SettingSection title="Privacy and account" description="Review the information associated with your sign-in.">
-        <div className="account-detail-row"><span>Full name</span><strong>Shaik Mahammad Hussain</strong></div>
+        <div className="account-detail-row"><span>Full name</span><strong>{fullName || "Student"}</strong></div>
         <div className="account-detail-row"><span>Email address</span><strong>{email}</strong></div>
         <div className="account-detail-row"><span>Account ID</span><strong>{userId}</strong></div>
         <div className="account-detail-row"><span>Preferences storage</span><strong>This browser</strong></div>
@@ -271,6 +339,15 @@ export default function StudentAccountSettings(props: Props) {
       <SettingSection title="Account actions">
         <div className="account-danger-zone"><div><strong>Sign out</strong><p>End this session on the current device.</p></div><button className="ghost" disabled={busy} onClick={onSignOut}>{busy ? "Signing out…" : "Sign out"}</button></div>
       </SettingSection>
+      {profileConfirming ? (
+        <div className="account-profile-confirm-backdrop" role="presentation">
+          <div className="panel account-profile-confirm" role="dialog" aria-modal="true" aria-labelledby="profile-change-title">
+            <h2 id="profile-change-title">Settings changed successfully. Please log in again.</h2>
+            <p>Your academic profile was updated and all active sessions were revoked.</p>
+            <button type="button" className="button button-primary" onClick={onProfileChanged}>Continue to login</button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

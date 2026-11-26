@@ -41,7 +41,7 @@ const API_URL = (() => {
   if (!/^https:\/\//.test(url)) throw new Error("EXPO_PUBLIC_API_URL must use https (cleartext http is blocked on Android).");
   return url.replace(/\/+$/, "");
 })();
-type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null };
+type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null; registrationNumber?: string | null };
 type GamificationSnapshot = { totalXp: number; xpBalance: number; currentStreak: number; longestStreak: number; dailyGoalXp: number; streakFreezeInventory: number; level: number; xpIntoLevel: number; xpToNextLevel: number; today: { xpEarned: number; goalReachedAt: string | null } | null; week: { date: string; xpEarned: number; goalReached: boolean; freezeUsed: boolean }[]; dailyChallengeCompleted: boolean };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Announcement = {
@@ -133,6 +133,11 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
+  const [profileDraft, setProfileDraft] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
+  const [profileRegistrationNumber, setProfileRegistrationNumber] = useState("");
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileSuccessVisible, setProfileSuccessVisible] = useState(false);
   const [register, setRegister] = useState(false);
   const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
@@ -1054,12 +1059,52 @@ export default function App() {
     }
   }
 
-  async function signOut() {
+  async function saveAcademicProfile() {
+    const validation = validateAcademicRegistration(profileDraft);
+    if (validation) { setError(validation); return; }
+    if (profileRegistrationNumber.trim() && !/^\d{5}-[A-Z]{1,3}-\d{3}$/i.test(profileRegistrationNumber.trim())) {
+      setError("Enter a valid diploma registration number, e.g. 24010-CM-053.");
+      return;
+    }
+    setProfileBusy(true);
+    setError("");
+    try {
+      const result = await api<{ changed: boolean; requiresReauthentication?: boolean }>("/auth/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ ...profileDraft, registrationNumber: profileRegistrationNumber.trim() }),
+      });
+      if (!result.changed || !result.requiresReauthentication) {
+        setError("No profile changes were made.");
+        return;
+      }
+      setProfileEditing(false);
+      setProfileSuccessVisible(true);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  function continueAfterProfileChange() {
+    setProfileSuccessVisible(false);
+    void signOut(true);
+  }
+  async function signOut(clearIdentityCache = false) {
     sessionIdentityRef.current = null;
     setBusy(false);
     await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
+    await SecureStore.deleteItemAsync("arctester-refresh-token").catch(() => undefined);
     setToken(null);
+    const previousUserId = user?.id;
     setUser(null);
+    setProfileDraft({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
+    setProfileRegistrationNumber("");
+    setProfileEditing(false);
+    setProfileSuccessVisible(false);
+    if (clearIdentityCache && previousUserId !== undefined) {
+      await clearOfflineLearningPackage(String(previousUserId)).catch(() => undefined);
+    }
     setBank(null);
     setAnnouncements([]);
     setNotifications([]);
@@ -1465,7 +1510,7 @@ export default function App() {
             <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>OFFLINE PRACTICE & SYNC</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{networkConnected === false ? "Offline · " : networkConnected === true ? "Online · " : "Checking connection · "}{pendingSyncCount ? pendingSyncCount + " pending practice attempt(s)" : "No pending progress"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{offlineLearningPackage ? offlineLearningPackage.total + " practice questions · " + offlineLearningPackage.subjects.length + " subjects downloaded" : "No practice question bank is saved on this device."}</Text>{pendingSyncCount > 0 ? <TouchableOpacity disabled={networkConnected !== true} onPress={() => void syncPendingPracticeProgress()} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{networkConnected === true ? "Sync pending progress now" : "Reconnect to sync progress"}</Text></TouchableOpacity> : null}{offlineLearningPackage ? <Text style={[styles.muted, darkMode && { color: "#94a3b8" }]}>Downloaded {new Date(offlineLearningPackage.exportedAt).toLocaleString()}</Text> : null}<TouchableOpacity onPress={() => void downloadOfflinePracticeBank()} disabled={offlineBankBusy || busy} style={[styles.secondary, { marginTop: 10 }]}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{offlineBankBusy ? "Downloading…" : offlineLearningPackage ? "Update offline question bank" : "Download practice bank"}</Text></TouchableOpacity>{offlineLearningPackage ? <TouchableOpacity onPress={removeOfflinePracticeBank} disabled={offlineBankBusy} style={styles.secondary}><Text style={[styles.secondaryText, { color: "#b42318" }]}>Remove offline download</Text></TouchableOpacity> : null}</View>
              <View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCESSIBILITY</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Reduce motion</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Reduce animated transitions</Text></View><Switch value={reduceMotion} onValueChange={(value) => { setReduceMotion(value); void setLocalValue("arctester-reduce-motion", String(value)).catch(() => undefined); }} /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>FEEDBACK</Text><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 }}><View style={{ flex: 1 }}><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>Haptic feedback</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Optional vibration on practice completion</Text></View><Switch value={hapticsEnabled} onValueChange={(value) => { setHapticsEnabled(value); void setLocalValue("arctester-haptics-enabled", String(value)).catch(() => undefined); }} accessibilityLabel="Enable haptic feedback" /></View></View><View style={styles.profileInfo}><Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACCOUNT</Text><Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.email}</Text></View>
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
-            <TouchableOpacity onPress={signOut} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => void signOut()} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
         ) : activeTab === "profile" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
@@ -1474,6 +1519,32 @@ export default function App() {
             </View>
             <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your account</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
+            <View style={styles.profileInfo}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACADEMIC IDENTITY</Text>
+              <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.fullName || "Student"}</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{user.registrationNumber || "Registration number not set"}</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{user.collegeName || "College not set"} · {user.branchName || "Branch not set"}</Text>
+              {!profileEditing ? (
+                <TouchableOpacity onPress={() => {
+                  setProfileDraft({ fullName: user.fullName ?? "", collegeName: user.collegeName ?? "", collegeCode: user.collegeCode ?? "", postalPin: user.postalPin ?? "", branchName: user.branchName ?? "", branchCode: user.branchCode ?? "" });
+                  setProfileRegistrationNumber(user.registrationNumber ?? "");
+                  setProfileEditing(true);
+                  setError("");
+                }} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Edit academic profile</Text></TouchableOpacity>
+              ) : (
+                <View>
+                  <TextInput accessibilityLabel="Profile full name" placeholder="Full name" value={profileDraft.fullName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, fullName: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile diploma registration number" placeholder="Diploma registration number" autoCapitalize="characters" value={profileRegistrationNumber} onChangeText={setProfileRegistrationNumber} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile college" placeholder="College / Polytechnic" value={profileDraft.collegeName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, collegeName: value, collegeCode: getCollegeCode(value) || current.collegeCode }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile college code" placeholder="College PIN / institute code" value={profileDraft.collegeCode} onChangeText={(value) => setProfileDraft((current) => ({ ...current, collegeCode: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile postal PIN" placeholder="Postal PIN (optional)" keyboardType="number-pad" maxLength={6} value={profileDraft.postalPin} onChangeText={(value) => setProfileDraft((current) => ({ ...current, postalPin: value.replace(/[^0-9]/g, "").slice(0, 6) }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile diploma branch" placeholder="Diploma branch" value={profileDraft.branchName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, branchName: value, branchCode: getBranchCode(value) || current.branchCode }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile branch code" placeholder="Branch code" value={profileDraft.branchCode} onChangeText={(value) => setProfileDraft((current) => ({ ...current, branchCode: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TouchableOpacity disabled={profileBusy} onPress={() => void saveAcademicProfile()} style={styles.primary}><Text style={styles.primaryText}>{profileBusy ? "Saving…" : "Save academic profile"}</Text></TouchableOpacity>
+                  <TouchableOpacity disabled={profileBusy} onPress={() => setProfileEditing(false)} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Cancel</Text></TouchableOpacity>
+                </View>
+              )}
+            </View>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEVEL & REWARDS</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -1502,7 +1573,7 @@ export default function App() {
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>QUESTION BANK</Text>
               <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{bank?.total ?? "Loading…"} questions</Text>
             </View>
-            <TouchableOpacity onPress={signOut} style={styles.dangerButton}>
+            <TouchableOpacity onPress={() => void signOut()} style={styles.dangerButton}>
               <MaterialCommunityIcons name="logout" size={18} color="#b42318" />
               <Text style={styles.dangerText}>Sign out</Text>
             </TouchableOpacity>
@@ -1650,7 +1721,7 @@ export default function App() {
               </TouchableOpacity>
             )}
 
-<TouchableOpacity onPress={signOut} style={styles.secondary}>
+<TouchableOpacity onPress={() => void signOut()} style={styles.secondary}>
               <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Sign out</Text>
             </TouchableOpacity>
           </>
@@ -1677,6 +1748,15 @@ export default function App() {
           </TouchableOpacity>
         </Animated.View>
       )}
+      {profileSuccessVisible ? (
+        <View style={styles.profileChangeOverlay}>
+          <View style={[styles.card, { width: "100%", maxWidth: 360 }, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings changed successfully. Please log in again.</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your academic identity was updated and existing sessions were revoked.</Text>
+            <TouchableOpacity onPress={continueAfterProfileChange} style={styles.primary}><Text style={styles.primaryText}>Continue to login</Text></TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
       {startupVisible && (
         <Animated.View style={[styles.startupOverlay, { opacity: startupFade }]}>
           <View style={styles.startupContent}>
@@ -1723,6 +1803,7 @@ function animatedEntrance(value: Animated.Value) {
 }
 
 const styles = StyleSheet.create({
+  profileChangeOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 200, elevation: 200, backgroundColor: "rgba(3, 7, 18, 0.72)", alignItems: "center", justifyContent: "center", padding: 24 },
   startupOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
