@@ -235,6 +235,10 @@ export default function StudentAccountSettings(props: Props) {
         </header>
         <SettingSection title="Profile" description="Your account identity and access.">
           <div className="account-profile-summary"><span className="account-profile-avatar">SH</span><div><strong>{fullName || "Student"}</strong><p>{email}</p></div></div>
+          <div className="account-detail-row"><span>Diploma registration</span><strong>{registrationNumber || "Not set"}</strong></div>
+          <div className="account-detail-row"><span>College / Polytechnic</span><strong>{collegeName || "Not set"} · {collegeCode || "No code"}</strong></div>
+          <div className="account-detail-row"><span>Diploma branch</span><strong>{branchName || "Not set"}{branchCode ? " · " + branchCode : ""}</strong></div>
+          <button type="button" className="button button-primary" onClick={() => setIsSettings(true)}>Edit academic profile</button>
           <div className="account-detail-row"><span>Account ID</span><strong>{userId}</strong></div>
           <div className="account-detail-row"><span>Account type</span><strong>{role === "ADMIN" ? "Administrator" : "Student"}</strong></div>
         </SettingSection>
