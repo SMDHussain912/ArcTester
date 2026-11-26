@@ -7,8 +7,8 @@ Complete this checklist for each production/staging environment. Do not paste se
 - [ ] Set `JWT_ISSUER` and `JWT_AUDIENCE` identically across API replicas; changing either invalidates existing tokens.
 - [ ] Set `TOTP_ENCRYPTION_KEY` to a 32-byte hex key (`openssl rand -hex 32`) before enabling authenticator MFA.
 - [ ] Set `CORS_ORIGINS` to exact HTTPS frontend origins, comma-separated, without trailing slash or path; do not use wildcard origins with credentialed cookies. Production startup now rejects missing, non-HTTPS, wildcard, or non-origin entries.
-- [ ] Set the Cloudflare Turnstile site key in the frontend and `TURNSTILE_SECRET_KEY` in the API. Browser registration fails closed in production if the secret is missing.
-- [ ] Production currently defaults the session cookie to `SameSite=None; Secure` for cross-site frontend/API hosting. Confirm this is required; set `COOKIE_SAME_SITE=lax` only for same-site deployments. Always use HTTPS.
+- [ ] Create a Cloudflare Turnstile widget for the production frontend domain. Set `VITE_TURNSTILE_SITE_KEY` in the Vercel Production environment and `TURNSTILE_SECRET_KEY` in the Render API environment. Redeploy both services after setting them. Browser registration fails closed in production if the server secret is missing; the registration page displays a setup notice if the frontend site key is absent.
+- [ ] Production session cookies use `SameSite=None; Secure` for the Vercel frontend and Render API. The API intentionally ignores an old `COOKIE_SAME_SITE=lax` setting in production because it prevents cross-site session cookies from reaching `/auth/me`. Always use HTTPS.
 - [ ] Keep database credentials, object-storage credentials and model artifact credentials in the host's secret manager/environment, not source control.
 
 ## Proxy, database and network
