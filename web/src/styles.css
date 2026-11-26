@@ -1504,3 +1504,14 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
 /* Administrator account contains account security and personal workspace settings. */
 .admin-account-page{display:grid;gap:22px;min-width:0;width:100%;}
 .admin-account-page>.admin-settings{min-width:0;}
+
+
+/* Account security layout repair: prevent device rows from collapsing into narrow columns. */
+.admin-security-panel{width:100%;min-width:0;box-sizing:border-box;}
+.admin-security-panel .account-device-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;width:100%;min-width:0;box-sizing:border-box;padding:14px 0;border-bottom:1px solid var(--border);}
+.admin-security-panel .account-device-row>div:first-child{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere;}
+.admin-security-panel .account-device-row strong,.admin-security-panel .account-device-row small{min-width:0;overflow-wrap:anywhere;line-height:1.5;}
+.admin-security-panel .account-device-row>button{justify-self:end;white-space:nowrap;}
+.admin-security-panel .security-secret-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-width:0;}
+.admin-security-panel .security-secret-actions .security-secret-key{min-width:0;}
+@media(max-width:620px){.admin-security-panel .account-device-row{grid-template-columns:minmax(0,1fr);align-items:stretch;gap:10px;}.admin-security-panel .account-device-row>button{justify-self:start;}.admin-security-panel .security-secret-actions{grid-template-columns:minmax(0,1fr);}}
