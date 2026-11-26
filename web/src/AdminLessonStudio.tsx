@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import AdminStudentPicker from "./AdminStudentPicker";\nimport { useEffect, useMemo, useRef, useState } from "react";
 import { AP_DIPLOMA_BRANCHES } from "./polytechnicCatalog";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
@@ -210,7 +210,7 @@ export default function AdminLessonStudio() {
         </>}
         <small className="muted">College targets require a name or code. Branch targets require a branch name or code. College is optional for branch-wide content.</small>
       </div>}
-      {audienceScope === "STUDENTS" && <label>Student account IDs<input value={targetStudentIds} onChange={e => setTargetStudentIds(e.target.value)} placeholder="e.g. 104, 118, 203"/><small className="muted">Enter numeric ArcTester account IDs. The lesson will be visible only to those students.</small></label>}
+      {audienceScope === "STUDENTS" && <label>Selected student accounts<AdminStudentPicker value={targetStudentIds} onChange={setTargetStudentIds}/></label>}
       <div className="admin-two-col lesson-editors">
         <label>Teaching script JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={scriptText} onChange={e => setScriptText(e.target.value)}/></label>
         <label>Storyboard JSON<textarea className="import-editor lesson-json-editor" rows={22} spellCheck={false} value={storyboardText} onChange={e => setStoryboardText(e.target.value)}/></label>
