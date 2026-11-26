@@ -157,8 +157,9 @@ describe("Part 3 responsive admin navigation and institution tools", () => {
     expect(screen.queryByRole("button", { name: "Institutions & branches" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Students" }));
     expect(await screen.findByRole("heading", { name: "Students" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Admin settings" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(await screen.findByRole("heading", { name: /Account security/i })).toBeInTheDocument();
+    expect(screen.getByText(/appearance/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dark" })).toBeInTheDocument();
   });
 
