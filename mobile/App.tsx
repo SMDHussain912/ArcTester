@@ -1059,12 +1059,49 @@ export default function App() {
     }
   }
 
+  async function saveAcademicProfile() {
+    const validation = validateAcademicRegistration(profileDraft);
+    if (validation) { setError(validation); return; }
+    if (profileRegistrationNumber.trim() && !/^\d{5}-[A-Z]{1,3}-\d{3}$/i.test(profileRegistrationNumber.trim())) {
+      setError("Enter a valid diploma registration number, e.g. 24010-CM-053.");
+      return;
+    }
+    setProfileBusy(true);
+    setError("");
+    try {
+      const result = await api<{ changed: boolean; requiresReauthentication?: boolean }>("/auth/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ ...profileDraft, registrationNumber: profileRegistrationNumber.trim() }),
+      });
+      if (!result.changed || !result.requiresReauthentication) {
+        setError("No profile changes were made.");
+        return;
+      }
+      setProfileEditing(false);
+      setProfileSuccessVisible(true);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
+  function continueAfterProfileChange() {
+    setProfileSuccessVisible(false);
+    void signOut();
+  }
   async function signOut() {
     sessionIdentityRef.current = null;
     setBusy(false);
     await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
     setToken(null);
+    const previousUserId = user?.id;
     setUser(null);
+    setProfileDraft({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
+    setProfileRegistrationNumber("");
+    setProfileEditing(false);
+    setProfileSuccessVisible(false);
+    if (previousUserId !== undefined) await clearOfflineLearningPackage(String(previousUserId)).catch(() => undefined);
     setBank(null);
     setAnnouncements([]);
     setNotifications([]);
