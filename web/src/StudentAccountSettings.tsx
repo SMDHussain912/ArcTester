@@ -234,7 +234,7 @@ export default function StudentAccountSettings(props: Props) {
           <button type="button" className="ghost" onClick={() => setIsSettings(true)}>Settings</button>
         </header>
         <SettingSection title="Profile" description="Your account identity and access.">
-          <div className="account-profile-summary"><span className="account-profile-avatar">SH</span><div><strong>Shaik Mahammad Hussain</strong><p>{email}</p></div></div>
+          <div className="account-profile-summary"><span className="account-profile-avatar">SH</span><div><strong>{fullName || "Student"}</strong><p>{email}</p></div></div>
           <div className="account-detail-row"><span>Account ID</span><strong>{userId}</strong></div>
           <div className="account-detail-row"><span>Account type</span><strong>{role === "ADMIN" ? "Administrator" : "Student"}</strong></div>
         </SettingSection>
@@ -325,7 +325,7 @@ export default function StudentAccountSettings(props: Props) {
       </SettingSection>
 
       <SettingSection title="Privacy and account" description="Review the information associated with your sign-in.">
-        <div className="account-detail-row"><span>Full name</span><strong>Shaik Mahammad Hussain</strong></div>
+        <div className="account-detail-row"><span>Full name</span><strong>{fullName || "Student"}</strong></div>
         <div className="account-detail-row"><span>Email address</span><strong>{email}</strong></div>
         <div className="account-detail-row"><span>Account ID</span><strong>{userId}</strong></div>
         <div className="account-detail-row"><span>Preferences storage</span><strong>This browser</strong></div>
