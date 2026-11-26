@@ -38,7 +38,7 @@ export default function AdminResultsAnalytics({ results, onRefresh }: AdminResul
   })).filter((item) => item.value > 0);
 
   return (
-    <>
+    <div className="admin-results-analytics">
       <div className="admin-page-title"><div><p className="eyebrow">PERFORMANCE MONITORING</p><h1>Results &amp; analytics</h1><p>Score trends, submission activity and grading status from the latest 200 records.</p></div><button className="ghost" onClick={onRefresh}>Refresh results</button></div>
       <div className="admin-stat-grid">
         <article><span>Submissions</span><b>{results.length}</b><small>Latest 200 records</small></article>
@@ -52,6 +52,6 @@ export default function AdminResultsAnalytics({ results, onRefresh }: AdminResul
         <AnalyticsBarChart title="Submission status" description="Current status of the latest records." items={statusItems} formatValue={(value) => value.toLocaleString()} />
       </div>
       <div className="admin-panel results-table"><div className="table-top"><span>Recent submissions</span><span>Sorted newest first</span></div>{results.length ? results.map((result) => <article className="result-row" key={result.id}><div><b>{result.student.email}</b><small>{result.exam.title} · Version {result.version}</small></div><strong>{result.score ?? "—"} / {result.maximumScore ?? "—"}</strong><span className={result.status === "GRADED" ? "status status-used" : "status status-revoked"}>{result.status.replaceAll("_", " ")}</span><small>{new Date(result.submittedAt).toLocaleString()}</small></article>) : <div className="empty-state">No submissions have been received yet.</div>}</div>
-    </>
+    </div>
   );
 }
