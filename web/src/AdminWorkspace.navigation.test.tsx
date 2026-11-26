@@ -48,6 +48,12 @@ describe("administrator workspace navigation", () => {
       fireEvent.click(screen.getByRole("button", { name: navigationLabel }));
       expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Model Lab" }));
+    expect(screen.getByText(/analytics model workspace—not API Handling/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Select active version" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "API Handling" }));
+    expect(screen.getByText(/only handles access keys and API integration/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Create datasets, queue training/i)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalled();
   });
 });
