@@ -19,7 +19,13 @@ function SettingSection({ title, description, children }: { title: string; descr
   return <section className="panel account-setting-section"><div className="account-section-heading"><h2>{title}</h2>{description ? <p>{description}</p> : null}</div>{children}</section>;
 }
 
-type Device = { id: string; deviceName: string; platform: string; createdAt: string; lastSeenAt: string };
+type Device = { id: string; deviceName: string; platform: string; loginMethod: string; ipAddress: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
+type LoginEvent = { id:string; email:string; result:string; method:string; ipAddress:string; userAgent:string; createdAt:string };
+type Passkey = { id:string; name:string; createdAt:string; lastUsedAt:string|null; transports:string[] };
+type SecurityStatus = { authenticatorEnabled:boolean; recoveryCodesRemaining:number; passkeyCount:number };
+function fromBase64Url(value:string):Uint8Array{const base=value.replace(/-/g,"+").replace(/_/g,"/");const padded=base+"=".repeat((4-base.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
+function toWebAuthnBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}
+function toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
 type Props = {
   page: "account" | "settings";
   email: string;
@@ -35,16 +41,6 @@ type Props = {
   onSignOut: () => void;
 };
 
-function SecurityStatus({ title, detail, status, action }: { title: string; detail: string; status: string; action?: string }) {
-  return (
-    <div className="security-feature-row">
-      <div className="security-feature-icon" aria-hidden="true">◇</div>
-      <div className="security-feature-copy"><strong>{title}</strong><p>{detail}</p></div>
-      <div className="security-feature-state"><span className="security-status-pill">{status}</span>{action ? <button type="button" className="ghost" disabled>{action}</button> : null}</div>
-    </div>
-  );
-}
-
 export default function StudentAccountSettings(props: Props) {
   const { page, email, userId, role, theme, onThemeChange, reduceMotion, onReduceMotionChange,
     showAnnouncementPopups, onShowAnnouncementPopupsChange, busy, onSignOut } = props;
@@ -59,16 +55,35 @@ export default function StudentAccountSettings(props: Props) {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [deviceError, setDeviceError] = useState("");
   const [revokingDevice, setRevokingDevice] = useState<string | null>(null);
+  const [loginEvents,setLoginEvents]=useState<LoginEvent[]>([]);
+  const [passkeys,setPasskeys]=useState<Passkey[]>([]);
+  const [securityStatus,setSecurityStatus]=useState<SecurityStatus>({authenticatorEnabled:false,recoveryCodesRemaining:0,passkeyCount:0});
+  const [securityBusy,setSecurityBusy]=useState(false);
+  const [securityError,setSecurityError]=useState("");
+  const [securityMessage,setSecurityMessage]=useState("");
+  const [totpSecret,setTotpSecret]=useState("");
+  const [totpUri,setTotpUri]=useState("");
+  const [totpCode,setTotpCode]=useState("");
+  const [recoveryCodes,setRecoveryCodes]=useState<string[]>([]);
+  const [disablePassword,setDisablePassword]=useState("");
+  const [disableCode,setDisableCode]=useState("");
 
   useEffect(() => {
     if (!isSettings) return;
     let cancelled = false;
     setDevicesLoading(true);
     setDeviceError("");
-    request<{ devices: Device[] }>("/auth/devices")
-      .then((result) => { if (!cancelled) setDevices(result.devices ?? []); })
-      .catch((error: unknown) => { if (!cancelled) setDeviceError(error instanceof Error ? error.message : "Could not load signed-in devices."); })
-      .finally(() => { if (!cancelled) setDevicesLoading(false); });
+    Promise.all([
+      request<{ sessions: Device[] }>("/auth/sessions"),
+      request<{ events: LoginEvent[] }>("/auth/login-history"),
+      request<{ passkeys: Passkey[] }>("/auth/passkeys"),
+      request<SecurityStatus>("/auth/2fa/status"),
+    ]).then(([sessionResult,historyResult,passkeyResult,statusResult]) => {
+      if(cancelled)return;
+      setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
+      setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
+    }).catch((error:unknown)=>{if(!cancelled)setDeviceError(error instanceof Error?error.message:"Could not load account security.");})
+      .finally(()=>{if(!cancelled)setDevicesLoading(false);});
     return () => { cancelled = true; };
   }, [isSettings]);
 
@@ -105,13 +120,60 @@ export default function StudentAccountSettings(props: Props) {
     setDeviceError("");
     setRevokingDevice(deviceId);
     try {
-      await request("/auth/devices/" + encodeURIComponent(deviceId), { method: "DELETE" });
-      setDevices((current) => current.filter((device) => device.id !== deviceId));
+      await request("/auth/sessions/" + encodeURIComponent(deviceId), { method: "DELETE" });
+      const wasCurrent=devices.find(device=>device.id===deviceId)?.current;setDevices((current) => current.filter((device) => device.id !== deviceId));if(wasCurrent)onSignOut();
     } catch (error) {
       setDeviceError(error instanceof Error ? error.message : "Could not revoke this device.");
     } finally {
       setRevokingDevice(null);
     }
+  }
+
+
+  async function reloadSecurity() {
+    const [sessionResult,historyResult,passkeyResult,statusResult]=await Promise.all([
+      request<{sessions:Device[]}>("/auth/sessions"),request<{events:LoginEvent[]}>("/auth/login-history"),
+      request<{passkeys:Passkey[]}>("/auth/passkeys"),request<SecurityStatus>("/auth/2fa/status"),
+    ]);
+    setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
+    setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
+  }
+  async function beginTotpSetup(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");setRecoveryCodes([]);
+    try{const result=await request<{secret:string;otpauthUri:string}>("/auth/2fa/totp/setup",{method:"POST",body:"{}"});setTotpSecret(result.secret);setTotpUri(result.otpauthUri);setTotpCode("");}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not start authenticator setup.");}finally{setSecurityBusy(false);}
+  }
+  async function verifyTotpSetup(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{const result=await request<{recoveryCodes:string[];message:string}>("/auth/2fa/totp/verify-setup",{method:"POST",body:JSON.stringify({code:totpCode})});setRecoveryCodes(result.recoveryCodes);setTotpSecret("");setTotpUri("");setTotpCode("");setSecurityMessage(result.message);await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not verify authenticator code.");}finally{setSecurityBusy(false);}
+  }
+  async function disableTotp(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{const result=await request<{message:string}>("/auth/2fa/totp/disable",{method:"POST",body:JSON.stringify({password:disablePassword,code:disableCode})});setSecurityMessage(result.message);setDisablePassword("");setDisableCode("");await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not disable authenticator.");}finally{setSecurityBusy(false);}
+  }
+  async function addPasskey(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{
+      if(!navigator.credentials)throw new Error("Passkeys are not supported by this browser.");
+      const options=await request<{publicKey:{challenge:string;rp:{name:string;id:string};user:{id:string;name:string;displayName:string};pubKeyCredParams:PublicKeyCredentialParameters[];timeout:number;attestation:AttestationConveyancePreference;authenticatorSelection:AuthenticatorSelectionCriteria;excludeCredentials:{type:"public-key";id:string}[]}}>("/auth/passkeys/register/options",{method:"POST",body:"{}"});
+      const publicKey:PublicKeyCredentialCreationOptions={...options.publicKey,challenge:toWebAuthnBufferSource(fromBase64Url(options.publicKey.challenge)),user:{...options.publicKey.user,id:toWebAuthnBufferSource(fromBase64Url(options.publicKey.user.id))},excludeCredentials:options.publicKey.excludeCredentials.map(item=>({...item,id:toWebAuthnBufferSource(fromBase64Url(item.id))}))};
+      const credential=await navigator.credentials.create({publicKey}) as PublicKeyCredential|null;if(!credential)throw new Error("Passkey creation was cancelled.");
+      const response=credential.response as AuthenticatorAttestationResponse;
+      await request("/auth/passkeys/register/verify",{method:"POST",body:JSON.stringify({challenge:options.publicKey.challenge,credentialId:credential.id,clientDataJSON:toBase64Url(response.clientDataJSON),attestationObject:toBase64Url(response.attestationObject),name:"This device",transports:response.getTransports?.()??[]})});
+      setSecurityMessage("Passkey added to your account.");await reloadSecurity();
+    }catch(error){setSecurityError(error instanceof Error?error.message:"Could not add passkey.");}finally{setSecurityBusy(false);}
+  }
+  async function removePasskey(id:string){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{await request("/auth/passkeys/"+encodeURIComponent(id),{method:"DELETE"});setSecurityMessage("Passkey removed.");await reloadSecurity();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not remove passkey.");}finally{setSecurityBusy(false);}
+  }
+  async function revokeAllSessions(){
+    setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
+    try{await request("/auth/sessions/revoke-all",{method:"POST",body:"{}"});setSecurityMessage("All sessions revoked. Signing out this device too.");setDevices([]);onSignOut();}
+    catch(error){setSecurityError(error instanceof Error?error.message:"Could not revoke sessions.");}finally{setSecurityBusy(false);}
   }
 
   if (page === "account" && !isSettings) {
@@ -128,7 +190,7 @@ export default function StudentAccountSettings(props: Props) {
         </SettingSection>
         <SettingSection title="Security overview" description="Protect your account and review access.">
           <div className="account-security-summary"><span className="security-summary-dot" /><div><strong>Password and sessions</strong><p>Change your password in Settings. Changing it revokes previously issued sessions.</p></div></div>
-          <div className="account-security-summary"><span className="security-summary-dot muted-dot" /><div><strong>Authenticator and passkeys</strong><p>These sign-in methods are not enabled on the server yet. Setup controls will appear when login enforcement is ready.</p></div></div>
+          <div className="account-security-summary"><span className="security-summary-dot muted-dot" /><div><strong>Authenticator and passkeys</strong><p>Manage authenticator setup, passkeys, active sessions and previous sign-ins in Settings.</p></div></div>
           <button className="ghost account-signout" disabled={busy} onClick={onSignOut}>{busy ? "Signing out…" : "Sign out"}</button>
         </SettingSection>
       </section>
@@ -156,26 +218,30 @@ export default function StudentAccountSettings(props: Props) {
             </form>
           </div>
           <div className="security-settings-card security-methods-card">
-            <div className="security-card-heading"><span className="security-card-icon">✧</span><div><strong>Additional sign-in methods</strong><small>Enrollment will be available once server-side verification is enabled.</small></div></div>
-            <SecurityStatus title="Two-step verification" detail="Login currently does not require a second factor." status="Not enabled" action="Setup unavailable" />
-            <SecurityStatus title="Authenticator app" detail="TOTP enrollment, recovery codes and login challenge are not configured." status="Not configured" action="Setup unavailable" />
-            <SecurityStatus title="Passkeys" detail="WebAuthn registration and assertion verification are not configured." status="Not configured" action="Setup unavailable" />
+            <div className="security-card-heading"><span className="security-card-icon">✧</span><div><strong>Two-factor authentication</strong><small>Use an authenticator app and a passkey to protect sign-in.</small></div></div>
+            <div className="security-feature-row"><div className="security-feature-copy"><strong>Authenticator app (TOTP)</strong><p>{securityStatus.authenticatorEnabled?"Authenticator is enabled. Login requires a current code.":"Add an authenticator such as Google Authenticator, Microsoft Authenticator, or 1Password."}</p></div><span className="security-status-pill">{securityStatus.authenticatorEnabled?"Enabled":"Not enabled"}</span></div>
+            {!securityStatus.authenticatorEnabled&&!totpSecret?<button type="button" className="button button-primary" disabled={securityBusy} onClick={()=>void beginTotpSetup()}>Set up authenticator</button>:null}
+            {totpSecret?<div className="security-enrollment-panel"><strong>1. Add this key to your authenticator</strong><p>Enter the key manually in your authenticator app. Account: {email}</p><code className="security-secret-key">{totpSecret}</code><p className="muted">You can also use this setup URI:</p><textarea readOnly rows={3} value={totpUri}/><strong>2. Enter the current 6-digit code</strong><form onSubmit={verifyTotpSetup} className="security-inline-form"><input aria-label="Authenticator setup code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={totpCode} onChange={e=>setTotpCode(e.target.value)} required/><button type="submit" className="button button-primary" disabled={securityBusy||totpCode.length!==6}>Verify and enable</button></form></div>:null}
+            {securityStatus.authenticatorEnabled?<><p className="muted">Recovery codes remaining: <strong>{securityStatus.recoveryCodesRemaining}</strong></p><form className="security-password-form" onSubmit={disableTotp}><label>Account password<input type="password" autoComplete="current-password" value={disablePassword} onChange={e=>setDisablePassword(e.target.value)} required/></label><label>Authenticator or recovery code<input value={disableCode} onChange={e=>setDisableCode(e.target.value)} required minLength={6} maxLength={32}/></label><button type="submit" className="ghost" disabled={securityBusy}>Disable two-factor authentication</button></form></>:null}
+            {recoveryCodes.length?<div className="security-recovery-panel"><strong>Save your recovery codes now</strong><p>Each code works once. Keep them somewhere private and safe.</p><div className="security-recovery-codes">{recoveryCodes.map(code=><code key={code}>{code}</code>)}</div><button type="button" className="ghost" onClick={()=>void navigator.clipboard?.writeText(recoveryCodes.join("\n"))}>Copy recovery codes</button><button type="button" className="ghost" onClick={()=>setRecoveryCodes([])}>I saved them</button></div>:null}
+            <div className="security-feature-row"><div className="security-feature-copy"><strong>Passkeys</strong><p>Sign in using your device's screen lock, fingerprint, face recognition, or a security key.</p></div><span className="security-status-pill">{passkeys.length} added</span></div>
+            <button type="button" className="button button-primary" disabled={securityBusy} onClick={()=>void addPasskey()}>Add a passkey</button>
+            {passkeys.map(passkey=><div className="account-device-row" key={passkey.id}><span className="account-device-icon">⌑</span><div><strong>{passkey.name}</strong><small>Added {new Date(passkey.createdAt).toLocaleString()} · {passkey.lastUsedAt?"Last used "+new Date(passkey.lastUsedAt).toLocaleString():"Not used yet"}</small></div><button type="button" className="ghost" disabled={securityBusy} onClick={()=>void removePasskey(passkey.id)}>Remove</button></div>)}
+            {securityError?<p className="security-form-message error" role="alert">{securityError}</p>:null}
+            {securityMessage?<p className="security-form-message success" role="status">{securityMessage}</p>:null}
           </div>
         </div>
       </SettingSection>
 
-      <SettingSection title="Devices and sessions" description="Review remembered devices. Revoking a device removes its registered access record.">
-        {devicesLoading ? <p className="muted">Loading registered devices…</p> : null}
-        {deviceError ? <p className="security-form-message error" role="alert">{deviceError}</p> : null}
-        {!devicesLoading && devices.length === 0 && !deviceError ? <div className="account-empty-device"><strong>No registered devices</strong><p>Devices will appear here after they are registered by a supported client.</p></div> : null}
-        {devices.map((device) => (
-          <div className="account-device-row" key={device.id}>
-            <span className="account-device-icon" aria-hidden="true">▣</span>
-            <div><strong>{device.deviceName}</strong><small>{device.platform.toUpperCase()} · Last active {new Date(device.lastSeenAt).toLocaleString()}</small></div>
-            <button className="ghost" type="button" disabled={revokingDevice === device.id} onClick={() => void revokeDevice(device.id)}>{revokingDevice === device.id ? "Revoking…" : "Revoke"}</button>
-          </div>
-        ))}
-        <p className="muted account-settings-note">Changing your password also invalidates all previously issued sessions. Sign out to revoke the current session.</p>
+      <SettingSection title="Active sessions" description="These are sign-ins that currently have valid sessions. Revoke any device you don't recognize.">
+        {devicesLoading?<p className="muted">Loading active sessions…</p>:null}
+        {deviceError?<p className="security-form-message error" role="alert">{deviceError}</p>:null}
+        {!devicesLoading&&!devices.length&&!deviceError?<div className="account-empty-device"><strong>No active sessions found</strong><p>Sign in again to create a tracked session.</p></div>:null}
+        {devices.map(session=><div className="account-device-row" key={session.id}><span className="account-device-icon">▣</span><div><strong>{session.deviceName} {session.current?<span className="security-status-pill">This device</span>:null}</strong><small>{session.platform.toUpperCase()} · {session.loginMethod==="legacy-session"?"Old login (pre-security update)":session.loginMethod} · Last active {new Date(session.lastSeenAt).toLocaleString()} · IP {session.ipAddress||"Unavailable"}</small></div><button className="ghost" type="button" disabled={revokingDevice===session.id} onClick={()=>void revokeDevice(session.id)}>{revokingDevice===session.id?"Revoking…":"Sign out"}</button></div>)}
+        <button type="button" className="ghost" disabled={securityBusy||!devices.length} onClick={()=>void revokeAllSessions()}>Sign out all devices</button>
+      </SettingSection>
+      <SettingSection title="Previous sign-ins" description="Recent login activity, including successful sign-ins and failed attempts. Historical events begin with the security rollout; older active sessions are labeled as old logins.">
+        {!loginEvents.length?<p className="muted">No sign-in history recorded yet.</p>:<div className="security-login-history">{loginEvents.map(event=><div className="security-login-event" key={event.id}><div><strong>{event.result==="success"?"Successful sign-in":event.result==="failed"?"Failed sign-in":event.result==="blocked"?"Sign-in blocked":"Second factor required"}</strong><small>{new Date(event.createdAt).toLocaleString()} · {event.method} · IP {event.ipAddress||"Unavailable"}</small><small>{event.userAgent||"Device information unavailable"}</small></div><span className="security-status-pill">{event.result}</span></div>)}</div>}
       </SettingSection>
 
       <SettingSection title="Appearance" description="Personalize the workspace on this device.">

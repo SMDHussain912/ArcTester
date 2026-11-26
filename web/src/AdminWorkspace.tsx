@@ -186,7 +186,7 @@ export default function AdminWorkspace(p:Props){
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
    {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
-   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
+   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} email={p.email} onSignOut={p.signOut} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
     total={liveSessionsTotal}

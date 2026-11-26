@@ -61,15 +61,17 @@ async function setupStudent(page: Page) {
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const studentEmail = `student-${suffix}@arctester.test`;
+  const registrationNumber = "24010-CM-" + String(Math.floor(Math.random() * 1000)).padStart(3, "0");
   const register = await apiRequest(page, "/auth/register", "POST", {
     email: studentEmail,
     password: "StudentPass123!",
     fullName: "E2E Student",
     collegeName: "Andhra Polytechnic, Kakinada",
     collegeCode: "010",
+    registrationNumber,
     postalPin: "533001",
-    branchName: "Diploma in Computer Engineering",
-    branchCode: "DCME",
+    branchName: "Computer Engineering (CME)",
+    branchCode: "CM",
   });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
   const studentId = register.json.user?.id;

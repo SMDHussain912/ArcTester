@@ -14,9 +14,10 @@ const STUDENT_PROFILE = {
   fullName: "Test Student",
   collegeName: "Test Polytechnic",
   collegeCode: "999",
+  registrationNumber: "24999-CM-050",
   postalPin: "533001",
-  branchName: "Diploma in Computer Engineering",
-  branchCode: "DCME",
+  branchName: "Computer Engineering (CME)",
+  branchCode: "CM",
 };
 
 async function request(
@@ -66,6 +67,7 @@ describe("identity foundation", () => {
     const response = await request("/auth/register", "POST", {
       ...STUDENT_PROFILE,
       email: "self-signup@arctester.test",
+      registrationNumber: "24999-CM-051",
       password: "student-password-123",
     });
     expect(response.status).toBe(201);
@@ -141,6 +143,7 @@ describe("identity foundation", () => {
     const registered = await request("/auth/register", "POST", {
       ...STUDENT_PROFILE,
       email: "student@arctester.test",
+      registrationNumber: "24999-CM-052",
       password: "student-password-123",
     });
     expect(registered.status).toBe(201);

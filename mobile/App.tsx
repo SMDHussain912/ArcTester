@@ -134,6 +134,8 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [academicProfile, setAcademicProfile] = useState<AcademicRegistration>({ fullName: "", collegeName: "", collegeCode: "", postalPin: "", branchName: "", branchCode: "" });
   const [register, setRegister] = useState(false);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [bank, setBank] = useState<Bank | null>(null);
@@ -713,10 +715,22 @@ export default function App() {
         setRegister(false);
         setError("Account request submitted. You can sign in after an administrator approves your account.");
       } else {
-        const result = await api<{ token: string; user: User }>("/auth/token", {
+        if (twoFactorChallenge) {
+          const verified = await api<{ token: string; user: User }>("/auth/token/2fa", { method: "POST", headers: { "x-arctester-client": "mobile" }, body: JSON.stringify({ challengeId: twoFactorChallenge, code: twoFactorCode.trim() }) });
+          if (verified.user.role !== "STUDENT") { setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web."); setTwoFactorChallenge(""); setPassword(""); return; }
+          await SecureStore.setItemAsync("arctester-token", verified.token).catch(() => { throw new Error("Secure sign-in storage is unavailable. Update or reinstall ArcTester, then sign in again."); });
+          setToken(verified.token); setUser(verified.user); setTwoFactorChallenge(""); setTwoFactorCode("");
+          return;
+        }
+        const result = await api<{ token?: string; user?: User; twoFactorRequired?: boolean; challengeId?: string }>("/auth/token", {
           method: "POST",
-          body: JSON.stringify({ email: email.trim(), password }),
+          headers: { "x-arctester-client": "mobile" }, body: JSON.stringify({ email: email.trim(), password }),
         });
+        if (result.twoFactorRequired && result.challengeId) {
+          setTwoFactorChallenge(result.challengeId); setPassword(""); setTwoFactorCode("");
+          return;
+        }
+        if (!result.user || !result.token) throw new Error("Sign-in response was incomplete.");
         if (result.user.role !== "STUDENT") {
           setError("Admin accounts cannot use the mobile app. Please sign in through ArcTester Web.");
           setPassword("");
@@ -1163,29 +1177,32 @@ export default function App() {
                 />
               </View>
             ) : null}
-            <TextInput
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholder="Email address"
-              placeholderTextColor="#8b95a7"
-              value={email}
-              onChangeText={setEmail}
-              style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
-            />
-            <TextInput
-              secureTextEntry
-              placeholder="Password"
-              placeholderTextColor="#8b95a7"
-              value={password}
-              onChangeText={setPassword}
-              style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
-            />
+            {!register && twoFactorChallenge ? (
+              <View>
+                <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Two-step verification is enabled. Enter your authenticator code or one unused recovery code.</Text>
+                <TextInput
+                  accessibilityLabel="Authenticator or recovery code"
+                  autoCapitalize="characters"
+                  autoComplete="one-time-code"
+                  placeholder="Authenticator / recovery code"
+                  placeholderTextColor="#8b95a7"
+                  value={twoFactorCode}
+                  onChangeText={setTwoFactorCode}
+                  style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]}
+                />
+              </View>
+            ) : (
+              <>
+                <TextInput autoCapitalize="none" keyboardType="email-address" placeholder="Email address" placeholderTextColor="#8b95a7" value={email} onChangeText={setEmail} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                <TextInput secureTextEntry placeholder="Password" placeholderTextColor="#8b95a7" value={password} onChangeText={setPassword} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+              </>
+            )}
             <TouchableOpacity disabled={busy} onPress={authenticate} style={styles.primary}>
               <Text style={styles.primaryText}>
-                {busy ? "Please wait…" : register ? "Create account" : "Sign in"}
+                {busy ? "Please wait…" : twoFactorChallenge ? "Verify code" : register ? "Create account" : "Sign in"}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setRegister(!register)} style={styles.secondary}>
+            <TouchableOpacity onPress={() => { setRegister(!register); setTwoFactorChallenge(""); setTwoFactorCode(""); }} style={styles.secondary}>
               <Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>
                 {register
                   ? "Already have an account? Sign in"

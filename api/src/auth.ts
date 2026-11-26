@@ -8,6 +8,8 @@ import { z } from "zod";
 import { createHash, createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import type { PrismaClient } from "@prisma/client";
+import { decryptTotpSecret, encryptTotpSecret, generateRecoveryCodes, generateTotpSecret, hashRecoveryCode, verifyTotp } from "./totp.js";
+import { base64urlEncode, createWebAuthnChallenge, parseNoneAttestation, verifyClientData, verifyPasskeyAssertion } from "./webauthn.js";
 
 const DEVELOPMENT_JWT_SECRET = "dev-secret-change-me-in-production";
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "production" ? "" : DEVELOPMENT_JWT_SECRET);
@@ -185,7 +187,7 @@ async function verifyRegistrationCaptcha(token: string | undefined, ip: string, 
   if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
   const body = new URLSearchParams({ secret, response: token });
   if (ip && ip !== "unknown") body.set("remoteip", ip);
-  let response: Response;
+  let response: globalThis.Response;
   try {
     response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
@@ -324,6 +326,16 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
     if (!user || user.email !== email || user.sessionVersion !== sessionVersion) {
       return next(forbidden("This session has been revoked. Sign in again."));
     }
+    const sessionId = typeof payload.sid === "string" ? payload.sid : "";
+    if (sessionId) {
+      const activeSession = await db.authSession.findFirst({ where: { id: sessionId, userId: id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { id: true, lastSeenAt: true } });
+      if (!activeSession) return next(forbidden("This device session has been revoked. Sign in again."));
+      if (activeSession.lastSeenAt.getTime() < Date.now() - 5 * 60 * 1000) await db.authSession.update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } });
+    } else {
+      const legacySessionId = "legacy-" + id + "-" + sha256(token).slice(0, 20);
+      const legacySession = await db.authSession.findUnique({ where: { id: legacySessionId }, select: { id: true, revokedAt: true, expiresAt: true } });
+      if (legacySession && (legacySession.revokedAt || legacySession.expiresAt <= new Date())) return next(forbidden("This legacy session has been revoked. Sign in again."));
+    }
     if (user.accessStatus !== "APPROVED") {
       return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
     }
@@ -382,6 +394,33 @@ function clearSessionCookie(res: Response): void {
     "Set-Cookie",
     `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=${sameSite}${secure ? "; Secure" : ""}`
   );
+}
+
+
+function maskedIp(ip: string): string {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) return ip.replace(/\.\d+$/, ".0");
+  if (ip.includes(":")) return ip.split(":").slice(0, 4).join(":") + "::";
+  return "";
+}
+function requestDevice(req: Request): { deviceName: string; platform: string; userAgent: string; ipAddress: string } {
+  const userAgent = String(req.headers["user-agent"] ?? "").slice(0, 500);
+  const nativeClient = req.header("x-arctester-client") === "mobile";
+  const platform = nativeClient ? (/iphone|ipad|ios/i.test(userAgent) ? "ios" : /android/i.test(userAgent) ? "android" : "mobile") : /android/i.test(userAgent) ? "android" : /iphone|ipad|ios/i.test(userAgent) ? "ios" : /windows/i.test(userAgent) ? "windows" : /mac os/i.test(userAgent) ? "macos" : /linux/i.test(userAgent) ? "linux" : "web";
+  const ua = userAgent.toLowerCase();
+  const browser = nativeClient ? "ArcTester" : ua.includes("edg/") ? "Edge" : ua.includes("firefox/") ? "Firefox" : ua.includes("chrome/") ? "Chrome" : ua.includes("safari/") ? "Safari" : "Browser";
+  const deviceName = nativeClient ? "ArcTester mobile app" : /mobile|android|iphone/i.test(userAgent) ? browser + " on mobile" : browser + " on " + platform;
+  return { deviceName, platform, userAgent, ipAddress: maskedIp(req.ip ?? "") };
+}
+async function recordLoginEvent(db: PrismaClient, req: Request, email: string, userId: number | null, result: string, method = "password"): Promise<void> {
+  const device = requestDevice(req);
+  await db.loginEvent.create({ data: { email: email.slice(0, 254), userId, result, method, ipAddress: device.ipAddress, userAgent: device.userAgent } });
+}
+async function createAuthSession(db: PrismaClient, req: Request, user: { id: number; email: string; sessionVersion: number }, method = "password"): Promise<{ token: string; sessionId: string }> {
+  const device = requestDevice(req);
+  const expiresAt = new Date(Date.now() + JWT_TTL_SECONDS * 1000);
+  const session = await db.authSession.create({ data: { userId: user.id, ...device, loginMethod: method, expiresAt } });
+  const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion, sid: session.id });
+  return { token, sessionId: session.id };
 }
 
 export function authRouter(db: PrismaClient): Router {
@@ -461,7 +500,7 @@ export function authRouter(db: PrismaClient): Router {
       const input = RegisterSchema.parse(req.body);
       const nativeClient = req.header("x-arctester-client") === "mobile";
       if (!input.registrationNumber && !nativeClient) throw badRequest("Enter your diploma registration number.");
-      let registrationNumber: string | null = input.registrationNumber?.toUpperCase() ?? null;
+      const registrationNumber: string | null = input.registrationNumber?.toUpperCase() ?? null;
       let registrationCollegeCode = input.collegeCode;
       let registrationBranchCode = input.branchCode || null;
       let registrationBranchName = input.branchName;
@@ -511,6 +550,7 @@ export function authRouter(db: PrismaClient): Router {
       if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
+        await recordLoginEvent(db, req, input.email, user?.id ?? null, "failed", "password");
         recordLoginFailure(emailKey);
         recordLoginFailure(ipKey);
         const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
@@ -518,8 +558,16 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
-      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
-      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
+      if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
+      const totp = await db.totpCredential.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
+      if (totp?.enabledAt) {
+        const challenge = randomBytes(32).toString("base64url");
+        await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "totp-login", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+        await recordLoginEvent(db, req, input.email, user.id, "second-factor-required", "password");
+        return res.json({ ok: true, twoFactorRequired: true, challengeId: challenge, expiresIn: 300 });
+      }
+      await recordLoginEvent(db, req, input.email, user.id, "success", "password");
+      const { token } = await createAuthSession(db, req, user, "password");
       setSessionCookie(res, token);
       res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
     } catch (error) {
@@ -544,8 +592,9 @@ export function authRouter(db: PrismaClient): Router {
         return next(badRequest("Invalid email or password."));
       }
       clearLoginFailures(ip, input.email);
-      if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
-      const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion });
+      if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
+      await recordLoginEvent(db, req, input.email, user.id, "success", "password");
+      const { token } = await createAuthSession(db, req, user, "password");
       res.json({
         ok: true,
         token,
@@ -571,19 +620,18 @@ export function authRouter(db: PrismaClient): Router {
         if (payload) {
           const userId = Number(payload.sub);
           const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
-          if (Number.isSafeInteger(userId) && userId > 0 &&
-              Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
-            // Only revoke tokens from the version presented by this request.
-            // Replaying logout cannot invalidate a later sign-in.
-            await db.user.updateMany({
-              where: { id: userId, sessionVersion },
-              data: { sessionVersion: { increment: 1 } },
-            });
+          if (Number.isSafeInteger(userId) && userId > 0 && Number.isSafeInteger(sessionVersion) && sessionVersion >= 0) {
+            if (typeof payload.sid === "string") {
+              await db.authSession.updateMany({ where: { id: payload.sid, userId, revokedAt: null }, data: { revokedAt: new Date() } });
+            } else {
+              await db.authSession.updateMany({ where: { userId, loginMethod: "legacy-session", revokedAt: null }, data: { revokedAt: new Date() } });
+              await db.user.updateMany({ where: { id: userId, sessionVersion }, data: { sessionVersion: { increment: 1 } } });
+            }
           }
         }
       }
       clearSessionCookie(res);
-      res.json({ ok: true, message: "Signed out. Existing sessions were revoked." });
+      res.json({ ok: true, message: "This device session was revoked." });
     } catch (error) {
       next(error);
     }
@@ -602,6 +650,10 @@ export function authRouter(db: PrismaClient): Router {
       if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
         return next(forbidden("This session has been revoked. Sign in again."));
       }
+      const sessionId = typeof payload.sid === "string" ? payload.sid : "";
+      const trackedId = sessionId || "legacy-" + user.id + "-" + sha256(token).slice(0, 20);
+      const trackedSession = await db.authSession.findUnique({ where: { id: trackedId }, select: { revokedAt: true, expiresAt: true } });
+      if (trackedSession && (trackedSession.revokedAt || trackedSession.expiresAt <= new Date())) return next(forbidden("This device session has been revoked. Sign in again."));
       if (user.accessStatus !== "APPROVED") return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval."));
       res.json({ ok: true, user });
     } catch {
@@ -626,8 +678,9 @@ export function authRouter(db: PrismaClient): Router {
         data: { passwordHash, sessionVersion: { increment: 1 } },
         select: { id: true, email: true, sessionVersion: true },
       });
+      await db.authSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
       // Rotate the current session while revoking every other previously issued session.
-      const token = signJwt({ sub: String(updated.id), email: updated.email, sv: updated.sessionVersion });
+      const { token } = await createAuthSession(db, req, updated, "password-change");
       const cookieSession = Boolean(getCookie(req, COOKIE_NAME));
       if (cookieSession) setSessionCookie(res, token);
       res.json({
@@ -708,6 +761,264 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+
+
+  router.post("/2fa/totp/setup", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const existing = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (existing?.enabledAt) return next(conflict("Authenticator is already enabled. Disable it before re-enrolling."));
+      const secret = generateTotpSecret();
+      const encrypted = encryptTotpSecret(secret);
+      await db.totpCredential.upsert({
+        where: { userId: req.user!.id },
+        create: { userId: req.user!.id, secretEncrypted: encrypted },
+        update: { secretEncrypted: encrypted, enabledAt: null, recoveryCodesJson: "[]", lastUsedCounter: -1 },
+      });
+      const account = encodeURIComponent(req.user!.email);
+      const issuer = encodeURIComponent("ArcTester");
+      const uri = `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+      res.json({ ok: true, secret, otpauthUri: uri });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+      const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (!credential || credential.enabledAt) return next(badRequest("Start authenticator setup first."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code);
+      if (counter === null) return next(badRequest("The authenticator code is incorrect or expired."));
+      const recoveryCodes = generateRecoveryCodes();
+      await db.totpCredential.update({ where: { userId: req.user!.id }, data: { enabledAt: new Date(), lastUsedCounter: counter, recoveryCodesJson: JSON.stringify(recoveryCodes.map(hashRecoveryCode)) } });
+      res.json({ ok: true, enabled: true, recoveryCodes, message: "Save these recovery codes now. Each code can be used once." });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/2fa/status", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const [totp, passkeyCount] = await Promise.all([
+        db.totpCredential.findUnique({ where: { userId: req.user!.id }, select: { enabledAt: true, recoveryCodesJson: true } }),
+        db.passkeyCredential.count({ where: { userId: req.user!.id } }),
+      ]);
+      const recoveryCodesRemaining = totp?.enabledAt ? (JSON.parse(totp.recoveryCodesJson) as string[]).length : 0;
+      res.json({ ok: true, authenticatorEnabled: Boolean(totp?.enabledAt), recoveryCodesRemaining, passkeyCount });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/2fa/totp/disable", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ password: z.string().min(1).max(128), code: z.string().min(6).max(32) }).parse(req.body);
+      const user = await db.user.findUnique({ where: { id: req.user!.id }, select: { passwordHash: true } });
+      const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
+      if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) return next(forbidden("Password is incorrect."));
+      if (!credential?.enabledAt) return next(badRequest("Authenticator is not enabled."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code, Date.now(), credential.lastUsedCounter);
+      const recovery = (JSON.parse(credential.recoveryCodesJson) as string[]).map(hash => hash === hashRecoveryCode(input.code));
+      if (counter === null && !recovery.some(Boolean)) return next(forbidden("Authenticator or recovery code is incorrect."));
+      await db.totpCredential.delete({ where: { userId: req.user!.id } });
+      res.json({ ok: true, message: "Two-step verification disabled." });
+    } catch (error) { next(error); }
+  });
+
+  const completeTotpLogin = (nativeClient: boolean) => async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = z.object({ challengeId: z.string().min(20).max(100), code: z.string().min(6).max(32) }).parse(req.body);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
+      if (!challenge || challenge.purpose !== "totp-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("The verification request expired. Sign in again."));
+      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const credential = await db.totpCredential.findUnique({ where: { userId: challenge.userId } });
+      const user = await db.user.findUnique({ where: { id: challenge.userId } });
+      if (!credential?.enabledAt || !user || user.accessStatus !== "APPROVED") return next(forbidden("Two-step verification is unavailable for this account."));
+      const secret = decryptTotpSecret(credential.secretEncrypted);
+      const counter = verifyTotp(secret, input.code, Date.now(), credential.lastUsedCounter);
+      let valid = counter !== null;
+      if (counter !== null) {
+        const updated = await db.totpCredential.updateMany({ where: { id: credential.id, lastUsedCounter: { lt: counter } }, data: { lastUsedCounter: counter } });
+        valid = updated.count === 1;
+      } else {
+        const recovery = JSON.parse(credential.recoveryCodesJson) as string[];
+        const hash = hashRecoveryCode(input.code);
+        const index = recovery.indexOf(hash);
+        if (index >= 0) {
+          recovery.splice(index, 1);
+          await db.totpCredential.update({ where: { id: credential.id }, data: { recoveryCodesJson: JSON.stringify(recovery) } });
+          valid = true;
+        }
+      }
+      if (!valid) {
+        if (challenge.attempts + 1 >= 5) await db.authChallenge.deleteMany({ where: { id: challenge.id } });
+        return next(forbidden("Authenticator or recovery code is incorrect."));
+      }
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      await recordLoginEvent(db, req, user.email, user.id, "success", "password+totp");
+      const { token } = await createAuthSession(db, req, user, "password+totp");
+      if (!nativeClient) setSessionCookie(res, token);
+      res.json({ ok: true, ...(nativeClient ? { token, tokenType: "Bearer", expiresIn: JWT_TTL_SECONDS } : {}), user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
+    } catch (error) { next(error); }
+  };
+  router.post("/login/2fa", completeTotpLogin(false));
+  router.post("/token/2fa", completeTotpLogin(true));
+
+
+  function passkeyOrigin(req: Request): { origin: string; rpId: string } {
+    const origin = String(req.headers.origin ?? "");
+    const configured = (process.env.CORS_ORIGINS ?? "").split(",").map(value => value.trim()).filter(Boolean);
+    const parsedOrigin = origin ? new URL(origin) : null;
+    const localDevOrigin = process.env.NODE_ENV !== "production" && Boolean(parsedOrigin && parsedOrigin.hostname === "localhost");
+    if (!origin || (!configured.includes(origin) && !localDevOrigin)) throw forbidden("This origin is not configured for passkey sign-in.");
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && parsed.hostname === "localhost")) throw forbidden("Passkeys require a secure origin.");
+    return { origin, rpId: parsed.hostname };
+  }
+
+  router.post("/passkeys/register/options", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const { rpId } = passkeyOrigin(req);
+      const user = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, fullName: true } });
+      if (!user) return next(notFound("Account not found."));
+      const challenge = createWebAuthnChallenge();
+      await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "passkey-register", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+      const existing = await db.passkeyCredential.findMany({ where: { userId: user.id }, select: { credentialId: true } });
+      res.json({ ok: true, publicKey: { challenge, rp: { name: "ArcTester", id: rpId }, user: { id: base64urlEncode(Buffer.from(String(user.id))), name: user.email, displayName: user.fullName ?? user.email }, pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }], timeout: 300000, attestation: "none", authenticatorSelection: { residentKey: "preferred", userVerification: "required" }, excludeCredentials: existing.map(item => ({ type: "public-key", id: item.credentialId })) } });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/passkeys/register/verify", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ challenge: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), attestationObject: z.string().min(20), name: z.string().trim().min(1).max(80).optional(), transports: z.array(z.string().max(32)).max(8).optional() }).parse(req.body);
+      const { origin, rpId } = passkeyOrigin(req);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challenge) } });
+      if (!challenge || challenge.userId !== req.user!.id || challenge.purpose !== "passkey-register" || challenge.expiresAt <= new Date()) return next(forbidden("Passkey setup expired. Start again."));
+      verifyClientData(input.clientDataJSON, input.challenge, origin, "webauthn.create");
+      const attested = parseNoneAttestation(input.attestationObject, rpId);
+      if (attested.credentialId !== input.credentialId) return next(badRequest("Passkey credential ID does not match."));
+      const credential = await db.passkeyCredential.create({ data: { userId: req.user!.id, credentialId: attested.credentialId, publicKey: attested.publicKey, signCount: attested.signCount, name: input.name ?? "Passkey", transports: JSON.stringify(input.transports ?? []) } });
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      res.status(201).json({ ok: true, passkey: { id: credential.id, name: credential.name, createdAt: credential.createdAt } });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") return next(conflict("This passkey is already registered."));
+      next(error);
+    }
+  });
+
+  router.post("/passkeys/login/options", async (req, res, next) => {
+    try {
+      const input = z.object({ email: z.string().email().trim().toLowerCase() }).parse(req.body);
+      const { rpId } = passkeyOrigin(req);
+      const user = await db.user.findUnique({ where: { email: input.email }, select: { id: true, email: true } });
+      if (!user) return next(badRequest("No passkeys are available for this account."));
+      const credentials = await db.passkeyCredential.findMany({ where: { userId: user.id }, select: { credentialId: true, transports: true } });
+      if (!credentials.length) return next(badRequest("No passkeys are available for this account."));
+      const challenge = createWebAuthnChallenge();
+      await db.authChallenge.create({ data: { userId: user.id, challenge: sha256(challenge), purpose: "passkey-login", expiresAt: new Date(Date.now() + 5 * 60 * 1000) } });
+      res.json({ ok: true, challengeId: challenge, publicKey: { challenge, rpId, allowCredentials: credentials.map(item => ({ type: "public-key", id: item.credentialId, transports: JSON.parse(item.transports) as string[] })), timeout: 300000, userVerification: "required" } });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/passkeys/login/verify", async (req, res, next) => {
+    try {
+      const input = z.object({ challengeId: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), authenticatorData: z.string().min(20), signature: z.string().min(8) }).parse(req.body);
+      const { origin, rpId } = passkeyOrigin(req);
+      const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
+      if (!challenge || challenge.purpose !== "passkey-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("Passkey request expired. Start sign-in again."));
+      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const credential = await db.passkeyCredential.findUnique({ where: { credentialId: input.credentialId } });
+      if (!credential || credential.userId !== challenge.userId) return next(forbidden("Passkey could not be verified."));
+      verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
+      const counter = verifyPasskeyAssertion({ authenticatorData: input.authenticatorData, clientDataJSON: input.clientDataJSON, signature: input.signature, publicKey: credential.publicKey, expectedChallenge: input.challengeId, expectedOrigin: origin, rpId });
+      if ((credential.signCount > 0 || counter > 0) && counter <= credential.signCount) return next(forbidden("Passkey counter did not advance. Use another passkey or contact support."));
+      if (counter > 0) {
+        const counterUpdate = await db.passkeyCredential.updateMany({ where: { id: credential.id, signCount: credential.signCount }, data: { signCount: counter, lastUsedAt: new Date() } });
+        if (counterUpdate.count !== 1) return next(forbidden("Passkey was used concurrently or its counter changed. Try signing in again."));
+      } else {
+        await db.passkeyCredential.update({ where: { id: credential.id }, data: { lastUsedAt: new Date() } });
+      }
+      const user = await db.user.findUnique({ where: { id: challenge.userId } });
+      if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Account access is not approved."));
+      await db.authChallenge.delete({ where: { id: challenge.id } });
+      await recordLoginEvent(db, req, user.email, user.id, "success", "passkey");
+      const { token } = await createAuthSession(db, req, user, "passkey");
+      setSessionCookie(res, token);
+      res.json({ ok: true, user: { id: user.id, email: user.email, role: user.role, fullName: user.fullName, collegeName: user.collegeName, collegeCode: user.collegeCode, postalPin: user.postalPin, branchName: user.branchName, branchCode: user.branchCode, registrationNumber: user.registrationNumber } });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/passkeys", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const passkeys = await db.passkeyCredential.findMany({ where: { userId: req.user!.id }, orderBy: { createdAt: "desc" }, select: { id: true, name: true, createdAt: true, lastUsedAt: true, transports: true } });
+      res.json({ ok: true, passkeys: passkeys.map(item => ({ ...item, transports: JSON.parse(item.transports) as string[] })) });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/passkeys/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const result = await db.passkeyCredential.deleteMany({ where: { id: req.params.id, userId: req.user!.id } });
+      if (!result.count) return next(notFound("Passkey not found."));
+      res.json({ ok: true });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/sessions", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const token = readSessionToken(req);
+      let currentId = "";
+      if (token) {
+        try {
+          const payload = verifyJwt(token);
+          currentId = String(payload.sid ?? "");
+          if (!currentId) {
+            currentId = "legacy-" + req.user!.id + "-" + sha256(token).slice(0, 20);
+            const device = requestDevice(req);
+            await db.authSession.upsert({
+              where: { id: currentId },
+              create: { id: currentId, userId: req.user!.id, ...device, loginMethod: "legacy-session", createdAt: new Date(Number(payload.iat ?? nowSeconds()) * 1000), expiresAt: new Date(Number(payload.exp) * 1000) },
+              update: { lastSeenAt: new Date() },
+            });
+          }
+        } catch { /* requireAuth already validated */ }
+      }
+      const sessions = await db.authSession.findMany({
+        where: { userId: req.user!.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        orderBy: { lastSeenAt: "desc" },
+        select: { id: true, deviceName: true, platform: true, loginMethod: true, ipAddress: true, createdAt: true, lastSeenAt: true, expiresAt: true },
+      });
+      res.json({ ok: true, sessions: sessions.map(session => ({ ...session, current: session.id === currentId })) });
+    } catch (error) { next(error); }
+  });
+
+  router.delete("/sessions/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const result = await db.authSession.updateMany({
+        where: { id: req.params.id, userId: req.user!.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (result.count === 0) return next(notFound("Session not found or already revoked."));
+      res.json({ ok: true, message: "Session revoked." });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/sessions/revoke-all", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      await db.authSession.updateMany({ where: { userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await db.user.update({ where: { id: req.user!.id }, data: { sessionVersion: { increment: 1 } } });
+      res.json({ ok: true, message: "All sessions revoked. Sign in again on this device." });
+    } catch (error) { next(error); }
+  });
+
+  router.get("/login-history", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const events = await db.loginEvent.findMany({
+        where: { userId: req.user!.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: { id: true, email: true, result: true, method: true, ipAddress: true, userAgent: true, createdAt: true },
+      });
+      res.json({ ok: true, events });
+    } catch (error) { next(error); }
   });
 
   return router;

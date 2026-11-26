@@ -7,6 +7,7 @@ import {
   verifyJwt,
 } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
+import { totpAt } from "../src/totp.js";
 import {
   issueTestInvitation,
   postJson,
@@ -34,6 +35,13 @@ const STUDENT_PROFILE = {
   branchCode: "CM",
 };
 
+function fixtureRegistrationNumber(email: string): string {
+  if (email === "alice@example.com") return "24999-CM-053";
+  let hash = 0;
+  for (const character of email.trim().toLowerCase()) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
+  return "24999-CM-" + String(hash % 1000).padStart(3, "0");
+}
+
 function setCookieFromResponse(res: Response): void {
   const setCookie = res.headers.getSetCookie?.() ?? [];
   for (const cookie of setCookie) {
@@ -49,10 +57,15 @@ async function postJsonWithCookie(
   const headers: Record<string, string> = { "content-type": "application/json" };
   const session = cookieJar.get("ecet_session");
   if (session) headers.cookie = `ecet_session=${session}`;
+  let payload = body;
+  if (url.endsWith("/auth/register") && body && typeof body === "object" && !Array.isArray(body)) {
+    const input = body as Record<string, unknown>;
+    if (input.registrationNumber === "24999-CM-053" && typeof input.email === "string") payload = { ...input, registrationNumber: fixtureRegistrationNumber(input.email) };
+  }
   const res = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   setCookieFromResponse(res);
   return { status: res.status, json: await res.json(), headers: res.headers };
@@ -476,4 +489,61 @@ describe("auth — bearer token (native/mobile clients)", () => {
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
   });
+
+  it("tracks active sessions and previous login activity", async () => {
+    const email = "security-sessions@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "session-test-password" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    cookieJar.delete("ecet_session");
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "session-test-password" });
+    expect(login.status).toBe(200);
+    const sessions = await getJsonWithCookie(`${server.baseUrl}/auth/sessions`);
+    const sessionRows = (sessions.json as { sessions: { id: string; current: boolean; loginMethod: string }[] }).sessions;
+    expect(sessionRows).toHaveLength(1);
+    expect(sessionRows[0]?.current).toBe(true);
+    expect(sessionRows[0]?.loginMethod).toBe("password");
+    const history = await getJsonWithCookie(`${server.baseUrl}/auth/login-history`);
+    expect((history.json as { events: { result: string }[] }).events[0]?.result).toBe("success");
+    const revoked = await fetch(`${server.baseUrl}/auth/sessions/${sessionRows[0]!.id}`, { method: "DELETE", headers: { cookie: `ecet_session=${cookieJar.get("ecet_session")}` } });
+    expect(revoked.status).toBe(200);
+    expect((await getJsonWithCookie(`${server.baseUrl}/auth/sessions`)).status).toBe(403);
+  });
+
+  it("requires TOTP after password sign-in and accepts a one-time recovery code", async () => {
+    process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
+    const email = "security-totp@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "totp-test-password" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    cookieJar.delete("ecet_session");
+    await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-test-password" });
+    const setup = await postJsonWithCookie(`${server.baseUrl}/auth/2fa/totp/setup`, {});
+    expect(setup.status).toBe(200);
+    const secret = (setup.json as { secret: string }).secret;
+    const counter = Math.floor(Date.now() / 30_000);
+    const enabled = await postJsonWithCookie(`${server.baseUrl}/auth/2fa/totp/verify-setup`, { code: totpAt(secret, counter) });
+    expect(enabled.status).toBe(200);
+    const recovery = (enabled.json as { recoveryCodes: string[] }).recoveryCodes[0]!;
+    cookieJar.delete("ecet_session");
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-test-password" });
+    const challenge = (login.json as { twoFactorRequired: boolean; challengeId: string });
+    expect(challenge.twoFactorRequired).toBe(true);
+    const verified = await postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId: challenge.challengeId, code: recovery });
+    expect(verified.status).toBe(200);
+    expect((verified.json as { user: { email: string } }).user.email).toBe(email);
+  });
+  it("lists and revokes a legacy session issued before session tracking", async () => {
+    const user = await server.db.user.findUnique({ where: { email: "mobile@example.com" }, select: { id: true, email: true, sessionVersion: true } });
+    expect(user).toBeTruthy();
+    const legacyToken = signJwt({ sub: String(user!.id), email: user!.email, sv: user!.sessionVersion });
+    cookieJar.set("ecet_session", legacyToken);
+    const sessions = await getJsonWithCookie(`${server.baseUrl}/auth/sessions`);
+    expect(sessions.status).toBe(200);
+    const rows = (sessions.json as { sessions: { id: string; current: boolean; loginMethod: string }[] }).sessions;
+    expect(rows.some(row => row.current && row.loginMethod === "legacy-session")).toBe(true);
+    const legacy = rows.find(row => row.current)!;
+    const revoke = await fetch(`${server.baseUrl}/auth/sessions/${legacy.id}`, { method: "DELETE", headers: { cookie: `ecet_session=${legacyToken}` } });
+    expect(revoke.status).toBe(200);
+    expect((await getJsonWithCookie(`${server.baseUrl}/auth/me`)).status).toBe(403);
+  });
+
 });
