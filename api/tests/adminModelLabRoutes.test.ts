@@ -58,6 +58,6 @@ describe("administrator Model Lab REST workspace", () => {
 
   it("requires administrator authentication", async () => {
     const response = await fetch(server.baseUrl + "/admin/model-lab");
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
   });
 });
