@@ -169,7 +169,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       } });
       if (!material || !material.fileName || !material.contentBase64) return next(notFound("Study file was not found."));
       const account = await db.user.findUnique({ where: { id: req.user!.id }, select: {
-        role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true,
+        id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true,
       } });
       if (!account) return next(notFound("Study file was not found."));
       if (material.status !== "PUBLISHED" && account.role !== "ADMIN") return next(notFound("Study file was not found."));
