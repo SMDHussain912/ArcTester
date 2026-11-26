@@ -32,6 +32,19 @@ describe("combined student approval and management", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("status=APPROVED"), expect.objectContaining({ credentials: "include" }));
   });
 
+  it("passes college and branch filters to the student directory API", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => Promise.resolve(response({ students: [], page: 1, limit: 25, total: 0, totalPages: 1, statusCounts: { PENDING: 0, APPROVED: 0, REJECTED: 0 } })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AdminStudents onError={vi.fn()} onNotice={vi.fn()} />);
+    await screen.findByText("No students found");
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter by college" }), { target: { value: "Polytechnic" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter by branch" }), { target: { value: "Computer" } });
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([input]) => new URL(String(input)));
+      expect(urls.some((url) => url.searchParams.get("college") === "Polytechnic" && url.searchParams.get("branch") === "Computer")).toBe(true);
+    });
+  });
+
   it("approves selected pending accounts in bulk", async () => {
     const second = { ...pendingStudent, id: 43, email: "pending-two@student.test", registrationNumber: "24010-CM-043" };
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
