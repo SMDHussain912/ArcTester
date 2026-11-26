@@ -33,6 +33,15 @@ describe("student audit timeline and exports", () => {
   });
   afterAll(async () => { await server.close(); });
 
+  it("records successful login with server-resolved account identity and no credentials", async () => {
+    const event = await waitForAudit("LOGIN", studentId);
+    expect(event.actorId).toBe(studentId);
+    expect(event.subjectUserId).toBe(studentId);
+    expect(event.actorRole).toBe("STUDENT");
+    expect(event.contextJson).not.toContain("correct-horse-battery");
+    expect(event.contextJson).not.toContain("token");
+  });
+
   it("writes a server-derived profile event and returns a filtered student timeline", async () => {
     const response = await patch("/admin/students/" + studentId, { fullName: "Changed Audit Student" });
     expect(response.status).toBe(200);
