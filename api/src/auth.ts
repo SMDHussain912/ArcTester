@@ -169,7 +169,7 @@ export const StudentAcademicProfileSchema = z.object({
 });
 
 export const StudentAcademicProfileUpdateSchema = StudentAcademicProfileSchema.extend({
-  registrationNumber: z.string().trim().regex(/^\\d{5}-[A-Z]{1,3}-\\d{3}$/i, "Enter a valid diploma registration number, e.g. 24010-CM-053.").or(z.literal("")).optional(),
+  registrationNumber: z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\d{3}$/i, "Enter a valid diploma registration number, e.g. 24010-CM-053.").or(z.literal("")).optional(),
 });
 
 const REGISTRATION_BRANCHES: Record<string, { code: string; name: string }> = {
@@ -182,7 +182,7 @@ const REGISTRATION_BRANCHES: Record<string, { code: string; name: string }> = {
 };
 
 function validateRegistrationIdentity(registrationNumber: string, collegeCode: string, branchCode: string, branchName: string): { collegeCode: string; branchCode: string; branchName: string } {
-  const parts = registrationNumber.toUpperCase().match(/^(\\d{2})(\\d{3})-([A-Z]{1,3})-(\\d{3})$/);
+  const parts = registrationNumber.toUpperCase().match(/^(\d{2})(\d{3})-([A-Z]{1,3})-(\d{3})$/);
   if (!parts) throw badRequest("Registration number must look like 24010-CM-053.");
   const branch = REGISTRATION_BRANCHES[parts[3]];
   if (!branch) throw badRequest("Diploma registration number has an unsupported branch code.");
