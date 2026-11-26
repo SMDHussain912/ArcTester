@@ -7,7 +7,7 @@ type AcademicField=keyof AcademicRegistration;
 type AuthScreenProps={email:string;password:string;register:boolean;busy:boolean;error:string;academicProfile:AcademicRegistration;onAcademicChange:(field:AcademicField,value:string)=>void;onEmailChange:(value:string)=>void;onPasswordChange:(value:string)=>void;onRegisterChange:(value:boolean)=>void;onAuthenticate:(captchaToken?:string)=>void;twoFactorChallenge?:string;onCompleteTwoFactor?:(challengeId:string,code:string)=>void;onPasskeyAuthenticate?:()=>void};
 type SearchOption={value:string;label:string;detail?:string;code?:string};
 declare const __TURNSTILE_SITE_KEY__: string;
-const TURNSTILE_SITE_KEY=__TURNSTILE_SITE_KEY__?.trim()??"";
+const TURNSTILE_SITE_KEY=typeof __TURNSTILE_SITE_KEY__ === "string" ? __TURNSTILE_SITE_KEY__.trim() : "";
 const BRANCH_OPTIONS:SearchOption[]=[
 {value:"Computer Engineering (CME)",label:"Computer Engineering (CME)",detail:"Registration code: CM",code:"CM"},
 {value:"Electronics and Communication Engineering (ECE)",label:"Electronics and Communication Engineering (ECE)",detail:"Registration code: EC",code:"EC"},
