@@ -196,6 +196,16 @@ describe("auth", () => {
     expect(response.status).toBe(409);
     expect((await response.json() as { error: string }).error).toContain("already connected");
   });
+  it("denies academic profile edits for accounts that are not approved students", async () => {
+    const email = "profile-pending@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "profile-password-123" });
+    const before = await server.db.user.findUnique({ where: { email }, select: { fullName: true, sessionVersion: true } });
+    const response = await postJsonWithCookie(`${server.baseUrl}/auth/profile`, { ...STUDENT_PROFILE, fullName: "Pending Changed" });
+    expect(response.status).toBe(403);
+    const after = await server.db.user.findUnique({ where: { email }, select: { fullName: true, sessionVersion: true } });
+    expect(after).toEqual(before);
+  });
+
   it("rejects duplicate email", async () => {
     const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
