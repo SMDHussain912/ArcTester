@@ -67,7 +67,7 @@ function base64UrlToBytes(value: string): Uint8Array {
   const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
   return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
 }
-function bytesToBase64Url(value: ArrayBuffer): string {
+function toWebAuthnBufferSource(value: Uint8Array): ArrayBuffer {\n  const buffer = new ArrayBuffer(value.byteLength);\n  new Uint8Array(buffer).set(value);\n  return buffer;\n}\nfunction bytesToBase64Url(value: ArrayBuffer): string {
   const bytes = new Uint8Array(value); let binary = "";
   bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -328,7 +328,7 @@ export default function App() {
       if (!email.trim()) throw new Error("Enter your email address first.");
       if (!navigator.credentials) throw new Error("Passkeys are not supported by this browser.");
       const options = await request<{ challengeId: string; publicKey: { challenge: string; rpId: string; allowCredentials: { type: "public-key"; id: string; transports?: AuthenticatorTransport[] }[]; timeout: number; userVerification: UserVerificationRequirement } }>("/auth/passkeys/login/options", { method: "POST", body: JSON.stringify({ email }) });
-      const publicKey: PublicKeyCredentialRequestOptions = { ...options.publicKey, challenge: base64UrlToBytes(options.publicKey.challenge), allowCredentials: options.publicKey.allowCredentials.map(item => ({ ...item, id: base64UrlToBytes(item.id) })) };
+      const publicKey: PublicKeyCredentialRequestOptions = { ...options.publicKey, challenge: toWebAuthnBufferSource(base64UrlToBytes(options.publicKey.challenge)), allowCredentials: options.publicKey.allowCredentials.map(item => ({ ...item, id: toWebAuthnBufferSource(base64UrlToBytes(item.id)) })) };
       const credential = await navigator.credentials.get({ publicKey }) as PublicKeyCredential | null;
       if (!credential) throw new Error("Passkey sign-in was cancelled.");
       const response = credential.response as AuthenticatorAssertionResponse;
