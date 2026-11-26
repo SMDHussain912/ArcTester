@@ -224,6 +224,28 @@ describe("auth", () => {
     expect(saved).toMatchObject({ sessionVersion: 1, accessStatus: "APPROVED", registrationNumber: "24999-CM-054", collegeCode: "999", branchCode: "CM" });
   });
 
+  it("reauthenticates with password and rotates the current session for security changes", async () => {
+    const email = "reauth-session@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "reauth-password-123" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" });
+    expect(login.status).toBe(200);
+    const oldToken = cookieJar.get("ecet_session");
+    expect(oldToken).toBeTruthy();
+
+    const reauth = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123" });
+    expect(reauth.status).toBe(200);
+    expect(reauth.json).toMatchObject({ ok: true, reauthenticated: true });
+    const newToken = cookieJar.get("ecet_session");
+    expect(newToken).toBeTruthy();
+    expect(newToken).not.toBe(oldToken);
+
+    const oldSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${oldToken}` } });
+    expect(oldSession.status).toBe(403);
+    const currentSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${newToken}` } });
+    expect(currentSession.status).toBe(200);
+  });
+
   it("rejects academic profile edits when registration number, college and branch disagree", async () => {
     const email = "profile-invalid-identity@example.com";
     await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "profile-password-123" });
