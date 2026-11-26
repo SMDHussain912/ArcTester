@@ -15,6 +15,7 @@ describe("administrator workspace navigation", () => {
       if (path === "/admin/exams") return Promise.resolve(response({ exams: [] }));
       if (path === "/admin/students") return Promise.resolve(response({ students: [] }));
       if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
+      if (path === "/admin/mcp-keys") return Promise.resolve(response({ keys: [] }));
       if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
       if (path === "/admin/study-materials") return Promise.resolve(response({ materials: [] }));
       if (path === "/admin/submissions/review-required") return Promise.resolve(response({ submissions: [] }));
