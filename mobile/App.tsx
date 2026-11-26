@@ -1094,6 +1094,7 @@ export default function App() {
     sessionIdentityRef.current = null;
     setBusy(false);
     await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
+    await SecureStore.deleteItemAsync("arctester-refresh-token").catch(() => undefined);
     setToken(null);
     const previousUserId = user?.id;
     setUser(null);
