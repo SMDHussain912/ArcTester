@@ -13,7 +13,7 @@ export default function AdminMcpAssistant(){
  async function copy(text:string){try{await navigator.clipboard.writeText(text);setNotice("Copied.");}catch{setError("Clipboard blocked; select and copy manually.");}}
  const config=JSON.stringify({url:endpoint,transport:"streamable-http",headers:{Authorization:secret?"Bearer "+secret:"Bearer <YOUR_ADMIN_MCP_KEY>"}},null,2);
  return <section className="admin-mcp-assistant">
-  <div className="admin-page-heading"><div><p className="eyebrow">MODEL LAB</p><h1>Model Lab &amp; MCP</h1><p>Connect an AI agent to approved administrator tools. Model-control scopes let it create provenance-labelled datasets, queue training jobs, inspect verification data, record evaluations, register candidates, and activate verified versions.</p></div><button className="ghost" disabled={busy} onClick={()=>void refresh()}>Refresh keys</button></div>
+  <div className="admin-page-heading"><div><p className="eyebrow">ADMINISTRATOR MCP</p><h1>MCP keys</h1><p>Connect an AI agent to approved administrator tools. Model-control scopes let it create provenance-labelled datasets, queue training jobs, inspect verification data, record evaluations, register candidates, and activate verified versions.</p></div><button className="ghost" disabled={busy} onClick={()=>void refresh()}>Refresh keys</button></div>
   {error&&<div className="error" role="alert">{error}</div>}{notice&&<div className="success" role="status">{notice}</div>}
   <article className="admin-card admin-mcp-card"><h2>Connect your AI client</h2><p>Generate a scoped key. The secret is returned once; stored credentials are hashed. Revoke a key immediately if it is exposed.</p>
    <label>Key label<input value={name} onChange={e=>setName(e.target.value)} maxLength={80}/></label>
