@@ -52,7 +52,7 @@ function classify(method: string, path: string, status: number): Classified | nu
   if (path === "/auth/profile" && upper === "PATCH") return { action: "STUDENT_PROFILE_CHANGE", resourceType: "STUDENT", resourceId: "" };
   if (path === "/auth/logout" || (/^\/auth\/sessions\/(?:revoke-all|[^/]+)/i.test(path) && upper !== "GET")) return { action: "SESSION_REVOKED", resourceType: "SESSION", resourceId: "" };
   if (/^\/auth\/(?:change-password|devices|invitations)/i.test(path) && upper !== "GET") return { action: "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH", resourceId: "" };
-  if (/^\\/auth\\/passkeys\\/login\\//i.test(path)) return { action: status < 400 ? "PASSKEY_LOGIN" : "PASSKEY_LOGIN_FAILURE", resourceType: "AUTH", resourceId: "" };
+  if (/^\/auth\/passkeys\/login\//i.test(path)) return { action: status < 400 ? "PASSKEY_LOGIN" : "PASSKEY_LOGIN_FAILURE", resourceType: "AUTH", resourceId: "" };
   if (/^\/auth\/(?:login|signin|sign-in|verify|totp|2fa|passkey)/i.test(path)) {
     return { action: /login|signin|sign-in/i.test(path) ? (status < 400 ? "LOGIN" : "LOGIN_FAILURE") : "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH", resourceId: "" };
   }
