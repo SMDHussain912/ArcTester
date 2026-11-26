@@ -405,11 +405,11 @@ function getCookie(req: Request, name: string): string | null {
 }
 
 function sessionCookieSameSite(secure: boolean): "Lax" | "None" {
-  // The web app and API are hosted on different sites (Vercel/localhost + Render).
-  // Production cookies therefore need SameSite=None; Secure to accompany CORS credentials.
-  // Set COOKIE_SAME_SITE=lax explicitly only for a same-site deployment.
-  if (!secure || process.env.COOKIE_SAME_SITE?.toLowerCase() === "lax") return "Lax";
-  return "None";
+  // The production web client (Vercel) and API (Render) are cross-site.
+  // Always use SameSite=None; Secure in production so credentialed browser
+  // requests can carry the session cookie. COOKIE_SAME_SITE=Lax from an old
+  // deployment setting must not silently break /auth/me and security flows.
+  return secure ? "None" : "Lax";
 }
 
 function setSessionCookie(res: Response, token: string): void {
@@ -953,7 +953,7 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/2fa/totp/verify-setup", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
+  router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
       const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
@@ -1070,7 +1070,7 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/passkeys/register/verify", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
+  router.post("/passkeys/register/verify", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ challenge: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), attestationObject: z.string().min(20), name: z.string().trim().min(1).max(80).optional(), transports: z.array(z.string().max(32)).max(8).optional() }).parse(req.body);
       const { origin, rpId } = passkeyOrigin(req);
