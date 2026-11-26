@@ -1,22 +1,57 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 type AuditRequest = Request & { user?: { id: number; email: string } };
-
 type Classified = { action: string; resourceType: string; resourceId: string; subjectIdFromPath?: number };
+type AuditHashFields = {
+  id: string; actorId: number | null; actorRole: string; subjectUserId: number | null;
+  action: string; outcome: string; resourceType: string; resourceId: string; requestId: string;
+  route: string; collegeCode: string; branchCode: string; contextJson: string; createdAt: Date; previousHash: string;
+};
+export type AuditWrite = Omit<Prisma.AuditEventUncheckedCreateInput, "id" | "createdAt" | "previousHash" | "eventHash"> & { id?: string; createdAt?: Date };
+
+export function computeAuditEventHash(event: AuditHashFields): string {
+  const canonical = {
+    id: event.id, actorId: event.actorId, actorRole: event.actorRole, subjectUserId: event.subjectUserId,
+    action: event.action, outcome: event.outcome, resourceType: event.resourceType, resourceId: event.resourceId,
+    requestId: event.requestId, route: event.route, collegeCode: event.collegeCode, branchCode: event.branchCode,
+    contextJson: event.contextJson, createdAt: event.createdAt.toISOString(), previousHash: event.previousHash,
+  };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+/** Appends events in a globally serialized, monotonic hash chain shared by all API instances. */
+export async function writeAuditEvent(db: PrismaClient, input: AuditWrite) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(73198412)`;
+    const latest = await tx.auditEvent.findFirst({ orderBy: { createdAt: "desc" }, select: { eventHash: true, createdAt: true } });
+    let createdAt = input.createdAt ?? new Date();
+    if (latest && createdAt.getTime() <= latest.createdAt.getTime()) createdAt = new Date(latest.createdAt.getTime() + 1);
+    const id = input.id ?? randomUUID();
+    const previousHash = latest?.eventHash ?? "GENESIS";
+    const fields: AuditHashFields = {
+      id, actorId: input.actorId ?? null, actorRole: input.actorRole, subjectUserId: input.subjectUserId ?? null,
+      action: input.action, outcome: input.outcome, resourceType: input.resourceType, resourceId: input.resourceId,
+      requestId: input.requestId, route: input.route, collegeCode: input.collegeCode, branchCode: input.branchCode,
+      contextJson: input.contextJson, createdAt, previousHash,
+    };
+    const eventHash = computeAuditEventHash(fields);
+    return tx.auditEvent.create({ data: { ...input, id, createdAt, previousHash, eventHash } });
+  });
+}
 
 function classify(method: string, path: string, status: number): Classified | null {
   const upper = method.toUpperCase();
   if (path === "/auth/profile" && upper === "PATCH") return { action: "STUDENT_PROFILE_CHANGE", resourceType: "STUDENT", resourceId: "" };
   if (/^\/auth\/(?:login|signin|sign-in|verify|totp|2fa|passkey)/i.test(path)) {
-    return { action: /login|signin|sign-in/i.test(path) ? (status < 400 ? "LOGIN" : "LOGIN_FAILURE") : "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH" , resourceId: "" };
+    return { action: /login|signin|sign-in/i.test(path) ? (status < 400 ? "LOGIN" : "LOGIN_FAILURE") : "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH", resourceId: "" };
   }
   const student = path.match(/^\/admin\/students\/(\d+)(?:\/(access))?$/);
   if (student) {
     const studentId = Number(student[1]);
     if (Number.isSafeInteger(studentId) && studentId > 0) {
-      if (student[2] || (upper === "PATCH" && /\/access\//.test(path))) return { action: "STUDENT_APPROVAL", resourceType: "STUDENT", resourceId: String(studentId), subjectIdFromPath: studentId };
+      if (student[2]) return { action: "STUDENT_APPROVAL", resourceType: "STUDENT", resourceId: String(studentId), subjectIdFromPath: studentId };
       if (upper === "DELETE") return { action: "STUDENT_ACCOUNT_ANONYMIZED", resourceType: "STUDENT", resourceId: String(studentId), subjectIdFromPath: studentId };
       if (upper === "PATCH") return { action: "STUDENT_PROFILE_CHANGE", resourceType: "STUDENT", resourceId: String(studentId), subjectIdFromPath: studentId };
     }
@@ -34,15 +69,11 @@ function classify(method: string, path: string, status: number): Classified | nu
   if (/^\/(?:questions|question-bank|practice)/i.test(path)) return { action: "QUESTION_ACTIVITY", resourceType: "QUESTION", resourceId: "" };
   return null;
 }
-
 function safeRoute(path: string): string {
-  return path.split("/").map((part) => /^\d+$/.test(part) ? ":id" : /^[a-z0-9]{20,}$/i.test(part) ? ":resource" : part).join("/");
+  return path.split("/").map(part => /^\d+$/.test(part) ? ":id" : /^[a-z0-9]{20,}$/i.test(part) ? ":resource" : part).join("/");
 }
 
-/**
- * Captures only route/action/outcome and server-resolved actor/subject identity.
- * It never persists request bodies, query strings, cookies, credentials, IPs or user agents.
- */
+/** Captures route/action/outcome and server-resolved identity; never stores request bodies or auth material. */
 export function auditRequestMiddleware(db: PrismaClient) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const requestId = randomUUID();
@@ -56,7 +87,7 @@ export function auditRequestMiddleware(db: PrismaClient) {
         if (!classified) return;
         let actorId = auditReq.user?.id ?? null;
         let subjectUserId = classified.subjectIdFromPath ?? actorId;
-        // Login identity is resolved from the database; the submitted email is never stored in the event.
+        // Login identity is resolved by database lookup; submitted email is not stored in the event.
         if (!actorId && classified.action.startsWith("LOGIN")) {
           const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
           if (email) {
@@ -70,26 +101,15 @@ export function auditRequestMiddleware(db: PrismaClient) {
           actorId ? db.user.findUnique({ where: { id: actorId }, select: { role: true } }) : Promise.resolve(null),
           identityId ? db.user.findUnique({ where: { id: identityId }, select: { collegeCode: true, branchCode: true } }) : Promise.resolve(null),
         ]);
-        await db.auditEvent.create({
-          data: {
-            actorId,
-            actorRole: actor?.role ?? "UNKNOWN",
-            subjectUserId,
-            action: classified.action,
-            outcome: res.statusCode < 400 ? "SUCCESS" : "FAILURE",
-            resourceType: classified.resourceType,
-            resourceId: classified.resourceId.slice(0, 120),
-            requestId,
-            route: safeRoute(path).slice(0, 240),
-            collegeCode: subject?.collegeCode ?? "",
-            branchCode: subject?.branchCode ?? "",
-            contextJson: JSON.stringify({ method: req.method.toUpperCase(), statusCode: res.statusCode }),
-          },
+        await writeAuditEvent(db, {
+          actorId, actorRole: actor?.role ?? "UNKNOWN", subjectUserId,
+          action: classified.action, outcome: res.statusCode < 400 ? "SUCCESS" : "FAILURE",
+          resourceType: classified.resourceType, resourceId: classified.resourceId.slice(0, 120),
+          requestId, route: safeRoute(path).slice(0, 240),
+          collegeCode: subject?.collegeCode ?? "", branchCode: subject?.branchCode ?? "",
+          contextJson: JSON.stringify({ method: req.method.toUpperCase(), statusCode: res.statusCode }),
         });
-      })().catch(() => {
-        // Audit persistence failures must not leak request data or break a completed API response.
-        console.error("ArcTester audit event persistence failed");
-      });
+      })().catch(() => console.error("ArcTester audit event persistence failed"));
     });
     next();
   };
