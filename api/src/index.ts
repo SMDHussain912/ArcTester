@@ -29,6 +29,7 @@ import { adminStudentRouter } from "./adminStudentRoutes.js";
 import { auditRequestMiddleware } from "./audit.js";
 import { studentAuditRouter } from "./studentAuditRoutes.js";
 import { validateProductionSecurityConfig } from "./securityConfig.js";
+import { opsMetricsMiddleware, opsMetricsRouter, startOpsMetricsHeartbeat } from "./opsMetrics.js";
 
 
 const db = new PrismaClient();
@@ -154,6 +155,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   const app = express();
   // requireAuth resolves the same injected client used by every router and test schema.
   app.locals.db = database;
+  const stopOpsMetricsHeartbeat = process.env.NODE_ENV === "test" ? () => undefined : startOpsMetricsHeartbeat(database);
+  app.locals.stopOpsMetricsHeartbeat = stopOpsMetricsHeartbeat;
   const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
   if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 10) {
     throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 10 and match the deployed proxy chain.");
@@ -182,6 +185,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   });
   app.use(cookieCsrfGuard);
   app.use(auditRequestMiddleware(database));
+  app.use(opsMetricsMiddleware());
+  app.use(opsMetricsRouter(database));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
@@ -243,6 +248,7 @@ if (process.env.NODE_ENV !== "test") {
     if (shutdownStarted) return;
     shutdownStarted = true;
     console.log(`ecet-api received ${signal}; draining requests`);
+    (app.locals as { stopOpsMetricsHeartbeat?: () => void }).stopOpsMetricsHeartbeat?.();
     server.close((error) => {
       if (error) {
         console.error("ecet-api HTTP shutdown failed", error);

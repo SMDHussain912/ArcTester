@@ -1100,3 +1100,29 @@ model AuthRateLimitBucket {
   @@index([updatedAt])
   @@map("auth_rate_limit_buckets")
 }
+
+
+/// Aggregated per-process operational snapshots for the administrator fleet monitor.
+/// No request paths, student identifiers, raw IP addresses, or secrets are stored.
+model ServerInstanceMetric {
+  instanceId       String   @id @map("instance_id")
+  hostname         String
+  version          String
+  buildSha         String   @map("build_sha")
+  startedAt        DateTime @map("started_at")
+  lastSeenAt       DateTime @map("last_seen_at")
+  cpuPercent       Float    @default(0) @map("cpu_percent")
+  rssBytes         BigInt   @default(0) @map("rss_bytes")
+  heapUsedBytes    BigInt   @default(0) @map("heap_used_bytes")
+  uptimeSeconds    Int      @default(0) @map("uptime_seconds")
+  activeRequests   Int      @default(0) @map("active_requests")
+  requestsTotal    BigInt   @default(0) @map("requests_total")
+  errorsTotal      BigInt   @default(0) @map("errors_total")
+  requestRate      Float    @default(0) @map("request_rate")
+  p50LatencyMs    Float    @default(0) @map("p50_latency_ms")
+  p95LatencyMs    Float    @default(0) @map("p95_latency_ms")
+  dbLatencyMs      Float?   @map("db_latency_ms")
+
+  @@index([lastSeenAt])
+  @@map("server_instance_metrics")
+}

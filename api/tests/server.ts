@@ -85,6 +85,7 @@ export async function startTestServer(
 
   const close = async () => {
     testDatabases.delete(base);
+    (app.locals as { stopOpsMetricsHeartbeat?: () => void }).stopOpsMetricsHeartbeat?.();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await flushAuditEvents(db);
     await db.$disconnect();

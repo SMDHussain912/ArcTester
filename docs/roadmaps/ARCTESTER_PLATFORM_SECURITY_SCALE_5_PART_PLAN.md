@@ -1,6 +1,6 @@
 # ArcTester Platform Consolidation, Security and Scale Plan
 
-**Status:** Parts 1–4 merged and CI-verified. Part 4 PR #198 was squash-merged as `2e42603ee6f3a87c46717e5269419f8214ac2696`; all five CI jobs passed on exact PR head `917181389dc3000ba2648f7a432e6e470e087241` (run #3374). Production configuration, published privacy notice/contact details, hosting retention/scheduler, and qualified legal/security review remain deployment acceptance gates.  
+**Status:** Parts 1–4 merged and CI-verified. Part 5 is now in progress on branch `part-5-server-ops-monitoring`, PR #199. The first delivery includes the shared API-instance fleet monitor, two-app-instance shared-state tests, an operations runbook, and a mobile Account Security center. Existing foundations verified before Part 5: `/health` liveness, `/ready` database readiness, PostgreSQL-backed shared API throttling, and the separate exam live-invigilation monitor. Multi-process staging validation, hosting/load-balancer configuration, and remaining Android parity checks are still outstanding. Part 4 production configuration, published privacy notice/contact details, hosting retention/scheduler, and qualified legal/security review remain deployment acceptance gates.  
 **Implementation rule:** Deliver one part at a time on a feature branch/PR. Keep CI green before merge; do not deploy unmerged changes to production.
 
 This roadmap consolidates the requested admin UX, academic content targeting, account security, auditability, infrastructure monitoring, and Android parity.

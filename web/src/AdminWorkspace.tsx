@@ -18,6 +18,7 @@ import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } fro
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import AdminStudents from "./AdminStudents";
 import AdminSettings from "./AdminSettings";
+import AdminSystemMonitor from "./AdminSystemMonitor";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
 
@@ -190,7 +191,7 @@ export default function AdminWorkspace(p:Props){
   {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
   {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
   {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
-  {label:"System",items:[["settings","Settings","⚙"]]}
+  {label:"System",items:[["system-monitor","Server monitor","▥"],["settings","Settings","⚙"]]}
  ];
  const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
@@ -205,6 +206,7 @@ export default function AdminWorkspace(p:Props){
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} email={p.email} onSignOut={p.signOut} />}
+   {tab==="system-monitor"&&<AdminSystemMonitor />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
     total={liveSessionsTotal}

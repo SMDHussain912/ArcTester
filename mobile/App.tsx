@@ -22,6 +22,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { deleteLocalValue, getLocalValue, setLocalValue } from "./src/localSettings";
 import StudentPracticeBuilder, { type PracticePaperConfig } from "./src/StudentPracticeBuilder";
 import StudentExamCenter from "./src/StudentExamCenter";
+import StudentSecurityCenter from "./src/StudentSecurityCenter";
 import StudentConceptLibrary from "./src/StudentConceptLibrary";
 import { clearOfflineLearningPackage, getOfflineLearningPackage, saveOfflineLearningPackage, type OfflineLearningPackage } from "./src/learningStore";
 import OfflinePracticeLibrary from "./src/OfflinePracticeLibrary";
@@ -162,7 +163,7 @@ export default function App() {
   const [result, setResult] = useState<PracticeResult | null>(null);
   const [hasSavedPracticeAttempt, setHasSavedPracticeAttempt] = useState(false);
   const [checkingPracticeRecovery, setCheckingPracticeRecovery] = useState(false);
-  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "learn" | "profile" | "settings">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "practice" | "exams" | "learn" | "profile" | "settings" | "security">("home");
   const [practicePresetSubject, setPracticePresetSubject] = useState<string | undefined>(undefined);
   const [lessonSession, setLessonSession] = useState(false);
   const [speedRoundSession, setSpeedRoundSession] = useState(false);
@@ -1493,6 +1494,7 @@ export default function App() {
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings</Text>
             <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>App preferences and account controls</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => setActiveTab("security")} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Review account security & sessions</Text></TouchableOpacity>
             <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>DAILY GOAL & STREAK REWARDS</Text>
               <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{gamification ? gamification.xpBalance + " spendable XP · " + gamification.streakFreezeInventory + "/2 streak freezes" : "Loading your rewards…"}</Text>
@@ -1512,6 +1514,8 @@ export default function App() {
             <TouchableOpacity onPress={refreshQuestionBank} disabled={busy} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>{busy ? "Refreshing…" : "Refresh question bank"}</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => void signOut()} style={styles.dangerButton}><MaterialCommunityIcons name="logout" size={18} color="#b42318" /><Text style={styles.dangerText}>Sign out</Text></TouchableOpacity>
           </Animated.View>
+        ) : activeTab === "security" ? (
+          <Animated.View style={animatedEntrance(entrance)}><StudentSecurityCenter api={api} darkMode={darkMode} onBack={() => setActiveTab("settings")} onSignOut={() => void signOut()} /></Animated.View>
         ) : activeTab === "profile" ? (
           <Animated.View style={[styles.card, animatedEntrance(entrance), darkMode && { backgroundColor: "#172235", borderColor: "#26364d" }]}>
             <View style={styles.profileAvatar}>
