@@ -23,6 +23,8 @@ describe("AdminSystemMonitor", () => {
     expect(screen.getByText("HEALTHY")).toBeTruthy();
     expect(screen.getByText("12.5%")).toBeTruthy();
     expect(screen.getByText("72 ms")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "CPU 12.5 percent" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Heap 50 percent of RSS" })).toBeTruthy();
     expect(screen.getByText(/shared PostgreSQL/)).toBeTruthy();
   });
 
@@ -37,7 +39,7 @@ describe("AdminSystemMonitor", () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminSystemMonitor />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh metrics" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Refresh metrics" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
