@@ -82,6 +82,7 @@ describe("versioned exam management", () => {
         explanation: "A queue follows first-in, first-out order.",
         source: "Exam route test",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "exam-route-question-fifo-unique",
       },
     });
@@ -117,6 +118,8 @@ describe("versioned exam management", () => {
     expect(jsonPreview.status).toBe(200);
     expect(jsonPreview.json.report).toMatchObject({ added: 1, duplicates: 0, total: 1, invalid: [] });
 
+    const previewSubject = await server.db.subject.create({ data: { name: "Preview Subject" } });
+    await server.db.topic.create({ data: { name: "Preview Topic", subjectId: previewSubject.id } });
     const csvContent = [
       "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty",
       "Preview Subject,Preview Topic,Preview-only CSV question,A,B,C,D,1,Preview only,Admin preview regression,easy",
@@ -467,6 +470,7 @@ describe("versioned exam management", () => {
         explanation: "The immutable snapshot must survive source deletion.",
         source: "test",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "exam-route-question-delete-snapshot-unique",
       },
     });

@@ -26,6 +26,7 @@ const INTEGRITY_WEIGHTS: Record<string, number> = {
   APP_REOPENED: 2,
   DEVICE_CHANGED: 3,
   CLOSE_ATTEMPT: 2,
+  OVERLAY_ATTEMPT: 3,
 } as const;
 
 type IntegrityType = keyof typeof INTEGRITY_WEIGHTS;

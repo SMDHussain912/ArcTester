@@ -1,11 +1,9 @@
 import type { StudentPage } from "./StudentNavigation";
+import ArcTesterMascot from "./components/ArcTesterMascot";
 
 interface StudentDashboardWelcomeProps {
   visible: boolean;
   onNavigate: (page: StudentPage) => void;
-  pendingExamCount?: number;
-  unreadAnnouncementCount?: number;
-  unreadNotificationCount?: number;
   questionCount?: number;
   subjectCount?: number;
 }
@@ -13,19 +11,13 @@ interface StudentDashboardWelcomeProps {
 export default function StudentDashboardWelcome({
   visible,
   onNavigate,
-  pendingExamCount = 0,
-  unreadAnnouncementCount = 0,
-  unreadNotificationCount = 0,
   questionCount = 0,
   subjectCount = 0,
 }: StudentDashboardWelcomeProps) {
   const actions: { page: StudentPage; icon: string; eyebrow: string; title: string; description: string; count: string }[] = [
     { page: "practice", icon: "✦", eyebrow: "LEARNING", title: "Start practice", description: "Build a question paper from your subjects and topics.", count: "Create a test" },
-    { page: "assigned-exams", icon: "▣", eyebrow: "EXAM CENTRE", title: "Assigned exams", description: "Check availability, deadlines and pending examinations.", count: `${pendingExamCount} pending` },
     { page: "question-bank", icon: "▤", eyebrow: "STUDY", title: "Question bank", description: "Explore questions across your available subjects.", count: `${questionCount.toLocaleString()} questions · ${subjectCount} subjects` },
     { page: "progress", icon: "↗", eyebrow: "PERFORMANCE", title: "Your progress", description: "Review practice accuracy, exam scores and learning trends.", count: "View analytics" },
-    { page: "announcements", icon: "▧", eyebrow: "UPDATES", title: "Announcements", description: "Read important notices and academic updates.", count: `${unreadAnnouncementCount} unread` },
-    { page: "notifications", icon: "♧", eyebrow: "UPDATES", title: "Notifications", description: "See assignment, submission and result alerts.", count: `${unreadNotificationCount} unread` },
   ];
 
   return (
@@ -34,14 +26,13 @@ export default function StudentDashboardWelcome({
         <div className="student-home-copy">
           <p className="eyebrow">YOUR LEARNING DASHBOARD</p>
           <h1 id="student-home-title">Make every practice count.</h1>
-          <p>Build your skills with focused practice, keep track of assigned examinations, and use your progress to decide what to study next.</p>
+          <p>Build your skills with focused practice and use your progress to decide what to study next.</p>
           <div className="student-home-actions">
             <button type="button" className="primary" onClick={() => onNavigate("practice")}>Start practicing <span aria-hidden="true">→</span></button>
-            <button type="button" className="student-home-secondary" onClick={() => onNavigate("assigned-exams")}>View assigned exams</button>
           </div>
         </div>
         <div className="student-home-mark" aria-hidden="true">
-          <span>A</span>
+          <ArcTesterMascot size={144} decorative className="student-home-mascot" />
           <small>LEARN · PRACTICE · IMPROVE</small>
         </div>
       </section>

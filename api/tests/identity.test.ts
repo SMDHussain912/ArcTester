@@ -10,6 +10,16 @@ let invitationToken = "";
 let invitationId = "";
 let studentId = 0;
 
+const STUDENT_PROFILE = {
+  fullName: "Test Student",
+  collegeName: "Test Polytechnic",
+  collegeCode: "999",
+  registrationNumber: "24999-CM-050",
+  postalPin: "533001",
+  branchName: "Computer Engineering (CME)",
+  branchCode: "CM",
+};
+
 async function request(
   path: string,
   method: string,
@@ -53,12 +63,15 @@ describe("identity foundation", () => {
     await server.close();
   });
 
-  it("blocks registration without an invitation", async () => {
+  it("allows self-registration without an invitation and leaves the account pending", async () => {
     const response = await request("/auth/register", "POST", {
-      email: "student@arctester.test",
+      ...STUDENT_PROFILE,
+      email: "self-signup@arctester.test",
+      registrationNumber: "24999-CM-051",
       password: "student-password-123",
     });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(201);
+    expect(response.json.user).toMatchObject({ role: "STUDENT", accessStatus: "PENDING" });
   });
 
   it("lists invitations only for administrators", async () => {
@@ -126,30 +139,33 @@ describe("identity foundation", () => {
     expect(entries.find((item) => item.id === invitation.id)?.status).toBe("REVOKED");
   });
 
-  it("binds an invitation to its email and permits only one registration", async () => {
-    const mismatch = await request("/auth/register", "POST", {
-      email: "someone-else@arctester.test",
-      password: "student-password-123",
-      invitationToken,
-    });
-    expect(mismatch.status).toBe(400);
-
+  it("self-registers a student, requires approval, and prevents duplicate registration", async () => {
     const registered = await request("/auth/register", "POST", {
+      ...STUDENT_PROFILE,
       email: "student@arctester.test",
+      registrationNumber: "24999-CM-052",
       password: "student-password-123",
-      invitationToken,
     });
     expect(registered.status).toBe(201);
-    const user = registered.json.user as { id: number; role: string };
+    const user = registered.json.user as { id: number; role: string; accessStatus: string };
     studentId = user.id;
-    expect(user.role).toBe("STUDENT");
+    expect(user).toMatchObject({ role: "STUDENT", accessStatus: "PENDING" });
+
+    const pendingLogin = await request("/auth/login", "POST", {
+      email: "student@arctester.test",
+      password: "student-password-123",
+    });
+    expect(pendingLogin.status).toBe(403);
+    const approval = await request(`/admin/students/${studentId}/access`, "PATCH", { accessStatus: "APPROVED" }, adminCookie);
+    expect(approval.status).toBe(200);
+    expect(approval.json.student).toMatchObject({ id: studentId, accessStatus: "APPROVED" });
 
     const reused = await request("/auth/register", "POST", {
+      ...STUDENT_PROFILE,
       email: "student@arctester.test",
       password: "another-password-123",
-      invitationToken,
     });
-    expect(reused.status).toBe(400);
+    expect(reused.status).toBe(409);
   });
 
   it("does not allow a student to create invitations", async () => {

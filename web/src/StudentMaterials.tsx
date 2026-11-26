@@ -1,112 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API, request } from "./apiClient";
+import { request } from "./apiClient";
 import type { OfflineLearningPackage } from "./lib/api";
-
-type PublishedMaterial = {
-  id: string; title: string; description: string; subject: string; topic: string;
-  fileName: string; mimeType: string; sizeBytes: number; createdAt: string;
-};
-
-export interface StudentMaterialsProps {
-  setActivePage: (page: string) => void;
-}
-
-export default function StudentMaterials({ setActivePage }: StudentMaterialsProps) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [materials, setMaterials] = useState<PublishedMaterial[]>([]);
-  const [query, setQuery] = useState("");
-  const [downloaded, setDownloaded] = useState<OfflineLearningPackage | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const cancelledRef = useRef<number>(0);
-
-  const loadMaterials = useCallback(async () => {
-    const generation = ++cancelledRef.current;
-    setLoading(true); setError(null);
-    try {
-      const result = await request<{ materials: PublishedMaterial[] }>("/study-materials");
-      if (generation === cancelledRef.current) setMaterials(result.materials ?? []);
-    } catch (cause) {
-      if (generation === cancelledRef.current) setError(cause instanceof Error ? cause.message : "Could not load study materials.");
-    } finally {
-      if (generation === cancelledRef.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadMaterials();
-    return () => { cancelledRef.current += 1; };
-  }, [loadMaterials]);
-
-  const downloadMaterial = useCallback(async (material: PublishedMaterial) => {
-    setDownloadingId(material.id); setError(null);
-    try {
-      const response = await fetch(`${API}/study-materials/${encodeURIComponent(material.id)}/download`, { credentials: "include" });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.error === "string" ? body.error : "Could not download this material.");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = material.fileName;
-      document.body.appendChild(anchor); anchor.click(); anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not download this material.");
-    } finally { setDownloadingId(null); }
-  }, []);
-
-  const downloadPackage = useCallback(async () => {
-    cancelledRef.current += 1;
-    setLoading(true); setError(null);
-    try {
-      const studyPackage = await request<OfflineLearningPackage>("/learning/package");
-      const blob = new Blob([JSON.stringify(studyPackage, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = `arctester-study-pack-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(anchor); anchor.click(); anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setDownloaded(studyPackage);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not download the study package.");
-    } finally { setLoading(false); }
-  }, []);
-
-  const filtered = materials.filter((item) => [item.title, item.description, item.subject, item.topic].join(" ").toLowerCase().includes(query.trim().toLowerCase()));
-  const sizeLabel = (bytes: number) => bytes >= 1024 * 1024 ? (bytes / (1024 * 1024)).toFixed(1) + " MB" : Math.max(1, Math.round(bytes / 1024)) + " KB";
-
-  return (
-    <div className="stack student-materials-page">
-      <section className="page-intro">
-        <p className="eyebrow">Study anywhere</p>
-        <h1>Study materials</h1>
-        <p className="muted">Download subject-wise notes, reference documents and revision resources published by your administrator.</p>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header"><div><h2>Published library</h2><p className="muted">Only administrator-published files appear here.</p></div><button className="button button-secondary" onClick={() => void loadMaterials()} disabled={loading}>Refresh</button></div>
-        <input aria-label="Search study materials" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by title, subject or topic" />
-        {error && <div className="student-load-error" role="alert"><div><strong>Study materials could not be loaded.</strong><p>{error}</p></div><button className="button button-secondary" onClick={() => void loadMaterials()} disabled={loading}>{loading ? "Retrying…" : "Try again"}</button></div>}
-        {loading && <p className="muted">Loading study materials…</p>}
-        {!loading && !error && filtered.length === 0 && <div className="empty-state"><h3>{materials.length ? "No matching materials" : "No materials published yet"}</h3><p className="muted">{materials.length ? "Try another search term." : "Your administrator has not published any study files yet."}</p></div>}
-        <div className="student-material-list">
-          {filtered.map((item) => <article className="student-material-card" key={item.id}>
-            <div className="student-material-icon" aria-hidden="true">{item.mimeType === "application/pdf" ? "PDF" : "DOC"}</div>
-            <div className="student-material-copy"><strong>{item.title}</strong><p className="muted">{item.subject}{item.topic ? " · " + item.topic : ""} · {sizeLabel(item.sizeBytes)}</p><p>{item.description}</p><small className="muted">{item.fileName}</small></div>
-            <div className="row wrap">{item.mimeType === "application/pdf" && <a className="button button-secondary" href={`${API}/study-materials/${encodeURIComponent(item.id)}/preview`} target="_blank" rel="noreferrer">Preview PDF</a>}<button className="button button-primary" disabled={downloadingId === item.id} onClick={() => void downloadMaterial(item)}>{downloadingId === item.id ? "Downloading…" : "Download"}</button></div>
-          </article>)}
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header"><h2>Offline question bank</h2><span className="pill">JSON · Version 1</span></div>
-        <p className="muted">Download a portable copy of the question bank with answer keys, explanations, topics and difficulty levels. This package contains answers and must not be used as a secure exam paper.</p>
-        <button className="button button-primary" onClick={() => void downloadPackage()} disabled={loading}>{loading ? "Preparing download…" : "Download offline question bank"}</button>
-        {downloaded && <div className="exp" role="status"><strong>Question bank downloaded.</strong><p className="muted">{downloaded.total.toLocaleString()} questions across {downloaded.subjects.length} subjects. Exported {new Date(downloaded.exportedAt).toLocaleString()}.</p></div>}
-      </section>
-      <div className="row"><button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Back to dashboard</button><button className="button button-secondary" onClick={() => setActivePage("analytics")}>Study analytics</button></div>
-    </div>
-  );
+type Material = { id:string; title:string; description:string; subject:string; topic:string; url?:string; fileName?:string; mimeType?:string; sizeBytes?:number; audienceScope?:"ALL"|"COLLEGE"|"BRANCH"; targetCollegeName?:string|null; targetCollegeCode?:string|null; targetBranchName?:string|null; targetBranchCode?:string|null; createdAt:string };
+export interface StudentMaterialsProps { setActivePage:(page:string)=>void }
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
+function resourceHref(item:Material){return item.url||API+"/study-materials/"+encodeURIComponent(item.id)+"/file";}
+export default function StudentMaterials({setActivePage}:StudentMaterialsProps){
+ const [loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null),[materials,setMaterials]=useState<Material[]>([]),[query,setQuery]=useState(""),[downloaded,setDownloaded]=useState<OfflineLearningPackage|null>(null);
+ const generation=useRef(0);
+ const load=useCallback(async()=>{const id=++generation.current;setLoading(true);setError(null);try{const result=await request<{materials?:Material[]}>("/study-materials");if(id===generation.current)setMaterials(Array.isArray(result?.materials)?result.materials.filter(Boolean):[])}catch(e){if(id===generation.current)setError(e instanceof Error?e.message:"Could not load study resources.")}finally{if(id===generation.current)setLoading(false)}},[]);
+ useEffect(()=>{void load();return()=>{generation.current++}},[load]);
+ const download=useCallback(async()=>{generation.current++;setLoading(true);setError(null);try{const pack=await request<OfflineLearningPackage>("/learning/package");const safe:OfflineLearningPackage={...pack,total:Number(pack?.total??0),subjects:Array.isArray(pack?.subjects)?pack.subjects:[],questions:Array.isArray(pack?.questions)?pack.questions:[]};const blob=new Blob([JSON.stringify(safe,null,2)],{type:"application/json"});const href=URL.createObjectURL(blob);const a=document.createElement("a");a.href=href;a.download="arctester-study-pack-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(href),1000);setDownloaded(safe)}catch(e){setError(e instanceof Error?e.message:"Could not download the study package.")}finally{setLoading(false)}},[]);
+ const filtered=materials.filter(x=>[x.title,x.description,x.subject,x.topic,x.fileName].join(" ").toLowerCase().includes(query.trim().toLowerCase()));
+ return <div className="stack student-materials-page">
+  <section className="page-intro"><p className="eyebrow">Study anywhere</p><h1>Study resources</h1><p className="muted">Open subject-wise notes and files shared by your administrator.</p></section>
+  <section className="panel"><div className="panel-header"><div><h2>Published library</h2><p className="muted">Administrator-published links and uploaded files.</p></div><button className="button button-secondary" disabled={loading} onClick={()=>void load()}>Refresh</button></div>
+   <input aria-label="Search study materials" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by title, subject or topic"/>
+   {error&&<div className="student-load-error" role="alert"><p>{error}</p><button className="button button-secondary" onClick={()=>void load()}>Try again</button></div>}
+   {loading&&<p className="muted">Loading study resources…</p>}
+   {!loading&&!error&&!filtered.length&&<div className="empty-state"><h3>{materials.length?"No matching resources":"No resources published yet"}</h3><p className="muted">{materials.length?"Try another search term.":"Your administrator has not published study resources yet."}</p></div>}
+   <div className="student-material-list">{filtered.map(item=>{const href=resourceHref(item);return <article className="student-material-card" key={item.id}><div className="student-material-icon" aria-hidden="true">{item.fileName?"▤":"↗"}</div><div className="student-material-copy"><strong>{item.title}</strong><p className="muted">{item.subject}{item.topic?" · "+item.topic:""}{item.audienceScope==="BRANCH"?" · Branch: "+(item.targetBranchName||item.targetBranchCode||"selected branch"):item.audienceScope==="COLLEGE"?" · College: "+(item.targetCollegeName||item.targetCollegeCode||"selected college"):""}</p><p>{item.description}</p><small className="muted">{item.fileName?item.fileName+(item.sizeBytes?" · "+(item.sizeBytes/1024/1024).toFixed(2)+" MB":""):(()=>{try{return new URL(item.url||"").hostname}catch{return "External resource"}})()}</small></div><a className="button button-primary" href={href} target="_blank" rel="noopener noreferrer">{item.fileName?"Download file":"Open resource"} ↗</a></article>})}</div>
+  </section>
+  <section className="panel"><div className="panel-header"><h2>Offline question bank</h2><span className="pill">JSON · Version 1</span></div><p className="muted">Download a portable practice question bank. This is for practice, not secure examination.</p><button className="button button-primary" disabled={loading} onClick={()=>void download()}>{loading?"Preparing download…":"Download offline question bank"}</button>{downloaded&&<div className="exp" role="status"><strong>Question bank downloaded.</strong><p className="muted">{downloaded.total.toLocaleString()} questions across {downloaded.subjects.length} subjects.</p></div>}</section>
+  <div className="row"><button className="button button-secondary" onClick={()=>setActivePage("dashboard")}>Back to dashboard</button><button className="button button-secondary" onClick={()=>setActivePage("analytics")}>Study analytics</button></div>
+ </div>;
 }

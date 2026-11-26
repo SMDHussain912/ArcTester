@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: arctester-ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -46,11 +46,11 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies and regenerate lockfile
+        run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run production dependency audit (high severity gate)
-        run: npm audit --omit=dev --audit-level=high
+      - name: Run production dependency audits (high severity gate)
+        run: node scripts/auditProductionWorkspaces.mjs
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=api
@@ -66,6 +66,14 @@ jobs:
 
       - name: Build web and API
         run: npm run build
+
+      - name: Upload verified npm lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-npm-lockfile
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 7
 
   mobile:
     name: Mobile typecheck
@@ -86,21 +94,8 @@ jobs:
       - name: Typecheck mobile app
         run: npm run typecheck --prefix mobile
 
-  dataset-preparation:
-    name: TensorFlow dataset preparation tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Test privacy-safe CSV conversion
-        run: python -m unittest scripts/test_prepare_tensorflow_dataset.py -v
+      - name: Run mobile unit tests
+        run: npm test --prefix mobile
 
   sqlite-to-postgres-migration:
     name: SQLite to PostgreSQL migration utility tests
@@ -222,8 +217,8 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies and regenerate lockfile
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Install Playwright browsers
         run: npx playwright install chromium
@@ -242,6 +237,12 @@ jobs:
 
       - name: Seed the question bank
         run: npm run prisma:seed --workspace=api
+
+      - name: Approve isolated E2E fixture questions
+        run: |
+          npx prisma db execute --schema=api/prisma/schema.prisma --stdin <<'SQL'
+          UPDATE "Question" SET "reviewStatus" = 'APPROVED';
+          SQL
 
       - name: Start API server
         run: |

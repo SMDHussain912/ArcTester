@@ -4,8 +4,10 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
-import { requireAdmin, requireAuth } from "./auth.js";
+import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
+import { validateQuestionDraftCsv } from "./questionDraftCsv.js";
+import { parseCsv } from "./csv.js";
 
 export function parseOptions(raw: string): string[] {
   const value: unknown = JSON.parse(raw);
@@ -17,6 +19,14 @@ export function parseOptions(raw: string): string[] {
 
 export function questionRouter(db: PrismaClient): Router {
   const router = Router();
+  async function validateDraftCsv(content: string) {
+    const subjects = await db.subject.findMany({ select: { name: true, topics: { select: { name: true } } } });
+    const catalog = Object.fromEntries(subjects.map((subject) => [subject.name, subject.topics.map((topic) => topic.name)]));
+    const issues = validateQuestionDraftCsv(content, catalog);
+    let total = 0;
+    try { total = parseCsv(content).rows.length; } catch { /* parser issue is already reported by validator */ }
+    return { issues, total };
+  }
 
   router.post("/admin/questions/import/preview", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
@@ -24,7 +34,12 @@ export function questionRouter(db: PrismaClient): Router {
       const content = z.string().min(1).max(8_000_000).parse(req.body?.content);
       let report;
       if (format === "csv") {
-        report = await importFromCsv(db, content, { dryRun: true });
+        const validation = await validateDraftCsv(content);
+        if (validation.issues.length) {
+          report = { added: 0, duplicates: 0, invalid: validation.issues, total: validation.total };
+        } else {
+          report = await importFromCsv(db, content, { dryRun: true });
+        }
       } else {
         let payload: unknown;
         try {
@@ -41,6 +56,11 @@ export function questionRouter(db: PrismaClient): Router {
   router.post("/admin/questions/import/csv", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const content = z.string().min(1).max(8_000_000).parse(req.body?.content);
+      const validation = await validateDraftCsv(content);
+      if (validation.issues.length) {
+        res.status(200).json({ ok: true, report: { added: 0, duplicates: 0, invalid: validation.issues, total: validation.total } });
+        return;
+      }
       const report = await importFromCsv(db, content);
       res.status(200).json({ ok: true, report });
     } catch (error) { next(error); }
@@ -53,10 +73,10 @@ export function questionRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = QuestionInputSchema.parse(req.body);
-      const outcome = await insertQuestion(db, input);
+      const outcome = await insertQuestion(db, input, req.user!.id);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
       const question = await db.question.findFirstOrThrow({
         where: { questionHash: hashQuestion(input.text) },
@@ -66,11 +86,21 @@ export function questionRouter(db: PrismaClient): Router {
         ok: true,
         question: {
           id: question.id,
+          createdById: question.createdById,
           subject: question.subject.name,
           topic: question.topic?.name ?? null,
           text: question.text,
           options: parseOptions(question.options),
+          questionType: question.questionType,
+          promptData: JSON.parse(question.promptData),
+          answerData: JSON.parse(question.answerData),
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         },
       });
     } catch (error) {
@@ -126,10 +156,19 @@ export function questionRouter(db: PrismaClient): Router {
           topic: question.topic?.name ?? null,
           text: question.text,
           options: parseOptions(question.options),
+          questionType: question.questionType,
+          promptData: JSON.parse(question.promptData),
+          answerData: JSON.parse(question.answerData),
           correctIndex: question.correctIndex,
           explanation: question.explanation,
           source: question.source,
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         })),
       });
     } catch (error) {
@@ -235,15 +274,30 @@ export function questionRouter(db: PrismaClient): Router {
         data: {
           subjectId: subject.id, topicId: topic.id, text: input.text,
           options: JSON.stringify(input.options), correctIndex: input.correctIndex,
+          questionType: input.questionType, promptData: JSON.stringify(input.promptData), answerData: JSON.stringify(input.answerData),
           explanation: input.explanation, source: input.source,
-          difficulty: input.difficulty, questionHash: hashQuestion(input.text),
+          difficulty: input.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(input.text),
+          audienceScope: input.audienceScope,
+          targetCollegeCode: input.targetCollegeCode.trim() || null,
+          targetCollegeName: input.targetCollegeName.trim() || null,
+          targetBranchCode: input.targetBranchCode.trim() || null,
+          targetBranchName: input.targetBranchName.trim() || null,
+          targetStudentIdsJson: JSON.stringify(input.targetStudentIds),
         },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
+      // Content edits invalidate prior embeddings; queue a fresh index build.
       res.json({ ok: true, question: {
-        id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
-        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
+        id: question.id, createdById: question.createdById, subject: question.subject.name, topic: question.topic?.name ?? null,
+        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex, questionType: question.questionType, promptData: JSON.parse(question.promptData), answerData: JSON.parse(question.answerData),
         explanation: question.explanation, source: question.source, difficulty: question.difficulty,
+        reviewStatus: question.reviewStatus,
+        audienceScope: question.audienceScope,
+        targetCollegeCode: question.targetCollegeCode,
+        targetCollegeName: question.targetCollegeName,
+        targetBranchCode: question.targetBranchCode,
+        targetBranchName: question.targetBranchName,
+        targetStudentIdsJson: question.targetStudentIdsJson,
       } });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && (error as {code?: string}).code === "P2002") {

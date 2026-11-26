@@ -1,0 +1,17 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Python Programming,Python Basics,What is the type of the value 3.0 in Python?,bool,float,int,str,1,A numeric literal with a decimal point is a float.,NEEDS HUMAN REVIEW,medium
+Python Programming,Control Flow,Which keyword skips to the next loop iteration?,pass only,return,continue,break,2,continue skips the remaining loop body for this iteration.,NEEDS HUMAN REVIEW,medium
+Python Programming,Data Structures,Which Python collection is mutable and ordered?,tuple,frozenset,str,list,3,Lists are mutable and preserve order.,NEEDS HUMAN REVIEW,medium
+Python Programming,Functions,Which keyword defines a function in Python?,def,func,function,lambda only,0,The def statement defines a named function.,NEEDS HUMAN REVIEW,medium
+Python Programming,File Handling,Which mode opens a file for appending?,x,a,r,w,1,Mode a appends to an existing file or creates it.,NEEDS HUMAN REVIEW,medium
+Python Programming,Exception Handling,Which keyword begins an exception handler?,handle,finally,except,catch,2,Python uses except to handle raised exceptions.,NEEDS HUMAN REVIEW,medium
+Python Programming,Python Basics,"In Python, what is the result of True == 1?",False,None,TypeError,True,3,"Python bool is a subclass of int, and True compares equal to 1.",NEEDS HUMAN REVIEW,medium
+Python Programming,Control Flow,Which Python keyword exits the nearest enclosing loop immediately?,pass,yield,break,continue,2,break terminates the nearest loop.,NEEDS HUMAN REVIEW,medium
+Python Programming,Data Structures,Which Python built-in collection stores unique hashable elements?,str,set,list,tuple with duplicates,1,A set stores unique hashable values.,NEEDS HUMAN REVIEW,medium
+Python Programming,Functions,Which Python statement sends a value back to the caller?,return,yield only,break,continue,0,return exits the function and supplies its result.,NEEDS HUMAN REVIEW,medium
+Python Programming,File Handling,Which Python construct closes a file automatically when the block ends?,open(...) without context,print(...),try without finally,with open(...),3,The with statement uses the file context manager to close it.,NEEDS HUMAN REVIEW,medium
+Python Programming,Exception Handling,"Which block is intended to run whether an exception occurs or not, commonly for cleanup?",raise,assert,finally,except only,2,finally executes during normal and exceptional control flow.,NEEDS HUMAN REVIEW,medium
+Python Programming,Python Basics,"In Python, what is the result of True == 1? (variant 2)",False,None,TypeError,True,3,"Python bool is a subclass of int, and True compares equal to 1.",NEEDS HUMAN REVIEW,medium
+Python Programming,Control Flow,Which Python keyword exits the nearest enclosing loop immediately? (variant 2),pass,yield,break,continue,2,break terminates the nearest loop.,NEEDS HUMAN REVIEW,medium
+Python Programming,Data Structures,Which Python built-in collection stores unique hashable elements? (variant 2),str,set,list,tuple with duplicates,1,A set stores unique hashable values.,NEEDS HUMAN REVIEW,medium
+Python Programming,Functions,Which Python statement sends a value back to the caller? (variant 2),return,yield only,break,continue,0,return exits the function and supplies its result.,NEEDS HUMAN REVIEW,medium

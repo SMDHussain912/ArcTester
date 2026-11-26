@@ -7,7 +7,7 @@ const catalog: AdminOverviewSubject[] = [{ id: 1, name: "Mathematics", count: 50
 
 describe("AdminOverview", () => {
   it("renders summary metrics and proportional subject coverage", () => {
-    const { container } = render(<AdminOverview stats={{ subjects: 2, topics: 8, questions: 75 }} exams={exams} invitationsCount={12} catalog={catalog} onNavigate={vi.fn()} />);
+    const { container } = render(<AdminOverview stats={{ subjects: 2, topics: 8, questions: 75 }} exams={exams} pendingApprovalsCount={12} catalog={catalog} onNavigate={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Build better exams." })).toBeTruthy();
     expect(screen.getByText("75")).toBeTruthy();
     expect(screen.getByText("8 topics mapped")).toBeTruthy();
@@ -19,7 +19,7 @@ describe("AdminOverview", () => {
 
   it("delegates all quick navigation actions", () => {
     const onNavigate = vi.fn();
-    render(<AdminOverview stats={{ subjects: 0, topics: 0, questions: 0 }} exams={[]} invitationsCount={0} catalog={[]} onNavigate={onNavigate} />);
+    render(<AdminOverview stats={{ subjects: 0, topics: 0, questions: 0 }} exams={[]} pendingApprovalsCount={0} catalog={[]} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByRole("button", { name: "＋ Create mock test" }));
     fireEvent.click(screen.getByRole("button", { name: "Manage subjects →" }));
     fireEvent.click(screen.getByRole("button", { name: /Upload questions/ }));

@@ -1,0 +1,78 @@
+{
+  "title": "DBMS Normalization: First Normal Form",
+  "subject": "Database Management Systems",
+  "topic": "Normalization",
+  "script": {
+    "title": "DBMS Normalization: First Normal Form",
+    "learningObjectives": [
+      "Describe the purpose of normalization",
+      "Identify repeating groups that violate first normal form"
+    ],
+    "sections": [
+      {
+        "heading": "Why normalize?",
+        "explanation": "Normalization organizes relational data to reduce unnecessary duplication and prevent insertion, update, and deletion anomalies.",
+        "example": "Storing a customer's phone numbers in a repeated comma-separated field makes searching and updating individual numbers difficult.",
+        "teacherCue": ""
+      },
+      {
+        "heading": "First normal form",
+        "explanation": "A relation is in first normal form when each row-column intersection contains one atomic value and repeating groups are removed.",
+        "example": "Instead of Phone1 and Phone2 columns, store one phone number per row in a related customer-phone table.",
+        "teacherCue": ""
+      }
+    ],
+    "keyTakeaways": [
+      "Normalization reduces redundancy and common data anomalies.",
+      "First normal form requires atomic values and no repeating groups."
+    ],
+    "groundingNotes": []
+  },
+  "storyboard": {
+    "scenes": [
+      {
+        "sceneType": "title_card",
+        "title": "Normalization",
+        "narration": "Learn why relational tables are normalized and what first normal form requires.",
+        "onScreenText": "Organize data carefully",
+        "durationMs": 3000,
+        "visual": {}
+      },
+      {
+        "sceneType": "diagram",
+        "title": "Remove repeating values",
+        "narration": "A customer row with several phone numbers in one cell contains a repeating group. Split the values into individual rows linked to the customer.",
+        "onScreenText": "One value per cell",
+        "durationMs": 7000,
+        "visual": {
+          "label": "Customer and phone records",
+          "items": [
+            "Customer row",
+            "Phone 9876",
+            "Phone 5432"
+          ],
+          "connections": [
+            {
+              "from": "Customer row",
+              "to": "Phone 9876",
+              "label": "customer ID"
+            },
+            {
+              "from": "Customer row",
+              "to": "Phone 5432",
+              "label": "customer ID"
+            }
+          ]
+        }
+      },
+      {
+        "sceneType": "checkpoint",
+        "title": "Quick recall",
+        "narration": "A table stores three phone numbers in one cell separated by commas. Which normalization rule is being violated?",
+        "onScreenText": "What does 1NF require?",
+        "durationMs": 4000,
+        "visual": {}
+      }
+    ]
+  }
+}

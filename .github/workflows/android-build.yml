@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: arctester-android-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   android-release:
@@ -69,10 +69,32 @@ jobs:
             sleep 15
           done
 
-      - name: Upload standalone APK
+      - name: Generate APK checksum and build metadata
+        shell: bash
+        run: |
+          apk="mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk"
+          sha256sum "$apk" > "${apk}.sha256"
+          {
+            echo "Commit: $GITHUB_SHA"
+            echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Built at (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "APK size (bytes): $(stat -c %s "$apk")"
+            echo "SHA-256: $(cut -d ' ' -f 1 "${apk}.sha256")"
+          } > "${apk}.build-info.txt"
+          {
+            echo "### Android APK artifact"
+            echo "- Size: $(stat -c %s "$apk") bytes"
+            echo "- SHA-256: $(cut -d ' ' -f 1 "${apk}.sha256")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload standalone APK and verification metadata
         uses: actions/upload-artifact@v4
         with:
           name: arctester-android-apk
-          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/build/outputs/apk/release/app-release.apk.sha256
+            mobile/android/app/build/outputs/apk/release/app-release.apk.build-info.txt
           if-no-files-found: error
           retention-days: 14

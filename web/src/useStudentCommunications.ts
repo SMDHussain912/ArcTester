@@ -23,7 +23,6 @@ export interface StudentNotification {
   expiresAt: string | null;
 }
 
-export interface StudentNotificationPreferences { examAssignments: boolean; examResults: boolean; }
 
 export type StudentCommunicationsRequest = <T>(path: string, init?: RequestInit) => Promise<T>;
 
@@ -48,7 +47,6 @@ export function useStudentCommunications({
   const [activeAnnouncements, setActiveAnnouncements] = useState<StudentAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<StudentNotification[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [notificationPreferences, setNotificationPreferences] = useState<StudentNotificationPreferences>({ examAssignments: true, examResults: true });
   // Page changes can trigger overlapping unread-only and full-inbox requests.
   // Only the newest request may publish results to the inbox.
   const notificationRequestSequence = useRef(0);
@@ -79,13 +77,10 @@ export function useStudentCommunications({
     const path = activePage === "notifications" ? "/notifications" : "/notifications?unread=true";
     const response = await request<{ notifications: StudentNotification[]; unreadCount?: number }>(path);
     if (identityRef.current !== requestIdentity || notificationRequestSequence.current !== requestSequence) return;
-    const items = Array.isArray(response.notifications) ? response.notifications : [];
+    const items = (Array.isArray(response.notifications) ? response.notifications : [])
+      .filter((item) => !["EXAM_ASSIGNMENT", "EXAM_RESULT"].includes(item.kind));
     setNotifications(items);
-    setUnreadNotificationCount(
-      typeof response.unreadCount === "number" && Number.isFinite(response.unreadCount)
-        ? Math.max(0, Math.floor(response.unreadCount))
-        : items.filter((item) => !item.readAt).length,
-    );
+    setUnreadNotificationCount(typeof response.unreadCount === "number" ? response.unreadCount : items.filter((item) => !item.readAt).length);
   }, [activePage, identity, request, userRole]);
 
   useEffect(() => {
@@ -95,7 +90,6 @@ export function useStudentCommunications({
     setActiveAnnouncements([]);
     setNotifications([]);
     setUnreadNotificationCount(0);
-    setNotificationPreferences({ examAssignments: true, examResults: true });
   }, [identity]);
 
   useEffect(() => {
@@ -238,30 +232,6 @@ export function useStudentCommunications({
     }
   }
 
-  useEffect(() => {
-    if (userRole !== "STUDENT") return;
-    const requestIdentity = identity;
-    let cancelled = false;
-    request<{ preferences: StudentNotificationPreferences }>("/notifications/preferences")
-      .then(({ preferences }) => {
-        if (!cancelled && identityRef.current === requestIdentity) setNotificationPreferences({ examAssignments: preferences.examAssignments !== false, examResults: preferences.examResults !== false });
-      })
-      .catch((cause) => { if (!cancelled && identityRef.current === requestIdentity) setError((cause as Error).message); });
-    return () => { cancelled = true; };
-  }, [identity, request, setError, userRole]);
-
-  async function updateNotificationPreferences(patch: Partial<StudentNotificationPreferences>) {
-    const requestIdentity = identity;
-    const previous = notificationPreferences;
-    setNotificationPreferences({ ...previous, ...patch });
-    try {
-      const response = await request<{ preferences: StudentNotificationPreferences }>("/notifications/preferences", { method: "PATCH", body: JSON.stringify(patch) });
-      if (identityRef.current === requestIdentity) setNotificationPreferences(response.preferences);
-    } catch (cause) {
-      if (identityRef.current === requestIdentity) { setNotificationPreferences(previous); setError((cause as Error).message); }
-    }
-  }
-
   const clear = useCallback(() => {
     // A pending poll must not repopulate the inbox after sign-out clears it.
     notificationRequestSequence.current += 1;
@@ -276,8 +246,6 @@ export function useStudentCommunications({
     activeAnnouncements,
     notifications,
     unreadNotificationCount,
-    notificationPreferences,
-    updateNotificationPreferences,
     refreshAnnouncements,
     refreshNotifications,
     dismissAnnouncement,

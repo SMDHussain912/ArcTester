@@ -1,286 +1,150 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import type { PrismaClient } from "@prisma/client";
-import { trainTensorflowRegressionCandidate } from "./intelligence/tensorflowJsTraining.js";
+import { stableModelJson, trainModel } from "./modelTraining.js";
 
-const LEASE_MS = 2 * 60 * 1000;
+const LEASE_MS = 15 * 60 * 1000;
+const delay = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
-type DatasetFeature = { name: string; type: "numeric" | "categorical"; categories?: string[] };
-type DatasetSample = { features: Record<string, number | string>; target: number; groupId?: string };
-
-async function processJob(db: PrismaClient, jobId: string, workerId: string): Promise<void> {
-  const job = await db.modelTrainingJob.findUnique({ where: { id: jobId } });
-  if (!job || job.status !== "RUNNING" || job.workerId !== workerId) return;
-
-  const heartbeat = setInterval(() => {
-    void db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-      data: { leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
-    }).catch((error: unknown) => {
-      console.error("ArcTester training-job lease renewal failed", error);
-    });
-  }, 30_000);
-
-  try {
-    const dataset = await db.modelDataset.findUnique({ where: { id: job.datasetId } });
-    if (!dataset) throw new Error("Training dataset no longer exists.");
-    if (dataset.task !== "regression") throw new Error("TensorFlow.js training currently supports regression datasets only.");
-
-    const featureSchema = JSON.parse(dataset.featureSchemaJson) as DatasetFeature[];
-    if (!Array.isArray(featureSchema) || featureSchema.length === 0 || featureSchema.length > 128 ||
-        featureSchema.some((feature) =>
-          !feature || typeof feature.name !== "string" || !feature.name.trim() ||
-          feature.type !== "numeric"
-        ) || new Set(featureSchema.map((feature) => feature.name)).size !== featureSchema.length) {
-      throw new Error("TensorFlow.js training requires 1 to 128 uniquely named numeric features.");
-    }
-    const samples = JSON.parse(dataset.samplesJson) as DatasetSample[];
-    if (!Array.isArray(samples) || samples.length !== dataset.rowCount ||
-        samples.length < 30 || samples.length > 5000) {
-      throw new Error("Training dataset rowCount must match its 30 to 5000 stored samples.");
-    }
-    if (samples.some((sample) =>
-      !sample || !sample.features || typeof sample.features !== "object" || Array.isArray(sample.features) ||
-      typeof sample.target !== "number" || !Number.isFinite(sample.target) ||
-      typeof sample.groupId !== "string" || !/^[a-f0-9]{64}$/.test(sample.groupId) ||
-      Object.keys(sample.features).length !== featureSchema.length ||
-      featureSchema.some((feature) => !Object.prototype.hasOwnProperty.call(sample.features, feature.name) ||
-        typeof sample.features[feature.name] !== "number" ||
-        !Number.isFinite(sample.features[feature.name]))
-    )) {
-      throw new Error("Every TensorFlow sample must contain finite numeric features, a finite target, and a keyed HMAC-SHA-256 pseudonymous groupId.");
-    }
-    if (job.modelId === "student-score-population") {
-      const expected = ["completed_attempts", "previous_accuracy", "recent_average_accuracy", "overall_average_accuracy", "previous_question_count"];
-      const actual = featureSchema.map((feature) => feature.name);
-      if (actual.length !== expected.length || expected.some((name) => !actual.includes(name)) ||
-          samples.some((sample) => {
-            const f = sample.features;
-            return !Number.isInteger(f.completed_attempts) || Number(f.completed_attempts) < 3 ||
-              !Number.isInteger(f.previous_question_count) || Number(f.previous_question_count) < 1 ||
-              ![f.previous_accuracy, f.recent_average_accuracy, f.overall_average_accuracy]
-                .every((value) => typeof value === "number" && value >= 0 && value <= 1) ||
-              sample.target < 0 || sample.target > 1;
-          })) {
-        throw new Error("student-score-population dataset does not match the registered feature and target constraints.");
-      }
-    }
-
-    const initialLease = await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-      data: { progress: 10, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
-    });
-    if (initialLease.count !== 1) {
-      throw new Error("Training worker lease was lost before training started.");
-    }
-    // The final registry version is allocated inside the commit transaction.
-    // Training only needs a valid positive artifact version; assigning it here
-    // would let concurrent jobs choose the same next version.
-    const trained = await trainTensorflowRegressionCandidate(
-      samples.map((sample) => ({
-        features: featureSchema.map((feature) => sample.features[feature.name] as number),
-        target: sample.target,
-        groupId: sample.groupId!,
-      })),
-      {
-        modelId: job.modelId,
-        version: 1,
-        featureNames: featureSchema.map((feature) => feature.name),
-        datasetKind: dataset.datasetKind as "synthetic" | "real-anonymized",
-        seed: job.seed,
-        epochs: job.epochs,
-        batchSize: job.batchSize,
-        onEpochEnd: async (epoch, metrics) => {
-          const progress = 10 + Math.floor(((epoch + 1) / job.epochs) * 70);
-          const renewed = await db.modelTrainingJob.updateMany({
-            where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-            data: { progress, resultJson: JSON.stringify({ epoch: epoch + 1, totalEpochs: job.epochs, loss: metrics.loss ?? null, mae: metrics.mae ?? null, updatedAt: new Date().toISOString() }), leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
-          });
-          if (renewed.count !== 1) {
-            throw new Error("Training worker lease was lost during epoch progress reporting.");
-          }
-        },
-      },
-    );
-
-    const lease = await db.modelTrainingJob.findFirst({
-      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-      select: { id: true },
-    });
-    if (!lease) throw new Error("Training worker lease was lost; refusing to register a candidate from an unowned job.");
-
-    const finalizingLease = await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-      data: { progress: 85, leaseExpiresAt: new Date(Date.now() + LEASE_MS) },
-    });
-    if (finalizingLease.count !== 1) {
-      throw new Error("Training worker lease was lost before finalization.");
-    }
-
-    await db.$transaction(async (tx) => {
-      // Serialize version allocation per model across API instances. The
-      // transaction-scoped lock is released automatically on commit/rollback.
-      await tx.$queryRaw`SELECT true AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${job.modelId}, 0))) AS model_lock`;
-      const latest = await tx.registeredModel.aggregate({
-        where: { modelId: job.modelId },
-        _max: { version: true },
-      });
-      const version = (latest._max.version ?? 0) + 1;
-      const versionedArtifact = trained.artifact
-        ? { ...trained.artifact, version }
-        : null;
-      let registeredModel = null;
-      if (versionedArtifact) {
-        registeredModel = await tx.registeredModel.create({
-          data: {
-            modelId: job.modelId,
-            version,
-            algorithm: "tensorflow-js-layers",
-            task: "regression",
-            dataset: dataset.name,
-            trainingDatasetId: dataset.id,
-            artifactJson: JSON.stringify(versionedArtifact),
-            isActive: false,
-            activatedAt: null,
-          },
-          select: { modelId: true, version: true, algorithm: true, task: true, dataset: true, isActive: true, createdAt: true },
-        });
-        await tx.modelRegistryAudit.create({
-          data: {
-            actorId: job.createdById,
-            modelId: job.modelId,
-            version,
-            action: "TRAINED_TENSORFLOW",
-            details: JSON.stringify({
-              jobId,
-              datasetId: dataset.id,
-              datasetFingerprint: dataset.fingerprint,
-              trainRows: trained.split.trainRows,
-              testRows: trained.split.testRows,
-              trainGroups: trained.split.trainGroups,
-              testGroups: trained.split.testGroups,
-              candidate: trained.candidate,
-              baseline: trained.baseline,
-              productionEligible: trained.productionEligible,
-              reason: trained.reason,
-              seed: job.seed,
-              epochs: job.epochs,
-              batchSize: job.batchSize,
-            }),
-          },
-        });
-      } else {
-        await tx.modelRegistryAudit.create({
-          data: {
-            actorId: job.createdById,
-            modelId: job.modelId,
-            version,
-            action: "TENSORFLOW_CANDIDATE_REJECTED",
-            details: JSON.stringify({
-              jobId,
-              datasetId: dataset.id,
-              datasetFingerprint: dataset.fingerprint,
-              candidate: trained.candidate,
-              baseline: trained.baseline,
-              split: trained.split,
-              reason: trained.reason,
-            }),
-          },
-        });
-      }
-
-      const result = {
-        model: registeredModel,
-        promoted: false,
-        productionEligible: trained.productionEligible,
-        split: trained.split,
-        candidate: trained.candidate,
-        baseline: trained.baseline,
-        reason: trained.reason,
-      };
-      const completed = await tx.modelTrainingJob.updateMany({
-        where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-        data: {
-          status: "SUCCEEDED",
-          progress: 100,
-          resultJson: JSON.stringify(result),
-          errorMessage: "",
-          completedAt: new Date(),
-          leaseExpiresAt: null,
-        },
-      });
-      if (completed.count !== 1) {
-        throw new Error("Training worker lease was lost before the candidate could be committed.");
-      }
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Training failed for an unknown reason.";
-    await db.modelTrainingJob.updateMany({
-      where: { id: jobId, status: "RUNNING", workerId, leaseExpiresAt: { gt: new Date() } },
-      data: {
-        status: "FAILED",
-        errorMessage: message.slice(0, 1500),
-        completedAt: new Date(),
-        leaseExpiresAt: null,
-      },
-    });
-  } finally {
-    clearInterval(heartbeat);
-  }
-}
-
-/** Atomically claims one queued or expired-lease job. Safe for multiple API instances. */
-export async function runNextModelTrainingJob(db: PrismaClient, workerId = randomUUID()): Promise<boolean> {
-  const now = new Date();
+export async function runOneTrainingJob(db: PrismaClient, workerId: string, now = new Date()): Promise<boolean> {
   const candidate = await db.modelTrainingJob.findFirst({
     where: {
       OR: [
         { status: "QUEUED" },
+        { status: "RUNNING", leaseExpiresAt: null },
         { status: "RUNNING", leaseExpiresAt: { lt: now } },
       ],
     },
     orderBy: { createdAt: "asc" },
+    select: { id: true, status: true, leaseExpiresAt: true },
   });
   if (!candidate) return false;
-
-  const claimed = await db.modelTrainingJob.updateMany({
-    where: {
-      id: candidate.id,
-      OR: [
-        { status: "QUEUED" },
-        { status: "RUNNING", leaseExpiresAt: { lt: now } },
-      ],
-    },
-    data: {
-      status: "RUNNING",
-      workerId,
-      progress: Math.max(candidate.progress, 1),
-      startedAt: new Date(),
-      leaseExpiresAt: new Date(Date.now() + LEASE_MS),
-      errorMessage: "",
-    },
+  const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
+  const claim = await db.modelTrainingJob.updateMany({
+    where: candidate.status === "QUEUED"
+      ? { id: candidate.id, status: "QUEUED" }
+      : { id: candidate.id, status: "RUNNING", OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }] },
+    data: { status: "RUNNING", progress: 5, workerId, leaseExpiresAt, errorMessage: "", updatedAt: now },
   });
-  if (claimed.count !== 1) return false;
-  await processJob(db, candidate.id, workerId);
-  return true;
+  if (claim.count !== 1) return false;
+
+  try {
+    const job = await db.modelTrainingJob.findUnique({
+      where: { id: candidate.id },
+      include: { dataset: true },
+    });
+    if (!job) throw new Error("Claimed training job disappeared.");
+    if (!["training", "synthetic"].includes(job.dataset.datasetKind)) throw new Error("Worker only trains on training or synthetic datasets.");
+    const trained = trainModel({
+      task: job.dataset.task as "classification" | "regression",
+      targetColumn: job.dataset.targetColumn,
+      featureSchemaJson: job.dataset.featureSchemaJson,
+      samplesJson: job.dataset.samplesJson,
+    }, { seed: job.seed, epochs: job.epochs, batchSize: job.batchSize });
+    const artifactJson = stableModelJson(trained.artifact);
+    const checksum = sha256(artifactJson);
+    const inputSchema = JSON.parse(job.dataset.featureSchemaJson) as Record<string, unknown>;
+    const outputSchema = { task: job.dataset.task, targetColumn: job.dataset.targetColumn, predictionType: job.dataset.task === "classification" ? "label" : "number" };
+    const result = {
+      uri: "db://arctester/model-artifact/" + job.id,
+      sha256: checksum,
+      framework: "arctester-native",
+      inputSchema,
+      outputSchema,
+      metrics: trained.metrics,
+      version: 0,
+      algorithm: trained.algorithm,
+    };
+    const completedAt = new Date();
+    await db.$transaction(async tx => {
+      const latest = await tx.registeredModel.findFirst({
+        where: { modelId: job.modelId },
+        orderBy: { version: "desc" },
+        select: { version: true },
+      });
+      const version = (latest?.version ?? 0) + 1;
+      result.version = version;
+      const artifactMetadata = { ...result, modelArtifact: trained.artifact };
+      await tx.registeredModel.create({
+        data: {
+          id: randomUUID().replace(/-/g, ""),
+          modelId: job.modelId,
+          version,
+          algorithm: trained.algorithm,
+          task: job.dataset.task,
+          dataset: job.dataset.name,
+          trainingDatasetId: job.dataset.id,
+          artifactJson: stableModelJson(artifactMetadata),
+          isActive: false,
+        },
+      });
+      await tx.modelRegistryAudit.create({
+        data: {
+          id: randomUUID().replace(/-/g, ""),
+          actorId: job.createdById,
+          modelId: job.modelId,
+          version,
+          action: "TRAINED_AND_REGISTERED",
+          details: stableModelJson({ jobId: job.id, datasetId: job.dataset.id, datasetFingerprint: job.dataset.fingerprint, sha256: checksum, metrics: trained.metrics }),
+        },
+      });
+      await tx.modelTrainingJob.update({
+        where: { id: job.id },
+        data: {
+          status: "COMPLETED",
+          progress: 100,
+          workerId,
+          leaseExpiresAt: null,
+          resultJson: stableModelJson(result),
+          errorMessage: "",
+          completedAt,
+          updatedAt: completedAt,
+        },
+      });
+    });
+    return true;
+  } catch (error) {
+    const failedAt = new Date();
+    const message = error instanceof Error ? error.message : "Training worker failed.";
+    await db.modelTrainingJob.update({
+      where: { id: candidate.id },
+      data: {
+        status: "FAILED",
+        progress: 100,
+        workerId,
+        leaseExpiresAt: null,
+        errorMessage: message.slice(0, 500),
+        completedAt: failedAt,
+        updatedAt: failedAt,
+      },
+    });
+    return true;
+  }
 }
 
-/** Starts a single polling loop for this API process; stop it during graceful shutdown. */
-export function startModelTrainingWorker(db: PrismaClient): () => void {
-  const workerId = randomUUID();
-  let busy = false;
-  const poll = async () => {
-    if (busy) return;
-    busy = true;
-    try {
-      await runNextModelTrainingJob(db, workerId);
-    } catch (error) {
-      console.error("ArcTester model-training worker poll failed", error);
-    } finally {
-      busy = false;
+async function main() {
+  const { PrismaClient } = await import("@prisma/client");
+  const db = new PrismaClient();
+  const workerId = (process.env.MODEL_WORKER_ID?.trim() || hostname() + "-" + process.pid + "-" + randomUUID().slice(0, 8)).slice(0, 120);
+  let stopping = false;
+  process.on("SIGTERM", () => { stopping = true; });
+  process.on("SIGINT", () => { stopping = true; });
+  console.info("[model-worker] started", { workerId });
+  try {
+    while (!stopping) {
+      const claimed = await runOneTrainingJob(db, workerId);
+      if (!claimed) await delay(2000);
     }
-  };
-  void poll();
-  const timer = setInterval(() => void poll(), 2_000);
-  timer.unref();
-  return () => clearInterval(timer);
+  } finally {
+    await db.$disconnect();
+    console.info("[model-worker] stopped", { workerId });
+  }
+}
+
+if (process.argv[1]?.endsWith("modelTrainingWorker.ts") || process.argv[1]?.endsWith("modelTrainingWorker.js")) {
+  main().catch(error => {
+    console.error("[model-worker] fatal", error);
+    process.exitCode = 1;
+  });
 }

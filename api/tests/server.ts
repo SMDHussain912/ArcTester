@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach } from "vitest";
+import { flushAuditEvents } from "../src/audit.js";
 import { PrismaClient } from "@prisma/client";
 import type { AddressInfo } from "node:net";
 import type { Express } from "express";
@@ -84,7 +85,9 @@ export async function startTestServer(
 
   const close = async () => {
     testDatabases.delete(base);
+    (app.locals as { stopOpsMetricsHeartbeat?: () => void }).stopOpsMetricsHeartbeat?.();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await flushAuditEvents(db);
     await db.$disconnect();
     await dropSchema(baseUrl, schema);
   };
@@ -92,18 +95,29 @@ export async function startTestServer(
   return { baseUrl: base, db, close };
 }
 
+function testRegistrationNumber(email: string): string {
+  let hash = 0;
+  for (const character of email.trim().toLowerCase()) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
+  return "24999-CM-" + String(hash % 1000).padStart(3, "0");
+}
+
 export async function postJson(
   url: string,
   body: unknown,
   cookie?: string
 ): Promise<{ status: number; json: unknown }> {
+  let payload = body;
+  if (url.endsWith("/auth/register") && body && typeof body === "object" && !Array.isArray(body)) {
+    const input = body as Record<string, unknown>;
+    if (input.registrationNumber === "24999-CM-053" && typeof input.email === "string" && input.email !== "alice@example.com") payload = { ...input, registrationNumber: testRegistrationNumber(input.email) };
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(cookie ? { cookie } : {}),
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   return { status: res.status, json: await res.json() };
 }
@@ -155,7 +169,7 @@ export async function issueTestInvitation(db: PrismaClient, email: string): Prom
 }
 
 /**
- * Register a brand-new account and sign it in. Returns the session cookie
+ * Register a brand-new account, approve it as test setup, and sign it in. Returns the session cookie
  * plus the new user's id, so tests can scope expectations to one account.
  */
 export async function signUp(
@@ -165,15 +179,26 @@ export async function signUp(
 ): Promise<{ cookie: string; userId: number }> {
   const db = testDatabases.get(baseUrl);
   if (!db) throw new Error("No test database is registered for this server.");
-  const invitationToken = await issueTestInvitation(db, email);
+  await db.user.upsert({ where: { email: "test-admin@arctester.invalid" }, create: { email: "test-admin@arctester.invalid", passwordHash: "test-only", role: "ADMIN" }, update: { role: "ADMIN" } });
   const reg = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password, invitationToken }),
+    body: JSON.stringify({
+      email,
+      password,
+      fullName: "Test Student",
+      collegeName: "Test Polytechnic",
+      collegeCode: "999",
+      registrationNumber: testRegistrationNumber(email),
+      postalPin: "533001",
+      branchName: "Computer Engineering (CME)",
+      branchCode: "CM",
+    }),
   });
   if (reg.status !== 201) {
     throw new Error(`Register failed (${reg.status}): ${await reg.text()}`);
   }
+  await db.user.update({ where: { email: email.trim().toLowerCase() }, data: { accessStatus: "APPROVED" } });
   const login = await fetch(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },

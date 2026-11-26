@@ -1,119 +1,192 @@
-import { Router } from "express";
+import express, { Router } from "express";
+import { basename } from "node:path";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const MIME_TYPES: Record<string, string> = {
-  "application/pdf": ".pdf",
-  "text/plain": ".txt",
-  "text/markdown": ".md",
-};
-const MetadataSchema = z.object({
+const ExternalHttpsUrl = z.string().trim().url().max(2048).refine((value) => {
+  try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password; }
+  catch { return false; }
+}, "Study material links must be valid HTTPS URLs without embedded credentials.");
+
+const AudienceTargetSchema = z.object({
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH", "STUDENTS"]).default("ALL"),
+  targetStudentIds: z.preprocess((value) => typeof value === "string" ? value.split(",").filter(Boolean).map(Number) : value, z.array(z.number().int().positive()).max(500).default([])),
+  targetCollegeCode: z.string().trim().max(40).default(""),
+  targetCollegeName: z.string().trim().max(160).default(""),
+  targetBranchCode: z.string().trim().max(40).default(""),
+  targetBranchName: z.string().trim().max(160).default(""),
+});
+
+function validateAudienceTarget(value: {
+  audienceScope: "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS";
+  targetStudentIds: number[];
+  targetCollegeCode?: string;
+  targetCollegeName?: string;
+  targetBranchCode?: string;
+  targetBranchName?: string;
+}, ctx: z.RefinementCtx) {
+  if (value.audienceScope === "STUDENTS" && value.targetStudentIds.length === 0) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
+  }
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Choose a college code or enter a college name.", path: ["targetCollegeName"] });
+  }
+  if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Choose a branch code or enter a branch name.", path: ["targetBranchName"] });
+  }
+}
+
+function audienceData(value: {
+  audienceScope: "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS";
+  targetStudentIds: number[];
+  targetCollegeCode?: string;
+  targetCollegeName?: string;
+  targetBranchCode?: string;
+  targetBranchName?: string;
+}) {
+  return {
+    audienceScope: value.audienceScope,
+    targetCollegeCode: value.targetCollegeCode?.trim() || null,
+    targetCollegeName: value.targetCollegeName?.trim() || null,
+    targetBranchCode: value.targetBranchCode?.trim() || null,
+    targetBranchName: value.targetBranchName?.trim() || null,
+    targetStudentIdsJson: JSON.stringify(value.targetStudentIds ?? []),
+  };
+}
+
+const LinkFields = z.object({
+  title: z.string().trim().min(2).max(140),
+  description: z.string().trim().max(1000).default(""),
+  subject: z.string().trim().min(1).max(80),
+  topic: z.string().trim().max(100).default(""),
+  url: ExternalHttpsUrl,
+  ...AudienceTargetSchema.shape,
+}).strict().superRefine(validateAudienceTarget);
+
+const FileMetadata = z.object({
   title: z.string().trim().min(2).max(140),
   description: z.string().trim().max(1000).default(""),
   subject: z.string().trim().min(1).max(80),
   topic: z.string().trim().max(100).default(""),
   fileName: z.string().trim().min(1).max(180),
-  mimeType: z.enum(["application/pdf", "text/plain", "text/markdown"]),
-  contentBase64: z.string().min(1).max(12 * 1024 * 1024),
-}).strict();
+  ...AudienceTargetSchema.shape,
+}).strict().superRefine(validateAudienceTarget);
 
-function safeFileName(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._ -]/g, "_").replace(/\s+/g, "_").slice(0, 150) || "study-material";
-}
+const MaterialPatch = z.object({
+  title: z.string().trim().min(2).max(140).optional(),
+  description: z.string().trim().max(1000).optional(),
+  subject: z.string().trim().min(1).max(80).optional(),
+  topic: z.string().trim().max(100).optional(),
+  url: z.string().trim().max(2048).optional(),
+  status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH", "STUDENTS"]).optional(),
+  targetStudentIds: z.array(z.number().int().positive()).max(500).optional(),
+  targetCollegeCode: z.string().trim().max(40).nullable().optional(),
+  targetCollegeName: z.string().trim().max(160).nullable().optional(),
+  targetBranchCode: z.string().trim().max(40).nullable().optional(),
+  targetBranchName: z.string().trim().max(160).nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (Object.keys(value).length === 0) ctx.addIssue({ code: "custom", message: "Provide at least one field to update." });
+  if (value.audienceScope === "STUDENTS" && (value.targetStudentIds?.length ?? 0) === 0) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
+  }
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A college code or name is required for college-only content.", path: ["targetCollegeName"] });
+  }
+  if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
+    ctx.addIssue({ code: "custom", message: "A branch code or name is required for branch-only content.", path: ["targetBranchName"] });
+  }
+});
 
 const publicSelect = {
-  id: true, title: true, description: true, subject: true, topic: true,
-  fileName: true, mimeType: true, sizeBytes: true, createdAt: true, updatedAt: true,
+  id: true, title: true, description: true, subject: true, topic: true, url: true,
+  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true, createdAt: true, updatedAt: true,
 } as const;
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const mimeByExtension: Record<string, string> = {
+  pdf: "application/pdf", txt: "text/plain", md: "text/markdown",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+};
+function parseUploadedFile(req: express.Request): { bytes: Buffer; fileName: string; mimeType: string } {
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw badRequest("Choose a non-empty file to upload.");
+  if (req.body.length > MAX_FILE_BYTES) throw badRequest("Study files must be 10 MB or smaller.");
+  const query = FileMetadata.parse(req.query);
+  const fileName = basename(query.fileName).replace(/[\r\n"]/g, "").slice(0, 180);
+  const extension = fileName.toLowerCase().split(".").pop() ?? "";
+  const expectedMime = mimeByExtension[extension];
+  if (!expectedMime) throw badRequest("Unsupported file type. Upload PDF, TXT, Markdown, DOCX, PPTX, XLSX, PNG or JPG.");
+  const suppliedMime = String(req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+  const mimeType = suppliedMime === "application/octet-stream" || !suppliedMime ? expectedMime : suppliedMime;
+  if (mimeType !== expectedMime && !(extension === "md" && mimeType === "text/plain")) {
+    throw badRequest("The selected file type does not match its filename.");
+  }
+  return { bytes: req.body, fileName, mimeType };
+}
+function fileSelectHeaders(res: express.Response, fileName: string, mimeType: string, sizeBytes: number) {
+  const safeName = fileName.replace(/[\r\n"]/g, "_");
+  res.setHeader("Content-Type", mimeType || "application/octet-stream");
+  res.setHeader("Content-Length", String(sizeBytes));
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, no-store");
+}
 
 export function studyMaterialRouter(db: PrismaClient): Router {
   const router = Router();
 
-  router.get("/study-materials", requireAuth, async (_req, res, next) => {
+  router.get("/study-materials", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const materials = await db.studyMaterial.findMany({
-        where: { status: "PUBLISHED" },
+      const profile = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
+      });
+      if (!profile) return next(notFound("Student profile was not found."));
+      const published = await db.studyMaterial.findMany({
+        where: { status: "PUBLISHED", OR: [{ url: { not: "" } }, { fileName: { not: "" } }] },
         orderBy: [{ subject: "asc" }, { title: "asc" }],
         select: publicSelect,
       });
-      res.json({ ok: true, materials });
+      const materials = profile.role === "ADMIN" ? published : published.filter((item) =>
+        isContentAudienceVisible(item as ContentAudience, profile),
+      );
+      res.json({ ok: true, materials: materials.map((item) => ({ ...item, targetStudentIdsJson: undefined })) });
     } catch (error) { next(error); }
   });
 
-  router.get("/study-materials/:id/download", requireAuth, async (req, res, next) => {
+  router.get("/study-materials/:id/file", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
-      const material = await db.studyMaterial.findFirst({
-        where: { id, status: "PUBLISHED" },
-      });
-      if (!material) return next(notFound("Published study material was not found."));
+      const material = await db.studyMaterial.findUnique({ where: { id }, select: {
+        status: true, fileName: true, mimeType: true, sizeBytes: true, contentBase64: true,
+        audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true,
+      } });
+      if (!material || !material.fileName || !material.contentBase64) return next(notFound("Study file was not found."));
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: {
+        id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true,
+      } });
+      if (!account) return next(notFound("Study file was not found."));
+      if (material.status !== "PUBLISHED" && account.role !== "ADMIN") return next(notFound("Study file was not found."));
+      if (material.status === "PUBLISHED" && account.role !== "ADMIN" && !isContentAudienceVisible(material as ContentAudience, account)) {
+        return next(notFound("Study file was not found."));
+      }
       const bytes = Buffer.from(material.contentBase64, "base64");
-      if (bytes.byteLength !== material.sizeBytes) return next(badRequest("Stored study material failed its integrity check."));
-      res.setHeader("Content-Type", material.mimeType);
-      res.setHeader("Content-Length", String(bytes.byteLength));
-      res.setHeader("Content-Disposition", `attachment; filename="${safeFileName(material.fileName)}"`);
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "private, no-store");
+      fileSelectHeaders(res, material.fileName, material.mimeType, bytes.length);
       res.send(bytes);
-    } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
-      next(error);
-    }
-  });
-
-  router.get("/study-materials/:id/offline", requireAuth, async (req, res, next) => {
-    try {
-      const id = z.string().min(1).max(64).parse(req.params.id);
-      const material = await db.studyMaterial.findFirst({
-        where: { id, status: "PUBLISHED", mimeType: { in: ["text/plain", "text/markdown"] } },
-      });
-      if (!material) return next(notFound("Published text or Markdown study material was not found."));
-      const bytes = Buffer.from(material.contentBase64, "base64");
-      if (bytes.byteLength !== material.sizeBytes) return next(badRequest("Stored study material failed its integrity check."));
-      res.setHeader("Cache-Control", "private, no-store");
-      res.json({
-        ok: true,
-        material: {
-          id: material.id, title: material.title, description: material.description,
-          subject: material.subject, topic: material.topic, fileName: material.fileName,
-          mimeType: material.mimeType, sizeBytes: material.sizeBytes, content: bytes.toString("utf8"),
-        },
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
-      next(error);
-    }
-  });
-
-  router.get("/study-materials/:id/preview", requireAuth, async (req, res, next) => {
-    try {
-      const id = z.string().min(1).max(64).parse(req.params.id);
-      const material = await db.studyMaterial.findFirst({
-        where: { id, status: "PUBLISHED", mimeType: "application/pdf" },
-      });
-      if (!material) return next(notFound("Published PDF study material was not found."));
-      const bytes = Buffer.from(material.contentBase64, "base64");
-      if (bytes.byteLength !== material.sizeBytes) return next(badRequest("Stored study material failed its integrity check."));
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Length", String(bytes.byteLength));
-      res.setHeader("Content-Disposition", `inline; filename="${safeFileName(material.fileName)}"`);
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "private, no-store");
-      res.send(bytes);
-    } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
 
   router.get("/admin/study-materials", requireAuth, requireAdmin(db), async (_req, res, next) => {
     try {
       const materials = await db.studyMaterial.findMany({
         orderBy: { createdAt: "desc" },
-        select: { ...publicSelect, status: true, uploadedById: true },
+        select: { ...publicSelect, status: true, uploadedById: true, targetStudentIdsJson: true },
         take: 300,
       });
       res.json({ ok: true, materials });
@@ -122,40 +195,55 @@ export function studyMaterialRouter(db: PrismaClient): Router {
 
   router.post("/admin/study-materials", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
-      const input = MetadataSchema.parse(req.body);
-      const extension = MIME_TYPES[input.mimeType];
-      if (!input.fileName.toLowerCase().endsWith(extension)) {
-        return next(badRequest(`The selected file must use the ${extension} extension.`));
-      }
-      const contentBase64 = input.contentBase64.replace(/^data:[^;]+;base64,/, "");
-      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(contentBase64) || contentBase64.length % 4 !== 0) {
-        return next(badRequest("The uploaded file data is not valid base64."));
-      }
-      const bytes = Buffer.from(contentBase64, "base64");
-      if (!bytes.byteLength || bytes.byteLength > MAX_FILE_BYTES) {
-        return next(badRequest("Study materials must be between 1 byte and 8 MB."));
-      }
-      if (input.mimeType === "application/pdf" && bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
-        return next(badRequest("The selected file does not contain a valid PDF signature."));
-      }
-      const created = await db.studyMaterial.create({
-        data: {
-          uploadedById: req.user!.id,
-          title: input.title,
-          description: input.description,
-          subject: input.subject,
-          topic: input.topic,
-          fileName: safeFileName(input.fileName),
-          mimeType: input.mimeType,
-          sizeBytes: bytes.byteLength,
-          contentBase64: bytes.toString("base64"),
-          status: "DRAFT",
-        },
-        select: { ...publicSelect, status: true },
+      const input = LinkFields.parse(req.body);
+      const material = await db.studyMaterial.create({
+        data: { uploadedById: req.user!.id, title: input.title, description: input.description, subject: input.subject, topic: input.topic, url: input.url, ...audienceData(input), fileName: "", mimeType: "", sizeBytes: 0, contentBase64: "", status: "DRAFT" },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
       });
-      res.status(201).json({ ok: true, material: created });
+      res.status(201).json({ ok: true, material });
     } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof z.ZodError) return next(badRequest("Provide valid resource metadata and an HTTPS link."));
+      next(error);
+    }
+  });
+
+  router.post("/admin/study-materials/upload", requireAuth, requireAdmin(db), express.raw({ type: () => true, limit: MAX_FILE_BYTES }), async (req: AuthedRequest, res, next) => {
+    try {
+      const metadata = FileMetadata.parse(req.query);
+      const file = parseUploadedFile(req);
+      const material = await db.studyMaterial.create({
+        data: {
+          uploadedById: req.user!.id, title: metadata.title, description: metadata.description,
+          subject: metadata.subject, topic: metadata.topic, ...audienceData(metadata), url: "",
+          fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length,
+          contentBase64: file.bytes.toString("base64"), status: "DRAFT",
+        },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
+      });
+      res.status(201).json({ ok: true, material });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Provide valid file metadata."));
+      next(error);
+    }
+  });
+
+  router.patch("/admin/study-materials/:id/file", requireAuth, requireAdmin(db), express.raw({ type: () => true, limit: MAX_FILE_BYTES }), async (req: AuthedRequest, res, next) => {
+    try {
+      const id = z.string().min(1).max(64).parse(req.params.id);
+      if (!await db.studyMaterial.findUnique({ where: { id }, select: { id: true } })) return next(notFound("Study material was not found."));
+      const metadata = FileMetadata.parse(req.query);
+      const file = parseUploadedFile(req);
+      const material = await db.studyMaterial.update({
+        where: { id },
+        data: {
+          title: metadata.title, description: metadata.description, subject: metadata.subject, topic: metadata.topic, ...audienceData(metadata),
+          url: "", fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length, contentBase64: file.bytes.toString("base64"),
+        },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
+      });
+      res.json({ ok: true, material });
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(badRequest("Provide valid file metadata."));
       next(error);
     }
   });
@@ -163,20 +251,14 @@ export function studyMaterialRouter(db: PrismaClient): Router {
   router.patch("/admin/study-materials/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
-      const input = z.object({
-        title: z.string().trim().min(2).max(140).optional(),
-        description: z.string().trim().max(1000).optional(),
-        subject: z.string().trim().min(1).max(80).optional(),
-        topic: z.string().trim().max(100).optional(),
-        status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
-      }).strict().refine((value) => Object.keys(value).length > 0);
-      const data = input.parse(req.body);
-      const exists = await db.studyMaterial.findUnique({ where: { id }, select: { id: true } });
-      if (!exists) return next(notFound("Study material was not found."));
-      const material = await db.studyMaterial.update({ where: { id }, data, select: { ...publicSelect, status: true } });
+      const patch = MaterialPatch.parse(req.body);
+      if (patch.url) ExternalHttpsUrl.parse(patch.url);
+      if (!await db.studyMaterial.findUnique({ where: { id }, select: { id: true } })) return next(notFound("Study material was not found."));
+      const { targetStudentIds, ...patchFields } = patch;
+      const material = await db.studyMaterial.update({ where: { id }, data: { ...patchFields, ...(targetStudentIds !== undefined ? { targetStudentIdsJson: JSON.stringify(targetStudentIds) } : {}) }, select: { ...publicSelect, status: true } });
       res.json({ ok: true, material });
     } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
+      if (error instanceof z.ZodError) return next(badRequest("Invalid study material update."));
       next(error);
     }
   });
@@ -184,14 +266,10 @@ export function studyMaterialRouter(db: PrismaClient): Router {
   router.delete("/admin/study-materials/:id", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const id = z.string().min(1).max(64).parse(req.params.id);
-      const exists = await db.studyMaterial.findUnique({ where: { id }, select: { id: true } });
-      if (!exists) return next(notFound("Study material was not found."));
+      if (!await db.studyMaterial.findUnique({ where: { id }, select: { id: true } })) return next(notFound("Study material was not found."));
       await db.studyMaterial.delete({ where: { id } });
       res.json({ ok: true, deleted: true });
-    } catch (error) {
-      if (error instanceof z.ZodError) return next(error);
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
 
   return router;

@@ -1,0 +1,13 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Computer Networks,OSI Model,Which OSI layer is responsible for routing packets between networks?,Session,Network,Data Link,Transport,1,The Network layer performs logical addressing and routing.,NEEDS HUMAN REVIEW,medium
+Computer Networks,IP Addressing,How many bits are in an IPv4 address?,64,128,32,16,2,IPv4 addresses contain 32 bits.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Subnetting,How many usable host addresses are in a typical IPv4 /26 subnet?,64,30,126,62,3,A /26 has 64 addresses; subtract network and broadcast: 62 usable.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Network Services,Which protocol resolves domain names to IP addresses?,DNS,DHCP,FTP,SNMP,0,DNS maps domain names to IP addresses.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Transport Protocols,"Which transport protocol provides reliable, connection-oriented delivery?",ICMP,TCP,UDP,IP,1,TCP provides reliable ordered byte-stream delivery.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Network Security,Which protocol protects HTTP traffic with TLS?,Telnet,TFTP,HTTPS,FTP,2,HTTPS is HTTP secured with TLS.,NEEDS HUMAN REVIEW,medium
+Computer Networks,OSI Model,Which OSI layer provides end-to-end transport services to applications?,Network,Data Link,Physical,Transport,3,The Transport layer provides end-to-end delivery services.,NEEDS HUMAN REVIEW,medium
+Computer Networks,IP Addressing,How many bits are used in an IPv6 address?,64,48,128,32,2,IPv6 addresses are 128 bits long.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Subnetting,How many usable host addresses are available in a conventional IPv4 /27 subnet?,14,30,32,62,1,A /27 has 32 addresses; network and broadcast leave 30 usable hosts.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Network Services,Which protocol automatically leases IP configuration to clients?,DHCP,DNS,FTP,SNMP,0,DHCP dynamically supplies IP configuration to hosts.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Transport Protocols,Which transport protocol is connectionless and does not guarantee delivery?,TCP,SCTP only,HTTP,UDP,3,UDP is connectionless and does not provide delivery guarantees.,NEEDS HUMAN REVIEW,medium
+Computer Networks,Network Security,Which mechanism can authenticate a message and verify its integrity using a secret key?,ARP,DHCP,HMAC,Plaintext checksum only,2,HMAC provides keyed message authentication and integrity.,NEEDS HUMAN REVIEW,medium

@@ -1,8 +1,8 @@
 import express from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import { PrismaClient } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
@@ -11,30 +11,81 @@ import { questionRouter } from "./questionRoutes.js";
 import { sessionRouter } from "./sessionRoutes.js";
 import { submissionRouter } from "./submissionRoutes.js";
 import { questionAdminRouter } from "./questionAdminRoutes.js";
-import { modelRegistryRouter } from "./modelRoutes.js";
-import { modelTrainingJobsRouter } from "./modelTrainingJobRoutes.js";
-import { startModelTrainingWorker } from "./modelTrainingWorker.js";
 import { announcementRouter } from "./announcementRoutes.js";
 import { studyMaterialRouter } from "./studyMaterialRoutes.js";
-import { answerIntelligenceRouter } from "./answerIntelligenceRoutes.js";
+import { conceptLibraryRouter } from "./conceptLibraryRoutes.js";
+import { lessonGenerationRouter } from "./lessonGenerationRoutes.js";
+import { lessonCatalogRouter } from "./lessonCatalogRoutes.js";
+import { lessonPackageAdminRouter } from "./lessonPackageAdminRoutes.js";
+import { learningPathRouter } from "./learningPathRoutes.js";
+import { gamificationRouter } from "./gamificationRoutes.js";
+import { masteryRouter } from "./masteryRoutes.js";
+import { studentMcpRouter } from "./studentMcpRoutes.js";
+import { adminMcpRouter } from "./adminMcpRoutes.js";
+import { adminModelLabRouter } from "./adminModelLabRoutes.js";
+import { modelInferenceRouter } from "./modelInferenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
+import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
+import { adminStudentRouter } from "./adminStudentRoutes.js";
+import { auditRequestMiddleware } from "./audit.js";
+import { studentAuditRouter } from "./studentAuditRoutes.js";
+import { validateProductionSecurityConfig } from "./securityConfig.js";
+import { opsMetricsMiddleware, opsMetricsRouter, startOpsMetricsHeartbeat } from "./opsMetrics.js";
+
 
 const db = new PrismaClient();
 
-// General request rate limiting applied to every API route. Login keeps its own
-// stricter per-IP + per-account throttle in auth.ts.
-const apiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests. Try again later." },
-});
+// Shared atomic request limiting in PostgreSQL; works across API instances.
+// Store only a SHA-256 digest of the client IP, not the IP itself.
+const API_LIMIT = 300;
+const apiBucketHash = (ip: string) => "api:" + createHash("sha256").update(ip || "unknown").digest("hex");
+let apiLimiterCleanupCounter = 0;
+function sharedApiRateLimit(database: PrismaClient): express.RequestHandler {
+  return async (req, res, next) => {
+    // Keep liveness/readiness semantics independent of the rate-limit table.
+    if (req.path === "/health" || req.path === "/ready" || req.method === "OPTIONS") return next();
+    try {
+      const bucketKey = apiBucketHash(req.ip ?? "unknown");
+      const rows = await database.$queryRaw<Array<{ count: number; blockedUntil: Date | null; retryAfterSeconds: number }>>`
+        INSERT INTO auth_rate_limit_buckets (bucket_key, failure_count, window_started_at, blocked_until, updated_at)
+        VALUES (${bucketKey}, 1, NOW(), NULL, NOW())
+        ON CONFLICT (bucket_key) DO UPDATE SET
+          failure_count = CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN 1 ELSE auth_rate_limit_buckets.failure_count + 1 END,
+          window_started_at = CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN NOW() ELSE auth_rate_limit_buckets.window_started_at END,
+          blocked_until = CASE
+            WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN NULL
+            WHEN auth_rate_limit_buckets.failure_count + 1 > ${API_LIMIT} THEN COALESCE(auth_rate_limit_buckets.blocked_until, NOW() + INTERVAL '15 minutes')
+            ELSE auth_rate_limit_buckets.blocked_until
+          END,
+          updated_at = NOW()
+        RETURNING failure_count AS count, blocked_until AS "blockedUntil",
+          CASE WHEN blocked_until IS NULL THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (window_started_at + INTERVAL '15 minutes' - NOW()))))::int
+               ELSE GREATEST(0, CEIL(EXTRACT(EPOCH FROM (blocked_until - NOW()))))::int END AS "retryAfterSeconds"
+      `;
+      const row = rows[0];
+      if (!row) return next(new Error("Shared API rate limiter did not return a bucket."));
+      res.setHeader("RateLimit-Limit", String(API_LIMIT));
+      res.setHeader("RateLimit-Remaining", String(Math.max(0, API_LIMIT - row.count)));
+      res.setHeader("RateLimit-Reset", String(row.retryAfterSeconds));
+      if (row.count > API_LIMIT || (row.blockedUntil && row.blockedUntil.getTime() > Date.now())) {
+        const retryAfter = Math.max(1, row.retryAfterSeconds);
+        res.setHeader("Retry-After", String(retryAfter));
+        return res.status(429).json({ error: "Too many requests. Try again later." });
+      }
+      apiLimiterCleanupCounter += 1;
+      if (apiLimiterCleanupCounter % 100 === 0) {
+        void database.$executeRaw`DELETE FROM auth_rate_limit_buckets WHERE updated_at < NOW() - INTERVAL '1 day'`.catch(() => undefined);
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
 
 /**
- * Minimal CORS without another dependency. In production only exact configured
- * origins are allowed; localhost/loopback is permitted outside production so
- * local development and the packaged desktop client (file://) can reach the API.
+ * Minimal CORS. In production only exact configured origins are allowed;
+ * localhost/loopback is permitted outside production for local development.
  */
 function localCors(
   _req: express.Request,
@@ -51,10 +102,7 @@ function localCors(
   const isLocalOrigin =
     process.env.NODE_ENV !== "production" &&
     /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
-  // file:// (desktop) sends Origin: "null"; allow it outside production so the
-  // packaged desktop app can reach the API on localhost.
-  const isFileOrigin = process.env.NODE_ENV !== "production" && origin === "null";
-  if (origin && (isLocalOrigin || isFileOrigin || configuredOrigins.has(origin))) {
+  if (origin && (isLocalOrigin || configuredOrigins.has(origin))) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -104,37 +152,42 @@ function cookieCsrfGuard(
 }
 
 export function buildApp(database: PrismaClient = db): express.Express {
+  validateProductionSecurityConfig();
   const app = express();
   // requireAuth resolves the same injected client used by every router and test schema.
   app.locals.db = database;
-  app.set("trust proxy", 1);
+  const stopOpsMetricsHeartbeat = process.env.NODE_ENV === "test" ? () => undefined : startOpsMetricsHeartbeat(database);
+  app.locals.stopOpsMetricsHeartbeat = stopOpsMetricsHeartbeat;
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 10) {
+    throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 10 and match the deployed proxy chain.");
+  }
+  app.set("trust proxy", trustProxyHops);
   // Morgan request logs expose route, status, latency and origin without logging
   // cookies, bearer tokens, request bodies or query-string secrets.
   morgan.token("route", (req) => req.path);
   app.use(morgan(":method :route :status :response-time ms origin=:req[origin]", {
     skip: (req) => req.path === "/health" || req.path === "/ready",
   }));
-  // helmet sets secure defaults (HSTS, X-Content-Type-Options, CSP, referrer
-  // policy, etc.). Disable frameguard so the admin live monitor can be framed
-  // only where explicitly desired; keep the rest of the defaults.
-  app.use(
-    helmet({
-      contentSecurityPolicy: false,
-    })
-  );
-  app.use(apiRateLimit);
-  // 1 MB JSON body limit by default. The large-payload import routes apply their
-  // own 50 MB parsers below; every other route uses the 1 MB global parser.
+  // Keep Helmet's default security headers, including CSP and SAMEORIGIN
+  // framing protection. This API does not need to serve embeddable HTML.
+  app.use(helmet());
+  app.use(localCors);
+  app.use(sharedApiRateLimit(database));
+  // Keep the bulk import endpoints on their route-specific parsers. Prepared
+  // lesson audio is base64 JSON (up to 12 MiB decoded), so parse it here with
+  // enough headroom for the encoded payload; ordinary API requests stay at 1 MiB.
   app.use((req, res, next) => {
-    if (req.path === "/admin/questions/import" || req.path === "/analytics/import") {
+    if (req.path === "/admin/questions/import" || req.path === "/analytics/import" || req.path === "/mcp/student" || req.path === "/mcp/admin" || req.path === "/student/private-questions/import") {
       return next();
     }
-    const largePayload = req.path.startsWith("/admin/model-datasets") ||
-      req.path.startsWith("/admin/study-materials");
-    express.json({ limit: largePayload ? "12mb" : "1mb" })(req, res, next);
+    const isLessonAudioUpload = /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path);
+    express.json({ limit: isLessonAudioUpload ? "18mb" : "1mb" })(req, res, next);
   });
-  app.use(localCors);
   app.use(cookieCsrfGuard);
+  app.use(auditRequestMiddleware(database));
+  app.use(opsMetricsMiddleware());
+  app.use(opsMetricsRouter(database));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
@@ -156,15 +209,29 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
   // and /admin/exams/attendance are matched before the /admin/exams/:id param route.
   app.use(sessionRouter(database));
+  // Audit timeline/export endpoints must be registered before the generic student :id routes.
+  app.use(studentAuditRouter(database));
+  // Student administration routes must precede exam routes, which retain legacy
+  // /admin/students handlers for backwards compatibility.
+  app.use(adminStudentRouter(database));
   app.use(examRouter(database));
   app.use(questionRouter(database));
   app.use(submissionRouter(database));
   app.use(questionAdminRouter(database));
-  app.use(modelRegistryRouter(database));
-  app.use(modelTrainingJobsRouter(database));
   app.use(announcementRouter(database));
   app.use(studyMaterialRouter(database));
-  app.use(answerIntelligenceRouter(database));
+  app.use(conceptLibraryRouter(database));
+  app.use(lessonGenerationRouter(database));
+  app.use(lessonCatalogRouter(database));
+  app.use(lessonPackageAdminRouter(database));
+  app.use(learningPathRouter(database));
+  app.use(gamificationRouter(database));
+  app.use(masteryRouter(database));
+  app.use(studentMcpRouter(database));
+  app.use(adminInstitutionRouter(database));
+  app.use(adminMcpRouter(database));
+  app.use(adminModelLabRouter(database));
+  app.use(modelInferenceRouter(database));
 
   app.use((_req, _res, next) => next(notFound("That page does not exist.")));
   app.use(errorHandler);
@@ -175,10 +242,29 @@ const app = buildApp();
 
 const PORT = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
-    startModelTrainingWorker(db);
+  const server = app.listen(PORT, () => {
     console.log(`ecet-api listening on http://localhost:${PORT}`);
   });
+  let shutdownStarted = false;
+  const shutdown = (signal: string) => {
+    if (shutdownStarted) return;
+    shutdownStarted = true;
+    console.log(`ecet-api received ${signal}; draining requests`);
+    (app.locals as { stopOpsMetricsHeartbeat?: () => void }).stopOpsMetricsHeartbeat?.();
+    server.close((error) => {
+      if (error) {
+        console.error("ecet-api HTTP shutdown failed", error);
+        process.exitCode = 1;
+      }
+      void db.$disconnect().catch((disconnectError: unknown) => {
+        console.error("ecet-api database disconnect failed", disconnectError);
+        process.exitCode = 1;
+      });
+    });
+    server.closeIdleConnections?.();
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 export default app;

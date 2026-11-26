@@ -5,22 +5,147 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, notFound } from "./errors.js";
 import { requireAdmin, requireAuth } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
-import { QuestionInputSchema, encodeOptions, hashQuestion } from "./questions.js";
+import { QuestionInputSchema, QUESTION_TYPES, encodeOptions, hashQuestion } from "./questions.js";
 
 const ListSchema = z.object({
   q: z.string().trim().max(300).optional(),
   subject: z.string().trim().max(120).optional(),
   topic: z.string().trim().max(120).optional(),
   difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+  reviewStatus: z.enum(["DRAFT", "APPROVED", "REJECTED"]).optional(),
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
-const UpdateSchema = QuestionInputSchema.partial().refine((value) => Object.keys(value).length > 0);
+const UpdateSchema = z.object({
+  subject: z.string().trim().min(1).optional(),
+  topic: z.string().trim().min(1).optional(),
+  text: z.string().trim().min(1).optional(),
+  options: z.array(z.string().trim()).optional(),
+  correctIndex: z.number().int().min(0).optional(),
+  explanation: z.string().optional(),
+  source: z.string().optional(),
+  difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+  questionType: z.enum(QUESTION_TYPES).optional(),
+  promptData: z.record(z.string(), z.unknown()).optional(),
+  answerData: z.record(z.string(), z.unknown()).optional(),
+}).refine((value) => Object.keys(value).length > 0);
 const BulkSchema = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) });
+const ReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
+const AP_ECET_SUBJECT_QUOTAS: Record<string, number> = { Mathematics: 50, Physics: 25, Chemistry: 25, "Digital Electronics": 6, "Software Engineering": 6, "Computer Organisation and Microprocessors": 8, "Data Structures through C": 10, "Computer Networks": 6, "Operating Systems": 10, DBMS: 8, "Java Programming": 10, "Web Technologies": 8, "Big-data & Cloud Computing": 6, "Android Programming": 6, "Internet Of Things(IoT)": 8, "Python Programming": 8 };
+function hasReviewableSource(source: string): boolean { const normalized = source.trim().toUpperCase(); return normalized.length > 0 && normalized !== "NEEDS HUMAN REVIEW"; }
 export function questionAdminRouter(db: PrismaClient): Router {
   const router = Router();
   router.use("/admin", requireAuth, requireAdmin(db));
 
+
+  router.get("/admin/question-review/progress", async (_req, res, next) => {
+    try {
+      const [subjects, groups] = await Promise.all([
+        db.subject.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+        db.question.groupBy({ by: ["subjectId", "reviewStatus"], _count: { _all: true } }),
+      ]);
+      const subjectById = new Map(subjects.map((subject) => [subject.id, subject.name]));
+      const counts = new Map<string, { drafted: number; approved: number; rejected: number }>();
+      for (const group of groups) {
+        const name = subjectById.get(group.subjectId);
+        if (!name) continue;
+        const row = counts.get(name) ?? { drafted: 0, approved: 0, rejected: 0 };
+        if (group.reviewStatus === "DRAFT") row.drafted = group._count._all;
+        if (group.reviewStatus === "APPROVED") row.approved = group._count._all;
+        if (group.reviewStatus === "REJECTED") row.rejected = group._count._all;
+        counts.set(name, row);
+      }
+      const names = [...new Set([...subjects.map((subject) => subject.name), ...Object.keys(AP_ECET_SUBJECT_QUOTAS)])].sort();
+      const progress = names.map((name) => {
+        const row = counts.get(name) ?? { drafted: 0, approved: 0, rejected: 0 };
+        const paperQuota = AP_ECET_SUBJECT_QUOTAS[name] ?? 0;
+        const requiredQuota = paperQuota * 3;
+        return { subject: name, paperQuota, requiredQuota, ...row, remaining: Math.max(0, requiredQuota - row.drafted - row.approved) };
+      });
+      const totals = progress.reduce((total, row) => ({ drafted: total.drafted + row.drafted, approved: total.approved + row.approved, rejected: total.rejected + row.rejected, requiredQuota: total.requiredQuota + row.requiredQuota, remaining: total.remaining + row.remaining }), { drafted: 0, approved: 0, rejected: 0, requiredQuota: 0, remaining: 0 });
+      res.json({ ok: true, subjects: progress, totals });
+    } catch (error) { next(error); }
+  });
+
+  router.post("/admin/questions/review/bulk-scope", async (req, res, next) => {
+    try {
+      const input = z.object({
+        subject: z.string().trim().min(1).max(120),
+        topic: z.string().trim().max(120).optional(),
+        difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+        dryRun: z.boolean().default(false),
+      }).parse(req.body);
+      const where = {
+        reviewStatus: "DRAFT",
+        subject: { is: { name: input.subject } },
+        ...(input.topic ? { topic: { is: { name: input.topic } } } : {}),
+        ...(input.difficulty ? { difficulty: input.difficulty } : {}),
+      };
+      const candidates = await db.question.findMany({ where, select: { id: true, source: true } });
+      const eligible = candidates.filter((question) => hasReviewableSource(question.source));
+      const missingSourceCount = candidates.length - eligible.length;
+      if (input.dryRun) {
+        return res.json({ ok: true, matchedCount: candidates.length, eligibleCount: eligible.length, missingSourceCount });
+      }
+      if (eligible.length === 0) {
+        return res.json({ ok: true, approvedCount: 0, matchedCount: candidates.length, missingSourceCount });
+      }
+      const result = await db.question.updateMany({
+        where: { id: { in: eligible.map((question) => question.id) }, reviewStatus: "DRAFT" },
+        data: { reviewStatus: "APPROVED" },
+      });
+      res.json({ ok: true, approvedCount: result.count, matchedCount: candidates.length, missingSourceCount });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/questions/review/bulk", async (req, res, next) => {
+    try {
+      const input = z.object({
+        ids: z.array(z.number().int().positive()).min(1).max(500),
+        status: ReviewStatusSchema,
+        sources: z.array(z.object({ id: z.number().int().positive(), source: z.string().trim().max(500) })).optional(),
+      }).parse(req.body);
+      if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Question IDs must be unique."));
+      const sources = input.sources ?? [];
+      if (new Set(sources.map((item) => item.id)).size !== sources.length) return next(badRequest("Question source entries must have unique IDs."));
+      if (sources.some((item) => !input.ids.includes(item.id))) return next(badRequest("Sources may only be supplied for selected questions."));
+      const sourceById = new Map(sources.map((item) => [item.id, item.source.trim()]));
+      const result = await db.$transaction(async (tx) => {
+        const questions = await tx.question.findMany({ where: { id: { in: input.ids } }, select: { id: true, source: true } });
+        if (questions.length !== input.ids.length) throw badRequest("One or more selected questions do not exist.");
+        if (input.status === "APPROVED") {
+          const missingSource = questions.filter((question) => {
+            const source = sourceById.get(question.id) ?? question.source;
+            return !hasReviewableSource(source);
+          }).map((question) => question.id);
+          if (missingSource.length) throw badRequest("Add a real source for every selected question before bulk approval. Missing source for: " + missingSource.join(", ") + ".");
+        }
+        for (const question of questions) {
+          const source = sourceById.get(question.id);
+          await tx.question.update({ where: { id: question.id }, data: {
+            reviewStatus: input.status,
+            ...(source === undefined ? {} : { source }),
+          } });
+        }
+        return { count: questions.length };
+      });
+      res.json({ ok: true, updated: result.count, reviewStatus: input.status });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/questions/:id/review", async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return next(badRequest("Invalid question ID."));
+      const input = z.object({ status: ReviewStatusSchema, source: z.string().trim().max(500).optional() }).parse(req.body);
+      const existing = await db.question.findUnique({ where: { id }, select: { id: true, source: true } });
+      if (!existing) return next(notFound("Question not found."));
+      const source = input.source ?? existing.source;
+      if (input.status === "APPROVED" && !hasReviewableSource(source)) return next(badRequest("Add a real source before approving this question. The review placeholder is not a source."));
+      const question = await db.question.update({ where: { id }, data: { reviewStatus: input.status, ...(input.source === undefined ? {} : { source: input.source }) }, select: { id: true, source: true, reviewStatus: true } });
+      res.json({ ok: true, question });
+    } catch (error) { next(error); }
+  });
   router.get("/admin/questions", async (req, res, next) => {
     try {
       const filter = ListSchema.parse(req.query);
@@ -28,6 +153,7 @@ export function questionAdminRouter(db: PrismaClient): Router {
         ...(filter.subject ? { subject: { name: filter.subject } } : {}),
         ...(filter.topic ? { topic: { name: filter.topic } } : {}),
         ...(filter.difficulty ? { difficulty: filter.difficulty } : {}),
+        ...(filter.reviewStatus ? { reviewStatus: filter.reviewStatus } : {}),
         ...(filter.q ? { OR: [
           { text: { contains: filter.q } },
           { explanation: { contains: filter.q } },
@@ -39,13 +165,14 @@ export function questionAdminRouter(db: PrismaClient): Router {
         db.question.findMany({
           where, orderBy: { createdAt: "desc" },
           skip: (filter.page - 1) * filter.limit, take: filter.limit,
-          include: { subject: true, topic: true },
+          include: { subject: true, topic: true, createdBy: { select: { id: true, email: true } } },
         }),
       ]);
       res.json({ ok: true, total, page: filter.page, limit: filter.limit, pages: Math.ceil(total / filter.limit),
         questions: questions.map((q) => ({ id: q.id, subject: q.subject.name, topic: q.topic?.name ?? "General",
-          text: q.text, options: JSON.parse(q.options), correctIndex: q.correctIndex,
-          explanation: q.explanation, source: q.source, difficulty: q.difficulty, createdAt: q.createdAt })) });
+          text: q.text, options: JSON.parse(q.options), questionType: q.questionType,
+          promptData: JSON.parse(q.promptData), answerData: JSON.parse(q.answerData), correctIndex: q.correctIndex,
+          explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, audienceScope: q.audienceScope, targetCollegeCode: q.targetCollegeCode, targetCollegeName: q.targetCollegeName, targetBranchCode: q.targetBranchCode, targetBranchName: q.targetBranchName, targetStudentIdsJson: q.targetStudentIdsJson, createdBy: q.createdBy, createdAt: q.createdAt })) });
     } catch (error) { next(error); }
   });
 
@@ -110,6 +237,9 @@ export function questionAdminRouter(db: PrismaClient): Router {
         text: patch.text ?? existing.text,
         options: patch.options ?? JSON.parse(existing.options),
         correctIndex: patch.correctIndex ?? existing.correctIndex,
+        questionType: patch.questionType ?? existing.questionType,
+        promptData: patch.promptData ?? JSON.parse(existing.promptData),
+        answerData: patch.answerData ?? JSON.parse(existing.answerData),
         explanation: patch.explanation ?? existing.explanation,
         source: patch.source ?? existing.source,
         difficulty: patch.difficulty ?? existing.difficulty,
@@ -119,8 +249,10 @@ export function questionAdminRouter(db: PrismaClient): Router {
         create: { subjectId: subject.id, name: merged.topic }, update: {} });
       const updated = await db.question.update({ where: { id }, data: {
         subjectId: subject.id, topicId: topic.id, text: merged.text, options: encodeOptions(merged.options),
-        correctIndex: merged.correctIndex, explanation: merged.explanation, source: merged.source,
-        difficulty: merged.difficulty, questionHash: hashQuestion(merged.text),
+        correctIndex: merged.correctIndex, questionType: merged.questionType,
+        promptData: JSON.stringify(merged.promptData), answerData: JSON.stringify(merged.answerData),
+        explanation: merged.explanation, source: merged.source,
+        difficulty: merged.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(merged.text),
       }, include: { subject: true, topic: true } });
       res.json({ ok: true, question: updated });
     } catch (error) { next(error); }

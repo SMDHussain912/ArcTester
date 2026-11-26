@@ -14,7 +14,7 @@ export function useMotionPreference(): MotionPreference {
   const [reduced, setReduced] = useState<boolean>(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return true;
     if (document.documentElement.dataset.motion === "reduced" || document.documentElement.dataset.motion === "off") return true;
-    if (window.matchMedia(REDUCED_QUERY).matches) return true;
+    if (typeof window.matchMedia === "function" && window.matchMedia(REDUCED_QUERY).matches) return true;
     if (typeof navigator !== "undefined" && "hardwareConcurrency" in navigator) {
       const cores = (navigator as unknown as { hardwareConcurrency?: number }).hardwareConcurrency;
       if (typeof cores === "number" && cores > 0 && cores <= LOW_END_CORES) return true;
@@ -27,10 +27,11 @@ export function useMotionPreference(): MotionPreference {
   });
 
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
     const media = window.matchMedia(REDUCED_QUERY);
     const handler = () => setReduced(media.matches);
-    media.addEventListener("change", handler);
-    return () => media.removeEventListener("change", handler);
+    media.addEventListener?.("change", handler);
+    return () => media.removeEventListener?.("change", handler);
   }, []);
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 import {
   QUESTION_ANALYTICS_MINIMUM_ANSWERS,
   QUESTION_ANALYTICS_WEAK_ACCURACY,
@@ -119,11 +120,11 @@ export function examRouter(db: PrismaClient): Router {
       }
 
       const sourceQuestions = await db.question.findMany({
-        where: { id: { in: questionIds } },
+        where: { id: { in: questionIds }, reviewStatus: "APPROVED" },
         include: { subject: true, topic: true },
       });
       if (sourceQuestions.length !== questionIds.length) {
-        return next(badRequest("One or more selected question IDs do not exist."));
+        return next(badRequest("One or more selected question IDs are missing or not approved."));
       }
       const questionById = new Map(sourceQuestions.map((question) => [question.id, question]));
       const snapshots = input.questions.map((selection, position) => {
@@ -398,11 +399,25 @@ export function examRouter(db: PrismaClient): Router {
       if (exam.status === "ARCHIVED") return next(conflict("Archived exams cannot receive new assignments."));
 
       const students = await db.user.findMany({
-        where: { id: { in: input.studentIds }, role: "STUDENT" },
-        select: { id: true },
+        where: { id: { in: input.studentIds }, role: "STUDENT", accessStatus: "APPROVED" },
+        select: { id: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
       });
       if (students.length !== input.studentIds.length) {
-        return next(badRequest("One or more selected accounts are not students."));
+        return next(badRequest("One or more selected accounts are not approved students."));
+      }
+
+      const versionQuestionRows = await db.examVersionQuestion.findMany({
+        where: { examVersionId: version.id, sourceQuestionId: { not: null } },
+        select: { sourceQuestionId: true },
+      });
+      const sourceQuestionIds = versionQuestionRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]);
+      if (sourceQuestionIds.length) {
+        const scopedQuestions = await db.question.findMany({
+          where: { id: { in: sourceQuestionIds }, audienceScope: { not: "ALL" } },
+          select: { id: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true },
+        });
+        const ineligible = students.filter((student) => scopedQuestions.some((question) => !isContentAudienceVisible(question as ContentAudience, student)));
+        if (ineligible.length) return next(badRequest("Scoped questions in this exam are not available to every selected student. Remove ineligible students or use content with a wider audience. Student IDs: " + ineligible.map((student) => student.id).join(", ") + "."));
       }
 
       const assignments = await db.$transaction(async (tx) => {
@@ -476,10 +491,10 @@ export function examRouter(db: PrismaClient): Router {
       if (new Set(ids).size !== ids.length) errors.push("Duplicate questions are not allowed in one paper.");
       if (input.questions.some((question) => question.negativeMarks > question.marks)) errors.push("Negative marks cannot exceed the marks for a correct answer.");
       const source = await db.question.findMany({
-        where: { id: { in: [...new Set(ids)] } },
+        where: { id: { in: [...new Set(ids)] }, reviewStatus: "APPROVED" },
         include: { subject: true },
       });
-      if (source.length !== new Set(ids).size) errors.push("One or more selected questions no longer exist in the question bank.");
+      if (source.length !== new Set(ids).size) errors.push("One or more selected questions are missing or not approved.");
       const byId = new Map(source.map((question) => [question.id, question]));
       const subjects = new Map<string, number>();
       const difficulties = new Map<string, number>();
@@ -511,17 +526,48 @@ export function examRouter(db: PrismaClient): Router {
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(50),
         search: z.string().trim().max(120).optional(),
+        accessStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
       }).parse(req.query);
-      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search } } : {}) };
+      const where = { role: "STUDENT", ...(query.search ? { email: { contains: query.search } } : {}), ...(query.accessStatus ? { accessStatus: query.accessStatus } : {}) };
       const [students, total] = await Promise.all([
         db.user.findMany({
-          where, orderBy: { email: "asc" },
+          where, orderBy: [{ accessStatus: "asc" }, { createdAt: "desc" }],
           skip: (query.page - 1) * query.limit, take: query.limit,
-          select: { id: true, email: true },
+          select: { id: true, email: true, accessStatus: true, createdAt: true },
         }),
         db.user.count({ where }),
       ]);
       res.json({ ok: true, students, page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/students/:id/access", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return next(badRequest("Invalid student ID."));
+      const input = z.object({ accessStatus: z.enum(["APPROVED", "REJECTED", "PENDING"]) }).parse(req.body);
+      const student = await db.user.findUnique({ where: { id }, select: { id: true, role: true } });
+      if (!student || student.role !== "STUDENT") return next(notFound("Student account not found."));
+      const updated = await db.user.update({
+        where: { id },
+        data: { accessStatus: input.accessStatus, sessionVersion: { increment: 1 } },
+        select: { id: true, email: true, accessStatus: true, createdAt: true },
+      });
+      res.json({ ok: true, student: updated });
+    } catch (error) { next(error); }
+  });
+
+  router.patch("/admin/students/access/bulk", requireAuth, requireAdmin(db), async (req, res, next) => {
+    try {
+      const input = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }).parse(req.body);
+      if (new Set(input.ids).size !== input.ids.length) return next(badRequest("Student IDs must be unique."));
+      const students = await db.user.findMany({ where: { id: { in: input.ids }, role: "STUDENT" }, select: { id: true } });
+      if (students.length !== input.ids.length) return next(badRequest("One or more selected accounts are not students."));
+      const result = await db.user.updateMany({
+        where: { id: { in: input.ids }, role: "STUDENT" },
+        data: { accessStatus: "APPROVED", sessionVersion: { increment: 1 } },
+      });
+      res.json({ ok: true, approvedCount: result.count });
     } catch (error) { next(error); }
   });
 

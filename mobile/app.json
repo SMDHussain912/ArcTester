@@ -20,7 +20,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "./modules/exam-guard"
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "microphonePermission": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "",

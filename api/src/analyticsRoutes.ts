@@ -7,12 +7,12 @@ import {
   getWeakTopics,
   getQuestionPerformance,
   getStudyRecommendations,
+  getFullMockPerformance,
   importProgress,
   exportProgress,
 } from "./analytics.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 import type { PrismaClient } from "@prisma/client";
-import { getStudentScorePrediction } from "./intelligence/studentScorePrediction.js";
 
 export function analyticsRouter(db: PrismaClient): Router {
   const router = Router();
@@ -20,6 +20,15 @@ export function analyticsRouter(db: PrismaClient): Router {
   router.get("/overview", requireAuth, async (req, res, next) => {
     try {
       const report = await getPerformanceOverview(db, (req as AuthedRequest).user!.id);
+      res.json(report);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/full-mock-performance", requireAuth, async (req, res, next) => {
+    try {
+      const report = await getFullMockPerformance(db, (req as AuthedRequest).user!.id);
       res.json(report);
     } catch (error) {
       next(error);
@@ -47,15 +56,6 @@ export function analyticsRouter(db: PrismaClient): Router {
   router.get("/recommendations", requireAuth, async (req, res, next) => {
     try {
       const report = await getStudyRecommendations(db, (req as AuthedRequest).user!.id);
-      res.json(report);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get("/score-prediction", requireAuth, async (req, res, next) => {
-    try {
-      const report = await getStudentScorePrediction(db, (req as AuthedRequest).user!.id);
       res.json(report);
     } catch (error) {
       next(error);

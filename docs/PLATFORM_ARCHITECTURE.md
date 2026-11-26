@@ -1,30 +1,25 @@
-# ArcTester platform architecture
+# Platform architecture
+
+ArcTester is a mobile-first AP ECET CSE learning and practice platform.
 
 ## Applications
 
-- **Web:** React + TypeScript + Vite. This is the browser application and the shared UI foundation for desktop.
-- **Mobile:** Expo + React Native + TypeScript. Android and iOS use the same API and bearer-token authentication.
-- **Windows desktop:** Electron shell. It hosts the built web application and keeps Node.js integration isolated from the renderer.
-- **Backend:** Existing Express + Prisma API remains the single source of truth for accounts, questions, tests, attempts, and results.
+- **Android mobile:** Expo + React Native + TypeScript. Primary student learning experience.
+- **Web:** React + TypeScript + Vite. Responsive student practice and administrator workspace.
+- **API:** Node.js + Express + Prisma. PostgreSQL is the production database.
+- **SQLite:** retained only for the one-time SQLite-to-PostgreSQL migration utility.
+- **Desktop shell:** not a supported product; desktop packaging and native modules were removed.
 
-## Authentication
+## Data flow
 
-- Web uses the existing httpOnly session cookie.
-- Native clients call `POST /auth/token`, store the bearer token in platform-secure storage, and send `Authorization: Bearer <token>`.
-- The API's existing auth middleware accepts both session cookies and bearer tokens.
+The API is the source of truth for users, approved questions, practice attempts, question snapshots, progress and administrator-managed content. Students receive only human-approved questions. Question selection and study recommendations use transparent deterministic rules; there is no model training, inference, embedding service or AI provider in the application runtime.
 
-## API configuration
+Study resources are external HTTPS links. ArcTester stores the resource URL and metadata, not uploaded document bytes.
 
-- Web: `VITE_API_URL`
-- Expo: `EXPO_PUBLIC_API_URL`
-- Desktop: uses the same web build and its configured API URL.
+## Engineering constraints
 
-For a physical phone, use the computer's LAN IP rather than `localhost`. The API CORS allowlist must include the web origin. Native fetch requests do not use browser CORS enforcement, but the API must still be reachable over the network.
-
-## Windows packaging
-
-Electron Builder produces a Windows NSIS installer using `npm run dist:win` from `desktop/`. The web Vite production build must exist at `web/dist/index.html` before packaging.
-
-## Migration rule
-
-The React + Vite application is now the default web target. The previous Next.js route components and tests remain temporarily as migration references while equivalent flows are consolidated and retested in the Vite app. Remove Next.js dependencies and legacy files only after all required flows and tests have been migrated.
+- Keep the Android bundle and API dependencies small for low-end devices and free hosting.
+- Preserve practice-attempt recovery and offline question-bank export.
+- Keep administrator question review and mock-paper management on web.
+- Maintain backward-compatible API contracts where possible; removals use an explicit database cleanup migration.
+- GitHub Actions is the verification source. Never mark a phase complete before exact-head CI is green and the PR is merged.

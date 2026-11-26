@@ -4,7 +4,14 @@ import { buildPracticeConfig } from "./practiceConfig";
 describe("buildPracticeConfig", () => {
   it("serializes selected subjects, topic filters, count and difficulty", () => {
     const result = buildPracticeConfig(["Mathematics", "Physics"], [JSON.stringify(["Mathematics", "Algebra"]), JSON.stringify(["Physics", "Mechanics"])], 40, "hard");
-    expect(result).toEqual({ subjects: ["Mathematics", "Physics"], topicFilters: [{ subject: "Mathematics", topic: "Algebra" }, { subject: "Physics", topic: "Mechanics" }], count: 40, difficulty: "hard" });
+    expect(result).toEqual({ subjects: ["Mathematics", "Physics"], topicFilters: [{ subject: "Mathematics", topic: "Algebra" }, { subject: "Physics", topic: "Mechanics" }], count: 40, difficulty: "hard", durationMinutes: 20, questionTypes: [] });
+  });
+
+
+  it("includes selected question types and a bounded time limit", () => {
+    const result = buildPracticeConfig(["Mathematics"], [], 25, "medium", 45, ["numeric", "matching", "numeric"]);
+    expect(result.durationMinutes).toBe(45);
+    expect(result.questionTypes).toEqual(["numeric", "matching"]);
   });
 
   it("keeps identically named topics isolated by subject", () => {

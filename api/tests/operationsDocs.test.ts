@@ -11,12 +11,13 @@ const backupGuide = readFileSync(resolve(repositoryRoot, "docs/BACKUP_RESTORE_RE
 const backupScriptPath = resolve(repositoryRoot, "scripts/backup-restore-rehearsal.sh");
 const backupScript = readFileSync(backupScriptPath, "utf8");
 
-describe("Phase 16 operational readiness artifacts", () => {
+describe("current operational documentation", () => {
   it("documents the current Vite monorepo and delegates phase status to the master roadmap", () => {
     expect(readme).toContain("React + TypeScript + Vite");
-    expect(readme).toContain("ARC_TESTER_16_PHASE_MASTER_ROADMAP.md");
+    expect(readme).toContain("docs/ROADMAP.md");
     expect(readme).not.toContain("Next.js");
     expect(readme).not.toContain("## Phases");
+    expect(readme).not.toContain("/desktop");
   });
 
   it("covers authentication, CORS, cookies, rate limits and dependency audit without claiming production verification", () => {

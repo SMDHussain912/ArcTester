@@ -1,110 +1,47 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import AdminModelLab, { type ModelLabDataset, type ModelLabJob } from "./AdminModelLab";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import AdminModelLab from "./AdminModelLab";
 
-const datasets: ModelLabDataset[] = [{ id: "dataset-1", name: "CSE readiness", task: "regression", rowCount: 120, featureSchema: [{ name: "score", type: "numeric" }] }];
-const jobs: ModelLabJob[] = [{ id: "job-1", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "RUNNING", progress: 45, errorMessage: "" }];
+const snapshot = {
+  datasets: [{ id: "dataset-1", name: "Readiness training", task: "classification", targetColumn: "label", rowCount: 20, sourceDescription: "Synthetic rows for tests.", sourceAttested: false, datasetKind: "synthetic", fingerprint: "a".repeat(64), createdAt: "2026-11-26T00:00:00.000Z" }],
+  jobs: [],
+  models: [{ id: "model-1", modelId: "readiness_classifier", version: 1, algorithm: "logistic_regression", task: "classification", dataset: "Readiness training", trainingDatasetId: "dataset-1", isActive: false, createdAt: "2026-11-26T00:00:00.000Z", activatedAt: null }],
+  evaluations: [],
+  drift: [],
+};
+function response(body: unknown, status = 200): Response {
+  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+}
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-describe("AdminModelLab", () => {
-  it("renders datasets, training controls and job progress", () => {
-    render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "Model lab" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "CSE readiness · 120 rows · 1 features · regression" })).toBeTruthy();
-    expect(screen.getByText("ecet-readiness-tensorflow")).toBeTruthy();
-    expect(screen.getByText("RUNNING")).toBeTruthy();
-    expect(screen.getByText("45% complete")).toBeTruthy();
+describe("Admin Model Lab", () => {
+  it("keeps analytics model management separate and supports activate, edit and delete candidate actions", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/admin/model-lab" && (!init?.method || init.method === "GET")) return response(snapshot);
+      if (url.pathname.endsWith("/activate")) return response({ ok: true });
+      if (init?.method === "PATCH") return response({ ok: true, model: { modelId: "readiness_classifier_v2", version: 1 } });
+      if (init?.method === "DELETE") return response({ ok: true });
+      return response({ ok: true }, 201);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "prompt").mockReturnValue("readiness_classifier_v2");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<AdminModelLab />);
+
+    expect(await screen.findByRole("heading", { name: "Model Lab" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create dataset" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Train a model" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Models & versions" })).toBeInTheDocument();
+    expect(screen.getByText(/analytics model workspace—not API Handling/i)).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Select active version" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/admin/model-lab/models/readiness_classifier/1/activate"), expect.objectContaining({ method: "POST" })));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit model ID" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/admin/model-lab/models/readiness_classifier/1"), expect.objectContaining({ method: "PATCH" })));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/admin/model-lab/models/readiness_classifier/1"), expect.objectContaining({ method: "DELETE" })));
   });
-
-  it("shows the empty job state and disables queueing without a dataset", () => {
-    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
-    expect(screen.getByText("No training jobs yet.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Queue TensorFlow.js" }).hasAttribute("disabled")).toBe(true);
-  });
-
-  it("delegates model configuration, dataset selection, queueing and refresh", () => {
-    const onDatasetChange = vi.fn(), onModelPrefixChange = vi.fn(), onQueueTraining = vi.fn(), onRefresh = vi.fn();
-    const { rerender } = render(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
-    fireEvent.change(screen.getByLabelText("Training model prefix"), { target: { value: "new-prefix" } });
-    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
-    rerender(<AdminModelLab datasets={datasets} jobs={[]} models={[]} selectedDatasetId="dataset-1" modelPrefix="new-prefix" busy={false} onDatasetChange={onDatasetChange} onModelPrefixChange={onModelPrefixChange} onQueueTraining={onQueueTraining} onTrainClassical={vi.fn()} onRefresh={onRefresh} />);
-    fireEvent.click(screen.getByRole("button", { name: "Queue TensorFlow.js" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    expect(onModelPrefixChange).toHaveBeenCalledWith("new-prefix");
-    expect(onDatasetChange).toHaveBeenCalledWith("dataset-1");
-    expect(onQueueTraining).toHaveBeenCalledTimes(1);
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
-  it("rejects non-binary target values for classification datasets", () => {
-    const onRegisterDataset = vi.fn();
-    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
-    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "Classification dataset" } });
-    fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Synthetic binary classification experiment data." } });
-    fireEvent.change(screen.getByLabelText("Prediction task"), { target: { value: "binary-classification" } });
-    const rows = Array.from({ length: 30 }, (_, index) => ({
-      features: { completed_attempts: 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 },
-      target: index === 0 ? 0.5 : index % 2,
-      groupId: (index % 5).toString(16).padStart(64, "0"),
-    }));
-    fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(rows) } });
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
-    expect(screen.getByRole("alert").textContent).toContain("exactly 0 or 1");
-    expect(onRegisterDataset).not.toHaveBeenCalled();
-  });
-
-  it("rejects rows with missing or non-numeric feature values before registration", () => {
-    const onRegisterDataset = vi.fn();
-    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
-    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "Invalid dataset" } });
-    fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Synthetic test data for validation checks." } });
-    const rows = Array.from({ length: 30 }, (_, index) => ({
-      features: { completed_attempts: index === 0 ? "three" : 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 },
-      target: 0.7,
-      groupId: (index % 5).toString(16).padStart(64, "0"),
-    }));
-    fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(rows) } });
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
-    expect(screen.getByRole("alert").textContent).toContain("invalid numeric value");
-    expect(onRegisterDataset).not.toHaveBeenCalled();
-  });
-
-  it("offers cancellation for queued and running training jobs", () => {
-    const onCancelJob = vi.fn();
-    render(<AdminModelLab datasets={datasets} jobs={jobs} models={[]} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onCancelJob={onCancelJob} />);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel job" }));
-    expect(onCancelJob).toHaveBeenCalledWith("job-1");
-  });
-
-  it("offers holdout comparison against the previous candidate version", () => {
-    const onEvaluateModel = vi.fn();
-    const registry = [
-      { modelId: "readiness-model", version: 1, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
-      { modelId: "readiness-model", version: 2, algorithm: "logistic-regression", task: "binary-classification", dataset: "CSE readiness", isActive: false },
-    ];
-    render(<AdminModelLab datasets={[{ ...datasets[0], task: "binary-classification" }]} jobs={[]} models={registry} selectedDatasetId="dataset-1" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onEvaluateModel={onEvaluateModel} />);
-    fireEvent.click(screen.getByRole("button", { name: "Compare with v1" }));
-    expect(onEvaluateModel).toHaveBeenCalledWith("readiness-model", 2, 1, "dataset-1");
-  });
-
-  it("registers a JSON dataset with provenance and feature schema", () => {
-    const onRegisterDataset = vi.fn();
-    render(<AdminModelLab datasets={[]} jobs={[]} models={[]} selectedDatasetId="" modelPrefix="model" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} onRegisterDataset={onRegisterDataset} />);
-    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "ECET score history" } });
-    fireEvent.change(screen.getByLabelText("Source description"), { target: { value: "Authorized anonymized historical assessment records." } });
-    fireEvent.change(screen.getByLabelText("Samples preview / JSON"), { target: { value: JSON.stringify(Array.from({ length: 30 }, (_, index) => ({ features: { completed_attempts: 3 + index, previous_accuracy: 0.6, recent_average_accuracy: 0.65, overall_average_accuracy: 0.62, previous_question_count: 20 }, target: 0.7, groupId: (index % 5).toString(16).padStart(64, "0") }))) } });
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Validate and register dataset" }));
-    expect(onRegisterDataset).toHaveBeenCalledTimes(1);
-    expect(onRegisterDataset.mock.calls[0][0]).toMatchObject({ name: "ECET score history", task: "regression", targetColumn: "next_score", sourceAttested: true, datasetKind: "synthetic" });
-  });
-
-  it("explains when a TensorFlow candidate loses to the baseline", () => {
-    const completed: ModelLabJob[] = [{ id: "job-2", datasetId: "dataset-1", modelId: "ecet-readiness-tensorflow", status: "SUCCEEDED", progress: 100, errorMessage: "", result: { productionEligible: false, candidate: { mae: 0.0526, rmse: 0.0671 }, baseline: { mae: 0.0495, rmse: 0.0599 }, reason: "Candidate did not beat both baseline metrics." } }];
-    render(<AdminModelLab datasets={datasets} jobs={completed} models={[]} selectedDatasetId="dataset-1" modelPrefix="ecet-readiness" busy={false} onDatasetChange={vi.fn()} onModelPrefixChange={vi.fn()} onQueueTraining={vi.fn()} onTrainClassical={vi.fn()} onRefresh={vi.fn()} />);
-    expect(screen.getByText("keep this candidate inactive.", { exact: false })).toBeTruthy();
-    expect(screen.getByText(/current baseline is the safer choice/i)).toBeTruthy();
-    expect(screen.getByText(/Do not activate or deploy it/i)).toBeTruthy();
-  });
-
 });

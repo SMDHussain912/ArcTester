@@ -17,6 +17,11 @@ describe("API client", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Invitation expired." }), { status: 410 }));
     await expect(createApiClient("http://localhost:4000", fetcher)("/auth/register")).rejects.toThrow("Invitation expired.");
   });
+  it("hides server implementation details from 5xx responses", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "PrismaClientKnownRequestError at api/src/routes.ts:88" }), { status: 500 }));
+    await expect(createApiClient("http://localhost:4000", fetcher)("/broken"))
+      .rejects.toThrow("ArcTester couldn't complete this request right now. Please try again.");
+  });
   it("exposes the HTTP status on API errors for recovery decisions", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: "Test not found." }), { status: 404 }));
     await expect(createApiClient("http://localhost:4000", fetcher)("/tests/42"))
@@ -25,7 +30,7 @@ describe("API client", () => {
   it("uses a stable fallback for non-JSON and invalid error payloads", async () => {
     const nonJson = vi.fn<typeof fetch>().mockResolvedValue(new Response("not json", { status: 502 }));
     const invalidError = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: { detail: "bad" } }), { status: 400 }));
-    await expect(createApiClient("http://localhost:4000", nonJson)("/broken")).rejects.toThrow("The request failed.");
+    await expect(createApiClient("http://localhost:4000", nonJson)("/broken")).rejects.toThrow("ArcTester couldn\u0027t complete this request right now. Please try again.");
     await expect(createApiClient("http://localhost:4000", invalidError)("/broken")).rejects.toThrow("The request failed.");
   });
   it("uses the current global fetch implementation when no override is supplied", async () => {

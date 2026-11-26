@@ -1,85 +1,37 @@
-# ArcTester platform release and deployment
+# Platform release and deployment
 
-This guide describes the supported release topology:
+ArcTester consists of a Vite web app, Express API and Expo Android app. Android is the primary student experience; web administration is browser-only.
 
-- Web: Vercel static hosting (Vite output in `web/dist`).
-- API: Render Docker web service using the repository root as build context and `api/Dockerfile`.
-- Database: Render PostgreSQL, using its internal connection string from the API service.
-- Mobile: Expo native application using the API bearer-token endpoint.
-- Desktop: Electron application packaging the web build and using the API bearer-token endpoint when configured by the web app.
+## Vercel — web
 
-## Vercel
+- Project root: repository root.
+- Install command: `npm ci`.
+- Build command: `VITE_BASE_PATH=/ npm run build:web`.
+- Output directory: `web/dist`.
+- Environment: `VITE_API_URL=https://<your-api>.onrender.com`.
 
-Import the repository and keep the project root at the repository root.
+The API URL is compiled into the static bundle. Redeploy after changing it.
 
-- Install command: `npm ci`
-- Build command: `VITE_BASE_PATH=/ npm run build:web`
-- Output directory: `web/dist`
-- Environment variable: `VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com`
+## Render — API
 
-The committed `vercel.json` configures these values, SPA route fallback, immutable caching for hashed assets, and conservative response headers. `VITE_API_URL` is compiled into the browser bundle, so redeploy after changing it.
+Use the repository root as the Docker build context and `api/Dockerfile` as the Dockerfile. Do not set the service root to `api`; the build needs root workspace manifests and the lockfile.
 
-The normal web build intentionally retains relative asset URLs for Electron's `file://` packaging. The Vercel build overrides the Vite base to `/` so deep links such as `/assignments` resolve their assets correctly.
+Required environment: `DATABASE_URL` (Render PostgreSQL internal URL with `?schema=public`), `JWT_SECRET` (unique random secret), exact `CORS_ORIGINS`, `COOKIE_SAME_SITE=None` when web and API are cross-site, and `NODE_ENV=production`.
 
-## Render API
+The API applies PostgreSQL migrations at startup. Do not apply SQLite migration history to the hosted PostgreSQL database.
 
-Create a Docker web service from the repository. Use the root directory as Docker context; do not set the service root to `api`.
-
-The `render.yaml` blueprint points Render at `api/Dockerfile`, sets `/health` as the health check, and declares the required secret environment variables.
-
-Set these values in the Render dashboard:
-
-- `DATABASE_URL`: Render PostgreSQL internal URL, including `?schema=public`.
-- `JWT_SECRET`: unique random value of at least 32 bytes; generate with `openssl rand -hex 32`.
-- `CORS_ORIGINS`: exact deployed Vercel origin (for example `https://your-app.vercel.app`) **and** `arctester://app`, comma-separated with no trailing slashes on HTTPS origins. The custom origin is used by the packaged Electron app.
-- `COOKIE_SAME_SITE=None`: needed for the current cross-site Vercel/Render cookie session.
-- `NODE_ENV=production`.
-
-The Docker entrypoint applies PostgreSQL migrations before starting the API. The image exposes the configured `PORT` and provides a container health check. Keep the PostgreSQL database on Render's private network and use the internal URL.
-
-### Browser cookie limitation
-
-A default `*.vercel.app` frontend and `*.onrender.com` API are cross-site. The API uses `SameSite=None; Secure` and exact-origin CORS, but browsers that block third-party cookies can still prevent cookie-based web login. For reliable browser sessions, use custom domains under the same registrable domain (for example `app.example.com` and `api.example.com`) or introduce a same-origin API proxy. Do not weaken cookie security to work around browser privacy controls. The packaged Electron app serves its local bundle from the privileged `arctester://app` origin; add that exact origin to `CORS_ORIGINS` as shown above.
-
-After deployment, verify sign-in, refresh, protected API calls, logout, and direct navigation to a nested route in desktop and mobile browsers.
-
-## Expo mobile
-
-Set `EXPO_PUBLIC_API_URL` to the HTTPS Render API origin before building a release:
+## Android
 
 ```bash
-cd mobile
-EXPO_PUBLIC_API_URL=https://YOUR-RENDER-SERVICE.onrender.com npx expo export --platform android
+npm install --prefix mobile
+npm run typecheck --prefix mobile
+npm test --prefix mobile
 ```
 
-For a native Android build, use the existing EAS/Gradle release configuration and ensure the same variable is available at build time. Native clients authenticate with `POST /auth/token` and send `Authorization: Bearer <token>`; they do not depend on browser cookies or CORS.
+Use the Android build scripts in `mobile/package.json` to produce the release APK. CI artifacts do not replace installation and verification on a physical Android device.
 
-The exam-guard interruption marker and pending integrity queue are stored with Expo SecureStore. Native integrity features require an installed development/release build; Expo Go does not include the custom ExamGuard native module. Android monitors native window focus, multi-window mode, external displays, app backgrounding, and screen-pinning state. iOS reports app backgrounding, screenshot notifications, and active screen recording/mirroring; iOS does not provide Android-style task pinning or equivalent kiosk enforcement.
+## Release smoke checks
 
-## Electron desktop
+After deployment, verify sign-in, refresh, logout, protected API access, practice creation, answer submission and study-resource links. Test Vercel/Render cookie configuration in a real browser; CI cannot verify provider settings or browser privacy behavior.
 
-Build the web app with the default relative Vite base before packaging:
-
-```bash
-npm run build:web
-npm run test --workspace=desktop
-npm run pack --workspace=desktop
-```
-
-For Windows distribution use `npm run build:desktop:win` on a Windows build host. For Linux, use `npm run build:desktop:linux` to produce AppImage and Debian packages. Both root commands build the web assets first, preserving the relative Vite asset base required by the packaged Electron app. The Electron main process serves the packaged web bundle from the privileged `arctester://app` origin so the API can allow a specific desktop origin without opening production CORS to the opaque `null` origin. The preload exposes only a narrow exam-mode toggle and integrity-event subscription; renderer code does not receive Node.js or unrestricted IPC access.
-
-## Release verification
-
-Run the following from the repository root:
-
-```bash
-npm run typecheck --workspace=web
-npm run build:web
-npm run test --workspace=web
-npm run typecheck --workspace=mobile
-npm run test --workspace=mobile
-npm run test --workspace=desktop
-npm run build:api
-```
-
-A successful build does not prove provider configuration, browser cookie behavior, Android native module behavior, or desktop exam-mode behavior on every operating system. Verify those on real deployed/browser/device targets before calling the release production-ready.
+NOT VERIFIED by a successful build alone: production environment values, custom domains, cross-site cookie acceptance, live database backups, real-device performance and APK installation.

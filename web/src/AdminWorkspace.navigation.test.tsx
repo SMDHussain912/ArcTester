@@ -15,17 +15,15 @@ describe("administrator workspace navigation", () => {
       if (path === "/admin/exams") return Promise.resolve(response({ exams: [] }));
       if (path === "/admin/students") return Promise.resolve(response({ students: [] }));
       if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
+      if (path === "/admin/mcp-keys") return Promise.resolve(response({ keys: [] }));
       if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
-      if (path === "/admin/model-datasets") return Promise.resolve(response({ datasets: [] }));
       if (path === "/admin/study-materials") return Promise.resolve(response({ materials: [] }));
-      if (path === "/admin/model-training-jobs") return Promise.resolve(response({ jobs: [] }));
-      if (path === "/admin/models") return Promise.resolve(response({ models: [] }));
       if (path === "/admin/submissions/review-required") return Promise.resolve(response({ submissions: [] }));
       if (path === "/admin/exams/live-sessions") return Promise.resolve(response({ sessions: [], total: 0, serverTime: "2026-11-10T10:00:00.000Z" }));
       return Promise.resolve(response({}));
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} invitations={[]} createInvitation={vi.fn()} inviteEmail="" setInviteEmail={vi.fn()} createdInvitation={null} revokeInvitation={vi.fn()} busy={false} />);
+    render(<AdminWorkspace email="admin@example.test" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
 
     const workspaces = [
       ["Overview", "Build better exams."],
@@ -37,17 +35,26 @@ describe("administrator workspace navigation", () => {
       ["Results & analytics", "Results & analytics"],
       ["Announcements", "Announcements"],
       ["Subjects & topics", "Subjects & topics"],
-      ["Student access", "Invitations"],
+      ["Students", "Students"],
+      ["Model Lab", "Model Lab"],
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
-      ["Model lab", "Model lab"],
-      ["Study materials", "Study materials"],
+      ["Study materials", "Study resources"],
+      ["Lesson Studio", "Lesson Studio"],
+      ["API Handling", "API Handling"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
       fireEvent.click(screen.getByRole("button", { name: navigationLabel }));
       expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Model Lab" }));
+    expect(screen.getByText(/analytics model workspace—not API Handling/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create dataset" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Train a model" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "API Handling" }));
+    expect(screen.getByText(/only handles access keys and API integration/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Create datasets, queue training/i)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalled();
   });
 });

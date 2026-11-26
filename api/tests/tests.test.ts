@@ -18,6 +18,8 @@ beforeAll(async () => {
   server = await startTestServer(buildApp);
   const report = await importFromJson(server.db, BANK);
   expect(report.added).toBe(4);
+  // Test fixtures represent questions already approved by a human reviewer.
+  await server.db.question.updateMany({ data: { reviewStatus: "APPROVED" } });
   const session = await signUp(server.baseUrl, "student@example.com");
   api = bindSession(server.baseUrl, session.cookie);
   userId = session.userId;
@@ -73,6 +75,54 @@ describe("POST /tests", () => {
       expect(q.options).toHaveLength(4);
     }
   });
+
+  it("prioritizes a learner's weak topic when building adaptive practice", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const topic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Adaptive Weak Topic" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Adaptive Weak Topic" },
+    });
+    const weakQuestion = await server.db.question.findFirstOrThrow({ where: { subjectId: maths.id } });
+    const strongTopic = await server.db.topic.upsert({
+      where: { subjectId_name: { subjectId: maths.id, name: "Adaptive Strong Topic" } },
+      update: {},
+      create: { subjectId: maths.id, name: "Adaptive Strong Topic" },
+    });
+    await server.db.question.update({ where: { id: weakQuestion.id }, data: { topicId: topic.id } });
+    const otherMathsQuestions = await server.db.question.findMany({
+      where: { subjectId: maths.id, id: { not: weakQuestion.id } },
+    });
+    await server.db.question.updateMany({
+      where: { id: { in: otherMathsQuestions.map((question) => question.id) } },
+      data: { topicId: strongTopic.id },
+    });
+
+    // The practice selector reads the canonical Stat table, which submitTest
+    // updates. Seed that same source of truth rather than orphan attempt answers.
+    const lastSeen = new Date();
+    await server.db.stat.upsert({
+      where: { userId_questionId: { userId, questionId: weakQuestion.id } },
+      update: { seen: 6, wrong: 6, lastSeen },
+      create: { userId, questionId: weakQuestion.id, seen: 6, wrong: 6, lastSeen },
+    });
+    for (const question of otherMathsQuestions) {
+      await server.db.stat.upsert({
+        where: { userId_questionId: { userId, questionId: question.id } },
+        update: { seen: 10, wrong: 1, lastSeen },
+        create: { userId, questionId: question.id, seen: 10, wrong: 1, lastSeen },
+      });
+    }
+
+    const { status, json } = await api.post("/tests", {
+      mode: "practice", subject: "Maths", count: 1,
+    });
+    expect(status).toBe(201);
+    const body = json as { questions: Array<{ id: number }> };
+    expect(body.questions).toHaveLength(1);
+    expect(body.questions[0]?.id).toBe(weakQuestion.id);
+  });
+
 
   it("warns on shortfall with a thin bank", async () => {
     const { json } = await api.post(`/tests`, {
@@ -559,4 +609,84 @@ describe("PUT /tests/:id/answers", () => {
     expect((await api.post(`/tests/${attempt.attemptId}/submit`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 1 }] })).status).toBe(200);
     expect((await api.put(`/tests/${attempt.attemptId}/answers`, { answers: [{ questionId: attempt.questions[0].id, selectedIndex: 2 }] })).status).toBe(409);
   });
+});
+describe("practice and exam question pools", () => {
+  it("keeps published exam questions out of practice unless the practice pool is short", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const examQuestions = await server.db.question.findMany({ where: { subjectId: maths.id }, take: 2 });
+    const exam = await server.db.exam.create({
+      data: {
+        title: "Practice pool separation test",
+        createdById: userId,
+        versions: { create: {
+          version: 1,
+          durationMinutes: 30,
+          sebKeys: [],
+          publishedAt: new Date(),
+          questions: { create: examQuestions.map((question, index) => ({
+            sourceQuestionId: question.id,
+            position: index + 1,
+            subject: "Maths",
+            topic: null,
+            text: question.text,
+            options: question.options,
+            correctIndex: question.correctIndex,
+          })) },
+        } },
+      },
+    });
+    try {
+      const bank = await api.get("/bank");
+      const bankBody = bank.json as { subjects: { subject: string; count: number; practiceCount: number }[]; practiceTotal: number };
+      const mathsBank = bankBody.subjects.find((subject) => subject.subject === "Maths");
+      expect(mathsBank).toBeDefined();
+      expect(mathsBank!.count - mathsBank!.practiceCount).toBe(2);
+      expect(bankBody.practiceTotal).toBeLessThanOrEqual((bank.json as { total: number }).total);
+      const response = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+      expect(response.status).toBe(201);
+      const body = response.json as { questions: { id: number }[]; warnings: string[] };
+      expect(body.questions).toHaveLength(2);
+      expect(body.questions.some((question) => examQuestions.some((examQuestion) => examQuestion.id === question.id))).toBe(true);
+      expect(body.warnings.some((warning) => warning.toLowerCase().includes("exam questions"))).toBe(true);
+    } finally {
+      await server.db.exam.delete({ where: { id: exam.id } });
+    }
+  });
+  it("uses only practice-pool questions when that pool can satisfy the requested paper", async () => {
+    const maths = await server.db.subject.findUniqueOrThrow({ where: { name: "Maths" } });
+    const [examQuestion] = await server.db.question.findMany({ where: { subjectId: maths.id }, take: 1 });
+    expect(examQuestion).toBeDefined();
+    const exam = await server.db.exam.create({
+      data: {
+        title: "Practice-only selection test",
+        createdById: userId,
+        versions: { create: {
+          version: 1,
+          durationMinutes: 30,
+          sebKeys: [],
+          publishedAt: new Date(),
+          questions: { create: {
+            sourceQuestionId: examQuestion!.id,
+            position: 1,
+            subject: "Maths",
+            topic: null,
+            text: examQuestion!.text,
+            options: examQuestion!.options,
+            correctIndex: examQuestion!.correctIndex,
+          } },
+        } },
+      },
+    });
+    try {
+      const response = await api.post("/tests", { mode: "practice", subject: "Maths", count: 2 });
+      expect(response.status).toBe(201);
+      const body = response.json as { questions: { id: number }[]; warnings: string[] };
+      expect(body.questions).toHaveLength(2);
+      expect(body.questions.every((question) => question.id !== examQuestion!.id)).toBe(true);
+      expect(body.warnings.some((warning) => warning.toLowerCase().includes("exam questions"))).toBe(false);
+    } finally {
+      await server.db.exam.delete({ where: { id: exam.id } });
+    }
+  });
+
 });

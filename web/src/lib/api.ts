@@ -2,6 +2,31 @@
 // These mirror the server-side schemas in api/src/*.ts so the frontend can
 // type its responses without importing from the backend.
 
+export interface FullMockPerformanceRow {
+  subject: string;
+  topic: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+}
+
+export interface FullMockPerformanceReport {
+  generatedAt: string;
+  completedFullMocks: number;
+  latestMockAt: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  subjects: FullMockPerformanceRow[];
+  topics: FullMockPerformanceRow[];
+}
+
 export interface PerformanceOverview {
   practice: {
     completedAttempts: number;
@@ -10,13 +35,19 @@ export interface PerformanceOverview {
     incorrect: number;
     unanswered: number;
     accuracy: number | null;
+    trend?: { attemptId: number; finishedAt: string; accuracy: number | null; correct: number; total: number }[];
   };
   formalExams: {
+    submissions?: number;
     graded: number;
     scorePercentage: number | null;
     score: number | null;
     maximumScore: number | null;
     reviewRequired: number;
+    correct?: number;
+    incorrect?: number;
+    unanswered?: number;
+    subjects?: { subject: string; correct: number; incorrect: number; unanswered: number; awardedMarks: number; maximumMarks: number; accuracy: number | null }[];
   };
 }
 
@@ -96,54 +127,18 @@ export interface StudyRecommendation {
   mode: "mistakes" | "mock" | "practice";
   subject?: string;
   topic?: string;
+  evidence?: { answeredQuestions: number; incorrectAnswers: number; accuracy: number | null; minimumAnswers: number; weakAccuracyThreshold: number; source?: "completed-full-mock" | "completed-practice" } | null;
 }
 
 export interface StudyRecommendationsReport {
   basedOnAttempts: number;
+  basedOnFullMocks?: number;
+  latestFullMockAt?: string | null;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
   performanceExplanation: PerformanceExplanation;
   recommendations: StudyRecommendation[];
 }
-
-export interface ScorePredictionInterval {
-  lowerPercent: number;
-  upperPercent: number;
-  estimatedErrorPercent: number;
-  method: string;
-}
-
-export type StudentScorePrediction =
-  | {
-      status: "insufficient_data";
-      completedAttempts: number;
-      availableSamples: number;
-      requiredSamples: number;
-      requiredCompletedAttempts: number;
-      message: string;
-      populationFeatures?: Record<string, number>;
-    }
-  | {
-      status: "baseline_not_beaten";
-      completedAttempts: number;
-      evaluationSamples: number;
-      modelMae: number;
-      baselineMae: number;
-      message: string;
-      populationFeatures?: Record<string, number>;
-    }
-  | {
-      status: "ready";
-      completedAttempts: number;
-      trainingSamples: number;
-      evaluationSamples: number;
-      predictedScorePercent: number;
-      predictionInterval: ScorePredictionInterval;
-      modelMae: number;
-      baselineMae: number;
-      message: string;
-      populationFeatures?: Record<string, number>;
-    };
 
 export interface LearningConcept {
   slug: string;
@@ -156,10 +151,22 @@ export interface LearningConcept {
   commonMistakes: string[];
 }
 
+export interface OfflineLearningQuestion {
+  id: number;
+  subject: string;
+  topic: string | null;
+  text: string;
+  options: string[];
+  difficulty: number;
+}
+
 export interface OfflineLearningPackage {
+  schemaVersion: number;
+  practiceOnly: boolean;
   total: number;
-  subjects: Array<{ name: string; count: number }>;
+  subjects: string[];
   exportedAt: string;
+  questions: OfflineLearningQuestion[];
 }
 
 export interface IntegrityResponse {

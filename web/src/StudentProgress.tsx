@@ -134,7 +134,19 @@ export default function StudentProgress() {
           </div>
           <section className="panel">
             <div className="section-head"><div><p className="eyebrow">RECENT ACTIVITY</p><h2>Practice trend</h2></div></div>
-            {overview.practice.trend.length ? <div className="grid two">
+            {overview.practice.trend.length ? <>
+              <div className="practice-trend-chart" role="img" aria-label="Practice accuracy across recent completed attempts">
+                {overview.practice.trend.slice().reverse().map((attempt, index) => (
+                  <div className="practice-trend-column" key={attempt.attemptId}>
+                    <span className="practice-trend-value">{percentage(attempt.accuracy)}</span>
+                    <div className="practice-trend-track">
+                      <i style={{ height: `${Math.max(4, Math.round((attempt.accuracy ?? 0) * 100))}%` }} />
+                    </div>
+                    <small>#{index + 1}</small>
+                  </div>
+                ))}
+              </div>
+              <div className="grid two">
               {overview.practice.trend.map((attempt) => (
                 <article className="question-review-row" key={attempt.attemptId}>
                   <strong>Practice #{attempt.attemptId}</strong>
@@ -142,7 +154,8 @@ export default function StudentProgress() {
                   <p>{percentage(attempt.accuracy)} accuracy · {attempt.correct} / {attempt.total} correct</p>
                 </article>
               ))}
-            </div> : <p className="muted">Your completed practice tests will appear here.</p>}
+              </div>
+            </> : <p className="muted">Your completed practice tests will appear here.</p>}
           </section>
         </>
       ) : null}

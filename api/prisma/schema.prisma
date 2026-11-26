@@ -16,6 +16,7 @@ model Subject {
   name      String     @unique
   topics    Topic[]
   questions Question[]
+  pathUnits PathUnit[]
 }
 
 model Topic {
@@ -24,6 +25,7 @@ model Topic {
   subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId Int
   questions Question[]
+  pathUnits PathUnit[]
 
   @@unique([subjectId, name])
 }
@@ -35,19 +37,36 @@ model Question {
   topic        Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
   topicId      Int?
   text         String
-  // JSON string of exactly 4 non-empty option strings (validated by Zod).
+  questionType String   @default("mcq")
+  promptData   String   @default("{}")
+  answerData   String   @default("{}")
+  // JSON-encoded options; empty for non-choice questions.
   options      String
   correctIndex Int
   explanation  String    @default("")
   source       String    @default("")
   difficulty   String    @default("medium")
+  reviewStatus String    @default("DRAFT")
+  audienceScope String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
+  targetStudentIdsJson String @default("[]")
+  createdById Int?
+  createdBy User? @relation("QuestionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   questionHash String    @unique
   createdAt    DateTime  @default(now())
   answers      AttemptAnswer[]
   stats        Stat[]
   examSnapshots ExamVersionQuestion[]
-
+  lessonLinks LessonQuestion[]
+  pathAnswers PathAnswer[]
+  reviews UserQuestionReview[]
   @@index([subjectId])
+  @@index([reviewStatus, subjectId])
+  @@index([reviewStatus, audienceScope, subjectId])
+  @@index([createdById])
 }
 
 model Attempt {
@@ -60,7 +79,6 @@ model Attempt {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     Int
   answers    AttemptAnswer[]
-
   @@index([userId])
 }
 
@@ -69,12 +87,25 @@ model User {
   email              String       @unique
   passwordHash       String
   role               String       @default("STUDENT")
+  accessStatus        String       @default("APPROVED")
+  fullName           String?
+  collegeName         String?
+  collegeCode         String?
+  postalPin           String?
+  branchName          String?
+  branchCode          String?
+  registrationNumber  String?       @unique
   // Incremented on logout to invalidate previously issued cookie and bearer JWTs.
   sessionVersion     Int          @default(0)
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
   devices            Device[]
+  authSessions        AuthSession[]
+  loginEvents         LoginEvent[]
+  totpCredential      TotpCredential?
+  passkeyCredentials  PasskeyCredential[]
+  authChallenges      AuthChallenge[]
   invitationsCreated Invitation[] @relation("InvitationCreator")
   examsCreated       Exam[]       @relation("ExamCreator")
   assignments        ExamAssignment[] @relation("StudentAssignments")
@@ -85,10 +116,33 @@ model User {
   notificationPreferences StudentNotificationPreference?
   examSessions      ExamSession[]
   examSessionEvents ExamSessionEvent[] @relation("ExamSessionEventActor")
-  modelDatasetsCreated ModelDataset[] @relation("ModelDatasetCreator")
-  modelEvaluations ModelEvaluation[] @relation("ModelEvaluationActor")
-  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
-  modelTrainingJobsCreated ModelTrainingJob[] @relation("ModelTrainingJobCreator")
+  lessonProgress UserLessonProgress[]
+  unitTestProgress UserUnitTestProgress[]
+  pathAnswers PathAnswer[]
+  gamification UserGamification?
+  xpEvents XpLedger[]
+  gamificationDays GamificationDay[]
+  questionReviews UserQuestionReview[]
+  badges UserBadge[]
+  lessonDrafts LessonDraft[]
+  questionsCreated Question[] @relation("QuestionCreator")
+  uploadedLessonAudio LessonAudioAsset[]
+  createdLessonVersions LessonVersion[]
+  privateQuestions StudentPrivateQuestion[]
+  practiceSets StudentPracticeSet[]
+  practiceRuns StudentPracticeRun[]
+  mcpKeys StudentMcpKey[]
+  adminMcpKeys AdminMcpKey[]
+  adminMcpAuditLogs AdminMcpAuditLog[]
+  modelDatasets ModelDataset[]
+  modelTrainingJobs ModelTrainingJob[]
+  auditEvents AuditEvent[] @relation("AuditEventActor")
+  modelRegistryAudits ModelRegistryAudit[]
+  modelEvaluations ModelEvaluation[]
+
+  @@index([collegeName])
+  @@index([branchName])
+  @@index([role, accessStatus])
 }
 
 model Invitation {
@@ -104,6 +158,7 @@ model Invitation {
 
   @@index([email, expiresAt])
   @@index([createdById])
+
 }
 
 model Device {
@@ -119,6 +174,76 @@ model Device {
 
   @@unique([userId, fingerprint])
   @@index([userId, revokedAt])
+}
+
+
+model AuthSession {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  deviceName  String
+  platform    String
+  userAgent   String    @default("")
+  ipAddress   String    @default("")
+  loginMethod String   @default("password")
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  @@index([userId, revokedAt, lastSeenAt])
+  @@index([expiresAt])
+}
+
+model LoginEvent {
+  id          String   @id @default(cuid())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      Int?
+  email       String
+  result      String
+  method      String   @default("password")
+  ipAddress   String   @default("")
+  userAgent   String   @default("")
+  createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+}
+
+model TotpCredential {
+  id                   String   @id @default(cuid())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  secretEncrypted      String
+  enabledAt            DateTime?
+  recoveryCodesJson    String   @default("[]")
+  lastUsedCounter      Int      @default(-1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model PasskeyCredential {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  credentialId   String   @unique
+  publicKey      String
+  signCount      Int      @default(0)
+  transports     String   @default("[]")
+  name           String   @default("Passkey")
+  createdAt      DateTime @default(now())
+  lastUsedAt     DateTime?
+  @@index([userId, createdAt])
+}
+
+model AuthChallenge {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  challenge   String   @unique
+  purpose     String
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@index([userId, purpose, expiresAt])
 }
 
 // Exam content is versioned. Each version stores immutable question snapshots so
@@ -315,6 +440,10 @@ model AttemptAnswer {
   optionsSnapshot   String   @default("[]")
   correctIndexSnapshot Int   @default(0)
   explanationSnapshot String @default("")
+  questionTypeSnapshot String @default("mcq")
+  promptDataSnapshot String @default("{}")
+  answerDataSnapshot String @default("{}")
+  responseSnapshot String @default("null")
 
   @@index([attemptId])
   @@index([questionId])
@@ -394,117 +523,6 @@ model StudentNotification {
 
 // Model registry and evaluation records. These models must remain represented in
 // the Prisma schema as well as the SQL migrations so generated clients expose them.
-model RegisteredModel {
-  id                String   @id @default(cuid())
-  modelId           String
-  version           Int
-  algorithm         String
-  task              String
-  dataset           String
-  trainingDatasetId String?
-  artifactJson      String
-  isActive          Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  activatedAt       DateTime?
-
-  @@unique([modelId, version])
-  @@index([modelId, isActive])
-  @@index([createdAt])
-}
-
-model ModelRegistryAudit {
-  id        String   @id @default(cuid())
-  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId   Int?
-  modelId   String
-  version   Int
-  action    String
-  details   String   @default("{}")
-  createdAt DateTime @default(now())
-
-  @@index([modelId, version, createdAt])
-  @@index([actorId, createdAt])
-}
-
-model ModelEvaluation {
-  id                String   @id @default(cuid())
-  actor             User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId           Int?
-  modelId           String
-  candidateVersion  Int
-  baselineVersion   Int
-  datasetId         String   @default("")
-  evaluationDataset String
-  datasetFingerprint String
-  sampleCount       Int
-  metricsJson       String
-  status            String
-  evaluatedAt       DateTime @default(now())
-
-  @@index([modelId, candidateVersion, evaluatedAt])
-  @@index([actorId, evaluatedAt])
-}
-
-model ModelDataset {
-  id                String   @id @default(cuid())
-  createdBy         User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById       Int?
-  trainingJobs      ModelTrainingJob[]
-  name              String
-  task              String
-  targetColumn      String   @default("target")
-  featureSchemaJson String
-  samplesJson       String
-  rowCount          Int
-  sourceDescription String
-  sourceAttested    Boolean  @default(false)
-  datasetKind       String   @default("synthetic")
-  fingerprint       String   @unique
-  createdAt         DateTime @default(now())
-
-  @@index([name, createdAt])
-  @@index([createdById, createdAt])
-}
-
-model ModelDriftBucket {
-  id          String   @id @default(cuid())
-  modelId     String
-  version     Int
-  featureName String
-  bucket      String
-  periodStart DateTime
-  count       Int      @default(0)
-
-  @@unique([modelId, version, featureName, bucket, periodStart])
-  @@index([modelId, version, periodStart])
-}
-
-model ModelTrainingJob {
-  id             String      @id @default(cuid())
-  dataset        ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
-  datasetId      String
-  createdBy      User?        @relation("ModelTrainingJobCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById    Int?
-  modelId        String
-  seed           Int       @default(42)
-  epochs         Int       @default(80)
-  batchSize      Int       @default(32)
-  status         String    @default("QUEUED")
-  progress       Int       @default(0)
-  errorMessage   String    @default("")
-  workerId       String    @default("")
-  leaseExpiresAt DateTime?
-  resultJson     String    @default("{}")
-  createdAt      DateTime  @default(now())
-  startedAt      DateTime?
-  completedAt    DateTime?
-  updatedAt      DateTime  @updatedAt
-
-  @@index([status, createdAt])
-  @@index([createdById, createdAt])
-  @@index([datasetId, createdAt])
-}
-
 model IntegrityFlag {
   id              String   @id @default(cuid())
   assignmentId    String
@@ -535,14 +553,576 @@ model StudyMaterial {
   description    String   @default("")
   subject        String
   topic          String   @default("")
-  fileName       String
-  mimeType       String
-  sizeBytes      Int
-  contentBase64  String
+  url            String   @default("")
+  fileName       String   @default("")
+  mimeType       String   @default("")
+  sizeBytes      Int      @default(0)
+  contentBase64  String   @default("")
   status         String   @default("DRAFT")
+  audienceScope  String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
+  targetStudentIdsJson String @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([status, subject, title])
+  @@index([audienceScope, targetCollegeCode, targetBranchCode], map: "StudyMaterial_audience_target_idx")
   @@index([uploadedById, createdAt])
+}
+
+
+
+model PathUnit {
+  id        Int      @id @default(autoincrement())
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId Int
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId   Int
+  position  Int
+  title     String
+  lessons   PathLesson[]
+  testProgress UserUnitTestProgress[]
+  answers PathAnswer[]
+
+  @@unique([subjectId, topicId])
+  @@unique([subjectId, position])
+  @@index([subjectId])
+}
+
+model PathLesson {
+  id        Int      @id @default(autoincrement())
+  unit      PathUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId    Int
+  position  Int
+  title     String
+  questions LessonQuestion[]
+  progress  UserLessonProgress[]
+  answers   PathAnswer[]
+
+  @@unique([unitId, position])
+  @@index([unitId])
+}
+
+model LessonQuestion {
+  id         Int        @id @default(autoincrement())
+  lesson     PathLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId   Int
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId Int
+  position   Int
+
+  @@unique([lessonId, position])
+  @@unique([questionId])
+  @@index([lessonId])
+}
+
+model UserLessonProgress {
+  id           Int        @id @default(autoincrement())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int
+  lesson       PathLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId     Int
+  completedAt  DateTime?
+  bestScorePct Int        @default(0)
+  attempts     Int        @default(0)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+}
+
+model UserUnitTestProgress {
+  id           Int       @id @default(autoincrement())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       Int
+  unit         PathUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId       Int
+  passedAt     DateTime?
+  bestScorePct Int       @default(0)
+  attempts     Int       @default(0)
+
+  @@unique([userId, unitId])
+  @@index([userId])
+}
+
+model PathAnswer {
+  id         Int        @id @default(autoincrement())
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId Int
+  lesson     PathLesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId   Int?
+  unit       PathUnit?  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId     Int?
+  scopeKey   String
+  response   String     @default("null")
+  isCorrect  Boolean    @default(false)
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([userId, scopeKey, questionId])
+  @@index([userId, lessonId])
+  @@index([userId, unitId])
+}
+
+
+// Student reward state. Dates are stored as UTC calendar-day boundaries.
+model UserGamification {
+  id                   Int      @id @default(autoincrement())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  totalXp              Int      @default(0)
+  xpBalance            Int      @default(0)
+  currentStreak        Int      @default(0)
+  longestStreak        Int      @default(0)
+  lastActivityDate     DateTime? @db.Date
+  dailyGoalXp         Int      @default(50)
+  streakFreezeInventory Int     @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model XpLedger {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  eventKey  String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventKey])
+  @@index([userId, createdAt])
+}
+
+model GamificationDay {
+  id                  Int      @id @default(autoincrement())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              Int
+  date                DateTime @db.Date
+  xpEarned            Int      @default(0)
+  lessonsCompleted    Int      @default(0)
+  unitTestsPassed     Int      @default(0)
+  practiceTestsDone   Int      @default(0)
+  goalReachedAt       DateTime?
+  freezeUsed          Boolean  @default(false)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+
+// Per-user spaced repetition state. The interval is rule-based and never uses ML.
+model UserQuestionReview {
+  id              Int      @id @default(autoincrement())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId      Int
+  lastReviewedAt  DateTime?
+  nextReviewAt    DateTime @default(now())
+  intervalDays    Int      @default(0)
+  repetitions     Int      @default(0)
+  reviewCount     Int      @default(0)
+  lastWasCorrect Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId, nextReviewAt])
+  @@index([userId, lastReviewedAt])
+}
+
+model UserBadge {
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int
+  badgeKey   String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, badgeKey])
+  @@index([userId, unlockedAt])
+}
+
+// AI-generated lesson drafts are private until an admin reviews and publishes them.
+model LessonDraft {
+  id             String   @id @default(cuid())
+  createdBy       User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById     Int
+  title           String
+  subject         String
+  topic           String
+  sourceTitle     String
+  sourceText      String
+  scriptJson      String
+  storyboardJson  String
+  provider        String
+  model           String
+  status          String   @default("DRAFT")
+  audienceScope   String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
+  targetStudentIdsJson String @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([status, audienceScope, targetBranchCode])
+  @@index([createdById])
+  audioAssets LessonAudioAsset[]
+
+  versions        LessonVersion[]
+  activeVersion   LessonVersion? @relation("ActiveLessonVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  activeVersionId String? @unique
+}
+
+
+
+model LessonVersion {
+  id                   String   @id @default(cuid())
+  lessonDraft          LessonDraft @relation(fields: [lessonDraftId], references: [id], onDelete: Cascade)
+  lessonDraftId        String
+  version              Int
+  packageSchemaVersion Int
+  manifestKey          String?
+  manifestSha256       String?
+  manifestSizeBytes    Int?
+  status               String   @default("UPLOADING")
+  validationJson       String   @default("{}")
+  createdBy            User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdById          Int
+  createdAt            DateTime @default(now())
+  verifiedAt           DateTime?
+  publishedAt          DateTime?
+  assets               LessonVersionAsset[]
+  activeFor            LessonDraft? @relation("ActiveLessonVersion")
+
+  @@unique([lessonDraftId, version])
+  @@index([lessonDraftId, status, version])
+}
+
+model LessonVersionAsset {
+  id             String   @id @default(cuid())
+  lessonVersion  LessonVersion @relation(fields: [lessonVersionId], references: [id], onDelete: Cascade)
+  lessonVersionId String
+  assetId        String
+  sceneId        String?
+  role           String
+  objectKey      String   @unique
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  durationMs     Int?
+  locale         String?
+  narrationHash  String?
+  createdAt      DateTime @default(now())
+
+  @@unique([lessonVersionId, assetId])
+  @@index([lessonVersionId, sceneId])
+}
+
+// Audio bytes live in private object storage; PostgreSQL stores only metadata and narration fingerprint.
+model LessonAudioAsset {
+  id             String      @id @default(cuid())
+  lessonDraft    LessonDraft @relation(fields: [lessonDraftId], references: [id], onDelete: Cascade)
+  lessonDraftId  String
+  uploadedBy     User        @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  uploadedById   Int
+  sceneIndex     Int
+  storagePath    String      @unique
+  mimeType       String
+  sizeBytes      Int
+  narrationHash  String
+  voice          String      @default("unknown")
+  model          String      @default("unknown")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([lessonDraftId, sceneIndex])
+  @@index([lessonDraftId, narrationHash])
+}
+
+/// Student-owned practice content is isolated from the public/admin ECET bank.
+model StudentPrivateQuestion {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  subject     String
+  topic       String   @default("General")
+  text        String
+  options     Json     @default("[]")
+  correctIndex Int     @default(0)
+  explanation String   @default("")
+  difficulty  String   @default("medium")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([userId, subject, topic])
+  @@index([userId, updatedAt])
+}
+
+model StudentPracticeSet {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  title       String
+  description String   @default("")
+  durationMinutes Int  @default(20)
+  questions   Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  runs        StudentPracticeRun[]
+  @@index([userId, updatedAt])
+}
+
+model StudentPracticeRun {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           Int
+  practiceSet      StudentPracticeSet? @relation(fields: [practiceSetId], references: [id], onDelete: SetNull)
+  practiceSetId    String?
+  titleSnapshot    String
+  totalQuestions   Int
+  answeredCount   Int
+  correctCount    Int
+  percentage      Float
+  answers         Json
+  completedAt     DateTime @default(now())
+  @@index([userId, completedAt])
+  @@index([practiceSetId])
+}
+
+model StudentMcpKey {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  name        String
+  keyHash     String   @unique
+  scopes      String[]
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([userId, revokedAt])
+}
+
+model AdminMcpKey {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  name        String
+  keyHash     String   @unique
+  scopes      String[]
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([userId, revokedAt])
+}
+
+model AdminMcpAuditLog {
+  id          String   @id @default(cuid())
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  actorId     Int
+  tool        String
+  success     Boolean
+  summary     String   @default("")
+  createdAt   DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}
+
+
+/// Versioned ML model artifacts. The artifact JSON stores a URI and integrity metadata,
+/// never model binaries or credentials.
+model RegisteredModel {
+  id                String   @id
+  modelId            String
+  version            Int
+  algorithm           String
+  task                String
+  dataset             String
+  trainingDatasetId   String?
+  artifactJson        String
+  isActive            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  activatedAt         DateTime?
+  @@unique([modelId, version])
+  @@index([modelId, isActive])
+  @@index([createdAt])
+}
+
+/// Admin action trail for model registration, evaluation and activation.
+model ModelRegistryAudit {
+  id        String   @id
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   Int?
+  modelId   String
+  version   Int
+  action    String
+  details   String   @default("{}")
+  createdAt DateTime @default(now())
+  @@index([modelId, version, createdAt])
+  @@index([actorId, createdAt])
+}
+
+/// Immutable dataset snapshots with explicit provenance and a content fingerprint.
+model ModelDataset {
+  id                 String   @id
+  createdBy           User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById         Int?
+  name                String
+  task                String
+  targetColumn        String   @default("target")
+  featureSchemaJson   String
+  samplesJson         String
+  rowCount            Int
+  sourceDescription  String
+  sourceAttested      Boolean  @default(false)
+  datasetKind         String   @default("synthetic")
+  fingerprint         String   @unique
+  createdAt            DateTime @default(now())
+  trainingJobs        ModelTrainingJob[]
+  @@index([name, createdAt])
+  @@index([createdById, createdAt])
+}
+
+/// Training is asynchronous. A queued job is not reported as trained until a worker
+/// completes it and writes a result.
+model ModelTrainingJob {
+  id              String   @id
+  dataset         ModelDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  datasetId       String
+  createdBy       User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdById     Int?
+  modelId         String
+  seed            Int      @default(42)
+  epochs          Int      @default(80)
+  batchSize       Int      @default(32)
+  status          String   @default("QUEUED")
+  progress        Int      @default(0)
+  errorMessage    String   @default("")
+  workerId        String   @default("")
+  leaseExpiresAt  DateTime?
+  resultJson      String   @default("{}")
+  createdAt       DateTime @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+  @@index([status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([datasetId, createdAt])
+}
+
+/// Evaluation records require an explicitly designated verification dataset.
+model ModelEvaluation {
+  id                  String   @id
+  actor               User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId             Int?
+  modelId             String
+  candidateVersion    Int
+  baselineVersion     Int
+  datasetId           String   @default("")
+  evaluationDataset   String
+  datasetFingerprint  String
+  sampleCount         Int
+  metricsJson         String
+  status              String
+  evaluatedAt         DateTime @default(now())
+  @@index([modelId, candidateVersion, evaluatedAt])
+  @@index([actorId, evaluatedAt])
+}
+
+/// Aggregated, non-identifying model input drift counters.
+model ModelDriftBucket {
+  id          String   @id
+  modelId     String
+  version     Int
+  featureName String
+  bucket      String
+  periodStart DateTime
+  count       Int      @default(0)
+  @@unique([modelId, version, featureName, bucket, periodStart])
+  @@index([modelId, version, periodStart])
+}
+
+
+
+/// Server-generated activity trail. Subject IDs intentionally have no FK so audit history
+/// survives account anonymization/deletion; actor identity is nulled if the actor is removed.
+model AuditEvent {
+  id             String   @id @default(cuid())
+  actor           User?    @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId         Int?
+  actorRole       String   @default("UNKNOWN")
+  subjectUserId   Int?
+  action          String
+  outcome         String
+  resourceType    String   @default("")
+  resourceId      String   @default("")
+  requestId       String
+  previousHash    String   @default("")
+  eventHash       String   @unique
+  route           String
+  collegeCode     String   @default("")
+  branchCode      String   @default("")
+  contextJson     String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([subjectUserId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([outcome, createdAt])
+  @@index([requestId])
+}
+
+/// Retention checkpoint anchors the hash chain before old audit rows are pruned.
+model AuditCheckpoint {
+  id                    String   @id
+  lastEventHash          String
+  lastEventCreatedAt     DateTime
+  deletedCount           Int
+  previousCheckpointHash String   @default("GENESIS")
+  checkpointHash         String   @unique
+  createdAt              DateTime @default(now())
+  @@index([createdAt])
+}
+
+/// Shared hashed buckets for distributed login and API request throttling.
+model AuthRateLimitBucket {
+  bucketKey       String   @id @map("bucket_key")
+  failureCount    Int      @default(0) @map("failure_count")
+  windowStartedAt DateTime @map("window_started_at")
+  blockedUntil    DateTime? @map("blocked_until")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("auth_rate_limit_buckets")
+}
+
+
+/// Aggregated per-process operational snapshots for the administrator fleet monitor.
+/// No request paths, student identifiers, raw IP addresses, or secrets are stored.
+model ServerInstanceMetric {
+  instanceId       String   @id @map("instance_id")
+  hostname         String
+  version          String
+  buildSha         String   @map("build_sha")
+  startedAt        DateTime @map("started_at")
+  lastSeenAt       DateTime @map("last_seen_at")
+  cpuPercent       Float    @default(0) @map("cpu_percent")
+  rssBytes         BigInt   @default(0) @map("rss_bytes")
+  heapUsedBytes    BigInt   @default(0) @map("heap_used_bytes")
+  uptimeSeconds    Int      @default(0) @map("uptime_seconds")
+  activeRequests   Int      @default(0) @map("active_requests")
+  requestsTotal    BigInt   @default(0) @map("requests_total")
+  errorsTotal      BigInt   @default(0) @map("errors_total")
+  requestRate      Float    @default(0) @map("request_rate")
+  p50LatencyMs    Float    @default(0) @map("p50_latency_ms")
+  p95LatencyMs    Float    @default(0) @map("p95_latency_ms")
+  dbLatencyMs      Float?   @map("db_latency_ms")
+
+  @@index([lastSeenAt])
+  @@map("server_instance_metrics")
 }

@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { request } from "./apiClient";
-import type {
-  PerformanceOverview,
-  StudentScorePrediction,
-  StudyRecommendation,
-  StudyRecommendationsReport,
-  TopicRow,
-  WeakTopicsReport,
-} from "./lib/api";
+import type { PerformanceOverview, FullMockPerformanceReport } from "./lib/api";
 import Skeleton from "./components/Skeleton";
+import { AnalyticsBarChart, AnalyticsDonutChart, AnalyticsLineChart, AnalyticsProgressRing } from "./AnalyticsCharts";
 
 export interface StudentAnalyticsProps {
   setActivePage: (page: string) => void;
@@ -16,9 +10,7 @@ export interface StudentAnalyticsProps {
 
 export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProps) {
   const [overview, setOverview] = useState<PerformanceOverview | null>(null);
-  const [weakTopics, setWeakTopics] = useState<WeakTopicsReport | null>(null);
-  const [recommendations, setRecommendations] = useState<StudyRecommendationsReport | null>(null);
-  const [prediction, setPrediction] = useState<StudentScorePrediction | null>(null);
+  const [fullMock, setFullMock] = useState<FullMockPerformanceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
   const generationRef = useRef(0);
@@ -29,199 +21,167 @@ export default function StudentAnalytics({ setActivePage }: StudentAnalyticsProp
     setErrors([]);
     const results = await Promise.allSettled([
       request<PerformanceOverview>("/analytics/overview"),
-      request<WeakTopicsReport>("/analytics/weak-topics"),
-      request<StudyRecommendationsReport>("/analytics/recommendations"),
-      request<StudentScorePrediction>("/analytics/score-prediction"),
+      request<FullMockPerformanceReport>("/analytics/full-mock-performance"),
     ]);
     if (generation !== generationRef.current) return;
+
     const failures: string[] = [];
-    if (results[0].status === "fulfilled") setOverview(results[0].value);
-    else failures.push("Practice overview: " + (results[0].reason instanceof Error ? results[0].reason.message : "Could not load this section."));
-    if (results[1].status === "fulfilled") setWeakTopics(results[1].value);
-    else failures.push("Weak-topic analysis: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
-    if (results[2].status === "fulfilled") setRecommendations(results[2].value);
-    else failures.push("Study recommendations: " + (results[2].reason instanceof Error ? results[2].reason.message : "Could not load this section."));
-    if (results[3].status === "fulfilled") setPrediction(results[3].value);
-    else failures.push("Score prediction: " + (results[3].reason instanceof Error ? results[3].reason.message : "Could not load this section."));
+    if (results[0].status === "fulfilled") {
+      const raw = results[0].value as Partial<PerformanceOverview> | null;
+      const practice = raw?.practice as Partial<PerformanceOverview["practice"]> | undefined;
+      const formal = raw?.formalExams as Partial<PerformanceOverview["formalExams"]> | undefined;
+      setOverview({
+        practice: {
+          completedAttempts: Number(practice?.completedAttempts ?? 0),
+          questions: Number(practice?.questions ?? 0),
+          correct: Number(practice?.correct ?? 0),
+          incorrect: Number(practice?.incorrect ?? 0),
+          unanswered: Number(practice?.unanswered ?? 0),
+          accuracy: typeof practice?.accuracy === "number" ? practice.accuracy : null,
+          trend: Array.isArray(practice?.trend) ? practice.trend.filter(Boolean) : [],
+        },
+        formalExams: {
+          submissions: Number(formal?.submissions ?? 0),
+          graded: Number(formal?.graded ?? 0),
+          scorePercentage: typeof formal?.scorePercentage === "number" ? formal.scorePercentage : null,
+          score: typeof formal?.score === "number" ? formal.score : null,
+          maximumScore: typeof formal?.maximumScore === "number" ? formal.maximumScore : null,
+          reviewRequired: Number(formal?.reviewRequired ?? 0),
+          correct: Number(formal?.correct ?? 0),
+          incorrect: Number(formal?.incorrect ?? 0),
+          unanswered: Number(formal?.unanswered ?? 0),
+          subjects: Array.isArray(formal?.subjects) ? formal.subjects.filter(Boolean) : [],
+        },
+      });
+    } else {
+      failures.push("Practice and assigned exam results: " + (results[0].reason instanceof Error ? results[0].reason.message : "Could not load this section."));
+    }
+
+    if (results[1].status === "fulfilled") {
+      const raw = results[1].value as Partial<FullMockPerformanceReport> | null;
+      setFullMock({
+        generatedAt: String(raw?.generatedAt ?? new Date().toISOString()),
+        completedFullMocks: Number(raw?.completedFullMocks ?? 0),
+        latestMockAt: raw?.latestMockAt ?? null,
+        questionCount: Number(raw?.questionCount ?? 0),
+        answeredQuestions: Number(raw?.answeredQuestions ?? 0),
+        correct: Number(raw?.correct ?? 0),
+        incorrect: Number(raw?.incorrect ?? 0),
+        unanswered: Number(raw?.unanswered ?? 0),
+        accuracy: typeof raw?.accuracy === "number" ? raw.accuracy : null,
+        subjects: Array.isArray(raw?.subjects) ? raw.subjects.filter(Boolean) : [],
+        topics: [],
+      });
+    } else {
+      failures.push("Mock test results: " + (results[1].reason instanceof Error ? results[1].reason.message : "Could not load this section."));
+    }
     setErrors(failures);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    loadAnalytics();
-    return () => {
-      generationRef.current += 1;
-    };
+    void loadAnalytics();
   }, [loadAnalytics]);
 
-  const accuracyPercent = (value: number | null) => (value === null ? "—" : Math.round(value * 100) + "%");
+  const ratioPercent = (value: number | null | undefined) => value == null ? null : Math.max(0, Math.min(100, value * 100));
+  const formalAccuracy = overview?.formalExams.scorePercentage ?? null;
 
   return (
-    <div className="stack student-analytics">
-      <section className="page-intro">
-        <p className="eyebrow">Your learning progress</p>
-        <h1>Study analytics</h1>
-        <p className="muted">A clear view of your practice history and the subjects that need more attention.</p>
+    <div className="stack performance-analytics student-analytics">
+      <section className="analytics-page-heading">
+        <div>
+          <p className="eyebrow">YOUR EXAM INSIGHTS</p>
+          <h1>Performance</h1>
+          <p className="muted">A clear view of your practice, mock tests and assigned exam results.</p>
+        </div>
+        <button type="button" className="button button-secondary analytics-refresh" onClick={() => void loadAnalytics()} disabled={loading}>
+          {loading ? "Updating…" : "↻ Refresh"}
+        </button>
       </section>
 
-      <div className="row analytics-toolbar">
-        <span className="muted" role="status">{loading ? "Updating analytics…" : "Analytics are up to date"}</span>
-        <button type="button" className="button button-secondary" onClick={() => void loadAnalytics()} disabled={loading}>
-          {loading ? "Refreshing…" : "Refresh analytics"}
-        </button>
+      <div className="analytics-status-line" role="status">
+        <span className={"analytics-status-dot" + (loading ? " updating" : "")} />
+        {loading ? "Updating performance data" : "Latest results loaded"}
       </div>
+
       {errors.length ? (
         <div className="error analytics-errors" role="alert">
-          <strong>Some analytics could not be loaded.</strong>
+          <strong>Some performance data could not be loaded.</strong>
           <ul>{errors.map((message) => <li key={message}>{message}</li>)}</ul>
-          <span>Other available sections remain visible. Use Refresh analytics to retry.</span>
-        </div>
-      ) : null}
-      {loading && !overview && !weakTopics && !recommendations && !prediction ? (
-        <div className="stack" style={{ gap: 10 }}>
-          <Skeleton variant="stat-tile" className="skeleton-stat" />
-          <Skeleton variant="stat-tile" className="skeleton-stat" />
-          <Skeleton variant="stat-tile" className="skeleton-stat" />
+          <span>Other available sections remain visible. Refresh to retry.</span>
         </div>
       ) : null}
 
-      {overview && (
-        <>
-          <section className="stat-grid">
-            <div className="stat-card">
-              <div className="stat-label">Completed attempts</div>
-              <div className="stat-value">{overview.practice.completedAttempts}</div>
-              <div className="stat-caption">Submitted practice sessions</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Question items</div>
-              <div className="stat-value">{overview.practice.questions}</div>
-              <div className="stat-caption">
-                {overview.practice.correct} correct · {overview.practice.incorrect} incorrect · {overview.practice.unanswered} unanswered
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Overall accuracy</div>
-              <div className="stat-value">{accuracyPercent(overview.practice.accuracy)}</div>
-              <div className="stat-caption">Correct answers / answered questions</div>
-            </div>
-          </section>
+      {loading && !overview && !fullMock ? (
+        <div className="analytics-loading-grid"><Skeleton variant="stat-tile" className="skeleton-stat" /><Skeleton variant="stat-tile" className="skeleton-stat" /></div>
+      ) : null}
 
-          <section className="panel" aria-labelledby="score-prediction-title">
-            <div className="panel-header">
-              <h2 id="score-prediction-title">Next practice score estimate</h2>
+      {overview ? (
+        <section className="analytics-section panel" aria-labelledby="practice-exam-analytics-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">01 · PRACTICE</span><h2 id="practice-exam-analytics-title">Practice performance</h2><p>Completed practice sessions only.</p></div>
+            <span className="analytics-section-count">{overview.practice.completedAttempts} attempts</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={ratioPercent(overview.practice.accuracy)} label="Practice accuracy" detail={overview.practice.correct + " correct of " + (overview.practice.correct + overview.practice.incorrect) + " answered"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Questions answered</span><strong>{(overview.practice.correct + overview.practice.incorrect).toLocaleString()}</strong><small>{overview.practice.questions.toLocaleString()} total in completed sessions</small></article>
+              <article className="analytics-kpi"><span>Correct answers</span><strong className="analytics-kpi-positive">{overview.practice.correct.toLocaleString()}</strong><small>{overview.practice.incorrect.toLocaleString()} incorrect · {overview.practice.unanswered.toLocaleString()} skipped</small></article>
+              <article className="analytics-kpi"><span>Completed attempts</span><strong>{overview.practice.completedAttempts.toLocaleString()}</strong><small>Practice sessions submitted</small></article>
             </div>
-            {prediction === null && loading ? <Skeleton variant="stat-tile" className="skeleton-stat" /> : null}
-            {prediction === null && !loading ? <p className="muted">Score prediction is unavailable. Refresh to try again.</p> : null}
-            {prediction && prediction.status === "ready" && (
-              <div>
-                <div className="big">{prediction.predictedScorePercent}%</div>
-                <p className="muted">Estimated accuracy on your next practice attempt. This is an estimate, not a guaranteed exam score.</p>
-                <p className="muted">Prediction range: <strong>{prediction.predictionInterval.lowerPercent}%–{prediction.predictionInterval.upperPercent}%</strong> (walk-forward RMSE {prediction.predictionInterval.estimatedErrorPercent} points).</p>
-                <p className="muted">{prediction.completedAttempts} completed attempts · {prediction.trainingSamples} samples · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}.</p>
-              </div>
-            )}
-            {prediction && prediction.status === "insufficient_data" && (
-              <div>
-                <p className="muted">{prediction.message}</p>
-                <p><strong>{prediction.completedAttempts} / {prediction.requiredCompletedAttempts}</strong> completed practice attempts</p>
-                <p className="muted">{prediction.availableSamples} of {prediction.requiredSamples} required prediction samples available.</p>
-              </div>
-            )}
-            {prediction && prediction.status === "baseline_not_beaten" && (
-              <div>
-                <p className="muted">{prediction.message}</p>
-                <p className="muted">{prediction.completedAttempts} attempts analyzed · validation MAE {prediction.modelMae.toFixed(3)} vs baseline {prediction.baselineMae.toFixed(3)}. No score estimate is shown until the model demonstrates useful predictive value.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="panel" aria-labelledby="formal-performance-title">
-            <div className="panel-header">
-              <h2 id="formal-performance-title">Formal exam performance</h2>
-            </div>
-            <div className="stat-grid">
-              <div className="stat-card">
-                <div className="stat-label">Verified graded exams</div>
-                <div className="stat-value">{overview.formalExams.graded}</div>
-                <div className="stat-caption">Review-required exams are excluded</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Score percentage</div>
-                <div className="stat-value">{overview.formalExams.scorePercentage === null ? "—" : overview.formalExams.scorePercentage.toFixed(1) + "%"}</div>
-                <div className="stat-caption">{overview.formalExams.score?.toFixed(2) ?? "—"} / {overview.formalExams.maximumScore?.toFixed(2) ?? "—"} marks</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Needs review</div>
-                <div className="stat-value">{overview.formalExams.reviewRequired}</div>
-                <div className="stat-caption">Not included in verified score totals</div>
-              </div>
-            </div>
-          </section>
-        </>
-      )}
-
-      {weakTopics && (
-        <section className="panel" aria-labelledby="study-recommendations-title">
-          <div className="panel-header">
-            <h2 id="study-recommendations-title">Your next study steps</h2>
-            {recommendations && <span className="pill">{recommendations.basedOnAttempts} attempts analyzed</span>}
           </div>
-          {recommendations && (
-            <>
-              <p className="muted">
-                Recommendations use completed practice answers only. A topic is prioritized only after at least {recommendations.minimumAnswers} answered questions and accuracy below {Math.round((recommendations.weakAccuracyThreshold as number) * 100)}%.
-              </p>
-              <div className="performance-explanation">
-                <strong>{recommendations.performanceExplanation.headline}</strong>
-                <ul>
-                  {recommendations.performanceExplanation.details.map((detail: string, index: number) => <li key={index}>{detail}</li>)}
-                </ul>
-              </div>
-              <div className="stack">
-                {recommendations.recommendations.map((item: StudyRecommendation) => (
-                  <article key={item.id} className="panel">
-                    <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
-                      <strong>{item.title}</strong>
-                      <span className="pill">{item.priority} priority</span>
-                    </div>
-                    <p className="muted">{item.reason}</p>
-                    <p className="muted">
-                      Suggested session: {item.questionCount} {item.mode === "mistakes" ? "mistake review" : item.mode === "mock" ? "mock test" : "practice"} questions
-                      {item.subject ? ` in ${item.subject}` : ""}{item.topic ? ` · ${item.topic}` : ""}.
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-          <div className="stack">
-            <h3>Subjects to revise</h3>
-            {weakTopics.weakest ? (
-              <p className="warn">
-                Focus next on <strong>{weakTopics.weakest.topic || weakTopics.weakest.subject}</strong>{" "}
-                in {weakTopics.weakest.subject} — {weakTopics.weakest.accuracy === null ? "not enough answered questions" : Math.round(weakTopics.weakest.accuracy * 100) + "% accuracy"} across {weakTopics.weakest.seen} answered questions.
-              </p>
-            ) : null}
-            {(weakTopics.subjects ?? []).map((item: TopicRow) => (
-              <div key={item.subject}>
-                <div className="row" style={{ justifyContent: "space-between", gap: 12 }}>
-                  <strong>{item.subject}</strong>
-                  <span className="pill">{item.accuracy === null ? "No answered questions" : Math.round(item.accuracy * 100) + "%"} · {item.seen} answered</span>
-                </div>
-                <p className="muted">{item.wrong} incorrect answers</p>
-              </div>
-            ))}
+          <div className="analytics-chart-grid analytics-practice-charts">
+            <AnalyticsLineChart title="Accuracy trend" description="Your recent practice attempts, in order." items={(overview.practice.trend ?? []).filter((attempt) => attempt.accuracy !== null).map((attempt,index)=>({label:"Attempt "+(index+1),value:Math.round((attempt.accuracy??0)*100),detail:new Date(attempt.finishedAt).toLocaleDateString()}))} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Finish more practice attempts to build your trend." />
+            <AnalyticsDonutChart title="Answer mix" segments={[{label:"Correct",value:overview.practice.correct,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:overview.practice.incorrect,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:overview.practice.unanswered,color:"var(--analytics-unanswered,#94a3b8)"}]} />
           </div>
         </section>
-      )}
+      ) : <section className="analytics-section panel"><h2>Practice performance</h2><p className="muted">Practice exam performance is unavailable right now.</p></section>}
 
-      {!loading && !weakTopics ? <section className="panel" aria-live="polite"><h2>Study recommendations unavailable</h2><p className="muted">Weak-topic analysis could not be loaded. Refresh analytics to try again.</p></section> : null}
+      {fullMock ? (
+        <section className="analytics-section panel" aria-labelledby="mock-test-analytics-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">02 · MOCK TESTS</span><h2 id="mock-test-analytics-title">Full mock results</h2><p>Completed full-length mock tests. Unanswered questions stay separate from incorrect answers.</p></div>
+            <span className="analytics-section-count">{fullMock.completedFullMocks} completed</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={ratioPercent(fullMock.accuracy)} label="Mock accuracy" detail={fullMock.correct + " correct of " + fullMock.answeredQuestions + " answered"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Questions in papers</span><strong>{fullMock.questionCount.toLocaleString()}</strong><small>Across completed mock papers</small></article>
+              <article className="analytics-kpi"><span>Answered</span><strong>{fullMock.answeredQuestions.toLocaleString()}</strong><small>{fullMock.unanswered.toLocaleString()} unanswered</small></article>
+              <article className="analytics-kpi"><span>Incorrect</span><strong className="analytics-kpi-negative">{fullMock.incorrect.toLocaleString()}</strong><small>Questions answered incorrectly</small></article>
+            </div>
+          </div>
+          <div className="analytics-chart-grid">
+            <AnalyticsBarChart title="Subject accuracy" description="Accuracy from answered questions in completed full mocks." items={fullMock.subjects.filter(subject=>subject.accuracy!==null).map(subject=>({label:subject.subject,value:Math.round((subject.accuracy??0)*100),detail:subject.answeredQuestions+" answered"})).sort((a,b)=>a.value-b.value)} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Subject results appear after you complete a full mock." />
+            <AnalyticsDonutChart title="Mock answer mix" segments={[{label:"Correct",value:fullMock.correct,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:fullMock.incorrect,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:fullMock.unanswered,color:"var(--analytics-unanswered,#94a3b8)"}]} />
+          </div>
+          {fullMock.latestMockAt ? <p className="analytics-last-updated">Latest completed mock: {new Date(fullMock.latestMockAt).toLocaleDateString()}</p> : null}
+        </section>
+      ) : <section className="analytics-section panel"><h2>Full mock results</h2><p className="muted">Mock test performance is unavailable right now.</p></section>}
 
-      <div className="row">
-        <button className="button button-secondary" onClick={() => setActivePage("learning")}>Open concept library</button>
-        <button className="button button-secondary" onClick={() => setActivePage("materials")}>Offline study materials</button>
-        <button className="button button-secondary" onClick={() => setActivePage("dashboard")}>Back to study dashboard</button>
+      {overview ? (
+        <section className="analytics-section panel" aria-labelledby="assigned-exam-performance-title">
+          <header className="analytics-section-heading">
+            <div><span className="analytics-section-kicker">03 · ASSIGNED EXAMS</span><h2 id="assigned-exam-performance-title">Assigned / real exam results</h2><p>Finalized results from exams assigned through your exam system.</p></div>
+            <span className="analytics-section-count">{overview.formalExams.graded} graded</span>
+          </header>
+          <div className="analytics-hero-grid">
+            <AnalyticsProgressRing value={formalAccuracy} label="Average exam score" detail={(overview.formalExams.score ?? "—") + " of " + (overview.formalExams.maximumScore ?? "—") + " points"} />
+            <div className="analytics-kpi-grid">
+              <article className="analytics-kpi"><span>Graded exams</span><strong>{overview.formalExams.graded.toLocaleString()}</strong><small>Results finalized</small></article>
+              <article className="analytics-kpi"><span>Awaiting review</span><strong>{overview.formalExams.reviewRequired.toLocaleString()}</strong><small>Pending manual marking</small></article>
+              <article className="analytics-kpi"><span>Exam submissions</span><strong>{(overview.formalExams.submissions ?? 0).toLocaleString()}</strong><small>Assigned / real exams submitted</small></article>
+            </div>
+          </div>
+          <div className="analytics-chart-grid">
+            <AnalyticsBarChart title="Subject score" description="Accuracy from graded assigned exams, by subject." items={(overview.formalExams.subjects??[]).filter(subject=>subject.accuracy!==null).map(subject=>({label:subject.subject,value:Math.round((subject.accuracy??0)*100),detail:subject.correct+" correct · "+subject.incorrect+" incorrect"})).sort((a,b)=>a.value-b.value)} maxValue={100} formatValue={(value)=>value+"%"} emptyMessage="Subject scores will appear after assigned exams are graded." />
+            <AnalyticsDonutChart title="Exam answer mix" segments={[{label:"Correct",value:overview.formalExams.correct??0,color:"var(--analytics-correct,#16a34a)"},{label:"Incorrect",value:overview.formalExams.incorrect??0,color:"var(--analytics-incorrect,#dc2626)"},{label:"Unanswered",value:overview.formalExams.unanswered??0,color:"var(--analytics-unanswered,#94a3b8)"}]} />
+          </div>
+        </section>
+      ) : <section className="analytics-section panel"><h2>Assigned / real exam results</h2><p className="muted">Assigned exam results are unavailable right now.</p></section>}
+
+      <div className="analytics-footer-action">
+        <button className="button button-secondary" onClick={() => setActivePage("assignments")}>View assigned exams <span aria-hidden="true">→</span></button>
       </div>
     </div>
   );

@@ -19,14 +19,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "dev:mobile": "npm --prefix mobile run start",
-    "dev:desktop": "npm --prefix desktop run start",
     "build:mobile": "npm --prefix mobile exec expo export -- --platform all",
-    "build:desktop:win": "npm run build:web && npm --prefix desktop run dist:win",
     "install:mobile": "npm install --prefix mobile",
-    "install:desktop": "npm install --prefix desktop",
     "admin:bootstrap": "npm run admin:bootstrap --workspace=api",
-    "build:mobile:android": "npm run prebuild:android --prefix mobile && npm run build:android:release --prefix mobile",
-    "build:desktop:linux": "npm run build:web && npm --prefix desktop run dist:linux"
+    "build:mobile:android": "npm run prebuild:android --prefix mobile && npm run build:android:release --prefix mobile"
   },
   "devDependencies": {
     "playwright": "^1.65.0",

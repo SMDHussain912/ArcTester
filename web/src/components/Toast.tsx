@@ -6,41 +6,39 @@ interface ToastProps {
   message: string;
   onClose: () => void;
   duration?: number;
+  tone?: "error" | "success" | "info";
 }
 
-/** Retry-safe toast: auto-dismisses, pops in, stacks. Never blocks input. */
-export default function Toast({ open, message, onClose, duration = 3500 }: ToastProps) {
+/** Non-blocking, dismissible toast for transient app feedback. */
+export default function Toast({ open, message, onClose, duration = 5000, tone = "info" }: ToastProps) {
   const [mounted, setMounted] = useState(false);
-  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onCloseRef = useRef(onClose);
   const reduced = useMotionPreference() !== "full";
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     setMounted(true);
-    rafRef.current = setTimeout(() => onClose(), duration);
+    timerRef.current = setTimeout(() => onCloseRef.current(), duration);
     return () => {
-      if (rafRef.current) clearTimeout(rafRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [open, duration]);
+  }, [open, duration, message]);
 
   if (!open || !mounted) return null;
 
+  const isError = tone === "error";
   return (
     <div
-      className="toast"
-      role="status"
-      aria-live="polite"
-      style={{
-        opacity: reduced ? 1 : 0,
-        transform: reduced ? undefined : "translateY(8px)",
-        transition: reduced
-          ? "none"
-          : `opacity 220ms cubic-bezier(.65,0,.35,1), transform 220ms cubic-bezier(.65,0,.35,1)`,
-      }}
+      className={`toast toast-${tone}`}
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+      style={reduced ? { animation: "none" } : undefined}
     >
-      {message}
-      <button type="button" onClick={onClose} style={{ marginLeft: 8, padding: 4, background: "none", border: 0, color: "inherit", cursor: "pointer" }}>
-        ✕
+      <span>{message}</span>
+      <button type="button" aria-label="Dismiss message" onClick={() => onCloseRef.current()} className="toast-close">
+        ×
       </button>
     </div>
   );

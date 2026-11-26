@@ -58,7 +58,7 @@ These observations describe source code, not the deployed environment.
 - [ ] Verify the frontend/API domain arrangement and third-party-cookie behavior
       in supported browsers; prefer same-site custom domains where possible.
 - [ ] Test login, refresh, logout, session revocation and protected requests on
-      desktop and mobile browsers.
+      web browsers and the Android app.
 - [ ] Confirm no access token or session cookie is written to browser
       localStorage/sessionStorage or exposed to client-side logs.
 

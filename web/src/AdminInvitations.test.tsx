@@ -1,55 +1,44 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import AdminInvitations, { type AdminInvitation } from "./AdminInvitations";
+import AdminInvitations, { type StudentAccessRow } from "./AdminInvitations";
 
-const invitations: AdminInvitation[] = [
-  { id: "invite-1", email: "pending@example.test", expiresAt: "2026-11-12T10:00:00.000Z", status: "PENDING" },
-  { id: "invite-2", email: "used@example.test", expiresAt: "2026-11-09T10:00:00.000Z", status: "USED" },
+const students: StudentAccessRow[] = [
+  { id: 1, email: "pending@example.test", accessStatus: "PENDING", createdAt: "2026-11-20T10:00:00.000Z" },
+  { id: 2, email: "approved@example.test", accessStatus: "APPROVED", createdAt: "2026-11-19T10:00:00.000Z" },
+  { id: 3, email: "rejected@example.test", accessStatus: "REJECTED", createdAt: "2026-11-18T10:00:00.000Z" },
 ];
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => vi.restoreAllMocks());
 
-describe("AdminInvitations", () => {
-  it("renders invitation form, status history and revocation for pending codes", () => {
-    const onRevoke = vi.fn();
-    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
-    render(<AdminInvitations invitations={invitations} inviteEmail="" createdInvitation={null} busy={false} onInviteEmailChange={vi.fn()} onCreate={vi.fn()} onRevoke={onRevoke} />);
-    expect(screen.getByRole("heading", { name: "Invitations" })).toBeTruthy();
+describe("student access approvals", () => {
+  it("shows account status, filters and one-click approval", () => {
+    const onChangeStatus = vi.fn();
+    render(<AdminInvitations students={students} busy={false} onRefresh={vi.fn()} onChangeStatus={onChangeStatus} onBulkApprove={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "Student approvals" })).toBeTruthy();
     expect(screen.getByText("pending@example.test")).toBeTruthy();
-    expect(screen.getByText("used@example.test")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Revoke" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Revoke" })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
-    expect(onRevoke).toHaveBeenCalledWith("invite-1");
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onChangeStatus).toHaveBeenCalledWith(1, "APPROVED");
+    fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "ALL" } });
+    expect(screen.getByText("approved@example.test")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "REJECTED" } });
+    expect(screen.getByText("rejected@example.test")).toBeTruthy();
+    expect(screen.queryByText("pending@example.test")).toBeNull();
   });
 
-  it("requires confirmation before revoking a pending invitation", () => {
-    const onRevoke = vi.fn();
-    const confirmMock = vi.fn().mockReturnValue(false);
-    vi.stubGlobal("confirm", confirmMock);
-    render(<AdminInvitations invitations={[invitations[0]]} inviteEmail="" createdInvitation={null} busy={false} onInviteEmailChange={vi.fn()} onCreate={vi.fn()} onRevoke={onRevoke} />);
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
-    expect(confirmMock).toHaveBeenCalledWith("Revoke the invitation for pending@example.test?");
-    expect(onRevoke).not.toHaveBeenCalled();
-    confirmMock.mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
-    expect(onRevoke).toHaveBeenCalledWith("invite-1");
+  it("searches student accounts by email", () => {
+    render(<AdminInvitations students={students} busy={false} onRefresh={vi.fn()} onChangeStatus={vi.fn()} onBulkApprove={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Filter student approval status"), { target: { value: "ALL" } });
+    fireEvent.change(screen.getByLabelText("Search student email"), { target: { value: "approved@" } });
+    expect(screen.getByText("approved@example.test")).toBeTruthy();
+    expect(screen.queryByText("pending@example.test")).toBeNull();
   });
 
-  it("shows the created invitation token and expiry", () => {
-    render(<AdminInvitations invitations={[]} inviteEmail="" createdInvitation={{ email: "new@example.test", token: "one-time-code", expiresAt: "2026-11-12T10:00:00.000Z" }} busy={false} onInviteEmailChange={vi.fn()} onCreate={vi.fn()} onRevoke={vi.fn()} />);
-    expect(screen.getByText("one-time-code")).toBeTruthy();
-    expect(screen.getByText("new@example.test")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Copy code" })).toBeTruthy();
-  });
-
-  it("delegates email changes and invitation form submission", () => {
-    const onInviteEmailChange = vi.fn(), onCreate = vi.fn();
-    render(<AdminInvitations invitations={[]} inviteEmail="student@example.test" createdInvitation={null} busy={true} onInviteEmailChange={onInviteEmailChange} onCreate={onCreate} onRevoke={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "next@example.test" } });
-    expect(onInviteEmailChange).toHaveBeenCalledWith("next@example.test");
-    expect(screen.getByRole("button", { name: "Create invitation" }).hasAttribute("disabled")).toBe(true);
-    fireEvent.submit(screen.getByRole("button", { name: "Create invitation" }).closest("form")!);
-    expect(onCreate).toHaveBeenCalledTimes(1);
+  it("confirms and bulk approves selected students", () => {
+    const onBulkApprove = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<AdminInvitations students={students} busy={false} onRefresh={vi.fn()} onChangeStatus={vi.fn()} onBulkApprove={onBulkApprove} />);
+    fireEvent.click(screen.getByLabelText("Select pending@example.test"));
+    fireEvent.click(screen.getByRole("button", { name: "Approve selected (1)" }));
+    expect(onBulkApprove).toHaveBeenCalledWith([1]);
   });
 });

@@ -24,6 +24,9 @@ const CSV_COLUMNS = [
   "explanation",
   "source",
   "difficulty",
+  "questionType",
+  "promptData",
+  "answerData",
 ] as const;
 
 function invalidRow(row: number, reason: string): InvalidRow {
@@ -69,6 +72,9 @@ async function insertValidatedQuestions(
       source: string;
       difficulty: string;
       questionHash: string;
+      questionType: string;
+      promptData: string;
+      answerData: string;
     }> = [];
 
     for (const input of pending) {
@@ -92,6 +98,9 @@ async function insertValidatedQuestions(
         explanation: input.explanation ?? "",
         source: input.source ?? "",
         difficulty: input.difficulty ?? "medium",
+        questionType: input.questionType,
+        promptData: JSON.stringify(input.promptData),
+        answerData: JSON.stringify(input.answerData),
         questionHash: hashQuestion(input.text),
       });
     }
@@ -170,7 +179,8 @@ export async function importFromJson(db: PrismaClient, payload: unknown, options
 
   // Use PostgreSQL ON CONFLICT DO NOTHING; catching a unique violation inside
   // a transaction leaves PostgreSQL's transaction aborted.
-  const inserted = await insertValidatedQuestions(db, valid.map((item) => item.input));
+  const inputs = valid.map((item) => item.input);
+  const inserted = await insertValidatedQuestions(db, inputs);
   report.added = inserted.added;
   report.duplicates = inserted.duplicates;
   return report;
@@ -212,11 +222,16 @@ export async function importFromCsv(db: PrismaClient, content: string, options: 
       subject: get("subject"),
       topic: get("topic") || "General",
       text: get("text"),
-      options: [get("optiona"), get("optionb"), get("optionc"), get("optiond")],
+      options: (get("questiontype") || "mcq") === "mcq" || (get("questiontype") || "mcq") === "multi_select"
+          ? [get("optiona"), get("optionb"), get("optionc"), get("optiond")]
+          : (get("questiontype") || "mcq") === "true_false" ? [get("optiona"), get("optionb")] : [],
       correctIndex: Number.isInteger(correctIndex) ? correctIndex : correctRaw,
       explanation: get("explanation"),
       source: get("source") || "csv",
       difficulty: get("difficulty") || "medium",
+      questionType: get("questiontype") || "mcq",
+      promptData: get("promptdata") ? JSON.parse(get("promptdata")) : {},
+      answerData: get("answerdata") ? JSON.parse(get("answerdata")) : {},
     });
     if (!checked.success) {
       report.invalid.push(invalidRow(rowNumber, describeIssue(checked.error)));
@@ -280,21 +295,17 @@ export async function previewImport(
       return { valid: 0, duplicates: 0, invalid: [invalidRow(0, `Import exceeds the ${MAX_QUESTION_IMPORT_ROWS}-question limit.`)], total };
     }
     payload.forEach((raw, index) => {
-      const parsed = BaseRowSchema.safeParse(raw);
-      if (!parsed.success) {
-        invalid.push(invalidRow(index + 1, describeIssue(parsed.error)));
-        return;
+      let normalized: unknown = raw;
+      if (Array.isArray(raw)) {
+        const parsed = BaseRowSchema.safeParse(raw);
+        if (!parsed.success) {
+          invalid.push(invalidRow(index + 1, describeIssue(parsed.error)));
+          return;
+        }
+        const [subject, text, options, correctIndex, explanation] = parsed.data;
+        normalized = { subject, text, options, correctIndex, explanation: explanation ?? "", source: "json" };
       }
-
-      const [subject, text, options, correctIndex, explanation] = parsed.data;
-      const checked = QuestionInputSchema.safeParse({
-        subject,
-        text,
-        options,
-        correctIndex,
-        explanation: explanation ?? "",
-        source: "json",
-      });
+      const checked = QuestionInputSchema.safeParse(normalized);
 
       if (!checked.success) {
         invalid.push(invalidRow(index + 1, describeIssue(checked.error)));
@@ -348,11 +359,16 @@ export async function previewImport(
         subject: get("subject"),
         topic: get("topic") || "General",
         text: get("text"),
-        options: [get("optiona"), get("optionb"), get("optionc"), get("optiond")],
+        options: (get("questiontype") || "mcq") === "mcq" || (get("questiontype") || "mcq") === "multi_select"
+          ? [get("optiona"), get("optionb"), get("optionc"), get("optiond")]
+          : (get("questiontype") || "mcq") === "true_false" ? [get("optiona"), get("optionb")] : [],
         correctIndex: Number.isInteger(correctIndex) ? correctIndex : correctRaw,
         explanation: get("explanation"),
         source: get("source") || "csv",
         difficulty: get("difficulty") || "medium",
+        questionType: get("questiontype") || "mcq",
+        promptData: get("promptdata") ? JSON.parse(get("promptdata")) : {},
+        answerData: get("answerdata") ? JSON.parse(get("answerdata")) : {},
       });
 
       if (!checked.success) {

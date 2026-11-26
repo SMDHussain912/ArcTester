@@ -21,15 +21,18 @@ export function createApiClient(apiBase: string, fetcher?: typeof fetch) {
     });
     const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = body && typeof body === "object" && "error" in body &&
-        typeof (body as ApiErrorBody).error === "string"
-        ? (body as { error: string }).error : "The request failed.";
+      const message = response.status >= 500
+        ? "ArcTester couldn't complete this request right now. Please try again."
+        : body && typeof body === "object" && "error" in body &&
+          typeof (body as ApiErrorBody).error === "string"
+          ? (body as { error: string }).error : "The request failed.";
       throw new ApiRequestError(message, response.status);
     }
     return body as T;
   };
 }
 
-/** Default cookie-authenticated JSON request using the configured API base. */
-export const API = "/api";
+/** Default cookie-authenticated JSON request using the same Render API as App.tsx. */
+const configuredApi = import.meta.env.VITE_API_URL;
+export const API = (configuredApi || "https://arctester.onrender.com").replace(/\/+$/, "");
 export const request = createApiClient(API);

@@ -9,6 +9,7 @@ export interface StudentLearningProps {
 
 export default function StudentLearning({ setActivePage }: StudentLearningProps) {
   const [concepts, setConcepts] = useState<LearningConcept[]>([]);
+  const [conceptTotal, setConceptTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +28,19 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
         "/learning/concepts" + (suffix ? "?" + suffix : ""),
       );
       if (generation !== cancelledRef.current) return;
-      setConcepts(result.concepts);
+      const rows = Array.isArray(result?.concepts) ? result.concepts : [];
+      setConceptTotal(Number.isFinite(result?.total) ? Math.max(0, Number(result.total)) : rows.length);
+      setConcepts(rows.filter(Boolean).map((concept) => ({
+        ...concept,
+        slug: String(concept.slug ?? ""),
+        title: String(concept.title ?? "Untitled concept"),
+        subject: String(concept.subject ?? "General"),
+        topic: String(concept.topic ?? "General"),
+        definition: String(concept.definition ?? ""),
+        examples: Array.isArray(concept.examples) ? concept.examples.filter((item): item is string => typeof item === "string") : [],
+        relatedConcepts: Array.isArray(concept.relatedConcepts) ? concept.relatedConcepts.filter((item): item is string => typeof item === "string") : [],
+        commonMistakes: Array.isArray(concept.commonMistakes) ? concept.commonMistakes.filter((item): item is string => typeof item === "string") : [],
+      })));
     } catch (cause) {
       if (generation !== cancelledRef.current) return;
       setError(cause instanceof Error ? cause.message : "Could not load the concept library.");
@@ -56,7 +69,7 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
             <h1>Concept library</h1>
             <p className="muted">Curated study notes with definitions, examples and common mistakes.</p>
           </div>
-          <span className="pill">{concepts.length} concepts</span>
+          <span className="pill">{conceptTotal} concepts</span>
         </div>
         <form className="row" onSubmit={handleSearch}>
           <input
@@ -83,7 +96,10 @@ export default function StudentLearning({ setActivePage }: StudentLearningProps)
         </div>
       ) : null}
       {!loading && concepts.length === 0 && !error ? (
-        <section className="panel"><p className="muted">No concepts matched this search.</p></section>
+        <section className="panel concept-empty-state">
+          <strong>{query.trim() ? "No concepts matched this search." : "The concept library is empty on the server."}</strong>
+          <p className="muted">{query.trim() ? "Try a different keyword, subject or topic." : "This library contains curated ECET study notes—definitions, examples, related concepts and common mistakes. An administrator needs to publish or seed the concept content."}</p>
+        </section>
       ) : null}
       <div className="stack">
         {concepts.map((concept) => (

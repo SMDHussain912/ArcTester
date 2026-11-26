@@ -1,0 +1,13 @@
+subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty
+Digital Electronics,Number Systems,What is hexadecimal A in decimal?,16,10,11,12,1,Hexadecimal A represents decimal ten.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Logic Gates,What is the output of AND when inputs are 1 and 0?,Depends on clock,High impedance,0,1,2,AND outputs 1 only when both inputs are 1.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Boolean Algebra,Simplify A + A·B using absorption law.,B,A·B,A+B,A,3,A + A·B = A.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Multiplexers,How many select lines are needed for an 8-to-1 multiplexer?,3,2,4,8,0,"2³ = 8 inputs, so three select lines.",NEEDS HUMAN REVIEW,medium
+Digital Electronics,Flip-Flops,Which flip-flop stores one bit of state?,Multiplexer,D flip-flop,Full adder,Encoder,1,A flip-flop stores one binary state bit.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Counters,A 4-bit binary counter has how many distinct states?,8,32,16,4,2,A 4-bit counter has 2⁴ = 16 states.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Number Systems,What is decimal 15 in hexadecimal?,E,10,A,F,3,Decimal 15 is hexadecimal F.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Logic Gates,What is the output of an OR gate when inputs are 0 and 1?,Undefined,High impedance,1,0,2,OR outputs 1 if at least one input is 1.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Boolean Algebra,Simplify A·(A+B) using the absorption law.,A·B,A,B,A+B,1,A(A+B)=A by absorption.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Multiplexers,How many select lines are required for a 4-to-1 multiplexer?,2,1,3,4,0,Two select lines encode four input choices.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Flip-Flops,"For a JK flip-flop, what happens when J=1 and K=1 at the active clock?",The output is always reset,The output is always set,The output is unchanged,The output toggles,3,A JK flip-flop toggles when both J and K are high.,NEEDS HUMAN REVIEW,medium
+Digital Electronics,Counters,How many states does a 3-bit binary counter have?,6,16,8,3,2,A 3-bit counter has 2³ = 8 states.,NEEDS HUMAN REVIEW,medium

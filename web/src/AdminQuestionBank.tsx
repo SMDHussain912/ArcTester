@@ -1,7 +1,17 @@
 import { useState } from "react";
-export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string };
+export type AdminBankQuestion = { id: number; subject: string; topic: string; text: string; options: string[]; correctIndex: number; explanation: string; source: string; difficulty: string; questionType?: string; promptData?: Record<string, unknown>; answerData?: Record<string, unknown>; reviewStatus?: "DRAFT" | "APPROVED" | "REJECTED"; audienceScope?: "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS"; targetCollegeCode?: string | null; targetCollegeName?: string | null; targetBranchCode?: string | null; targetBranchName?: string | null; targetStudentIdsJson?: string | null; createdBy?: { id: number; email: string } | null };
+export type QuestionReviewProgress = { subjects: Array<{ subject: string; paperQuota: number; requiredQuota: number; drafted: number; approved: number; rejected: number; remaining: number }>; totals: { drafted: number; approved: number; rejected: number; requiredQuota: number; remaining: number } };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
 type Topic = { id: number; name: string; _count: { questions: number } };
+function questionAudienceLabel(question: AdminBankQuestion): string {
+  if (question.audienceScope === "COLLEGE") return "College · " + (question.targetCollegeName || question.targetCollegeCode || "target missing");
+  if (question.audienceScope === "BRANCH") return "Branch · " + (question.targetBranchName || question.targetBranchCode || "target missing") + (question.targetCollegeName || question.targetCollegeCode ? " · " + (question.targetCollegeName || question.targetCollegeCode) : " · all colleges");
+  if (question.audienceScope === "STUDENTS") {
+    try { const ids = JSON.parse(question.targetStudentIdsJson ?? "[]"); return "Selected students · " + (Array.isArray(ids) ? ids.length + " account(s)" : "target missing"); }
+    catch { return "Selected students · target missing"; }
+  }
+  return "Global · all students";
+}
 
 type AdminQuestionBankProps = {
   questions: AdminBankQuestion[];
@@ -11,6 +21,12 @@ type AdminQuestionBankProps = {
   subject: string;
   topic: string;
   difficulty: string;
+  reviewStatus?: string;
+  reviewProgress?: QuestionReviewProgress | null;
+  onReviewStatusChange?: (value: string) => void;
+  onReviewQuestion?: (id: number, status: "APPROVED" | "REJECTED", source: string) => void;
+  onBulkReview?: (status: "APPROVED" | "REJECTED", sources: Array<{ id: number; source: string }>) => void;
+  onBulkApproveScope?: (scope: { subject: string; topic?: string; difficulty?: string }) => void;
   catalog: AdminQuestionCatalogSubject[];
   filteredTopics: Topic[];
   selected: number[];
@@ -27,9 +43,17 @@ type AdminQuestionBankProps = {
   onPageChange: (page: number) => void;
 };
 
-export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
+export default function AdminQuestionBank({ questions, total, page, query, subject, topic, difficulty, reviewStatus = "", reviewProgress = null, onReviewStatusChange = () => {}, onReviewQuestion = () => {}, onBulkReview = () => {}, onBulkApproveScope = () => {}, catalog, filteredTopics, selected, busy, onQueryChange, onSubjectChange, onTopicChange, onDifficultyChange, onToggleSelected, onDeleteSelected, onBulkDifficultyChange, onEditQuestion, onUpload, onPageChange }: AdminQuestionBankProps) {
   const [bulkDifficulty, setBulkDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [sourceDrafts, setSourceDrafts] = useState<Record<number, string>>({});
   const pageCount = Math.max(1, Math.ceil(total / 25));
+  const bulkReviewSources = selected.map((id) => {
+    const question = questions.find((item) => item.id === id);
+    return { id, source: (sourceDrafts[id] ?? question?.source ?? "").trim() };
+  });
+  const bulkReviewReady = selected.length > 0 && bulkReviewSources.length === selected.length &&
+    bulkReviewSources.every((item) => item.source.length > 0 && item.source.toUpperCase() !== "NEEDS HUMAN REVIEW");
+
   function confirmDeleteSelected() {
     if (!selected.length) return;
     if (!window.confirm(`Delete ${selected.length} selected question(s)? Questions used in historical attempts will be protected.`)) return;
@@ -42,23 +66,35 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         <input placeholder="Search question text or explanation…" value={query} onChange={(event) => onQueryChange(event.target.value)} />
         <select value={subject} onChange={(event) => onSubjectChange(event.target.value)}><option value="">All subjects</option>{catalog.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select>
         <select value={topic} onChange={(event) => onTopicChange(event.target.value)}><option value="">All topics</option>{filteredTopics.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select>
-        <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)}><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+        <select value={difficulty} onChange={(event) => onDifficultyChange(event.target.value)} aria-label="Filter by difficulty"><option value="">All difficulty</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+        <select value={reviewStatus} onChange={(event) => onReviewStatusChange(event.target.value)} aria-label="Filter by review status"><option value="">All review statuses</option><option value="DRAFT">Needs review</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select>
       </div>
-      <div className="admin-panel table-panel">
+      <details className="admin-panel question-review-progress" aria-label="Question review progress">
+        <summary className="question-review-summary">Review progress · {reviewProgress?.totals?.drafted ?? "—"} draft · {reviewProgress?.totals?.approved ?? "—"} approved · {reviewProgress?.totals?.remaining ?? "—"} needed</summary>
+        {reviewProgress?.totals && Array.isArray(reviewProgress.subjects) ? <>
+          <div className="admin-stat-grid"><article><span>Drafted</span><b>{reviewProgress.totals.drafted.toLocaleString()}</b></article><article><span>Approved</span><b>{reviewProgress.totals.approved.toLocaleString()}</b></article><article><span>Required bank target</span><b>{reviewProgress.totals.requiredQuota.toLocaleString()}</b></article><article><span>Still needed</span><b>{reviewProgress.totals.remaining.toLocaleString()}</b></article></div>
+          <div className="table-panel">{reviewProgress.subjects.map((item) => <div className="coverage-row" key={item.subject}><span>{item.subject}</span><b>{item.drafted} drafted · {item.approved} approved / {item.requiredQuota} required</b><small>{item.rejected} rejected · {item.remaining} still needed</small></div>)}</div>
+          <p className="question-review-progress-note">Review individual questions or approve source-valid drafts in bulk by subject or topic.</p>
+        </> : <p className="muted">Review progress is loading or unavailable.</p>}
+      </details>
+      <section className="admin-panel bulk-approve-scope"><div><b>Bulk approve by subject or topic</b><p className="muted">Uses the current subject, topic and difficulty filters. Only drafts with a valid source are approved.</p></div><button className="primary" disabled={!subject || busy} onClick={() => onBulkApproveScope({subject, ...(topic ? {topic} : {}), ...(difficulty ? {difficulty} : {})})}>Approve matching drafts</button></section>
+      <div id="question-review-list" className="admin-panel table-panel">
         <div className="table-top"><span>{total.toLocaleString()} questions found</span><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="bulk-question-difficulty" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0, 0, 0, 0)" }}>Selected question difficulty</label>
           <select id="bulk-question-difficulty" aria-label="Selected question difficulty" value={bulkDifficulty} onChange={(event) => setBulkDifficulty(event.target.value as "easy" | "medium" | "hard")} disabled={!selected.length || busy}>
             <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
           </select>
-          <button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkDifficultyChange(bulkDifficulty)}>Update difficulty ({selected.length})</button>
+          <button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkDifficultyChange(bulkDifficulty)}>Update difficulty ({selected.length})</button><button className="ghost" title="Every selected question needs a real source. Select questions on this page and fill their source fields." disabled={!bulkReviewReady || busy} onClick={() => onBulkReview("APPROVED", bulkReviewSources)}>Approve selected</button><button className="ghost" disabled={!selected.length || busy} onClick={() => onBulkReview("REJECTED", bulkReviewSources.filter((item) => item.source))}>Reject selected</button>
           <button className="ghost danger-button" disabled={!selected.length || busy} onClick={confirmDeleteSelected}>Delete selected ({selected.length})</button>
         </div></div>
         {questions.length === 0 ? <div className="empty-state"><b>No questions match these filters</b><span>Upload a question set or add the first question.</span></div> : questions.map((question) => (
           <article className="bank-question" key={question.id}>
             <input type="checkbox" aria-label={`Select question ${question.id}`} checked={selected.includes(question.id)} onChange={() => onToggleSelected(question.id)} />
-            <div className="bank-q-main"><div className="bank-q-meta"><b>{question.subject}</b><span>{question.topic}</span><span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span></div>
+            <div className="bank-q-main"><div className="bank-q-meta"><b>{question.subject}</b><span>{question.topic}</span><span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span><span className="audience-scope-label">{questionAudienceLabel(question)}</span><span className="question-owner-label">Creator · {question.createdBy?.email || "Imported / unknown"}</span><span className={`status ${question.reviewStatus === "APPROVED" ? "status-used" : question.reviewStatus === "REJECTED" ? "status-expired" : "status-pending"}`}>{question.reviewStatus ?? "DRAFT"}</span></div>
               <p>{question.text}</p><div className="bank-options">{question.options.map((option, index) => <span className={index === question.correctIndex ? "correct-option" : ""} key={index}>{String.fromCharCode(65 + index)}. {option}{index === question.correctIndex ? " ✓" : ""}</span>)}</div>
-              {question.explanation && <small className="muted">Explanation: {question.explanation}</small>}<button className="text-button edit-question" onClick={() => onEditQuestion(question)}>Edit question</button>
+              {question.explanation && <small className="muted">Explanation: {question.explanation}</small>}
+              <label className="question-review-source">Source (required before approval)<input aria-label={`Source for question ${question.id}`} value={(sourceDrafts[question.id] ?? question.source ?? "")} onChange={(event) => setSourceDrafts((current) => ({ ...current, [question.id]: event.target.value }))} placeholder="Add a real book, syllabus or reference source" /></label>
+              <div className="row wrap"><button className="ghost" disabled={busy || !((sourceDrafts[question.id] ?? question.source ?? "")).trim() || ((sourceDrafts[question.id] ?? question.source ?? "")).trim().toUpperCase() === "NEEDS HUMAN REVIEW"} onClick={() => onReviewQuestion(question.id, "APPROVED", (sourceDrafts[question.id] ?? question.source ?? ""))}>Approve</button><button className="ghost" disabled={busy} onClick={() => onReviewQuestion(question.id, "REJECTED", (sourceDrafts[question.id] ?? question.source ?? ""))}>Reject</button><button className="text-button edit-question" onClick={() => onEditQuestion(question)}>Edit question</button></div>
             </div>
           </article>
         ))}

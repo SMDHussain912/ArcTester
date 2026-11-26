@@ -1,104 +1,98 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildApp } from "../src/index.js";
-import { signUp, startTestServer, type TestServer } from "./server.js";
+import {afterAll,beforeAll,describe,expect,it} from "vitest";
+import {buildApp} from "../src/index.js";
+import {signUp,startTestServer,type TestServer} from "./server.js";
 
-describe("study material publishing API", () => {
-  let server: TestServer;
-  let adminCookie: string;
-  let studentCookie: string;
+describe("study materials API",()=>{
+ let server:TestServer;let adminCookie="";let studentCookie="";let studentId=0;
+ beforeAll(async()=>{server=await startTestServer(buildApp);const admin=await signUp(server.baseUrl,"materials-admin@example.com");adminCookie=admin.cookie;await server.db.user.update({where:{id:admin.userId},data:{role:"ADMIN"}});const student=await signUp(server.baseUrl,"materials-student@example.com");studentCookie=student.cookie;studentId=student.userId;await server.db.user.update({where:{id:studentId},data:{collegeCode:"010",collegeName:"Andhra Polytechnic, Kakinada",branchCode:"CM",branchName:"Diploma in Computer Engineering"}});});
+ afterAll(async()=>{await server.close();});
+ async function call(path:string,method="GET",body?:unknown,cookie=adminCookie){return fetch(server.baseUrl+path,{method,headers:{cookie,...(body===undefined?{}:{"content-type":"application/json"})},...(body===undefined?{}:{body:JSON.stringify(body)})});}
+ const resource={title:"Data Structures Unit 1",description:"Arrays and linked lists revision notes.",subject:"Computer Science",topic:"Data Structures",url:"https://example.org/data-structures.pdf"};
+ it("keeps links private until publication and returns the URL after publish",async()=>{
+  const response=await call("/admin/study-materials","POST",resource);expect(response.status).toBe(201);
+  const created=await response.json() as{material:{id:string;status:string;url:string}};
+  expect(created.material).toMatchObject({status:"DRAFT",url:resource.url});
+  const hidden=await call("/study-materials","GET",undefined,studentCookie);expect((await hidden.json() as{materials:unknown[]}).materials).toHaveLength(0);
+  expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const visible=await call("/study-materials","GET",undefined,studentCookie);
+  const materials=(await visible.json() as{materials:Array<Record<string,unknown>>}).materials;
+  expect(materials).toHaveLength(1);expect(materials[0]).toMatchObject({title:resource.title,url:resource.url});
+  expect(materials[0]).not.toHaveProperty("contentBase64");
+  expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
+ });
+ it("accepts an admin file upload, hides it until published, then streams it to students",async()=>{
+  const bytes=Buffer.from("%PDF-1.4 ArcTester test pdf");
+  const query=new URLSearchParams({title:"PDF Notes",description:"Uploaded file",subject:"Computer Science",topic:"Files",fileName:"notes.pdf"});
+  const upload=await fetch(server.baseUrl+"/admin/study-materials/upload?"+query.toString(),{method:"POST",headers:{cookie:adminCookie,"content-type":"application/pdf"},body:bytes});
+  expect(upload.status).toBe(201);
+  const created=await upload.json() as{material:{id:string;status:string;fileName:string;sizeBytes:number}};
+  expect(created.material.status).toBe("DRAFT");
+  expect(created.material.fileName).toBe("notes.pdf");
+  expect(created.material.sizeBytes).toBe(bytes.length);
+  expect((await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:unknown[]}).materials).toHaveLength(0);
+  expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const list=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<Record<string,unknown>>};
+  expect(list.materials[0]).toMatchObject({title:"PDF Notes",fileName:"notes.pdf"});expect(list.materials[0]).not.toHaveProperty("contentBase64");
+  const download=await call("/study-materials/"+created.material.id+"/file","GET",undefined,studentCookie);
+  expect(download.status).toBe(200);
+  expect(download.headers.get("content-disposition")).toContain('filename="notes.pdf"');
+  expect(Buffer.from(await download.arrayBuffer())).toEqual(bytes);
+ });
+ it("filters branch-targeted resources and denies direct file access outside the target branch",async()=>{
+  const targeted={...resource,audienceScope:"BRANCH",targetCollegeCode:"010",targetBranchCode:"CM"};
+  const createdResponse=await call("/admin/study-materials","POST",targeted);
+  expect(createdResponse.status).toBe(201);
+  const created=await createdResponse.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const visible=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  expect(visible.materials.some(item=>item.id===created.material.id)).toBe(true);
 
-  beforeAll(async () => {
-    server = await startTestServer(buildApp);
-    const admin = await signUp(server.baseUrl, "materials-admin@example.com");
-    adminCookie = admin.cookie;
-    await server.db.user.update({ where: { id: admin.userId }, data: { role: "ADMIN" } });
-    studentCookie = (await signUp(server.baseUrl, "materials-student@example.com")).cookie;
-  });
+  await server.db.user.update({where:{id:studentId},data:{branchCode:"C",branchName:"Diploma in Civil Engineering"}});
+  const hidden=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  expect(hidden.materials.some(item=>item.id===created.material.id)).toBe(false);
 
-  afterAll(async () => { await server.close(); });
+  await server.db.user.update({where:{id:studentId},data:{branchCode:"CM",branchName:"Diploma in Computer Engineering",collegeCode:"011",collegeName:"Other Polytechnic"}});
+  const otherCollege=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  expect(otherCollege.materials.some(item=>item.id===created.material.id)).toBe(false);
 
-  async function call(path: string, method = "GET", body?: unknown, cookie = adminCookie) {
-    const response = await fetch(server.baseUrl + path, {
-      method,
-      headers: { cookie, ...(body === undefined ? {} : { "content-type": "application/json" }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    return response;
-  }
+  await server.db.user.update({where:{id:studentId},data:{collegeCode:"010",collegeName:"Andhra Polytechnic, Kakinada",branchCode:"CM",branchName:"Diploma in Computer Engineering"}});
+  const bytes=Buffer.from("%PDF-1.4 branch-targeted file");
+  const query=new URLSearchParams({title:"EC Branch Notes",description:"Restricted notes",subject:"Electronics",topic:"Circuits",fileName:"branch.pdf",audienceScope:"BRANCH",targetCollegeCode:"010",targetBranchCode:"EC"});
+  const upload=await fetch(server.baseUrl+"/admin/study-materials/upload?"+query.toString(),{method:"POST",headers:{cookie:adminCookie,"content-type":"application/pdf"},body:bytes});
+  expect(upload.status).toBe(201);
+  const file=await upload.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+file.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const denied=await call("/study-materials/"+file.material.id+"/file","GET",undefined,studentCookie);
+  expect(denied.status).toBe(404);
+  expect((await call("/admin/study-materials/"+file.material.id,"DELETE")).status).toBe(200);
+  expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
+ });
+ it("restricts published links and uploaded files to selected student account IDs",async()=>{
+  const other=await signUp(server.baseUrl,"materials-other-selected@example.com");
+  const targeted={...resource,audienceScope:"STUDENTS",targetStudentIds:[studentId]};
+  const createdResponse=await call("/admin/study-materials","POST",targeted);
+  expect(createdResponse.status).toBe(201);
+  const created=await createdResponse.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const firstList=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  const otherList=await call("/study-materials","GET",undefined,other.cookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  expect(firstList.materials.map(item=>item.id)).toContain(created.material.id);
+  expect(otherList.materials.map(item=>item.id)).not.toContain(created.material.id);
 
-  it("keeps uploaded files private until published and serves them to students afterward", async () => {
-    const pdf = Buffer.from("%PDF-1.4\nArcTester study notes\n%%EOF", "utf8");
-    const uploaded = await call("/admin/study-materials", "POST", {
-      title: "Data Structures Unit 1",
-      description: "Arrays and linked lists revision notes.",
-      subject: "Computer Science",
-      topic: "Data Structures",
-      fileName: "data-structures.pdf",
-      mimeType: "application/pdf",
-      contentBase64: pdf.toString("base64"),
-    });
-    expect(uploaded.status).toBe(201);
-    const created = await uploaded.json() as { material: { id: string; status: string; sizeBytes: number } };
-    expect(created.material).toMatchObject({ status: "DRAFT", sizeBytes: pdf.byteLength });
-
-    const hidden = await call("/study-materials", "GET", undefined, studentCookie);
-    expect(hidden.status).toBe(200);
-    expect((await hidden.json() as { materials: unknown[] }).materials).toHaveLength(0);
-
-    const published = await call("/admin/study-materials/" + created.material.id, "PATCH", { status: "PUBLISHED" });
-    expect(published.status).toBe(200);
-
-    const visible = await call("/study-materials", "GET", undefined, studentCookie);
-    expect(visible.status).toBe(200);
-    expect((await visible.json() as { materials: Array<{ title: string }> }).materials[0].title).toBe("Data Structures Unit 1");
-
-    const download = await call("/study-materials/" + created.material.id + "/download", "GET", undefined, studentCookie);
-    expect(download.status).toBe(200);
-    expect(download.headers.get("content-type")).toBe("application/pdf");
-    expect(Buffer.from(await download.arrayBuffer()).equals(pdf)).toBe(true);
-
-    const preview = await call("/study-materials/" + created.material.id + "/preview", "GET", undefined, studentCookie);
-    expect(preview.status).toBe(200);
-    expect(preview.headers.get("content-type")).toBe("application/pdf");
-    expect(preview.headers.get("content-disposition")).toContain("inline");
-    expect(Buffer.from(await preview.arrayBuffer()).equals(pdf)).toBe(true);
-
-    const deleted = await call("/admin/study-materials/" + created.material.id, "DELETE");
-    expect(deleted.status).toBe(200);
-    expect((await call("/study-materials", "GET", undefined, studentCookie)).status).toBe(200);
-  });
-
-  it("serves published text and Markdown as offline reading content", async () => {
-    const content = "# Binary trees\\n\\nA tree is a hierarchical data structure.";
-    const uploaded = await call("/admin/study-materials", "POST", {
-      title: "Binary Trees Notes",
-      description: "Offline revision notes.",
-      subject: "Computer Science",
-      topic: "Data Structures",
-      fileName: "binary-trees.md",
-      mimeType: "text/markdown",
-      contentBase64: Buffer.from(content, "utf8").toString("base64"),
-    });
-    expect(uploaded.status).toBe(201);
-    const created = await uploaded.json() as { material: { id: string } };
-    expect((await call("/study-materials/" + created.material.id + "/offline", "GET", undefined, studentCookie)).status).toBe(404);
-    expect((await call("/admin/study-materials/" + created.material.id, "PATCH", { status: "PUBLISHED" })).status).toBe(200);
-
-    const response = await call("/study-materials/" + created.material.id + "/offline", "GET", undefined, studentCookie);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      ok: true,
-      material: { id: created.material.id, title: "Binary Trees Notes", mimeType: "text/markdown", content },
-    });
-  });
-
-  it("rejects non-admin uploads and unsupported file types", async () => {
-    const denied = await call("/admin/study-materials", "POST", {}, studentCookie);
-    expect(denied.status).toBe(403);
-    const invalid = await call("/admin/study-materials", "POST", {
-      title: "Executable", description: "", subject: "CS", topic: "",
-      fileName: "run.exe", mimeType: "application/pdf", contentBase64: Buffer.from("not a pdf").toString("base64"),
-    });
-    expect(invalid.status).toBe(400);
-  });
+  const bytes=Buffer.from("%PDF-1.4 selected student file");
+  const query=new URLSearchParams({title:"Private Student File",description:"Selected account only",subject:"Computer Science",topic:"Audience",fileName:"private.pdf",audienceScope:"STUDENTS",targetStudentIds:String(studentId)});
+  const upload=await fetch(server.baseUrl+"/admin/study-materials/upload?"+query.toString(),{method:"POST",headers:{cookie:adminCookie,"content-type":"application/pdf"},body:bytes});
+  expect(upload.status).toBe(201);
+  const file=await upload.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+file.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  expect((await call("/study-materials/"+file.material.id+"/file","GET",undefined,studentCookie)).status).toBe(200);
+  expect((await call("/study-materials/"+file.material.id+"/file","GET",undefined,other.cookie)).status).toBe(404);
+  expect((await call("/admin/study-materials/"+file.material.id,"DELETE")).status).toBe(200);
+  expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
+ });
+ it("rejects non-HTTPS and credential-bearing resource links",async()=>{
+  expect((await call("/admin/study-materials","POST",{...resource,url:"http://example.org/notes"})).status).toBe(400);
+  expect((await call("/admin/study-materials","POST",{...resource,url:"https://user:pass@example.org/notes"})).status).toBe(400);
+ });
+ it("requires administrator access to create resources",async()=>{expect((await call("/admin/study-materials","POST",resource,studentCookie)).status).toBe(403);});
 });

@@ -45,6 +45,7 @@ describe("question administration route contracts", () => {
         explanation: "Dequeue removes the front item.",
         source: "Question admin route tests",
         difficulty: "easy",
+        reviewStatus: "APPROVED",
         questionHash: "question-admin-route-base-unique",
       },
     });
@@ -54,6 +55,7 @@ describe("question administration route contracts", () => {
   afterAll(async () => {
     if (server) await server.close();
   });
+
 
   it("lists, filters and paginates the question bank with admin-only access", async () => {
     const response = await getJson(
@@ -94,6 +96,7 @@ describe("question administration route contracts", () => {
         id: questionId,
         text: "Which queue operation removes the front element?",
         difficulty: "medium",
+        reviewStatus: "DRAFT",
       },
     });
 
@@ -112,10 +115,9 @@ describe("question administration route contracts", () => {
       }),
     });
     expect(patched.status).toBe(200);
-    expect(await patched.json()).toMatchObject({
-      ok: true,
-      question: { id: questionId, difficulty: "easy" },
-    });
+    expect(await patched.json()).toMatchObject({ ok: true, question: { id: questionId, difficulty: "easy", reviewStatus: "DRAFT" } });
+    // Later route tests create an exam from this fixture, so explicitly model a second human approval.
+    await server.db.question.update({ where: { id: questionId }, data: { reviewStatus: "APPROVED" } });
     const studentPatch = await fetch(`${server.baseUrl}/admin/questions/${questionId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json", cookie: studentCookie },
@@ -291,6 +293,8 @@ describe("question administration route contracts", () => {
       content: JSON.stringify(payload),
     }, adminCookie)).json).toMatchObject({ report: { added: 0, duplicates: 1, total: 1, invalid: [] } });
 
+    const csvSubject = await server.db.subject.create({ data: { name: "Imported CSV Subject" } });
+    await server.db.topic.create({ data: { name: "Imported CSV Topic", subjectId: csvSubject.id } });
     const csv = [
       "subject,topic,text,optionA,optionB,optionC,optionD,correctIndex,explanation,source,difficulty",
       "Imported CSV Subject,Imported CSV Topic,Question imported through the CSV route,A,B,C,D,2,CSV route regression,Question admin route tests,easy",

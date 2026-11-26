@@ -7,6 +7,7 @@ import { z } from "zod";
 import { badRequest } from "./errors.js";
 import { buildPerformanceExplanation, type PerformanceExplanation } from "./intelligence/performanceExplanation.js";
 import { buildRuleBasedRecommendations } from "./intelligence/ruleBasedRecommendations.js";
+import { buildFullMockRecommendations } from "./intelligence/mockRecommendations.js";
 
 export interface TopicRow {
   subject: string;
@@ -203,6 +204,123 @@ export async function getQuestionPerformance(
     weakAccuracyThreshold: QUESTION_ANALYTICS_WEAK_ACCURACY,
     insufficientSampleCount: questions.filter((row) => !row.sufficientData).length,
     questions,
+  };
+}
+
+export interface FullMockPerformanceRow {
+  subject: string;
+  topic: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+}
+
+export interface FullMockPerformanceReport {
+  generatedAt: string;
+  completedFullMocks: number;
+  latestMockAt: string | null;
+  questionCount: number;
+  answeredQuestions: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  accuracy: number | null;
+  subjects: FullMockPerformanceRow[];
+  topics: FullMockPerformanceRow[];
+}
+
+/**
+ * Full mock analytics only includes finished mock attempts with exactly 200
+ * persisted answer rows. Subject/topic labels come from immutable answer
+ * snapshots; unanswered items remain in the paper denominator but not accuracy.
+ */
+export async function getFullMockPerformance(
+  db: PrismaClient,
+  userId: number
+): Promise<FullMockPerformanceReport> {
+  const [metadata, groupedRows] = await Promise.all([
+    db.$queryRaw<Array<{ completedFullMocks: number; latestMockAt: Date | null }>>`
+      WITH full_mocks AS (
+        SELECT a.id, a."finishedAt"
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id, a."finishedAt"
+        HAVING COUNT(aa.id) = 200
+      )
+      SELECT COUNT(*) AS "completedFullMocks", MAX("finishedAt") AS "latestMockAt"
+      FROM full_mocks
+    `,
+    db.$queryRaw<Array<{ subject: string; topic: string | null; correct: number; incorrect: number; unanswered: number }>>`
+      WITH full_mocks AS (
+        SELECT a.id
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id
+        HAVING COUNT(aa.id) = 200
+      )
+      SELECT
+        COALESCE(NULLIF(aa."subjectSnapshot", ''), s.name) AS subject,
+        CASE WHEN aa."subjectSnapshot" <> '' THEN aa."topicSnapshot" ELSE t.name END AS topic,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = TRUE THEN 1 ELSE 0 END) AS correct,
+        SUM(CASE WHEN aa.chosen IS NOT NULL AND aa."isCorrect" = FALSE THEN 1 ELSE 0 END) AS incorrect,
+        SUM(CASE WHEN aa.chosen IS NULL THEN 1 ELSE 0 END) AS unanswered
+      FROM full_mocks fm
+      INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = fm.id
+      INNER JOIN "Question" q ON q.id = aa."questionId"
+      INNER JOIN "Subject" s ON s.id = q."subjectId"
+      LEFT JOIN "Topic" t ON t.id = q."topicId"
+      GROUP BY subject, topic
+    `,
+  ]);
+
+  const rows = groupedRows.map((row) => ({
+    subject: row.subject,
+    topic: row.topic,
+    correct: Number(row.correct ?? 0),
+    incorrect: Number(row.incorrect ?? 0),
+    unanswered: Number(row.unanswered ?? 0),
+  }));
+  const toPerformanceRow = (subject: string, topic: string | null, counts: { correct: number; incorrect: number; unanswered: number }): FullMockPerformanceRow => {
+    const answeredQuestions = counts.correct + counts.incorrect;
+    const questionCount = answeredQuestions + counts.unanswered;
+    return {
+      subject, topic, questionCount, answeredQuestions,
+      correct: counts.correct, incorrect: counts.incorrect, unanswered: counts.unanswered,
+      accuracy: answeredQuestions > 0 ? counts.correct / answeredQuestions : null,
+    };
+  };
+  const bySubject = new Map<string, { correct: number; incorrect: number; unanswered: number }>();
+  const topics = rows.map((row) => toPerformanceRow(row.subject, row.topic, row));
+  for (const row of rows) {
+    const counts = bySubject.get(row.subject) ?? { correct: 0, incorrect: 0, unanswered: 0 };
+    counts.correct += row.correct;
+    counts.incorrect += row.incorrect;
+    counts.unanswered += row.unanswered;
+    bySubject.set(row.subject, counts);
+  }
+  const subjects = [...bySubject.entries()]
+    .map(([subject, counts]) => toPerformanceRow(subject, null, counts))
+    .sort((a, b) => a.subject.localeCompare(b.subject));
+  topics.sort((a, b) => a.subject.localeCompare(b.subject) || (a.topic ?? "").localeCompare(b.topic ?? ""));
+  const total = subjects.reduce((sum, row) => ({
+    correct: sum.correct + row.correct,
+    incorrect: sum.incorrect + row.incorrect,
+    unanswered: sum.unanswered + row.unanswered,
+  }), { correct: 0, incorrect: 0, unanswered: 0 });
+  const answeredQuestions = total.correct + total.incorrect;
+  return {
+    generatedAt: new Date().toISOString(),
+    completedFullMocks: Number(metadata[0]?.completedFullMocks ?? 0),
+    latestMockAt: metadata[0]?.latestMockAt ? new Date(metadata[0].latestMockAt).toISOString() : null,
+    questionCount: answeredQuestions + total.unanswered,
+    answeredQuestions, ...total,
+    accuracy: answeredQuestions > 0 ? total.correct / answeredQuestions : null,
+    subjects, topics,
   };
 }
 
@@ -452,12 +570,15 @@ export interface StudyRecommendation {
     accuracy: number | null;
     minimumAnswers: number;
     weakAccuracyThreshold: number;
+    source?: "completed-full-mock" | "completed-practice";
   } | null;
 }
 
 export interface StudyRecommendationsReport {
   generatedAt: string;
   basedOnAttempts: number;
+  basedOnFullMocks: number;
+  latestFullMockAt: string | null;
   minimumAnswers: number;
   weakAccuracyThreshold: number;
   performanceExplanation: PerformanceExplanation;
@@ -465,15 +586,15 @@ export interface StudyRecommendationsReport {
 }
 
 /**
- * Turns a learner's own completed practice answers into transparent next steps.
- * Weak-topic recommendations require a minimum sample; low-sample data only
- * produces a baseline-building action. This is deterministic guidance.
+ * Turns a learner's own completed answers and exact 200-question mock outcomes
+ * into transparent next steps. Weak-area actions require a minimum answered
+ * sample; unanswered items are excluded from accuracy. This is deterministic guidance.
  */
 export async function getStudyRecommendations(
   db: PrismaClient,
   userId: number
 ): Promise<StudyRecommendationsReport> {
-  const [weakTopics, history, recentActivity] = await Promise.all([
+  const [weakTopics, history, recentActivity, fullMockCountRows, mockAttempts] = await Promise.all([
     getWeakTopics(db, userId),
     getHistory(db, userId, 1, 1),
     db.$queryRaw<Array<{ subject: string; topic: string | null; lastPracticedAt: Date }>>`
@@ -489,7 +610,40 @@ export async function getStudyRecommendations(
       WHERE a."userId" = ${userId} AND a."finishedAt" IS NOT NULL
       GROUP BY subject, topic
     `,
+    db.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS count FROM (
+        SELECT a.id
+        FROM "Attempt" a
+        INNER JOIN "AttemptAnswer" aa ON aa."attemptId" = a.id
+        WHERE a."userId" = ${userId} AND a.mode = ${"mock"} AND a."finishedAt" IS NOT NULL
+        GROUP BY a.id
+        HAVING COUNT(aa.id) = 200
+      ) completed_full_mocks
+    `,
+    db.attempt.findMany({
+      where: { userId, mode: "mock", finishedAt: { not: null } },
+      orderBy: { finishedAt: "desc" },
+      take: 10,
+      select: {
+        finishedAt: true,
+        answers: { select: { subjectSnapshot: true, topicSnapshot: true, chosen: true, isCorrect: true } },
+      },
+    }),
   ]);
+  const latestFullMock = mockAttempts.find((attempt) => attempt.answers.length === 200) ?? null;
+  const mockRecommendations = latestFullMock
+    ? buildFullMockRecommendations({
+        answers: latestFullMock.answers.map((answer) => ({
+          subject: answer.subjectSnapshot,
+          topic: answer.topicSnapshot,
+          chosen: answer.chosen,
+          isCorrect: answer.isCorrect,
+        })),
+        minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
+        weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
+        maximumAreas: 3,
+      })
+    : [];
   const ruleBased = buildRuleBasedRecommendations({
     topics: weakTopics.topics,
     subjects: weakTopics.subjects,
@@ -499,7 +653,10 @@ export async function getStudyRecommendations(
     recentPracticeDays: RECOMMENDATION_RECENT_PRACTICE_DAYS,
     now: Date.now(),
   });
-  const recommendations: StudyRecommendation[] = [...ruleBased.recommendations];
+  const recommendations: StudyRecommendation[] = [
+    ...mockRecommendations.map((item) => ({ ...item, evidence: { ...item.evidence, source: "completed-full-mock" as const } })),
+    ...ruleBased.recommendations.filter((item) => !mockRecommendations.some((mock) => mock.subject === item.subject && mock.topic === item.topic)),
+  ];
 
   if (recommendations.length === 0) {
     const hasAnsweredEvidence = weakTopics.topics.some((row) => row.seen > 0);
@@ -523,6 +680,8 @@ export async function getStudyRecommendations(
   return {
     generatedAt: new Date().toISOString(),
     basedOnAttempts: history.total,
+    basedOnFullMocks: Number(fullMockCountRows[0]?.count ?? 0),
+    latestFullMockAt: latestFullMock?.finishedAt?.toISOString() ?? null,
     minimumAnswers: RECOMMENDATION_MINIMUM_ANSWERS,
     weakAccuracyThreshold: RECOMMENDATION_WEAK_ACCURACY,
     performanceExplanation: buildPerformanceExplanation(

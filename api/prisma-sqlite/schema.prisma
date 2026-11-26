@@ -37,7 +37,10 @@ model Question {
   topic        Topic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
   topicId      Int?
   text         String
-  // JSON string of exactly 4 non-empty option strings (validated by Zod).
+  questionType String   @default("mcq")
+  promptData   String   @default("{}")
+  answerData   String   @default("{}")
+  // JSON-encoded options; empty for non-choice questions.
   options      String
   correctIndex Int
   explanation  String    @default("")
@@ -48,7 +51,6 @@ model Question {
   answers      AttemptAnswer[]
   stats        Stat[]
   examSnapshots ExamVersionQuestion[]
-
   @@index([subjectId])
 }
 
@@ -62,7 +64,6 @@ model Attempt {
   user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId     Int
   answers    AttemptAnswer[]
-
   @@index([userId])
 }
 
@@ -71,10 +72,23 @@ model User {
   email              String       @unique
   passwordHash       String
   role               String       @default("STUDENT")
+  accessStatus        String       @default("APPROVED")
+  fullName           String?
+  collegeName         String?
+  collegeCode         String?
+  postalPin           String?
+  branchName          String?
+  branchCode          String?
+  registrationNumber  String?       @unique
   createdAt          DateTime     @default(now())
   attempts           Attempt[]
   stats              Stat[]
   devices            Device[]
+  authSessions        AuthSession[]
+  loginEvents         LoginEvent[]
+  totpCredential      TotpCredential?
+  passkeyCredentials  PasskeyCredential[]
+  authChallenges      AuthChallenge[]
   invitationsCreated Invitation[] @relation("InvitationCreator")
   examsCreated       Exam[]       @relation("ExamCreator")
   assignments        ExamAssignment[] @relation("StudentAssignments")
@@ -85,9 +99,10 @@ model User {
   notificationPreferences StudentNotificationPreference?
   examSessions        ExamSession[]
   examSessionEvents   ExamSessionEvent[] @relation("SessionEventActor")
-  modelRegistryAudits ModelRegistryAudit[] @relation("ModelRegistryAuditActor")
-  modelEvaluations    ModelEvaluation[]    @relation("ModelEvaluationActor")
-  modelDatasets       ModelDataset[]       @relation("ModelDatasetCreator")
+
+  @@index([collegeName])
+  @@index([branchName])
+  @@index([role, accessStatus])
 }
 
 model Invitation {
@@ -118,6 +133,76 @@ model Device {
 
   @@unique([userId, fingerprint])
   @@index([userId, revokedAt])
+}
+
+
+model AuthSession {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  deviceName  String
+  platform    String
+  userAgent   String    @default("")
+  ipAddress   String    @default("")
+  loginMethod String   @default("password")
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  @@index([userId, revokedAt, lastSeenAt])
+  @@index([expiresAt])
+}
+
+model LoginEvent {
+  id          String   @id @default(cuid())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId      Int?
+  email       String
+  result      String
+  method      String   @default("password")
+  ipAddress   String   @default("")
+  userAgent   String   @default("")
+  createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+}
+
+model TotpCredential {
+  id                   String   @id @default(cuid())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               Int      @unique
+  secretEncrypted      String
+  enabledAt            DateTime?
+  recoveryCodesJson    String   @default("[]")
+  lastUsedCounter      Int      @default(-1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model PasskeyCredential {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          Int
+  credentialId   String   @unique
+  publicKey      String
+  signCount      Int      @default(0)
+  transports     String   @default("[]")
+  name           String   @default("Passkey")
+  createdAt      DateTime @default(now())
+  lastUsedAt     DateTime?
+  @@index([userId, createdAt])
+}
+
+model AuthChallenge {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int
+  challenge   String   @unique
+  purpose     String
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  createdAt   DateTime @default(now())
+  @@index([userId, purpose, expiresAt])
 }
 
 // Exam content is versioned. Each version stores immutable question snapshots so
@@ -242,6 +327,10 @@ model AttemptAnswer {
   optionsSnapshot   String   @default("[]")
   correctIndexSnapshot Int   @default(0)
   explanationSnapshot String @default("")
+  questionTypeSnapshot String @default("mcq")
+  promptDataSnapshot String @default("{}")
+  answerDataSnapshot String @default("{}")
+  responseSnapshot String @default("null")
 
   @@index([attemptId])
   @@index([questionId])
@@ -372,110 +461,25 @@ model ExamSessionAnswer {
 }
 
 
-model RegisteredModel {
-  id          String   @id @default(cuid())
-  modelId     String
-  version     Int
-  algorithm   String
-  task        String
-  dataset     String
-  trainingDatasetId String?
-  artifactJson String
-  isActive    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  activatedAt DateTime?
-
-  @@unique([modelId, version])
-  @@index([modelId, isActive])
-  @@index([createdAt])
-}
-
-
-model ModelRegistryAudit {
-  id        String   @id @default(cuid())
-  actor     User?    @relation("ModelRegistryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId   Int?
-  modelId   String
-  version   Int
-  action    String
-  details   String   @default("{}")
-  createdAt DateTime @default(now())
-
-  @@index([modelId, version, createdAt])
-  @@index([actorId, createdAt])
-}
-
-
-model ModelEvaluation {
-  id                 String   @id @default(cuid())
-  actor              User?    @relation("ModelEvaluationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  actorId            Int?
-  modelId            String
-  candidateVersion   Int
-  baselineVersion    Int
-  datasetId          String   @default("")
-  evaluationDataset  String
-  datasetFingerprint String
-  sampleCount        Int
-  metricsJson        String
-  status             String
-  evaluatedAt        DateTime @default(now())
-
-  @@index([modelId, candidateVersion, evaluatedAt])
-  @@index([actorId, evaluatedAt])
-}
-
-
-model ModelDataset {
-  id                 String   @id @default(cuid())
-  createdBy          User?    @relation("ModelDatasetCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById        Int?
-  name               String
-  task               String
-  targetColumn       String   @default("target")
-  featureSchemaJson  String
-  samplesJson        String
-  rowCount           Int
-  sourceDescription  String
-  sourceAttested     Boolean  @default(false)
-  datasetKind        String   @default("synthetic")
-  fingerprint        String   @unique
-  createdAt          DateTime @default(now())
-
-  @@index([name, createdAt])
-  @@index([createdById, createdAt])
-}
-
-
-model ModelDriftBucket {
-  id          String   @id @default(cuid())
-  modelId     String
-  version     Int
-  featureName String
-  bucket      String
-  periodStart DateTime
-  count       Int      @default(0)
-
-  @@unique([modelId, version, featureName, bucket, periodStart])
-  @@index([modelId, version, periodStart])
-}
-
-
 model StudyMaterial {
-  id             String   @id @default(cuid())
-  uploadedById   Int?
-  title          String
-  description    String   @default("")
-  subject        String
-  topic          String   @default("")
-  fileName       String
-  mimeType       String
-  sizeBytes      Int
-  contentBase64  String
-  status         String   @default("DRAFT")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  uploadedById Int?
+  title        String
+  description  String   @default("")
+  subject      String
+  topic        String   @default("")
+  url          String   @default("")
+  status       String   @default("DRAFT")
+  audienceScope String  @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([status, subject, title])
+  @@index([audienceScope, targetCollegeCode, targetBranchCode], map: "StudyMaterial_audience_target_idx")
   @@index([uploadedById, createdAt])
 }
+

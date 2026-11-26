@@ -4,7 +4,8 @@ import { encodeOptions, hashQuestion, normalizeText, type QuestionInput } from "
 /** Insert one validated question. Returns "inserted" or "duplicate". */
 export async function insertQuestion(
   db: PrismaClient,
-  input: QuestionInput
+  input: QuestionInput,
+  createdById?: number,
 ): Promise<"inserted" | "duplicate"> {
   const questionHash = hashQuestion(input.text);
   const subjectName = input.subject.trim();
@@ -30,9 +31,19 @@ export async function insertQuestion(
         text: input.text.trim(),
         options: encodeOptions(input.options),
         correctIndex: input.correctIndex,
+        questionType: input.questionType,
+        promptData: JSON.stringify(input.promptData),
+        answerData: JSON.stringify(input.answerData),
         explanation: input.explanation ?? "",
         source: input.source ?? "",
         difficulty: input.difficulty ?? "medium",
+        audienceScope: input.audienceScope,
+        targetCollegeCode: input.targetCollegeCode.trim() || null,
+        targetCollegeName: input.targetCollegeName.trim() || null,
+        targetBranchCode: input.targetBranchCode.trim() || null,
+        targetBranchName: input.targetBranchName.trim() || null,
+        targetStudentIdsJson: JSON.stringify(input.targetStudentIds),
+        ...(createdById !== undefined ? { createdById } : {}),
         questionHash,
       },
     });
