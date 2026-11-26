@@ -103,7 +103,7 @@ const MaterialPatch = z.object({
 
 const publicSelect = {
   id: true, title: true, description: true, subject: true, topic: true, url: true,
-  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true, createdAt: true, updatedAt: true,
+  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, createdAt: true, updatedAt: true,
 } as const;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -186,7 +186,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
     try {
       const materials = await db.studyMaterial.findMany({
         orderBy: { createdAt: "desc" },
-        select: { ...publicSelect, status: true, uploadedById: true },
+        select: { ...publicSelect, status: true, uploadedById: true, targetStudentIdsJson: true },
         take: 300,
       });
       res.json({ ok: true, materials });
@@ -198,7 +198,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const input = LinkFields.parse(req.body);
       const material = await db.studyMaterial.create({
         data: { uploadedById: req.user!.id, title: input.title, description: input.description, subject: input.subject, topic: input.topic, url: input.url, ...audienceData(input), fileName: "", mimeType: "", sizeBytes: 0, contentBase64: "", status: "DRAFT" },
-        select: { ...publicSelect, status: true },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
       });
       res.status(201).json({ ok: true, material });
     } catch (error) {
@@ -218,7 +218,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
           fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length,
           contentBase64: file.bytes.toString("base64"), status: "DRAFT",
         },
-        select: { ...publicSelect, status: true },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
       });
       res.status(201).json({ ok: true, material });
     } catch (error) {
@@ -239,7 +239,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
           title: metadata.title, description: metadata.description, subject: metadata.subject, topic: metadata.topic, ...audienceData(metadata),
           url: "", fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.bytes.length, contentBase64: file.bytes.toString("base64"),
         },
-        select: { ...publicSelect, status: true },
+        select: { ...publicSelect, status: true, targetStudentIdsJson: true },
       });
       res.json({ ok: true, material });
     } catch (error) {
