@@ -6,6 +6,8 @@ import { startTestServer, type TestServer } from "./server.js";
 
 let server: TestServer;
 let bearer = "";
+let adminId = 0;
+let adminKeyId = "";
 
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
 async function callTool(name: string, args: Record<string, unknown>) {
@@ -15,7 +17,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
   });
   const body = await response.json() as { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: { message?: string } };
-  if (!response.ok || body.error) throw new Error(body.error?.message ?? "MCP request failed");
+  if (!response.ok || body.error) throw new Error("MCP request failed (" + response.status + "): " + JSON.stringify(body));
   const text = body.result?.content?.[0]?.text ?? "";
   if (body.result?.isError) throw new Error(text);
   // MCP tool results are JSON-decoded test fixtures with dynamic fields.
@@ -44,13 +46,15 @@ describe("administrator MCP model control", () => {
   beforeAll(async () => {
     server = await startTestServer(buildApp);
     const admin = await server.db.user.create({ data: { email: "admin-model-mcp@arctester.test", passwordHash: "test-only", role: "ADMIN" } });
+    adminId = admin.id;
     bearer = "arc_admin_" + randomBytes(32).toString("base64url");
-    await server.db.adminMcpKey.create({ data: {
+    const key = await server.db.adminMcpKey.create({ data: {
       userId: admin.id,
       name: "model-control-test",
       keyHash: digest(bearer),
       scopes: ["models:read", "models:dataset:create", "models:verification:read", "models:train", "models:register", "models:evaluate", "models:activate"],
     } });
+    adminKeyId = key.id;
   });
 
   afterAll(async () => { await server.close(); });
@@ -175,5 +179,17 @@ describe("administrator MCP model control", () => {
     expect(result.metrics.accuracy).toBeLessThanOrEqual(1);
     expect(result.metrics.baselineAccuracy).toBeGreaterThanOrEqual(0);
     expect(result.metrics.baselineAccuracy).toBeLessThanOrEqual(1);
+  });
+
+  it("enforces missing tool scopes", async () => {
+    await expect(callTool("create_questions", { questions: [] })).rejects.toThrow(/Missing questions:create scope/i);
+  });
+
+  it("re-checks administrator role and key revocation on every MCP request", async () => {
+    await server.db.user.update({ where: { id: adminId }, data: { role: "STUDENT" } });
+    await expect(callTool("list_registered_models", { limit: 5 })).rejects.toThrow(/MCP request failed \(403\)/);
+    await server.db.user.update({ where: { id: adminId }, data: { role: "ADMIN" } });
+    await server.db.adminMcpKey.update({ where: { id: adminKeyId }, data: { revokedAt: new Date() } });
+    await expect(callTool("list_registered_models", { limit: 5 })).rejects.toThrow(/MCP request failed \((401|403)\)/);
   });
 });

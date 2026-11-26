@@ -7,7 +7,7 @@ import { requireAuth, type AuthedRequest } from "./auth.js";
 
 const KEY_PREFIX = "arc_student_";
 const KEY_SCOPES = ["questions:read", "questions:write", "practice:read", "practice:write"] as const;
-const QuestionInput = z.object({
+const QuestionBase = z.object({
   subject: z.string().trim().min(1).max(100),
   topic: z.string().trim().min(1).max(100).default("General"),
   text: z.string().trim().min(1).max(5000),
@@ -15,10 +15,12 @@ const QuestionInput = z.object({
   correctIndex: z.number().int().min(0).default(0),
   explanation: z.string().max(5000).default(""),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
-}).refine((q) => q.options.length === 0 || q.correctIndex < q.options.length, {
+});
+const QuestionInput = QuestionBase.refine((q) => q.options.length === 0 || q.correctIndex < q.options.length, {
   message: "correctIndex must refer to an existing option.",
   path: ["correctIndex"],
 });
+const QuestionPatchInput = QuestionBase.partial();
 const PracticeSetInput = z.object({
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(2000).default(""),
@@ -124,7 +126,7 @@ export function studentMcpRouter(db: PrismaClient): Router {
   });
   router.patch("/student/private-questions/:id", requireAuth, requireStudent(db), async (req: AuthedRequest, res, next) => {
     try {
-      const patch = QuestionInput.partial().parse(req.body);
+      const patch = QuestionPatchInput.parse(req.body);
       const existing = await db.studentPrivateQuestion.findFirst({ where: { id: req.params.id, userId: req.user!.id } });
       if (!existing) return next(notFound("Private question not found."));
       const merged = QuestionInput.parse({ ...existing, ...patch, options: patch.options ?? existing.options });
@@ -253,7 +255,7 @@ export function studentMcpRouter(db: PrismaClient): Router {
         }
         case "edit_my_question": {
           if (!hasScope(key, "questions:write")) return res.json(jsonRpcError(id, -32003, "Missing questions:write scope."));
-          const input = z.object({ id: z.string().min(1), patch: QuestionInput.partial() }).parse(args);
+          const input = z.object({ id: z.string().min(1), patch: QuestionPatchInput }).parse(args);
           const existing = await db.studentPrivateQuestion.findFirst({ where: { id: input.id, userId: key.userId } });
           if (!existing) return res.json(jsonRpcError(id, -32004, "Private question not found."));
           const patch = input.patch;

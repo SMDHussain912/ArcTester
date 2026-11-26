@@ -38,13 +38,22 @@ export function computeAuditEventHash(event: AuditHashFields): string {
 export async function pruneAuditEvents(db: PrismaClient, retentionDays: number, now = new Date()) {
   if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) throw new Error("AUDIT_RETENTION_DAYS must be an integer from 30 to 3650.");
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const sessionCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(73198412)`;
+    // Login history contains email, masked IP and user-agent metadata. Apply the
+    // same configured retention window as audit events.
+    const loginEventsDeletedCount = (await tx.loginEvent.deleteMany({ where: { createdAt: { lt: cutoff } } })).count;
+    // Keep recent session history for account security; remove stale expired or
+    // revoked session records after 90 days.
+    const authSessionsDeletedCount = (await tx.authSession.deleteMany({
+      where: { OR: [{ expiresAt: { lt: sessionCutoff } }, { revokedAt: { lt: sessionCutoff } }] },
+    })).count;
     const where = { createdAt: { lt: cutoff } };
     const deletedCount = await tx.auditEvent.count({ where });
-    if (!deletedCount) return { deletedCount: 0, cutoff: cutoff.toISOString(), retentionDays };
+    if (!deletedCount) return { deletedCount: 0, loginEventsDeletedCount, authSessionsDeletedCount, cutoff: cutoff.toISOString(), retentionDays };
     const last = await tx.auditEvent.findFirst({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { eventHash: true, createdAt: true } });
-    if (!last) return { deletedCount: 0, cutoff: cutoff.toISOString(), retentionDays };
+    if (!last) return { deletedCount: 0, loginEventsDeletedCount, authSessionsDeletedCount, cutoff: cutoff.toISOString(), retentionDays };
     const previous = await tx.auditCheckpoint.findFirst({ orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { checkpointHash: true, createdAt: true } });
     const id = randomUUID();
     const createdAt = new Date(Math.max(now.getTime(), last.createdAt.getTime() + 1, (previous?.createdAt.getTime() ?? 0) + 1));
@@ -52,7 +61,7 @@ export async function pruneAuditEvents(db: PrismaClient, retentionDays: number, 
     const checkpointHash = computeAuditCheckpointHash(fields);
     await tx.auditCheckpoint.create({ data: { ...fields, checkpointHash } });
     const deleted = await tx.auditEvent.deleteMany({ where });
-    return { deletedCount: deleted.count, cutoff: cutoff.toISOString(), retentionDays, checkpointId: id, checkpointHash };
+    return { deletedCount: deleted.count, loginEventsDeletedCount, authSessionsDeletedCount, cutoff: cutoff.toISOString(), retentionDays, checkpointId: id, checkpointHash };
   }, { timeout: 30000 });
 }
 

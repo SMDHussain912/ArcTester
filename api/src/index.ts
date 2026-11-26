@@ -1,8 +1,8 @@
 import express from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import { PrismaClient } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { errorHandler, notFound } from "./errors.js";
 import { testRouter } from "./testRoutes.js";
 import { authRouter } from "./auth.js";
@@ -28,18 +28,58 @@ import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
 import { adminStudentRouter } from "./adminStudentRoutes.js";
 import { auditRequestMiddleware } from "./audit.js";
 import { studentAuditRouter } from "./studentAuditRoutes.js";
+import { validateProductionSecurityConfig } from "./securityConfig.js";
+
 
 const db = new PrismaClient();
 
-// General request rate limiting applied to every API route. Login keeps its own
-// stricter per-IP + per-account throttle in auth.ts.
-const apiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests. Try again later." },
-});
+// Shared atomic request limiting in PostgreSQL; works across API instances.
+// Store only a SHA-256 digest of the client IP, not the IP itself.
+const API_LIMIT = 300;
+const apiBucketHash = (ip: string) => "api:" + createHash("sha256").update(ip || "unknown").digest("hex");
+let apiLimiterCleanupCounter = 0;
+function sharedApiRateLimit(database: PrismaClient): express.RequestHandler {
+  return async (req, res, next) => {
+    // Keep liveness/readiness semantics independent of the rate-limit table.
+    if (req.path === "/health" || req.path === "/ready" || req.method === "OPTIONS") return next();
+    try {
+      const bucketKey = apiBucketHash(req.ip ?? "unknown");
+      const rows = await database.$queryRaw<Array<{ count: number; blockedUntil: Date | null; retryAfterSeconds: number }>>`
+        INSERT INTO auth_rate_limit_buckets (bucket_key, failure_count, window_started_at, blocked_until, updated_at)
+        VALUES (${bucketKey}, 1, NOW(), NULL, NOW())
+        ON CONFLICT (bucket_key) DO UPDATE SET
+          failure_count = CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN 1 ELSE auth_rate_limit_buckets.failure_count + 1 END,
+          window_started_at = CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN NOW() ELSE auth_rate_limit_buckets.window_started_at END,
+          blocked_until = CASE
+            WHEN auth_rate_limit_buckets.window_started_at <= NOW() - INTERVAL '15 minutes' THEN NULL
+            WHEN auth_rate_limit_buckets.failure_count + 1 > ${API_LIMIT} THEN COALESCE(auth_rate_limit_buckets.blocked_until, NOW() + INTERVAL '15 minutes')
+            ELSE auth_rate_limit_buckets.blocked_until
+          END,
+          updated_at = NOW()
+        RETURNING failure_count AS count, blocked_until AS "blockedUntil",
+          CASE WHEN blocked_until IS NULL THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (window_started_at + INTERVAL '15 minutes' - NOW()))))::int
+               ELSE GREATEST(0, CEIL(EXTRACT(EPOCH FROM (blocked_until - NOW()))))::int END AS "retryAfterSeconds"
+      `;
+      const row = rows[0];
+      if (!row) return next(new Error("Shared API rate limiter did not return a bucket."));
+      res.setHeader("RateLimit-Limit", String(API_LIMIT));
+      res.setHeader("RateLimit-Remaining", String(Math.max(0, API_LIMIT - row.count)));
+      res.setHeader("RateLimit-Reset", String(row.retryAfterSeconds));
+      if (row.count > API_LIMIT || (row.blockedUntil && row.blockedUntil.getTime() > Date.now())) {
+        const retryAfter = Math.max(1, row.retryAfterSeconds);
+        res.setHeader("Retry-After", String(retryAfter));
+        return res.status(429).json({ error: "Too many requests. Try again later." });
+      }
+      apiLimiterCleanupCounter += 1;
+      if (apiLimiterCleanupCounter % 100 === 0) {
+        void database.$executeRaw`DELETE FROM auth_rate_limit_buckets WHERE updated_at < NOW() - INTERVAL '1 day'`.catch(() => undefined);
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
 
 /**
  * Minimal CORS. In production only exact configured origins are allowed;
@@ -110,25 +150,26 @@ function cookieCsrfGuard(
 }
 
 export function buildApp(database: PrismaClient = db): express.Express {
+  validateProductionSecurityConfig();
   const app = express();
   // requireAuth resolves the same injected client used by every router and test schema.
   app.locals.db = database;
-  app.set("trust proxy", 1);
+  const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 10) {
+    throw new Error("TRUST_PROXY_HOPS must be an integer from 0 to 10 and match the deployed proxy chain.");
+  }
+  app.set("trust proxy", trustProxyHops);
   // Morgan request logs expose route, status, latency and origin without logging
   // cookies, bearer tokens, request bodies or query-string secrets.
   morgan.token("route", (req) => req.path);
   app.use(morgan(":method :route :status :response-time ms origin=:req[origin]", {
     skip: (req) => req.path === "/health" || req.path === "/ready",
   }));
-  // helmet sets secure defaults (HSTS, X-Content-Type-Options, CSP, referrer
-  // policy, etc.). Disable frameguard so the admin live monitor can be framed
-  // only where explicitly desired; keep the rest of the defaults.
-  app.use(
-    helmet({
-      contentSecurityPolicy: false,
-    })
-  );
-  app.use(apiRateLimit);
+  // Keep Helmet's default security headers, including CSP and SAMEORIGIN
+  // framing protection. This API does not need to serve embeddable HTML.
+  app.use(helmet());
+  app.use(localCors);
+  app.use(sharedApiRateLimit(database));
   // Keep the bulk import endpoints on their route-specific parsers. Prepared
   // lesson audio is base64 JSON (up to 12 MiB decoded), so parse it here with
   // enough headroom for the encoded payload; ordinary API requests stay at 1 MiB.
@@ -139,7 +180,6 @@ export function buildApp(database: PrismaClient = db): express.Express {
     const isLessonAudioUpload = /^\/admin\/lesson-drafts\/[^/]+\/scenes\/\d+\/audio$/.test(req.path);
     express.json({ limit: isLessonAudioUpload ? "18mb" : "1mb" })(req, res, next);
   });
-  app.use(localCors);
   app.use(cookieCsrfGuard);
   app.use(auditRequestMiddleware(database));
 

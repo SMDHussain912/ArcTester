@@ -1088,3 +1088,15 @@ model AuditCheckpoint {
   createdAt              DateTime @default(now())
   @@index([createdAt])
 }
+
+/// Shared hashed buckets for distributed login and API request throttling.
+model AuthRateLimitBucket {
+  bucketKey       String   @id @map("bucket_key")
+  failureCount    Int      @default(0) @map("failure_count")
+  windowStartedAt DateTime @map("window_started_at")
+  blockedUntil    DateTime? @map("blocked_until")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("auth_rate_limit_buckets")
+}

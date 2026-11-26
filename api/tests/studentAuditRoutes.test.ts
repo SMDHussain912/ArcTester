@@ -9,6 +9,8 @@ let adminCookie = "";
 let adminId = 0;
 let studentId = 0;
 let expiredEventId = "";
+let expiredLoginEventId = 0;
+let expiredSessionId = "";
 
 async function patch(path: string, body: unknown) {
   const response = await fetch(server.baseUrl + path, { method: "PATCH", headers: { cookie: adminCookie, "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -35,6 +37,19 @@ describe("student audit timeline and exports", () => {
     const student = await signUp(server.baseUrl, "audit-student@example.test");
     studentId = student.userId;
     await server.db.user.update({ where: { id: studentId }, data: { fullName: "Audit Student", collegeCode: "901", branchCode: "CM" } });
+    const oldLoginDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    const oldLogin = await server.db.loginEvent.create({ data: {
+      userId: studentId, email: "audit-student@example.test", result: "failed", method: "password",
+      ipAddress: "192.0.2.0", userAgent: "retention-test-agent", createdAt: oldLoginDate,
+    } });
+    expiredLoginEventId = oldLogin.id;
+    const oldSessionDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+    const oldSession = await server.db.authSession.create({ data: {
+      userId: studentId, deviceName: "Expired fixture", platform: "web", userAgent: "retention-test-agent",
+      ipAddress: "192.0.2.0", createdAt: oldSessionDate, lastSeenAt: oldSessionDate,
+      expiresAt: oldSessionDate, revokedAt: oldSessionDate,
+    } });
+    expiredSessionId = oldSession.id;
   });
   afterAll(async () => { await server.close(); });
 
@@ -50,7 +65,11 @@ describe("student audit timeline and exports", () => {
   it("prunes expired rows into a checkpoint and preserves the retained chain", async () => {
     const result = await pruneAuditEvents(server.db, 30);
     expect(result.deletedCount).toBe(1);
+    expect(result.loginEventsDeletedCount).toBe(1);
+    expect(result.authSessionsDeletedCount).toBe(1);
     expect(await server.db.auditEvent.findUnique({ where: { id: expiredEventId } })).toBeNull();
+    expect(await server.db.loginEvent.findUnique({ where: { id: expiredLoginEventId } })).toBeNull();
+    expect(await server.db.authSession.findUnique({ where: { id: expiredSessionId } })).toBeNull();
     expect(await server.db.auditCheckpoint.count()).toBe(1);
     const verified = await getJson(server.baseUrl + "/admin/audit/integrity", adminCookie);
     expect(verified.status).toBe(200);

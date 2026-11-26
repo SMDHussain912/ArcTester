@@ -14,7 +14,9 @@ This is the engineering default for the student/admin audit trail. Confirm reten
 - Default retention: 365 days.
 - Configure `AUDIT_RETENTION_DAYS` to an integer from 30 through 3650.
 - Schedule the API retention command as a managed cron job (for example, daily): `cd api && npm run audit:prune`.
-- The pruning transaction takes the same PostgreSQL advisory lock as audit writes, creates a hash-chain checkpoint, then deletes expired event rows. The checkpoint preserves chain continuity and lets the integrity verifier detect missing or altered retained records.
+- The pruning transaction takes the same PostgreSQL advisory lock as audit writes, creates a hash-chain checkpoint, then deletes expired audit-event rows. The checkpoint preserves chain continuity and lets the integrity verifier detect missing or altered retained records.
+- The same scheduled command deletes login-history events older than the configured audit retention window (default 365 days) because those rows contain email, masked IP and user-agent metadata.
+- It also deletes expired or revoked session-history rows older than 90 days. Recent session history remains available for account security.
 - Pruned event details are deleted, not archived. Export records needed for a longer legal or operational retention period before they expire.
 
 ## Integrity and operations

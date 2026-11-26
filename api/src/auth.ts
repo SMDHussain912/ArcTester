@@ -16,7 +16,13 @@ const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === "producti
 const COOKIE_NAME = "ecet_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 const JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
+// Keep issuer/audience stable across API instances. Overrides are useful for
+// staging environments; changing either intentionally invalidates existing sessions.
+const JWT_ISSUER = process.env.JWT_ISSUER?.trim() || "arctester-api";
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE?.trim() || "arctester-client";
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Explicit parameters keep password hashes stable across Node runtime upgrades.
+const SCRYPT_OPTIONS = { N: 1 << 14, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 export function validateJwtSecret(secret: string, production = process.env.NODE_ENV === "production"): void {
   if (!production) return;
@@ -58,6 +64,8 @@ export function signJwt(
     Buffer.from(
       JSON.stringify({
         ...payload,
+        iss: JWT_ISSUER,
+        aud: JWT_AUDIENCE,
         iat: nowSeconds(),
         exp: nowSeconds() + ttlSeconds,
       })
@@ -115,29 +123,43 @@ export function verifyJwt(token: string): Record<string, unknown> {
     throw new Error("malformed token payload");
   }
   const payload = parsedPayload as Record<string, unknown>;
+  const now = nowSeconds();
   if (!Number.isSafeInteger(payload.exp)) throw new Error("missing or invalid token expiry");
-  if ((payload.exp as number) <= nowSeconds()) throw new Error("expired token");
+  if (!Number.isSafeInteger(payload.iat)) throw new Error("missing or invalid token issued-at");
+  if (typeof payload.iss !== "string" || payload.iss !== JWT_ISSUER) throw new Error("invalid token issuer");
+  const audience = payload.aud;
+  if (!(audience === JWT_AUDIENCE || (Array.isArray(audience) && audience.includes(JWT_AUDIENCE)))) {
+    throw new Error("invalid token audience");
+  }
+  const issuedAt = payload.iat as number;
+  const expiresAt = payload.exp as number;
+  if (issuedAt > now + 60) throw new Error("token issued in the future");
+  if (expiresAt <= now) throw new Error("expired token");
+  if (expiresAt <= issuedAt || expiresAt - issuedAt > JWT_TTL_SECONDS) throw new Error("invalid token lifetime");
+  if (payload.nbf !== undefined && (!Number.isSafeInteger(payload.nbf) || (payload.nbf as number) > now + 60)) {
+    throw new Error("token not yet valid");
+  }
   return payload;
 }
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16);
-  const derived = scryptSync(password, salt, 64);
+  const derived = scryptSync(password, salt, 64, SCRYPT_OPTIONS);
   return `${salt.toString("hex")}:${derived.toString("hex")}`;
 }
 
 export function verifyPassword(password: string, stored: string): boolean {
   const [saltHex, hashHex] = stored.split(":");
-  if (!saltHex || !hashHex) return false;
+  if (!saltHex || !hashHex || !/^[a-f0-9]{32}$/i.test(saltHex) || !/^[a-f0-9]{128}$/i.test(hashHex)) return false;
   const salt = Buffer.from(saltHex, "hex");
   const expected = Buffer.from(hashHex, "hex");
-  const derived = scryptSync(password, salt, 64);
+  const derived = scryptSync(password, salt, 64, SCRYPT_OPTIONS);
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
 function scryptAsync(password: string | Buffer, salt: string | Buffer, keylen: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    scrypt(password, salt, keylen, (error, derived) => {
+    scrypt(password, salt, keylen, SCRYPT_OPTIONS, (error, derived) => {
       if (error) reject(error);
       else resolve(derived as Buffer);
     });
@@ -204,7 +226,9 @@ async function verifyRegistrationCaptcha(token: string | undefined, ip: string, 
   if (nativeClient) return;
   const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
   if (!secret) {
-    if (token?.trim()) throw badRequest("CAPTCHA verification is not configured. Try again later.");
+    if (process.env.NODE_ENV === "production" || token?.trim()) {
+      throw badRequest("Registration security check is not configured. Try again later.");
+    }
     return;
   }
   if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
@@ -248,60 +272,25 @@ const DeviceSchema = z.object({
   fingerprint: z.string().trim().min(16).max(128),
 });
 
-// Login throttling is keyed by client IP *and* target email:
-// - the ip+email bucket stops one IP from guessing one account's password
-//   without letting a different IP lock that account out;
-// - the ip-only bucket bounds brute force from a single source so one IP
-//   cannot exhaust the shared failure map or hammer many accounts.
-// Both buckets are process-local (not a distributed limiter), matching the
-// existing best-effort throttle.
+// Shared PostgreSQL login throttling; only hashed bucket identifiers are stored.
 const LOGIN_FAILURE_LIMIT = 8;
 const IP_FAILURE_LIMIT = 20;
-const LOGIN_FAILURE_WINDOW_MS = 15 * 60 * 1000;
-const loginFailures = new Map<string, { count: number; windowStartedAt: number; blockedUntil: number }>();
-
-function loginBucketKey(ip: string, email?: string): string {
-  return email ? `${ip}::${email.toLowerCase()}` : `ip-only::${ip}`;
+function loginBucketKey(ip: string, email?: string): string { return email ? `${ip}::${email.toLowerCase()}` : `ip-only::${ip}`; }
+async function loginRetryAfter(db: PrismaClient, key: string): Promise<number> {
+ const hash = sha256(key);
+ const rows = await db.$queryRaw<Array<{ retryAfterSeconds: number }>>`SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (blocked_until - NOW()))))::int AS "retryAfterSeconds" FROM auth_rate_limit_buckets WHERE bucket_key = ${hash} AND window_started_at > NOW() - INTERVAL '15 minutes' AND blocked_until IS NOT NULL`;
+ return rows[0]?.retryAfterSeconds ?? 0;
 }
-
-function loginRetryAfter(key: string, now = Date.now()): number {
-  const bucket = loginFailures.get(key);
-  if (!bucket) return 0;
-  if (now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && bucket.blockedUntil <= now) {
-    loginFailures.delete(key);
-    return 0;
-  }
-  return bucket.blockedUntil > now ? Math.ceil((bucket.blockedUntil - now) / 1000) : 0;
+async function recordLoginFailure(db: PrismaClient, key: string): Promise<number> {
+ const hash = sha256(key), limit = key.startsWith("ip-only::") ? IP_FAILURE_LIMIT : LOGIN_FAILURE_LIMIT;
+ await db.$executeRaw`INSERT INTO auth_rate_limit_buckets (bucket_key,failure_count,window_started_at,blocked_until,updated_at) VALUES (${hash},1,NOW(),NULL,NOW()) ON CONFLICT (bucket_key) DO UPDATE SET failure_count=CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW()-INTERVAL '15 minutes' THEN 1 ELSE auth_rate_limit_buckets.failure_count+1 END, window_started_at=CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW()-INTERVAL '15 minutes' THEN NOW() ELSE auth_rate_limit_buckets.window_started_at END, blocked_until=CASE WHEN (CASE WHEN auth_rate_limit_buckets.window_started_at <= NOW()-INTERVAL '15 minutes' THEN 1 ELSE auth_rate_limit_buckets.failure_count+1 END) >= ${limit} THEN NOW()+INTERVAL '15 minutes' ELSE NULL END, updated_at=NOW()`;
+ await db.$executeRaw`DELETE FROM auth_rate_limit_buckets WHERE updated_at < NOW() - INTERVAL '1 day'`;
+ return loginRetryAfter(db,key);
 }
-
-function recordLoginFailure(key: string, now = Date.now()): number {
-  let bucket = loginFailures.get(key);
-  if (!bucket || now - bucket.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS) {
-    bucket = { count: 0, windowStartedAt: now, blockedUntil: 0 };
-  }
-  bucket.count += 1;
-  const limit = key.startsWith("ip-only::") ? IP_FAILURE_LIMIT : LOGIN_FAILURE_LIMIT;
-  if (bucket.count >= limit) bucket.blockedUntil = now + LOGIN_FAILURE_WINDOW_MS;
-  loginFailures.set(key, bucket);
-
-  if (loginFailures.size > 5000) {
-    for (const [bucketKey, value] of loginFailures) {
-      if (now - value.windowStartedAt >= LOGIN_FAILURE_WINDOW_MS && value.blockedUntil <= now) loginFailures.delete(bucketKey);
-    }
-    while (loginFailures.size > 5000) {
-      const oldestKey = loginFailures.keys().next().value;
-      if (oldestKey === undefined) break;
-      loginFailures.delete(oldestKey);
-    }
-  }
-  return loginRetryAfter(key, now);
+async function clearLoginFailures(db: PrismaClient, ip: string, email?: string): Promise<void> {
+ const keys=[loginBucketKey(ip,email),loginBucketKey(ip)].map(sha256);
+ await db.$executeRaw`DELETE FROM auth_rate_limit_buckets WHERE bucket_key IN (${keys[0]},${keys[1]})`;
 }
-
-function clearLoginFailures(ip: string, email?: string): void {
-  loginFailures.delete(loginBucketKey(ip, email));
-  loginFailures.delete(loginBucketKey(ip));
-}
-
 function rejectThrottledLogin(res: Response, retryAfter: number): void {
   res.setHeader("Retry-After", String(retryAfter));
   res.status(429).json({ error: "Too many failed sign-in attempts. Try again later." });
@@ -367,6 +356,28 @@ export async function requireAuth(req: AuthedRequest, _res: Response, next: Next
   } catch (error) {
     next(error);
   }
+}
+
+/**
+ * Security-sensitive account changes require a recently issued session token.
+ * The JWT iat is set by the server at successful authentication and cannot be
+ * changed without invalidating its signature.
+ */
+export function requireRecentAuth(maxAgeSeconds = 5 * 60) {
+  return (req: AuthedRequest, _res: Response, next: NextFunction): void => {
+    const token = readSessionToken(req);
+    if (!token) return next(forbidden("Sign in again to confirm this security change."));
+    try {
+      const payload = verifyJwt(token);
+      const issuedAt = payload.iat;
+      if (!Number.isSafeInteger(issuedAt)) return next(forbidden("Sign in again to confirm this security change."));
+      const ageSeconds = nowSeconds() - (issuedAt as number);
+      if (ageSeconds < -60 || ageSeconds > maxAgeSeconds) return next(forbidden("Sign in again to confirm this security change."));
+      next();
+    } catch {
+      next(forbidden("Sign in again to confirm this security change."));
+    }
+  };
 }
 
 export function requireAdmin(db: PrismaClient) {
@@ -440,8 +451,37 @@ async function recordLoginEvent(db: PrismaClient, req: Request, email: string, u
 }
 async function createAuthSession(db: PrismaClient, req: Request, user: { id: number; email: string; sessionVersion: number }, method = "password"): Promise<{ token: string; sessionId: string }> {
   const device = requestDevice(req);
+  const recentDevice = await db.authSession.findFirst({
+    where: {
+      userId: user.id,
+      deviceName: device.deviceName,
+      platform: device.platform,
+      userAgent: device.userAgent,
+      ipAddress: device.ipAddress,
+      createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true },
+  });
   const expiresAt = new Date(Date.now() + JWT_TTL_SECONDS * 1000);
   const session = await db.authSession.create({ data: { userId: user.id, ...device, loginMethod: method, expiresAt } });
+  if (!recentDevice) {
+    try {
+      const locationHint = device.ipAddress ? " from " + device.ipAddress : "";
+      await db.studentNotification.create({
+        data: {
+          userId: user.id,
+          kind: "SECURITY_NEW_DEVICE",
+          title: "New sign-in detected",
+          message: `New sign-in on ${device.deviceName}${locationHint}. If this wasn't you, review your sessions and change your password.`,
+          href: "/profile",
+          dedupeKey: "security-new-device:" + session.id,
+          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+        },
+      });
+    } catch {
+      // Security alerts are best-effort; a notification failure must not block login.
+    }
+  }
   const token = signJwt({ sub: String(user.id), email: user.email, sv: user.sessionVersion, sid: session.id });
   return { token, sessionId: session.id };
 }
@@ -559,18 +599,18 @@ export function authRouter(db: PrismaClient): Router {
       const ip = req.ip ?? "unknown";
       const emailKey = loginBucketKey(ip, input.email);
       const ipKey = loginBucketKey(ip);
-      const retryAfter = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
-      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
+      const retryAfter = Math.max(await loginRetryAfter(db, emailKey), await loginRetryAfter(db, ipKey));
+      if (retryAfter > 0) { await recordLoginEvent(db, req, input.email, null, "throttled", "password"); return rejectThrottledLogin(res, retryAfter); }
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
         await recordLoginEvent(db, req, input.email, user?.id ?? null, "failed", "password");
-        recordLoginFailure(emailKey);
-        recordLoginFailure(ipKey);
-        const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
+        await recordLoginFailure(db, emailKey);
+        await recordLoginFailure(db, ipKey);
+        const blockedFor = Math.max(await loginRetryAfter(db, emailKey), await loginRetryAfter(db, ipKey));
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      clearLoginFailures(ip, input.email);
+      await clearLoginFailures(db, ip, input.email);
       if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
       const totp = await db.totpCredential.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
       if (totp?.enabledAt) {
@@ -594,17 +634,18 @@ export function authRouter(db: PrismaClient): Router {
       const ip = req.ip ?? "unknown";
       const emailKey = loginBucketKey(ip, input.email);
       const ipKey = loginBucketKey(ip);
-      const retryAfter = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
-      if (retryAfter > 0) return rejectThrottledLogin(res, retryAfter);
+      const retryAfter = Math.max(await loginRetryAfter(db, emailKey), await loginRetryAfter(db, ipKey));
+      if (retryAfter > 0) { await recordLoginEvent(db, req, input.email, null, "throttled", "password"); return rejectThrottledLogin(res, retryAfter); }
       const user = await db.user.findUnique({ where: { email: input.email } });
       if (!user || !await verifyPasswordAsync(input.password, user.passwordHash)) {
-        recordLoginFailure(emailKey);
-        recordLoginFailure(ipKey);
-        const blockedFor = Math.max(loginRetryAfter(emailKey), loginRetryAfter(ipKey));
+        await recordLoginEvent(db, req, input.email, user?.id ?? null, "failed", "password");
+        await recordLoginFailure(db, emailKey);
+        await recordLoginFailure(db, ipKey);
+        const blockedFor = Math.max(await loginRetryAfter(db, emailKey), await loginRetryAfter(db, ipKey));
         if (blockedFor > 0) return rejectThrottledLogin(res, blockedFor);
         return next(badRequest("Invalid email or password."));
       }
-      clearLoginFailures(ip, input.email);
+      await clearLoginFailures(db, ip, input.email);
       if (user.accessStatus !== "APPROVED") { await recordLoginEvent(db, req, input.email, user.id, "blocked"); return next(forbidden(user.accessStatus === "REJECTED" ? "Your account was not approved. Contact your administrator." : "Your account is waiting for administrator approval.")); }
       await recordLoginEvent(db, req, input.email, user.id, "success", "password");
       const { token } = await createAuthSession(db, req, user, "password");
@@ -655,12 +696,17 @@ export function authRouter(db: PrismaClient): Router {
     if (!token) return next(forbidden("Not signed in."));
     try {
       const payload = verifyJwt(token);
+      const id = Number(payload.sub);
+      const tokenEmail = String(payload.email ?? "");
+      const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
+      if (!Number.isSafeInteger(id) || id <= 0 || !tokenEmail || !Number.isSafeInteger(sessionVersion) || sessionVersion < 0) {
+        return next(forbidden("Invalid or expired session. Sign in again."));
+      }
       const user = await db.user.findUnique({
-        where: { id: Number(payload.sub) },
+        where: { id },
         select: { id: true, email: true, role: true, sessionVersion: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
-      const sessionVersion = payload.sv === undefined ? 0 : Number(payload.sv);
-      if (!user || !Number.isSafeInteger(sessionVersion) || user.sessionVersion !== sessionVersion) {
+      if (!user || user.email !== tokenEmail || user.sessionVersion !== sessionVersion) {
         return next(forbidden("This session has been revoked. Sign in again."));
       }
       const sessionId = typeof payload.sid === "string" ? payload.sid : "";
@@ -844,7 +890,7 @@ export function authRouter(db: PrismaClient): Router {
 
 
 
-  router.post("/2fa/totp/setup", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.post("/2fa/totp/setup", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
     try {
       const existing = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
       if (existing?.enabledAt) return next(conflict("Authenticator is already enabled. Disable it before re-enrolling."));
@@ -862,7 +908,7 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.post("/2fa/totp/verify-setup", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
       const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
@@ -898,8 +944,12 @@ export function authRouter(db: PrismaClient): Router {
       const counter = verifyTotp(secret, input.code, Date.now(), credential.lastUsedCounter);
       const recovery = (JSON.parse(credential.recoveryCodesJson) as string[]).map(hash => hash === hashRecoveryCode(input.code));
       if (counter === null && !recovery.some(Boolean)) return next(forbidden("Authenticator or recovery code is incorrect."));
-      await db.totpCredential.delete({ where: { userId: req.user!.id } });
-      res.json({ ok: true, message: "Two-step verification disabled." });
+      await db.$transaction([
+        db.totpCredential.delete({ where: { userId: req.user!.id } }),
+        db.user.update({ where: { id: req.user!.id }, data: { sessionVersion: { increment: 1 } } }),
+        db.authSession.updateMany({ where: { userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } }),
+      ]);
+      res.json({ ok: true, message: "Two-step verification disabled. Sign in again on your devices." });
     } catch (error) { next(error); }
   });
 
@@ -908,7 +958,11 @@ export function authRouter(db: PrismaClient): Router {
       const input = z.object({ challengeId: z.string().min(20).max(100), code: z.string().min(6).max(32) }).parse(req.body);
       const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
       if (!challenge || challenge.purpose !== "totp-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("The verification request expired. Sign in again."));
-      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const attempt = await db.authChallenge.updateMany({
+        where: { id: challenge.id, purpose: "totp-login", attempts: { lt: 5 }, expiresAt: { gt: new Date() } },
+        data: { attempts: { increment: 1 } },
+      });
+      if (attempt.count !== 1) return next(forbidden("The verification request expired. Sign in again."));
       const credential = await db.totpCredential.findUnique({ where: { userId: challenge.userId } });
       const user = await db.user.findUnique({ where: { id: challenge.userId } });
       if (!credential?.enabledAt || !user || user.accessStatus !== "APPROVED") return next(forbidden("Two-step verification is unavailable for this account."));
@@ -924,12 +978,17 @@ export function authRouter(db: PrismaClient): Router {
         const index = recovery.indexOf(hash);
         if (index >= 0) {
           recovery.splice(index, 1);
-          await db.totpCredential.update({ where: { id: credential.id }, data: { recoveryCodesJson: JSON.stringify(recovery) } });
-          valid = true;
+          // Compare-and-swap prevents two concurrent requests consuming the
+          // same one-time recovery code successfully.
+          const consumed = await db.totpCredential.updateMany({
+            where: { id: credential.id, recoveryCodesJson: credential.recoveryCodesJson },
+            data: { recoveryCodesJson: JSON.stringify(recovery) },
+          });
+          valid = consumed.count === 1;
         }
       }
       if (!valid) {
-        if (challenge.attempts + 1 >= 5) await db.authChallenge.deleteMany({ where: { id: challenge.id } });
+        await db.authChallenge.deleteMany({ where: { id: challenge.id, attempts: { gte: 5 } } });
         return next(forbidden("Authenticator or recovery code is incorrect."));
       }
       await db.authChallenge.delete({ where: { id: challenge.id } });
@@ -954,7 +1013,7 @@ export function authRouter(db: PrismaClient): Router {
     return { origin, rpId: parsed.hostname };
   }
 
-  router.post("/passkeys/register/options", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.post("/passkeys/register/options", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
     try {
       const { rpId } = passkeyOrigin(req);
       const user = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, fullName: true } });
@@ -966,17 +1025,27 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/passkeys/register/verify", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.post("/passkeys/register/verify", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ challenge: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), attestationObject: z.string().min(20), name: z.string().trim().min(1).max(80).optional(), transports: z.array(z.string().max(32)).max(8).optional() }).parse(req.body);
       const { origin, rpId } = passkeyOrigin(req);
       const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challenge) } });
-      if (!challenge || challenge.userId !== req.user!.id || challenge.purpose !== "passkey-register" || challenge.expiresAt <= new Date()) return next(forbidden("Passkey setup expired. Start again."));
+      if (!challenge || challenge.userId !== req.user!.id || challenge.purpose !== "passkey-register" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("Passkey setup expired. Start again."));
+      const attempt = await db.authChallenge.updateMany({
+        where: { id: challenge.id, userId: req.user!.id, purpose: "passkey-register", attempts: { lt: 5 }, expiresAt: { gt: new Date() } },
+        data: { attempts: { increment: 1 } },
+      });
+      if (attempt.count !== 1) return next(forbidden("Passkey setup expired. Start again."));
       verifyClientData(input.clientDataJSON, input.challenge, origin, "webauthn.create");
       const attested = parseNoneAttestation(input.attestationObject, rpId);
       if (attested.credentialId !== input.credentialId) return next(badRequest("Passkey credential ID does not match."));
+      // Consume the challenge atomically before persisting a credential. Concurrent
+      // registration submissions cannot attach multiple credentials to one challenge.
+      const consumed = await db.authChallenge.deleteMany({
+        where: { id: challenge.id, userId: req.user!.id, purpose: "passkey-register", expiresAt: { gt: new Date() }, attempts: { lte: 5 } },
+      });
+      if (consumed.count !== 1) return next(forbidden("Passkey setup expired. Start again."));
       const credential = await db.passkeyCredential.create({ data: { userId: req.user!.id, credentialId: attested.credentialId, publicKey: attested.publicKey, signCount: attested.signCount, name: input.name ?? "Passkey", transports: JSON.stringify(input.transports ?? []) } });
-      await db.authChallenge.delete({ where: { id: challenge.id } });
       res.status(201).json({ ok: true, passkey: { id: credential.id, name: credential.name, createdAt: credential.createdAt } });
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "P2002") return next(conflict("This passkey is already registered."));
@@ -1004,7 +1073,11 @@ export function authRouter(db: PrismaClient): Router {
       const { origin, rpId } = passkeyOrigin(req);
       const challenge = await db.authChallenge.findUnique({ where: { challenge: sha256(input.challengeId) } });
       if (!challenge || challenge.purpose !== "passkey-login" || challenge.expiresAt <= new Date() || challenge.attempts >= 5) return next(forbidden("Passkey request expired. Start sign-in again."));
-      await db.authChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
+      const attempt = await db.authChallenge.updateMany({
+        where: { id: challenge.id, purpose: "passkey-login", attempts: { lt: 5 }, expiresAt: { gt: new Date() } },
+        data: { attempts: { increment: 1 } },
+      });
+      if (attempt.count !== 1) return next(forbidden("Passkey request expired. Start sign-in again."));
       const credential = await db.passkeyCredential.findUnique({ where: { credentialId: input.credentialId } });
       if (!credential || credential.userId !== challenge.userId) return next(forbidden("Passkey could not be verified."));
       verifyClientData(input.clientDataJSON, input.challengeId, origin, "webauthn.get");
@@ -1018,7 +1091,10 @@ export function authRouter(db: PrismaClient): Router {
       }
       const user = await db.user.findUnique({ where: { id: challenge.userId } });
       if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Account access is not approved."));
-      await db.authChallenge.delete({ where: { id: challenge.id } });
+      const consumed = await db.authChallenge.deleteMany({
+        where: { id: challenge.id, purpose: "passkey-login", expiresAt: { gt: new Date() }, attempts: { lte: 5 } },
+      });
+      if (consumed.count !== 1) return next(forbidden("Passkey request was already used. Start sign-in again."));
       await recordLoginEvent(db, req, user.email, user.id, "success", "passkey");
       const { token } = await createAuthSession(db, req, user, "passkey");
       setSessionCookie(res, token);
@@ -1033,11 +1109,17 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.delete("/passkeys/:id", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.delete("/passkeys/:id", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
     try {
-      const result = await db.passkeyCredential.deleteMany({ where: { id: req.params.id, userId: req.user!.id } });
-      if (!result.count) return next(notFound("Passkey not found."));
-      res.json({ ok: true });
+      const removed = await db.$transaction(async (tx) => {
+        const result = await tx.passkeyCredential.deleteMany({ where: { id: req.params.id, userId: req.user!.id } });
+        if (!result.count) return 0;
+        await tx.user.update({ where: { id: req.user!.id }, data: { sessionVersion: { increment: 1 } } });
+        await tx.authSession.updateMany({ where: { userId: req.user!.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        return result.count;
+      });
+      if (!removed) return next(notFound("Passkey not found."));
+      res.json({ ok: true, message: "Passkey removed. Sign in again on your devices." });
     } catch (error) { next(error); }
   });
 

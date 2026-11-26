@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "model:worker": "node dist/modelTrainingWorker.js",
     "model:worker:dev": "tsx src/modelTrainingWorker.ts",
-    "lint": "eslint src tests prisma/seed.ts prisma/seedLearningPathDemo.ts prisma/baseQuestions.ts prisma/bootstrapAdmin.ts",
+    "lint": "eslint src tests scripts/securityPreflight.ts prisma/seed.ts prisma/seedLearningPathDemo.ts prisma/baseQuestions.ts prisma/bootstrapAdmin.ts",
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -17,7 +17,8 @@
     "import:questions": "tsx prisma/seed.ts",
     "admin:bootstrap": "tsx prisma/bootstrapAdmin.ts",
     "prebuild": "node scripts/recoverStudyMaterialUrlMigration.mjs",
-    "audit:prune": "tsx scripts/pruneAuditEvents.ts"
+    "audit:prune": "tsx scripts/pruneAuditEvents.ts",
+    "security:preflight": "tsx scripts/securityPreflight.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.17.0",

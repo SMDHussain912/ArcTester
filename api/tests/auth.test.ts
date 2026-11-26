@@ -1,13 +1,14 @@
-import { createHmac } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createHash, createHmac } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/index.js";
 import {
   signJwt,
   validateJwtSecret,
   verifyJwt,
+  requireRecentAuth,
 } from "../src/auth.js";
 import { importFromJson } from "../src/importService.js";
-import { totpAt } from "../src/totp.js";
+import { encryptTotpSecret, generateTotpSecret, totpAt } from "../src/totp.js";
 import {
   issueTestInvitation,
   postJson,
@@ -94,7 +95,7 @@ describe("JWT secret configuration", () => {
   });
 
 
-  it("requires the supported HS256 header and a valid expiry claim", () => {
+  it("requires HS256 plus issuer, audience and bounded time claims", () => {
     const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
     const signed = (header: unknown, payload: unknown) => {
       const message = encode(header) + "." + encode(payload);
@@ -102,10 +103,37 @@ describe("JWT secret configuration", () => {
       return message + "." + signature;
     };
     const now = Math.floor(Date.now() / 1000);
+    const claims = { sub: "1", iat: now, exp: now + 60, iss: "arctester-api", aud: "arctester-client" };
     expect(() => verifyJwt(signJwt({ sub: "1" }, -1))).toThrow(/expired token/i);
-    expect(() => verifyJwt(signed({ alg: "none", typ: "JWT" }, { sub: "1", exp: now + 60 }))).toThrow(/unsupported jwt header/i);
+    expect(() => verifyJwt(signed({ alg: "none", typ: "JWT" }, { ...claims }))).toThrow(/unsupported jwt header/i);
     expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1" }))).toThrow(/missing or invalid token expiry/i);
-    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { sub: "1", exp: now + 60 }))).not.toThrow();
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { ...claims, iss: "another-api" }))).toThrow(/invalid token issuer/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { ...claims, aud: "another-client" }))).toThrow(/invalid token audience/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { ...claims, iat: now + 120 }))).toThrow(/future/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, { ...claims, exp: now + 8 * 24 * 60 * 60 }))).toThrow(/lifetime/i);
+    expect(() => verifyJwt(signed({ alg: "HS256", typ: "JWT" }, claims))).not.toThrow();
+    expect(verifyJwt(signJwt({ sub: "1" })).iss).toBe("arctester-api");
+  });
+
+  it("requires recent authentication for MFA/passkey security changes", () => {
+    vi.useFakeTimers();
+    const initialTime = new Date("2026-01-01T00:00:00.000Z");
+    try {
+      vi.setSystemTime(initialTime);
+      const staleToken = signJwt({ sub: "1", email: "recent@example.com", sv: 0 }, 24 * 60 * 60);
+      vi.setSystemTime(new Date(initialTime.getTime() + 60 * 60 * 1000));
+      const guard = requireRecentAuth();
+      let staleError: unknown;
+      guard({ headers: { authorization: `Bearer ${staleToken}` } } as never, {} as never, (error?: unknown) => { staleError = error; });
+      expect(staleError).toBeTruthy();
+
+      const freshToken = signJwt({ sub: "1", email: "recent@example.com", sv: 0 });
+      let freshError: unknown;
+      guard({ headers: { authorization: `Bearer ${freshToken}` } } as never, {} as never, (error?: unknown) => { freshError = error; });
+      expect(freshError).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not require production-strength secrets in development or tests", () => {
@@ -142,6 +170,27 @@ describe("auth", () => {
   it("rejects a registration number with an unsupported branch code", async () => {
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, registrationNumber: "24999-XX-053", email: "wrong-branch@example.com", password: "secret1234" });
     expect(res.status).toBe(400);
+  });
+
+  it("fails closed for browser registration when production CAPTCHA is not configured", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousTurnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    process.env.NODE_ENV = "production";
+    delete process.env.TURNSTILE_SECRET_KEY;
+    try {
+      const response = await postJson(`${server.baseUrl}/auth/register`, {
+        ...STUDENT_PROFILE,
+        email: "captcha-unconfigured@example.com",
+        password: "secret1234",
+      });
+      expect(response.status).toBe(400);
+      expect((response.json as { error: string }).error).toContain("Registration security check is not configured");
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousTurnstileSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY;
+      else process.env.TURNSTILE_SECRET_KEY = previousTurnstileSecret;
+    }
   });
 
   it("requires academic identity fields for new student registration", async () => {
@@ -420,6 +469,11 @@ describe("auth — bearer token (native/mobile clients)", () => {
     expect(body.user.email).toBe("mobile@example.com");
     // A bearer client must not be handed a cookie it cannot use.
     expect(res.headers.getSetCookie?.() ?? []).toHaveLength(0);
+    const account = await server.db.user.findUniqueOrThrow({ where: { email: "mobile@example.com" } });
+    const alert = await server.db.studentNotification.findFirst({ where: { userId: account.id, kind: "SECURITY_NEW_DEVICE" } });
+    expect(alert).toBeTruthy();
+    expect(alert!.title).toBe("New sign-in detected");
+    expect(alert!.message).toContain("If this wasn't you");
   });
 
   it("rejects a wrong password on /auth/token", async () => {
@@ -429,6 +483,7 @@ describe("auth — bearer token (native/mobile clients)", () => {
       body: JSON.stringify({ email: "mobile@example.com", password: "nope-nope-nope" }),
     });
     expect(res.status).toBe(400);
+    expect(await server.db.loginEvent.findFirst({ where: { email: "mobile@example.com", method: "password", result: "failed" } })).toBeTruthy();
   });
 
   it("authorizes protected routes with a bearer token and no cookie", async () => {
@@ -472,6 +527,12 @@ describe("auth — bearer token (native/mobile clients)", () => {
       body: JSON.stringify({ mode: "practice", subject: "Maths", count: 1 }),
     });
     expect(res.status).toBe(403);
+  });
+
+  it("rejects a correctly signed token missing required identity claims on a protected route", async () => {
+    const token = signJwt({ sub: "1", sv: 0 });
+    const response = await fetch(`${server.baseUrl}/auth/me`, { headers: { authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(403);
   });
 
   it("/auth/me works with a bearer token", async () => {
@@ -521,6 +582,15 @@ describe("auth — bearer token (native/mobile clients)", () => {
     });
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+
+    // Counters live in PostgreSQL for cross-instance enforcement, and the
+    // persisted identifiers are hashes rather than raw IP/email strings.
+    const buckets = await server.db.$queryRaw<Array<{ bucket_key: string; failure_count: number }>>`
+      SELECT bucket_key, failure_count FROM auth_rate_limit_buckets
+      WHERE failure_count > 0 AND bucket_key NOT LIKE 'api:%'
+    `;
+    expect(buckets.length).toBeGreaterThanOrEqual(2);
+    expect(buckets.every((bucket) => /^[a-f0-9]{64}$/.test(bucket.bucket_key))).toBe(true);
   });
 
   it("tracks active sessions and previous login activity", async () => {
@@ -560,10 +630,196 @@ describe("auth — bearer token (native/mobile clients)", () => {
     const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-test-password" });
     const challenge = (login.json as { twoFactorRequired: boolean; challengeId: string });
     expect(challenge.twoFactorRequired).toBe(true);
-    const verified = await postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId: challenge.challengeId, code: recovery });
-    expect(verified.status).toBe(200);
+    const recoveryAttempts = await Promise.all([
+      postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId: challenge.challengeId, code: recovery }),
+      postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId: challenge.challengeId, code: recovery }),
+    ]);
+    expect(recoveryAttempts.filter((attempt) => attempt.status === 200)).toHaveLength(1);
+    const verified = recoveryAttempts.find((attempt) => attempt.status === 200)!;
     expect((verified.json as { user: { email: string } }).user.email).toBe(email);
+
+    // Removing an MFA factor revokes every session, including the current one.
+    const disableCounter = Math.floor(Date.now() / 30_000) + 1;
+    const disabled = await fetch(`${server.baseUrl}/auth/2fa/totp/disable`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `ecet_session=${cookieJar.get("ecet_session")}` },
+      body: JSON.stringify({ password: "totp-test-password", code: totpAt(secret, disableCounter) }),
+    });
+    expect(disabled.status).toBe(200);
+    const revokedSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${cookieJar.get("ecet_session")}` } });
+    expect(revokedSession.status).toBe(403);
   });
+  it("allows only one concurrent use of a valid TOTP counter", async () => {
+    process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
+    const email = "totp-counter-replay@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "totp-counter-replay-password" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    cookieJar.delete("ecet_session");
+    await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-counter-replay-password" });
+    const setup = await postJsonWithCookie(`${server.baseUrl}/auth/2fa/totp/setup`, {});
+    expect(setup.status).toBe(200);
+    const secret = (setup.json as { secret: string }).secret;
+    const setupCounter = Math.floor(Date.now() / 30_000);
+    expect((await postJsonWithCookie(`${server.baseUrl}/auth/2fa/totp/verify-setup`, { code: totpAt(secret, setupCounter) })).status).toBe(200);
+    cookieJar.delete("ecet_session");
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-counter-replay-password" });
+    const challengeId = (login.json as { challengeId: string }).challengeId;
+    const counter = Math.floor(Date.now() / 30_000) + 1;
+    const code = totpAt(secret, counter);
+    const attempts = await Promise.all([
+      postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId, code }),
+      postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId, code }),
+    ]);
+    expect(attempts.filter(attempt => attempt.status === 200)).toHaveLength(1);
+    expect(attempts.filter(attempt => attempt.status === 403)).toHaveLength(1);
+    const credential = await server.db.totpCredential.findUnique({ where: { userId: (await server.db.user.findUniqueOrThrow({ where: { email } })).id } });
+    expect(credential?.lastUsedCounter).toBe(counter);
+  });
+
+  it("expires TOTP login challenges after five failed verification attempts", async () => {
+    const previousKey = process.env.TOTP_ENCRYPTION_KEY;
+    process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
+    const email = "totp-attempt-limit@example.com";
+    try {
+      await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "totp-attempt-password" });
+      const user = await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+      const secret = generateTotpSecret();
+      await server.db.totpCredential.create({
+        data: { userId: user.id, secretEncrypted: encryptTotpSecret(secret), enabledAt: new Date(), recoveryCodesJson: "[]", lastUsedCounter: -1 },
+      });
+      cookieJar.delete("ecet_session");
+      const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "totp-attempt-password" });
+      expect(login.status).toBe(200);
+      const challengeId = (login.json as { challengeId: string }).challengeId;
+      const current = Math.floor(Date.now() / 30_000);
+      let invalidCode = "000000";
+      if ([current - 1, current, current + 1].some(counter => totpAt(secret, counter) === invalidCode)) invalidCode = "000001";
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId, code: invalidCode });
+        expect(response.status).toBe(403);
+      }
+      const replay = await postJsonWithCookie(`${server.baseUrl}/auth/login/2fa`, { challengeId, code: invalidCode });
+      expect(replay.status).toBe(403);
+      expect(await server.db.authChallenge.findUnique({ where: { challenge: createHash("sha256").update(challengeId).digest("hex") } })).toBeNull();
+    } finally {
+      if (previousKey === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
+      else process.env.TOTP_ENCRYPTION_KEY = previousKey;
+    }
+  });
+
+  it("limits failed passkey registration verification attempts", async () => {
+    const previousOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = "https://study.example.com";
+    const email = "passkey-registration-attempts@example.com";
+    try {
+      await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "passkey-registration-attempt-password" });
+      await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+      cookieJar.delete("ecet_session");
+      await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "passkey-registration-attempt-password" });
+      const cookie = cookieJar.get("ecet_session") ?? "";
+      const optionsResponse = await fetch(`${server.baseUrl}/auth/passkeys/register/options`, {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: `ecet_session=${cookie}`, origin: "https://study.example.com" },
+        body: JSON.stringify({}),
+      });
+      const options = await optionsResponse.json() as { publicKey: { challenge: string } };
+      expect(optionsResponse.status).toBe(200);
+      const challenge = options.publicKey.challenge;
+      const challengeHash = createHash("sha256").update(challenge).digest("hex");
+      const verify = async () => {
+        const response = await fetch(`${server.baseUrl}/auth/passkeys/register/verify`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: `ecet_session=${cookie}`, origin: "https://study.example.com" },
+          body: JSON.stringify({
+            challenge,
+            credentialId: "fixture-credential-registration",
+            clientDataJSON: "invalid-client-data".repeat(3),
+            attestationObject: "invalid-attestation-object".repeat(3),
+          }),
+        });
+        await response.arrayBuffer();
+        return response.status;
+      };
+      for (let attempt = 0; attempt < 5; attempt += 1) expect(await verify()).not.toBe(201);
+      const stored = await server.db.authChallenge.findUnique({ where: { challenge: challengeHash } });
+      expect(stored?.attempts).toBe(5);
+      expect(await verify()).toBe(403);
+    } finally {
+      if (previousOrigins === undefined) delete process.env.CORS_ORIGINS;
+      else process.env.CORS_ORIGINS = previousOrigins;
+    }
+  });
+  it("enforces passkey login challenge expiry and failed-attempt limits", async () => {
+    const previousOrigins = process.env.CORS_ORIGINS;
+    process.env.CORS_ORIGINS = "https://study.example.com";
+    const email = "passkey-attempt-limit@example.com";
+    try {
+      await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "passkey-attempt-password" });
+      const user = await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+      await server.db.passkeyCredential.create({
+        data: { userId: user.id, credentialId: "fixture-passkey-credential-123", publicKey: "fixture-public-key", name: "Fixture passkey" },
+      });
+      const requestOptions = async () => {
+        const response = await fetch(`${server.baseUrl}/auth/passkeys/login/options`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "https://study.example.com" },
+          body: JSON.stringify({ email }),
+        });
+        return { status: response.status, body: await response.json() as { challengeId: string } };
+      };
+      const options = await requestOptions();
+      expect(options.status).toBe(200);
+      const challengeId = options.body.challengeId;
+      const verify = async (id: string) => {
+        const response = await fetch(`${server.baseUrl}/auth/passkeys/login/verify`, {
+          method: "POST",
+          headers: { "content-type": "application/json", origin: "https://study.example.com" },
+          body: JSON.stringify({
+            challengeId: id,
+            credentialId: "missing-passkey-credential-0001",
+            clientDataJSON: "x".repeat(40),
+            authenticatorData: "y".repeat(40),
+            signature: "z".repeat(40),
+          }),
+        });
+        await response.arrayBuffer();
+        return response.status;
+      };
+      for (let attempt = 0; attempt < 5; attempt += 1) expect(await verify(challengeId)).toBe(403);
+      expect(await verify(challengeId)).toBe(403);
+      const stored = await server.db.authChallenge.findUnique({ where: { challenge: createHash("sha256").update(challengeId).digest("hex") } });
+      expect(stored?.attempts).toBe(5);
+
+      const expired = await requestOptions();
+      expect(expired.status).toBe(200);
+      const expiredHash = createHash("sha256").update(expired.body.challengeId).digest("hex");
+      await server.db.authChallenge.update({ where: { challenge: expiredHash }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      expect(await verify(expired.body.challengeId)).toBe(403);
+    } finally {
+      if (previousOrigins === undefined) delete process.env.CORS_ORIGINS;
+      else process.env.CORS_ORIGINS = previousOrigins;
+    }
+  });
+
+  it("requires a recent session and revokes all sessions when removing a passkey", async () => {
+    const email = "passkey-removal@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "passkey-removal-password" });
+    const user = await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    cookieJar.delete("ecet_session");
+    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "passkey-removal-password" });
+    expect(login.status).toBe(200);
+    const credential = await server.db.passkeyCredential.create({
+      data: { userId: user.id, credentialId: "test-credential-id-12345678", publicKey: "test-public-key", name: "Fixture passkey" },
+    });
+    const removed = await fetch(`${server.baseUrl}/auth/passkeys/${credential.id}`, {
+      method: "DELETE",
+      headers: { cookie: `ecet_session=${cookieJar.get("ecet_session")}` },
+    });
+    expect(removed.status).toBe(200);
+    const replay = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${cookieJar.get("ecet_session")}` } });
+    expect(replay.status).toBe(403);
+  });
+
   it("lists and revokes a legacy session issued before session tracking", async () => {
     const user = await server.db.user.findUnique({ where: { email: "mobile@example.com" }, select: { id: true, email: true, sessionVersion: true } });
     expect(user).toBeTruthy();

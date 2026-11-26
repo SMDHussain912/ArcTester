@@ -65,13 +65,19 @@ describe("student notification API", () => {
       },
     });
 
+    const securityAlert = await server.db.studentNotification.findFirst({ where: { userId: firstUserId, kind: "SECURITY_NEW_DEVICE" } });
+    expect(securityAlert).toBeTruthy();
+    const activeUnreadCount = await server.db.studentNotification.count({ where: { userId: firstUserId, readAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
     const firstInbox = await getJson(`${server.baseUrl}/notifications`, firstCookie);
     expect(firstInbox.status).toBe(200);
-    expect(firstInbox.json).toMatchObject({ unreadCount: 1 });
-    expect((firstInbox.json as { notifications: { id: string }[] }).notifications.map((item) => item.id)).toEqual([active.id]);
+    expect(firstInbox.json).toMatchObject({ unreadCount: activeUnreadCount });
+    const firstIds = (firstInbox.json as { notifications: { id: string }[] }).notifications.map((item) => item.id);
+    expect(firstIds).toEqual(expect.arrayContaining([active.id, securityAlert!.id]));
+    expect(firstIds).toHaveLength(activeUnreadCount);
 
     const secondInbox = await getJson(`${server.baseUrl}/notifications`, secondCookie);
-    expect((secondInbox.json as { notifications: { title: string }[] }).notifications.map((item) => item.title)).toEqual(["Private result"]);
+    const secondTitles = (secondInbox.json as { notifications: { title: string }[] }).notifications.map((item) => item.title);
+    expect(secondTitles).toEqual(expect.arrayContaining(["Private result", "New sign-in detected"]));
 
     const acknowledged = await postJson(`${server.baseUrl}/notifications/${active.id}/read`, {}, firstCookie);
     expect(acknowledged.status).toBe(200);
@@ -81,10 +87,10 @@ describe("student notification API", () => {
     expect(repeated.json).toMatchObject({ ok: true, alreadyRead: true });
 
     const unread = await getJson(`${server.baseUrl}/notifications?unread=true`, firstCookie);
-    expect((unread.json as { notifications: unknown[]; unreadCount: number })).toMatchObject({
-      notifications: [],
-      unreadCount: 0,
-    });
+    const unreadBody = unread.json as { notifications: { id: string }[]; unreadCount: number };
+    expect(unreadBody.unreadCount).toBe(activeUnreadCount - 1);
+    expect(unreadBody.notifications.map(item => item.id)).not.toContain(active.id);
+    expect(unreadBody.notifications.length).toBe(activeUnreadCount - 1);
     expect((await postJson(`${server.baseUrl}/notifications/${active.id}/read`, {}, secondCookie)).status).toBe(400);
     expect((await postJson(`${server.baseUrl}/notifications/${expired.id}/read`, {}, firstCookie)).status).toBe(400);
   });
@@ -122,9 +128,10 @@ describe("student notification API", () => {
       },
     });
 
+    const expectedUnreadBeforeReadAll = await server.db.studentNotification.count({ where: { userId: firstUserId, readAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
     const response = await postJson(`${server.baseUrl}/notifications/read-all`, {}, firstCookie);
     expect(response.status).toBe(200);
-    expect(response.json).toMatchObject({ ok: true, updatedCount: 2 });
+    expect(response.json).toMatchObject({ ok: true, updatedCount: expectedUnreadBeforeReadAll });
 
     const [savedOne, savedTwo, savedExpired] = await Promise.all([
       server.db.studentNotification.findUniqueOrThrow({ where: { id: activeOne.id } }),
