@@ -191,7 +191,8 @@ export default function StudentAccountSettings(props: Props) {
     setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
     setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
   }
-  function beginTotpSetup(){setSecurityReauthAction("totp");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");}\n  async function beginTotpSetupAfterReauth(){
+  function beginTotpSetup(){setSecurityReauthAction("totp");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");} 
+  async function beginTotpSetupAfterReauth(){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");setRecoveryCodes([]);
     try{const result=await request<{secret:string;otpauthUri:string}>("/auth/2fa/totp/setup",{method:"POST",body:"{}"});setTotpSecret(result.secret);setTotpUri(result.otpauthUri);setTotpCode("");}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not start authenticator setup.");}finally{setSecurityBusy(false);}
@@ -206,7 +207,8 @@ export default function StudentAccountSettings(props: Props) {
     try{const result=await request<{message:string}>("/auth/2fa/totp/disable",{method:"POST",body:JSON.stringify({password:disablePassword,code:disableCode})});setSecurityMessage(result.message);setDisablePassword("");setDisableCode("");await reloadSecurity();}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not disable authenticator.");}finally{setSecurityBusy(false);}
   }
-  function addPasskey(){setSecurityReauthAction("passkey");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");}\n  async function addPasskeyAfterReauth(){
+  function addPasskey(){setSecurityReauthAction("passkey");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");} 
+  async function addPasskeyAfterReauth(){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
     try{
       if(!navigator.credentials)throw new Error("Passkeys are not supported by this browser.");
