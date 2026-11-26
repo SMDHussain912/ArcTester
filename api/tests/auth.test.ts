@@ -152,34 +152,50 @@ describe("auth", () => {
     expect(res.status).toBe(400);
   });
 
-  it("updates and returns the student's academic profile", async () => {
+  it("updates academic identity and revokes all existing sessions", async () => {
     const email = "profile-update@example.com";
-    await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
-      ...STUDENT_PROFILE,
-      email,
-      password: "profile-password-123",
-    });
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "profile-password-123" });
     await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
     const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "profile-password-123" });
     expect(login.status).toBe(200);
-    const updatedProfile = {
-      fullName: "Updated Test Student",
-      collegeName: "New Polytechnic",
-      collegeCode: "321",
-      postalPin: "522001",
-      branchName: "Diploma in Electrical and Electronics Engineering",
-      branchCode: "DEEE",
-    };
-    const patch = await fetch(`${server.baseUrl}/auth/profile`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json", cookie: `ecet_session=${cookieJar.get("ecet_session")}` },
-      body: JSON.stringify(updatedProfile),
-    });
+    const oldSession = cookieJar.get("ecet_session");
+    expect(oldSession).toBeTruthy();
+    const secondLogin = await postJson(`${server.baseUrl}/auth/token`, { email, password: "profile-password-123" });
+    expect(secondLogin.status).toBe(200);
+    const secondToken = (secondLogin.json as { token: string }).token;
+    const updatedProfile = { fullName: "Updated Test Student", collegeName: "Test Polytechnic", collegeCode: "999", postalPin: "522001", branchName: "Computer Engineering (CME)", branchCode: "CM", registrationNumber: "24999-CM-054" };
+    const patch = await fetch(`${server.baseUrl}/auth/profile`, { method: "PATCH", headers: { "content-type": "application/json", cookie: `ecet_session=${oldSession}` }, body: JSON.stringify(updatedProfile) });
     expect(patch.status).toBe(200);
-    const me = await getJsonWithCookie(`${server.baseUrl}/auth/me`);
-    expect((me.json as { user: typeof updatedProfile }).user).toMatchObject(updatedProfile);
+    expect(patch.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+    const meWithOldCookie = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${oldSession}` } });
+    expect(meWithOldCookie.status).toBe(403);
+    const meWithSecondToken = await fetch(`${server.baseUrl}/auth/me`, { headers: { authorization: `Bearer ${secondToken}` } });
+    expect(meWithSecondToken.status).toBe(403);
+    const saved = await server.db.user.findUnique({ where: { email }, select: { sessionVersion: true, accessStatus: true, registrationNumber: true, collegeCode: true, branchCode: true } });
+    expect(saved).toMatchObject({ sessionVersion: 1, accessStatus: "APPROVED", registrationNumber: "24999-CM-054", collegeCode: "999", branchCode: "CM" });
   });
 
+  it("rejects academic profile edits when registration number, college and branch disagree", async () => {
+    const email = "profile-invalid-identity@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "profile-password-123" });
+    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+    await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "profile-password-123" });
+    const response = await fetch(`${server.baseUrl}/auth/profile`, { method: "PATCH", headers: { "content-type": "application/json", cookie: `ecet_session=${cookieJar.get("ecet_session")}` }, body: JSON.stringify({ ...STUDENT_PROFILE, fullName: "Invalid Identity", collegeCode: "123" }) });
+    expect(response.status).toBe(400);
+    expect((await response.json() as { error: string }).error).toContain("College code does not match");
+  });
+
+  it("rejects duplicate diploma registration numbers on profile change", async () => {
+    const firstEmail = "profile-first@example.com";
+    const secondEmail = "profile-second@example.com";
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email: firstEmail, password: "profile-password-123" });
+    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email: secondEmail, password: "profile-password-123" });
+    await server.db.user.updateMany({ where: { email: { in: [firstEmail, secondEmail] } }, data: { accessStatus: "APPROVED" } });
+    await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email: secondEmail, password: "profile-password-123" });
+    const response = await fetch(`${server.baseUrl}/auth/profile`, { method: "PATCH", headers: { "content-type": "application/json", cookie: `ecet_session=${cookieJar.get("ecet_session")}` }, body: JSON.stringify({ ...STUDENT_PROFILE, fullName: "Duplicate Identity", registrationNumber: "24999-CM-053" }) });
+    expect(response.status).toBe(409);
+    expect((await response.json() as { error: string }).error).toContain("already connected");
+  });
   it("rejects duplicate email", async () => {
     const invitationToken = await issueTestInvitation(server.db, "alice@example.com");
     const res = await postJsonWithCookie(`${server.baseUrl}/auth/register`, {
