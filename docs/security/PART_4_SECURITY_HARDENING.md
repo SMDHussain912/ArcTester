@@ -1,6 +1,6 @@
 # Part 4 — Security and compliance hardening
 
-**Status:** Part 4 merged via PR #198 (`2e42603ee6f3a87c46717e5269419f8214ac2696`). All five CI jobs passed on exact PR head `917181389dc3000ba2648f7a432e6e470e087241` (run #3374). Production configuration and operational/legal sign-offs remain deployment gates. Production rollout remains blocked until the automated preflight passes in the target environment and the remaining hosting/privacy/legal sign-offs are completed. No merge or production deployment has been performed.
+**Status:** Part 4 merged via PR #198 (`2e42603ee6f3a87c46717e5269419f8214ac2696`). All five CI jobs passed on exact PR head `917181389dc3000ba2648f7a432e6e470e087241` (run #3374). Production configuration and operational/legal sign-offs remain deployment gates. Production rollout remains blocked until the automated preflight passes in the target environment and the remaining hosting/privacy/legal sign-offs are completed. PR #198 is merged; no production deployment has been performed.
 
 ## Delivery rules
 - Keep the work on this feature branch and open one reviewable PR for Part 4.
