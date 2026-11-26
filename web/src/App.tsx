@@ -35,6 +35,7 @@ import { OnlineStatusContext } from "./OnlineStatusContext";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const request = createApiClient(API);
+function loadRegistrationCaptcha(){return request<{svg:string;token:string}>("/auth/captcha/challenge")}
 type User = { id: number; email: string; role: "ADMIN" | "STUDENT"; fullName?: string | null; collegeName?: string | null; collegeCode?: string | null; postalPin?: string | null; branchName?: string | null; branchCode?: string | null; registrationNumber?: string | null };
 type Bank = { total: number; practiceTotal?: number; subjects: { subject: string; count: number; practiceCount?: number; topics?: { topic: string; count: number; practiceCount?: number }[] }[] };
 type Test = PracticeSessionTest;
@@ -588,6 +589,7 @@ export default function App() {
         onPasswordChange={setPassword}
         onRegisterChange={(value) => { setRegister(value); setTwoFactorChallenge(""); }}
         onAuthenticate={(captchaToken) => void authenticate(captchaToken)}
+        onCaptchaLoad={loadRegistrationCaptcha}
         twoFactorChallenge={twoFactorChallenge}
         onCompleteTwoFactor={(challengeId, code) => void completeTwoFactor(challengeId, code)}
         onPasskeyAuthenticate={() => void authenticateWithPasskey()}

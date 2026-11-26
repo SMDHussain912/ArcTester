@@ -220,33 +220,72 @@ export const RegisterSchema = z.object({
   registrationNumber: z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\d{3}$/i, "Enter your diploma registration number, e.g. 24010-CM-053.").optional(),
 }).merge(StudentAcademicProfileSchema);
 
-async function verifyRegistrationCaptcha(token: string | undefined, ip: string, nativeClient = false): Promise<void> {
-  // Native app registration remains supported separately and is rate-limited.
-  // Browser registration uses Turnstile when both public/private keys are configured.
-  if (nativeClient) return;
-  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
-  if (!secret) {
-    if (process.env.NODE_ENV === "production" || token?.trim()) {
-      throw badRequest("Registration security check is not configured. Try again later.");
-    }
-    return;
+type SvgCaptchaPayload = { answerDigest: string; expiresAt: number; nonce: string };
+const usedSvgCaptchaNonces = new Map<string, number>();
+const SVG_CAPTCHA_TTL_MS = 5 * 60 * 1000;
+const SVG_CAPTCHA_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+function signSvgCaptchaPayload(encoded: string): string {
+  if (!JWT_SECRET) throw new Error("JWT_SECRET is required to sign registration CAPTCHA challenges.");
+  return createHmac("sha256", JWT_SECRET).update("svg-captcha:" + encoded).digest("base64url");
+}
+
+function createSvgCaptcha(): { svg: string; token: string } {
+  const answer = Array.from(randomBytes(5), byte => SVG_CAPTCHA_ALPHABET[byte % SVG_CAPTCHA_ALPHABET.length]).join("");
+  const nonce = randomBytes(18).toString("base64url");
+  const answerDigest = createHmac("sha256", JWT_SECRET).update("svg-captcha-answer:" + nonce + ":" + answer).digest("base64url");
+  const payload: SvgCaptchaPayload = { answerDigest, expiresAt: Date.now() + SVG_CAPTCHA_TTL_MS, nonce };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const token = encoded + "." + signSvgCaptchaPayload(encoded);
+  const chars = Array.from(answer, (char, index) => {
+    const x = 28 + index * 37;
+    const y = 39 + (index % 2 ? 4 : -3);
+    const rotate = (index % 5 - 2) * 8;
+    return `<text x="${x}" y="${y}" transform="rotate(${rotate} ${x} ${y})" font-size="30" font-family="monospace" font-weight="700" fill="#${["234","345","456","567","678"][index]}">${char}</text>`;
+  }).join("");
+  const lines = Array.from({ length: 7 }, (_, i) => {
+    const x1 = (i * 47 + 13) % 220, y1 = (i * 23 + 9) % 65;
+    const x2 = (i * 61 + 77) % 220, y2 = (i * 31 + 19) % 65;
+    return `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="#9aa4b2" stroke-width="1.3" opacity=".55"/>`;
+  }).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="68" viewBox="0 0 220 68"><rect width="220" height="68" rx="8" fill="#f1f5f9"/><g>${lines}</g><g>${chars}</g></svg>`;
+  return { svg, token };
+}
+
+function verifySvgCaptcha(token: string | undefined): void {
+  if (!token?.trim()) throw badRequest("Enter the characters shown in the security image.");
+  const answerSeparator = token.lastIndexOf(":");
+  if (answerSeparator <= 0) throw badRequest("Enter the characters shown in the security image.");
+  const signedToken = token.slice(0, answerSeparator);
+  const answer = token.slice(answerSeparator + 1).trim().toUpperCase();
+  const separator = signedToken.lastIndexOf(".");
+  if (separator <= 0) throw badRequest("Security image expired. Refresh it and try again.");
+  const encoded = signedToken.slice(0, separator);
+  const suppliedSignature = signedToken.slice(separator + 1);
+  const expectedSignature = signSvgCaptchaPayload(encoded);
+  const supplied = Buffer.from(suppliedSignature);
+  const expected = Buffer.from(expectedSignature);
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    throw badRequest("Security image is invalid. Refresh it and try again.");
   }
-  if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
-  const body = new URLSearchParams({ secret, response: token });
-  if (ip && ip !== "unknown") body.set("remoteip", ip);
-  let response: globalThis.Response;
-  try {
-    response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body,
-    });
-  } catch {
-    throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
+  let payload: SvgCaptchaPayload;
+  try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as SvgCaptchaPayload; }
+  catch { throw badRequest("Security image is invalid. Refresh it and try again."); }
+  if (!payload || typeof payload.answerDigest !== "string" || typeof payload.nonce !== "string" || !Number.isFinite(payload.expiresAt)) {
+    throw badRequest("Security image is invalid. Refresh it and try again.");
   }
-  if (!response.ok) throw badRequest("CAPTCHA verification is temporarily unavailable. Try again.");
-  const result = await response.json() as { success?: boolean };
-  if (!result.success) throw badRequest("CAPTCHA verification failed. Please try again.");
+  if (payload.expiresAt < Date.now()) throw badRequest("Security image expired. Refresh it and try again.");
+  const submittedDigest = createHmac("sha256", JWT_SECRET).update("svg-captcha-answer:" + payload.nonce + ":" + answer).digest("base64url");
+  const submittedDigestBytes = Buffer.from(submittedDigest);
+  const expectedDigestBytes = Buffer.from(payload.answerDigest);
+  if (submittedDigestBytes.length !== expectedDigestBytes.length || !timingSafeEqual(submittedDigestBytes, expectedDigestBytes)) throw badRequest("The security image characters do not match. Try again.");
+  if (usedSvgCaptchaNonces.has(payload.nonce)) throw badRequest("Security image was already used. Refresh it and try again.");
+  usedSvgCaptchaNonces.set(payload.nonce, payload.expiresAt);
+  for (const [nonce, expiry] of usedSvgCaptchaNonces) if (expiry < Date.now()) usedSvgCaptchaNonces.delete(nonce);
+}
+async function verifyRegistrationCaptcha(token: string | undefined, _ip: string, nativeClient = false): Promise<void> {
+  if (nativeClient || process.env.NODE_ENV === "test") return;
+  verifySvgCaptcha(token);
 }
 
 export const LoginSchema = z.object({
@@ -556,6 +595,15 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) {
       next(error);
     }
+  });
+
+  router.get("/captcha/challenge", (_req, res, next) => {
+    try {
+      const challenge = createSvgCaptcha();
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.json(challenge);
+    } catch (error) { next(error); }
   });
 
   router.post("/register", async (req, res, next) => {

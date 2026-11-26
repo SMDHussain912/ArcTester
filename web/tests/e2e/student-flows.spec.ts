@@ -3,10 +3,11 @@ import { test, expect, type Page } from "@playwright/test";
 const API_BASE = "http://localhost:4000";
 
 /** Helper: make an authenticated API request */
-async function apiRequest(page: Page, path: string, method = "GET", body?: Record<string, unknown>, cookie?: string) {
+async function apiRequest(page: Page, path: string, method = "GET", body?: Record<string, unknown>, cookie?: string, extraHeaders: Record<string, string> = {}) {
   const headers: Record<string, string> = {};
   if (cookie) headers["Cookie"] = cookie;
   if (body) headers["Content-Type"] = "application/json";
+  Object.assign(headers, extraHeaders);
   const res = await page.request.fetch(`${API_BASE}${path}`, {
     method,
     headers,
@@ -72,7 +73,7 @@ async function setupStudent(page: Page) {
     postalPin: "533001",
     branchName: "Computer Engineering (CME)",
     branchCode: "CM",
-  });
+  }, undefined, { "x-arctester-client": "mobile" });
   if (register.status !== 201) throw new Error(`E2E student registration failed: ${JSON.stringify(register.json)}`);
   const studentId = register.json.user?.id;
   if (!Number.isSafeInteger(studentId)) throw new Error("E2E registration did not return the student ID.");

@@ -174,7 +174,7 @@ describe("auth", () => {
     expect(res.status).toBe(400);
   });
 
-  it("fails closed for browser registration when production CAPTCHA is not configured", async () => {
+  it("requires a valid SVG CAPTCHA for browser registration in production", async () => {
     const previousNodeEnv = process.env.NODE_ENV;
     const previousTurnstileSecret = process.env.TURNSTILE_SECRET_KEY;
     process.env.NODE_ENV = "production";
@@ -186,12 +186,35 @@ describe("auth", () => {
         password: "secret1234",
       });
       expect(response.status).toBe(400);
-      expect((response.json as { error: string }).error).toContain("Registration security check is not configured");
+      expect((response.json as { error: string }).error).toContain("Enter the characters shown in the security image");
     } finally {
       if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previousNodeEnv;
       if (previousTurnstileSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY;
       else process.env.TURNSTILE_SECRET_KEY = previousTurnstileSecret;
+    }
+  });
+
+  it("issues an SVG CAPTCHA and verifies its signed answer for browser registration", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const challengeResponse = await getJsonWithCookie(`${server.baseUrl}/auth/captcha/challenge`);
+      expect(challengeResponse.status).toBe(200);
+      const challenge = challengeResponse.json as { svg: string; token: string };
+      expect(challenge.svg).toContain("<svg");
+      expect(challenge.token).toContain(".");
+      const answer = Array.from(challenge.svg.matchAll(/<text[^>]*>([^<]+)<\/text>/g), match => match[1]).join("");
+      const response = await postJson(`${server.baseUrl}/auth/register`, {
+        ...STUDENT_PROFILE,
+        email: "svg-captcha-valid@example.com",
+        password: "secret1234",
+        captchaToken: challenge.token + ":" + answer,
+      });
+      expect(response.status).toBe(201);
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
     }
   });
 
