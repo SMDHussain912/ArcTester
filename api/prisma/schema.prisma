@@ -1062,6 +1062,8 @@ model AuditEvent {
   resourceType    String   @default("")
   resourceId      String   @default("")
   requestId       String
+  previousHash    String   @default("")
+  eventHash       String   @unique
   route           String
   collegeCode     String   @default("")
   branchCode      String   @default("")
