@@ -11,6 +11,12 @@ type AuditHashFields = {
 };
 export type AuditWrite = Omit<Prisma.AuditEventUncheckedCreateInput, "id" | "createdAt" | "previousHash" | "eventHash"> & { id?: string; createdAt?: Date };
 
+type CheckpointHashFields = { id: string; lastEventHash: string; lastEventCreatedAt: Date; deletedCount: number; previousCheckpointHash: string; createdAt: Date };
+export function computeAuditCheckpointHash(checkpoint: CheckpointHashFields): string {
+  const canonical = { id: checkpoint.id, lastEventHash: checkpoint.lastEventHash, lastEventCreatedAt: checkpoint.lastEventCreatedAt.toISOString(), deletedCount: checkpoint.deletedCount, previousCheckpointHash: checkpoint.previousCheckpointHash, createdAt: checkpoint.createdAt.toISOString() };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
 export function computeAuditEventHash(event: AuditHashFields): string {
   const canonical = {
     id: event.id, actorId: event.actorId, actorRole: event.actorRole, subjectUserId: event.subjectUserId,
