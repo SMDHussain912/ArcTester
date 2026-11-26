@@ -532,18 +532,9 @@ export default function App() {
     void submitPracticeTestRef.current();
   }, [test, result, practiceRemainingSeconds, busy]);
 
-  async function signOut() {
-    setBusy(true);
-    setError("");
-    try {
-      await request("/auth/logout", { method: "POST" });
-    } catch (cause) {
-      setError(`Secure sign-out failed. Your server session may still be active. ${(cause as Error).message}`);
-      setBusy(false);
-      return;
-    }
+  function clearLocalAuthenticatedState() {
     setUser(null);
-      setBank(null);
+    setBank(null);
     const activePracticeId = safeStorage.getItem("arctester-active-practice-attempt");
     if (activePracticeId) safeStorage.removeItem(practiceAnswersKey(activePracticeId));
     safeStorage.removeItem("arctester-active-practice-attempt");
@@ -560,6 +551,25 @@ export default function App() {
     setError("");
     setActivePage("dashboard");
     setBusy(false);
+  }
+
+  async function signOut() {
+    setBusy(true);
+    setError("");
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch (cause) {
+      setError(`Secure sign-out failed. Your server session may still be active. ${(cause as Error).message}`);
+      setBusy(false);
+      return;
+    }
+    clearLocalAuthenticatedState();
+  }
+
+  function completeProfileReauthentication() {
+    // The profile endpoint has already revoked server sessions and expired the HttpOnly cookie.
+    // Do not make another authenticated request using the revoked session.
+    clearLocalAuthenticatedState();
   }
 
   if (sessionRestoring) return <AppSplash visible />;
@@ -618,6 +628,13 @@ export default function App() {
             email={user.email}
             userId={user.id}
             role={user.role}
+            fullName={user.fullName}
+            registrationNumber={user.registrationNumber}
+            collegeName={user.collegeName}
+            collegeCode={user.collegeCode}
+            postalPin={user.postalPin}
+            branchName={user.branchName}
+            branchCode={user.branchCode}
             theme={theme}
             onThemeChange={setTheme}
             reduceMotion={reduceMotion}
@@ -626,6 +643,7 @@ export default function App() {
             onShowAnnouncementPopupsChange={updateAnnouncementPopups}
             busy={busy}
             onSignOut={signOut}
+            onProfileChanged={completeProfileReauthentication}
           />
         ) : activePage === "assignments" ? (
           <StudentAssignedExams />
