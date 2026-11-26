@@ -8,6 +8,7 @@ type Classified = { action: string; resourceType: string; resourceId: string; su
 
 function classify(method: string, path: string, status: number): Classified | null {
   const upper = method.toUpperCase();
+  if (path === "/auth/profile" && upper === "PATCH") return { action: "STUDENT_PROFILE_CHANGE", resourceType: "STUDENT", resourceId: "" };
   if (/^\/auth\/(?:login|signin|sign-in|verify|totp|2fa|passkey)/i.test(path)) {
     return { action: /login|signin|sign-in/i.test(path) ? (status < 400 ? "LOGIN" : "LOGIN_FAILURE") : "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH" , resourceId: "" };
   }
