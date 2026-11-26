@@ -1,4 +1,4 @@
-import { useState } from "react";
+import AdminStudentPicker from "./AdminStudentPicker";\nimport { useState } from "react";
 import { AP_DIPLOMA_BRANCHES } from "./polytechnicCatalog";
 
 export type StudyMaterial = {
@@ -108,7 +108,7 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onUpdat
         </>}
         <small className="muted">Content targeting matches institute/branch codes or names from student profiles. Leave college fields empty to make a branch resource available to that branch across colleges.</small>
       </div>}
-      {form.audienceScope === "STUDENTS" && <label>Student account IDs<input value={form.targetStudentIds} onChange={(event) => set("targetStudentIds", event.target.value)} placeholder="e.g. 104, 118, 203"/><small className="muted">Enter the numeric ArcTester account IDs. Only these students can view the resource.</small></label>}
+      {form.audienceScope === "STUDENTS" && <label>Selected student accounts<AdminStudentPicker value={form.targetStudentIds} onChange={value => set("targetStudentIds", value)} disabled={busy}/></label>}
       <label>Description<textarea rows={3} value={form.description} onChange={(event) => set("description", event.target.value)} placeholder="What students will learn from this resource."/></label>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="editor-actions">
