@@ -13,7 +13,7 @@ const ExternalHttpsUrl = z.string().trim().url().max(2048).refine((value) => {
 
 const AudienceTargetSchema = z.object({
   audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH", "STUDENTS"]).default("ALL"),
-  targetStudentIds: z.array(z.number().int().positive()).max(500).default([]),
+  targetStudentIds: z.preprocess((value) => typeof value === "string" ? value.split(",").filter(Boolean).map(Number) : value, z.array(z.number().int().positive()).max(500).default([])),
   targetCollegeCode: z.string().trim().max(40).default(""),
   targetCollegeName: z.string().trim().max(160).default(""),
   targetBranchCode: z.string().trim().max(40).default(""),
