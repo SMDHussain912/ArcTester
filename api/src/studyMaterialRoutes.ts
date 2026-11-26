@@ -28,7 +28,10 @@ function validateAudienceTarget(value: {
   targetBranchCode?: string;
   targetBranchName?: string;
 }, ctx: z.RefinementCtx) {
-  if (value.audienceScope === "STUDENTS" && value.targetStudentIds.length === 0) {\n    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });\n  }\n  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+  if (value.audienceScope === "STUDENTS" && value.targetStudentIds.length === 0) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
+  }
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
     ctx.addIssue({ code: "custom", message: "Choose a college code or enter a college name.", path: ["targetCollegeName"] });
   }
   if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
@@ -87,7 +90,10 @@ const MaterialPatch = z.object({
   targetBranchName: z.string().trim().max(160).nullable().optional(),
 }).strict().superRefine((value, ctx) => {
   if (Object.keys(value).length === 0) ctx.addIssue({ code: "custom", message: "Provide at least one field to update." });
-  if (value.audienceScope === "STUDENTS" && (value.targetStudentIds?.length ?? 0) === 0) {\n    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });\n  }\n  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
+  if (value.audienceScope === "STUDENTS" && (value.targetStudentIds?.length ?? 0) === 0) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
+  }
+  if (value.audienceScope === "COLLEGE" && !value.targetCollegeCode?.trim() && !value.targetCollegeName?.trim()) {
     ctx.addIssue({ code: "custom", message: "A college code or name is required for college-only content.", path: ["targetCollegeName"] });
   }
   if (value.audienceScope === "BRANCH" && !value.targetBranchCode?.trim() && !value.targetBranchName?.trim()) {
