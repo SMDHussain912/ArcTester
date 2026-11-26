@@ -24,3 +24,16 @@ CREATE INDEX "AuditEvent_actorId_createdAt_idx" ON "AuditEvent"("actorId", "crea
 CREATE INDEX "AuditEvent_action_createdAt_idx" ON "AuditEvent"("action", "createdAt");
 CREATE INDEX "AuditEvent_outcome_createdAt_idx" ON "AuditEvent"("outcome", "createdAt");
 CREATE INDEX "AuditEvent_requestId_idx" ON "AuditEvent"("requestId");
+
+CREATE TABLE "AuditCheckpoint" (
+  "id" TEXT NOT NULL,
+  "lastEventHash" TEXT NOT NULL,
+  "lastEventCreatedAt" TIMESTAMP(3) NOT NULL,
+  "deletedCount" INTEGER NOT NULL,
+  "previousCheckpointHash" TEXT NOT NULL DEFAULT 'GENESIS',
+  "checkpointHash" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "AuditCheckpoint_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "AuditCheckpoint_checkpointHash_key" UNIQUE ("checkpointHash")
+);
+CREATE INDEX "AuditCheckpoint_createdAt_idx" ON "AuditCheckpoint"("createdAt");
