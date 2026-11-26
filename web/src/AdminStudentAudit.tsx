@@ -5,7 +5,7 @@ type AuditEvent = { id: string; createdAt: string; action: string; outcome: "SUC
 type AuditPage = { events: AuditEvent[]; page: number; limit: number; total: number; totalPages: number };
 type Props = { student: StudentSummary; onClose: () => void; onError: (message: string) => void };
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
-const actions = ["LOGIN", "LOGIN_FAILURE", "AUTHENTICATION_SECURITY_CHANGE", "SESSION_REVOKED", "SESSION_ACTIVITY", "STUDENT_APPROVAL", "STUDENT_APPROVAL_BULK", "STUDENT_PROFILE_CHANGE", "STUDENT_ACCOUNT_ANONYMIZED", "LESSON_ACCESS", "LESSON_COMPLETION", "QUESTION_ACTIVITY", "EXAM_START", "EXAM_SUBMIT", "CONTENT_EDIT", "ADMIN_OPERATION", "AUDIT_TIMELINE_VIEW", "AUDIT_EXPORT"];
+const actions = ["LOGIN", "LOGIN_FAILURE", "AUTHENTICATION_SECURITY_CHANGE", "SESSION_REVOKED", "SESSION_ACTIVITY", "STUDENT_APPROVAL", "STUDENT_APPROVAL_BULK", "STUDENT_PROFILE_CHANGE", "STUDENT_ACCOUNT_ANONYMIZED", "LESSON_ACCESS", "LESSON_COMPLETION", "QUESTION_ACTIVITY", "EXAM_START", "EXAM_SUBMIT", "CONTENT_EDIT", "ADMIN_OPERATION", "AUDIT_TIMELINE_VIEW", "AUDIT_EXPORT", "AUDIT_INTEGRITY_CHECK"];
 async function request<T>(path: string): Promise<T> {
   const response = await fetch(API + path, { credentials: "include" });
   const body = await response.json().catch(() => ({}));
