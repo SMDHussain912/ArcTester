@@ -6,6 +6,11 @@ export default defineConfig(({ mode }) => {
   // to browser code because they do not use Vite's public VITE_ prefix.
   const env = loadEnv(mode, process.cwd(), "");
   return {
+    // Public CAPTCHA site key is read from the ordinary Vercel env name and
+    // embedded at build time. It is intentionally not a VITE_* dashboard key.
+    define: {
+      __TURNSTILE_SITE_KEY__: JSON.stringify(env.TURNSTILE_SITE_KEY || ""),
+    },
     plugins: [react()],
     // Vercel serves from the domain root; Electron needs relative file:// URLs.
     base: process.env.VERCEL ? "/" : "./",
