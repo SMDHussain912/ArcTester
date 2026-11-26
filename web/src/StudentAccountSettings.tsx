@@ -113,8 +113,8 @@ export default function StudentAccountSettings(props: Props) {
     setProfileError("");
     if (profileDraft.fullName.trim().length < 2 || profileDraft.collegeName.trim().length < 2 ||
       !profileDraft.collegeCode.trim() || profileDraft.branchName.trim().length < 2 ||
-      (profileDraft.postalPin && !/^\\d{6}$/.test(profileDraft.postalPin.trim())) ||
-      (profileDraft.registrationNumber && !/^\\d{5}-[A-Z]{1,3}-\\d{3}$/i.test(profileDraft.registrationNumber.trim()))) {
+      (profileDraft.postalPin && !/^\d{6}$/.test(profileDraft.postalPin.trim())) ||
+      (profileDraft.registrationNumber && !/^\d{5}-[A-Z]{1,3}-\d{3}$/i.test(profileDraft.registrationNumber.trim()))) {
       setProfileError("Check your name, diploma registration number, college and branch details.");
       return;
     }
