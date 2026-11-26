@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdminStudentPicker from "./AdminStudentPicker";
@@ -12,29 +13,30 @@ const students = [
 
 afterEach(() => vi.unstubAllGlobals());
 
+function Harness() { const [value, setValue] = useState(""); return <AdminStudentPicker value={value} onChange={setValue}/>; }
+
 describe("admin selected-student audience picker", () => {
   it("searches approved students, preserves selections, and removes selected accounts", async () => {
-    const onChange = vi.fn();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input));
       const q = url.searchParams.get("q")?.toLowerCase() ?? "";
       return Promise.resolve(response({ students: students.filter((student) => !q || student.fullName.toLowerCase().includes(q) || student.email.includes(q)) }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<AdminStudentPicker value="" onChange={onChange} />);
+    render(<Harness />);
 
     expect(await screen.findByText("Maya Student")).toBeInTheDocument();
     expect(screen.getByText("Arun Student")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: /Maya Student/ }));
-    expect(onChange).toHaveBeenLastCalledWith("104");
+    expect(await screen.findByRole("button", { name: "Remove student 104" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Arun" } });
     expect(await screen.findByText("Arun Student")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: /Arun Student/ }));
-    expect(onChange).toHaveBeenLastCalledWith("104, 118");
+    expect(await screen.findByRole("button", { name: "Remove student 118" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove student 104" }));
-    expect(onChange).toHaveBeenLastCalledWith("118");
+    expect(screen.queryByRole("button", { name: "Remove student 104" })).not.toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("status=APPROVED"), expect.anything()));
   });
 });
