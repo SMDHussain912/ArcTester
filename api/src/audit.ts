@@ -11,6 +11,13 @@ type AuditHashFields = {
 };
 export type AuditWrite = Omit<Prisma.AuditEventUncheckedCreateInput, "id" | "createdAt" | "previousHash" | "eventHash"> & { id?: string; createdAt?: Date };
 
+// Track finish-hook writes so test/server shutdown can drain audit persistence before DB teardown.
+const pendingAuditWrites = new WeakMap<PrismaClient, Set<Promise<void>>>();
+export async function flushAuditEvents(db: PrismaClient): Promise<void> {
+  const pending = pendingAuditWrites.get(db);
+  if (pending?.size) await Promise.allSettled([...pending]);
+}
+
 type CheckpointHashFields = { id: string; lastEventHash: string; lastEventCreatedAt: Date; deletedCount: number; previousCheckpointHash: string; createdAt: Date };
 export function computeAuditCheckpointHash(checkpoint: CheckpointHashFields): string {
   const canonical = { id: checkpoint.id, lastEventHash: checkpoint.lastEventHash, lastEventCreatedAt: checkpoint.lastEventCreatedAt.toISOString(), deletedCount: checkpoint.deletedCount, previousCheckpointHash: checkpoint.previousCheckpointHash, createdAt: checkpoint.createdAt.toISOString() };
@@ -113,7 +120,7 @@ export function auditRequestMiddleware(db: PrismaClient) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
     res.on("finish", () => {
-      void (async () => {
+      const pending = (async () => {
         const auditReq = req as AuditRequest;
         const path = req.path;
         if (path === "/health" || path === "/ready") return;
@@ -148,6 +155,10 @@ export function auditRequestMiddleware(db: PrismaClient) {
           contextJson: JSON.stringify({ method: req.method.toUpperCase(), statusCode: res.statusCode }),
         });
       })().catch(() => console.error("ArcTester audit event persistence failed"));
+      let writes = pendingAuditWrites.get(db);
+      if (!writes) { writes = new Set(); pendingAuditWrites.set(db, writes); }
+      writes.add(pending);
+      void pending.then(() => writes!.delete(pending));
     });
     next();
   };
