@@ -39,7 +39,7 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
       .catch((error: unknown) => { if (active) onError(error instanceof Error ? error.message : "Could not load audit timeline."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [student.id, page, action, outcome, from, to, collegeCode, branchCode, refresh]);
+  }, [student.id, page, action, outcome, from, to, collegeCode, branchCode, refresh, onError]);
   async function exportLogs(format: "csv" | "json") {
     setExporting(true);
     try {
