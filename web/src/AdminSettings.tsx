@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import AccountSecurityPanel from "./AccountSecurityPanel";
+type Props = { theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void };
 
-type Props = { theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void; email:string; onSignOut:()=>void };
-
-export default function AdminSettings({ theme, onThemeChange, email, onSignOut }: Props) {
+export default function AdminSettings({ theme, onThemeChange }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [compactNavigation, setCompactNavigation] = useState(() => {
     try { return window.localStorage.getItem("arctester-admin-compact-nav") === "true"; } catch { return false; }
@@ -68,6 +66,6 @@ export default function AdminSettings({ theme, onThemeChange, email, onSignOut }
           }}>Confirm reset</button><button type="button" className="ghost" onClick={() => setConfirmClear(false)}>Cancel</button></div>}
       </article>
     </div>
-    <AccountSecurityPanel email={email} onSignOut={onSignOut} />
+    
   </section>;
 }
