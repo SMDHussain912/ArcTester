@@ -1,4 +1,4 @@
-export type ContentAudienceScope = "ALL" | "COLLEGE" | "BRANCH";
+export type ContentAudienceScope = "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS";
 
 export type ContentAudience = {
   audienceScope?: string | null;
@@ -6,9 +6,11 @@ export type ContentAudience = {
   targetCollegeName?: string | null;
   targetBranchCode?: string | null;
   targetBranchName?: string | null;
+  targetStudentIdsJson?: string | null;
 };
 
 export type AcademicAudienceProfile = {
+  id?: number | null;
   collegeCode?: string | null;
   collegeName?: string | null;
   branchCode?: string | null;
@@ -16,7 +18,7 @@ export type AcademicAudienceProfile = {
 };
 
 function normalize(value: string | null | undefined): string {
-  return (value ?? "").normalize("NFKC").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  return (value ?? "").normalize("NFKC").trim().toLocaleLowerCase().replace(/\\s+/g, " ");
 }
 
 function matchesOneOf(profileValues: Array<string | null | undefined>, targetValues: Array<string | null | undefined>): boolean {
@@ -25,9 +27,19 @@ function matchesOneOf(profileValues: Array<string | null | undefined>, targetVal
   return profileValues.map(normalize).filter(Boolean).some((value) => targets.includes(value));
 }
 
+function matchesSelectedStudent(audience: ContentAudience, profile: AcademicAudienceProfile): boolean {
+  if (!Number.isSafeInteger(profile.id) || !profile.id || !audience.targetStudentIdsJson) return false;
+  try {
+    const parsed: unknown = JSON.parse(audience.targetStudentIdsJson);
+    return Array.isArray(parsed) && parsed.some((id) => Number.isSafeInteger(id) && id === profile.id);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Fail closed for institution/branch-scoped content. Missing or legacy student
- * profile fields can see only global material, never another college's content.
+ * Fail closed for institution/branch/student-scoped content. Missing or legacy
+ * student profile fields can see only global material, never another student's content.
  */
 export function isContentAudienceVisible(
   audience: ContentAudience,
@@ -35,6 +47,8 @@ export function isContentAudienceVisible(
 ): boolean {
   const scope = audience.audienceScope ?? "ALL";
   if (scope === "ALL") return true;
+
+  if (scope === "STUDENTS") return matchesSelectedStudent(audience, profile);
 
   const collegeMatches = () => matchesOneOf(
     [profile.collegeCode, profile.collegeName],
