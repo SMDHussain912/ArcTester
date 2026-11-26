@@ -1370,3 +1370,84 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
 .security-reauth-dialog input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
 .security-reauth-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:8px}
 @media(max-width:560px){.account-profile-confirm{padding:18px}.security-reauth-actions button{flex:1}}
+
+
+/* Part 3: consistent analytics, fleet cards, and narrow-screen layouts. */
+.admin-results-analytics,
+.admin-system-monitor { min-width: 0; width: 100%; }
+.admin-results-analytics .admin-page-title,
+.admin-system-monitor .admin-page-title { align-items: flex-start; gap: 18px; }
+.admin-results-analytics .admin-page-title > div,
+.admin-system-monitor .admin-page-title > div { min-width: 0; }
+.admin-results-analytics .admin-page-title p:not(.eyebrow),
+.admin-system-monitor .admin-page-title p:not(.eyebrow) { max-width: 760px; line-height: 1.6; }
+.admin-results-analytics .admin-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.admin-results-analytics .admin-stat-grid article { min-width: 0; align-content: start; }
+.admin-results-analytics .analytics-chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0 24px; align-items: stretch; }
+.admin-results-analytics .analytics-chart { min-width: 0; padding: 20px; gap: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.admin-results-analytics .analytics-chart > p { min-height: 2.8em; }
+.admin-results-analytics .analytics-bar-list { gap: 16px; margin: 0; }
+.admin-results-analytics .analytics-bar-row { min-width: 0; gap: 7px; }
+.admin-results-analytics .analytics-bar-label { min-width: 0; gap: 10px; }
+.admin-results-analytics .analytics-bar-label span { min-width: 0; overflow-wrap: anywhere; }
+.admin-results-analytics .analytics-bar-track { height: 9px; background: color-mix(in srgb, var(--border) 70%, var(--surface)); }
+.admin-results-analytics .analytics-bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 180ms ease; }
+.admin-results-analytics .results-table { min-width: 0; overflow: hidden; }
+.admin-results-analytics .results-table .result-row { min-width: 0; grid-template-columns: minmax(0, 1.5fr) auto auto minmax(120px, .9fr); align-items: center; gap: 14px; }
+.admin-results-analytics .results-table .result-row > div { min-width: 0; }
+.admin-results-analytics .results-table .result-row b,
+.admin-results-analytics .results-table .result-row small { overflow-wrap: anywhere; }
+.admin-results-analytics .results-table .result-row strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin-system-monitor .admin-monitor-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-system-monitor .admin-monitor-stats article { min-width: 0; align-content: start; }
+.admin-system-monitor .admin-panel { min-width: 0; overflow: hidden; }
+.admin-system-monitor .admin-panel-head { align-items: center; gap: 16px; }
+.admin-system-monitor .admin-monitor-instance { display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr)); gap: 18px; padding: 22px; margin: 12px 0; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--surface) 92%, var(--bg)); min-width: 0; }
+.admin-system-monitor .admin-monitor-instance > div { min-width: 0; display: grid; align-content: start; gap: 6px; }
+.admin-system-monitor .admin-monitor-instance > div:first-child { grid-column: 1 / -1; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.admin-system-monitor .admin-monitor-instance b { font-size: 15px; overflow-wrap: anywhere; }
+.admin-system-monitor .admin-monitor-instance small { font-size: 11px; line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; }
+.admin-system-monitor .admin-monitor-instance .status { width: fit-content; }
+.admin-system-monitor .admin-monitor-meter { height: 7px; width: 100%; border-radius: 999px; overflow: hidden; background: var(--border); margin-top: 3px; }
+.admin-system-monitor .admin-monitor-meter span { display: block; height: 100%; max-width: 100%; border-radius: inherit; background: var(--accent); transition: width 180ms ease; }
+.admin-system-monitor .admin-muted { max-width: 100%; line-height: 1.65; overflow-wrap: anywhere; }
+.admin-security-panel .security-feature-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 14px; }
+.admin-security-panel .security-feature-copy { min-width: 0; width: auto; }
+.admin-security-panel .security-feature-copy p { max-width: 56ch; line-height: 1.6; overflow-wrap: anywhere; }
+.admin-security-panel .security-status-pill { white-space: nowrap; }
+.admin-security-panel .security-enrollment-panel { min-width: 0; }
+.admin-security-panel .security-enrollment-panel code,
+.admin-security-panel .security-enrollment-panel textarea { max-width: 100%; overflow-wrap: anywhere; }
+.account-setting-section .security-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.account-setting-section .security-settings-card { min-width: 0; }
+.account-setting-section .security-feature-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.account-setting-section .security-feature-copy { min-width: 0; width: auto; }
+.account-setting-section .security-feature-copy p { line-height: 1.55; overflow-wrap: anywhere; }
+.account-setting-section .security-status-pill { white-space: nowrap; }
+@media (max-width: 1120px) {
+  .admin-results-analytics .analytics-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-results-analytics .analytics-chart-grid > :last-child { grid-column: 1 / -1; }
+  .admin-results-analytics .admin-stat-grid,
+  .admin-system-monitor .admin-monitor-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-system-monitor .admin-monitor-instance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .admin-results-analytics .admin-page-title,
+  .admin-system-monitor .admin-page-title { flex-direction: column; align-items: stretch; }
+  .admin-results-analytics .admin-page-title > button,
+  .admin-system-monitor .admin-page-title > button { width: 100%; }
+  .admin-results-analytics .analytics-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .admin-results-analytics .analytics-chart-grid > :last-child { grid-column: auto; }
+  .admin-results-analytics .analytics-chart { padding: 16px; }
+  .admin-results-analytics .analytics-chart > p { min-height: 0; }
+  .admin-results-analytics .results-table .result-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .admin-results-analytics .results-table .result-row > small:last-child { grid-column: 1 / -1; }
+  .admin-system-monitor .admin-monitor-instance { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 14px; }
+  .admin-system-monitor .admin-monitor-instance > div:first-child { grid-column: auto; }
+  .admin-system-monitor .admin-monitor-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-security-panel .security-feature-row,
+  .account-setting-section .security-feature-row { grid-template-columns: minmax(0, 1fr); }
+  .admin-security-panel .security-status-pill,
+  .account-setting-section .security-status-pill { justify-self: start; }
+  .account-setting-section .security-settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
