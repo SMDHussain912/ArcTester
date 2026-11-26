@@ -162,6 +162,12 @@ export function questionRouter(db: PrismaClient): Router {
           explanation: question.explanation,
           source: question.source,
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         })),
       });
     } catch (error) {
