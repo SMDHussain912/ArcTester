@@ -11,7 +11,8 @@ const UpdateLessonDraftSchema = z.object({
   title: z.string().trim().min(3).max(160),
   script: z.unknown(),
   storyboard: z.unknown(),
-  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).optional(),
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH", "STUDENTS"]).optional(),
+  targetStudentIds: z.array(z.number().int().positive()).max(500).optional(),
   targetCollegeCode: z.string().trim().max(40).nullable().optional(),
   targetCollegeName: z.string().trim().max(160).nullable().optional(),
   targetBranchCode: z.string().trim().max(40).nullable().optional(),
@@ -19,6 +20,9 @@ const UpdateLessonDraftSchema = z.object({
 }).strict().superRefine((input, ctx) => {
   if (input.audienceScope === "COLLEGE" && !input.targetCollegeCode?.trim() && !input.targetCollegeName?.trim()) {
     ctx.addIssue({ code: "custom", message: "A college code or name is required.", path: ["targetCollegeName"] });
+  }
+  if (input.audienceScope === "STUDENTS" && !input.targetStudentIds?.length) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
   }
   if (input.audienceScope === "BRANCH" && !input.targetBranchCode?.trim() && !input.targetBranchName?.trim()) {
     ctx.addIssue({ code: "custom", message: "A branch code or name is required.", path: ["targetBranchName"] });
@@ -32,7 +36,8 @@ const ImportLessonPackageSchema = z.object({
   fileName: z.string().trim().min(1).max(180).optional(),
   script: LessonScriptSchema,
   storyboard: LessonStoryboardSchema,
-  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH"]).default("ALL"),
+  audienceScope: z.enum(["ALL", "COLLEGE", "BRANCH", "STUDENTS"]).default("ALL"),
+  targetStudentIds: z.array(z.number().int().positive()).max(500).default([]),
   targetCollegeCode: z.string().trim().max(40).default(""),
   targetCollegeName: z.string().trim().max(160).default(""),
   targetBranchCode: z.string().trim().max(40).default(""),
@@ -43,6 +48,9 @@ const ImportLessonPackageSchema = z.object({
   }
   if (input.audienceScope === "COLLEGE" && !input.targetCollegeCode && !input.targetCollegeName) {
     ctx.addIssue({ code: "custom", message: "A college code or name is required.", path: ["targetCollegeName"] });
+  }
+  if (input.audienceScope === "STUDENTS" && input.targetStudentIds.length === 0) {
+    ctx.addIssue({ code: "custom", message: "Select at least one student account.", path: ["targetStudentIds"] });
   }
   if (input.audienceScope === "BRANCH" && !input.targetBranchCode && !input.targetBranchName) {
     ctx.addIssue({ code: "custom", message: "A branch code or name is required.", path: ["targetBranchName"] });
@@ -77,10 +85,10 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   const router = Router();
   router.get("/lessons/:id", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const id = z.string().trim().min(1).max(64).parse(req.params.id);
-      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true } });
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { id: true, title: true, subject: true, topic: true, scriptJson: true, storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true } });
       if (!draft || !isContentAudienceVisible(draft as ContentAudience, account)) return next(notFound("Published lesson was not found."));
       const script = LessonScriptSchema.parse(JSON.parse(draft.scriptJson) as unknown);
       const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
@@ -92,7 +100,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   });
   router.get("/lessons", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const published = await db.lessonDraft.findMany({
         where: { status: "PUBLISHED" },
@@ -100,7 +108,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
         take: 300,
         select: {
           id: true, title: true, subject: true, topic: true, updatedAt: true,
-          audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true,
+          audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true,
           activeVersion: { select: { id: true, version: true, packageSchemaVersion: true, manifestSha256: true } },
         },
       });
@@ -119,11 +127,11 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
   });
   router.get("/lessons/:id/scenes/:sceneIndex/audio", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Lesson narration is available to student accounts." });
       const id = z.string().trim().min(1).max(64).parse(req.params.id);
       const sceneIndex = z.coerce.number().int().min(0).max(23).parse(req.params.sceneIndex);
-      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true } });
+      const draft = await db.lessonDraft.findFirst({ where: { id, status: "PUBLISHED" }, select: { storyboardJson: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true } });
       if (!draft || !isContentAudienceVisible(draft as ContentAudience, account)) return next(notFound("Published lesson was not found."));
       const storyboard = LessonStoryboardSchema.parse(JSON.parse(draft.storyboardJson) as unknown);
       const scene = storyboard.scenes[sceneIndex];
@@ -212,7 +220,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
     try {
       const drafts = await db.lessonDraft.findMany({
         orderBy: { updatedAt: "desc" }, take: 100,
-        select: { id: true, title: true, subject: true, topic: true, status: true, provider: true, model: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, createdAt: true, updatedAt: true },
+        select: { id: true, title: true, subject: true, topic: true, status: true, provider: true, model: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true, createdAt: true, updatedAt: true },
       });
       res.json({ ok: true, drafts });
     } catch (error) { next(error); }
@@ -245,6 +253,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
           ...(input.targetCollegeName !== undefined ? { targetCollegeName: input.targetCollegeName || null } : {}),
           ...(input.targetBranchCode !== undefined ? { targetBranchCode: input.targetBranchCode || null } : {}),
           ...(input.targetBranchName !== undefined ? { targetBranchName: input.targetBranchName || null } : {}),
+          ...(input.targetStudentIds !== undefined ? { targetStudentIdsJson: JSON.stringify(input.targetStudentIds) } : {}),
         },
       });
       if (updated.count !== 1) return next(badRequest("Only unpublished lesson drafts can be edited."));
@@ -321,6 +330,7 @@ export function lessonGenerationRouter(db: PrismaClient): Router {
           targetCollegeName: input.targetCollegeName || null,
           targetBranchCode: input.targetBranchCode || null,
           targetBranchName: input.targetBranchName || null,
+          targetStudentIdsJson: JSON.stringify(input.targetStudentIds),
           provider: "admin-upload",
           model: "static-json-v1",
           status: "DRAFT",

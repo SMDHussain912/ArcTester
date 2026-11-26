@@ -28,4 +28,14 @@ describe("content audience matching", () => {
     expect(isContentAudienceVisible({ audienceScope: "COLLEGE", targetCollegeCode: "010" }, {})).toBe(false);
     expect(isContentAudienceVisible({ audienceScope: "SOME_UNKNOWN_SCOPE" }, student)).toBe(false);
   });
+
+  it("restricts selected-student content to exact student IDs", () => {
+    const audience = { audienceScope: "STUDENTS", targetStudentIdsJson: "[12,34]" };
+    expect(isContentAudienceVisible(audience, { id: 12 })).toBe(true);
+    expect(isContentAudienceVisible(audience, { id: 34 })).toBe(true);
+    expect(isContentAudienceVisible(audience, { id: 35 })).toBe(false);
+    expect(isContentAudienceVisible({ audienceScope: "STUDENTS", targetStudentIdsJson: "[]" }, { id: 12 })).toBe(false);
+    expect(isContentAudienceVisible({ audienceScope: "STUDENTS", targetStudentIdsJson: "invalid" }, { id: 12 })).toBe(false);
+    expect(isContentAudienceVisible({ audienceScope: "STUDENTS", targetStudentIdsJson: "[12]" }, {})).toBe(false);
+  });
 });

@@ -16,66 +16,77 @@ import { notFound } from "./errors.js";
 import { getLearningConcept, listLearningConcepts } from "./learningConcepts.js";
 import { awardXp } from "./gamificationService.js";
 import { dailyChallengeRewardKey } from "./dailyChallenge.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 
 const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export function testRouter(db: PrismaClient): Router {
   const router = Router();
 
-  router.get("/bank", async (_req, res, next) => {
+  router.get("/bank", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const rows = await db.subject.findMany({
-        select: {
-          id: true,
-          name: true,
-          _count: { select: { questions: { where: { reviewStatus: "APPROVED" } } } },
-          topics: {
-            orderBy: { name: "asc" },
-            select: { id: true, name: true, _count: { select: { questions: { where: { reviewStatus: "APPROVED" } } } } },
+      const account = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, role: true, accessStatus: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
+      });
+      if (!account || account.role !== "STUDENT" || account.accessStatus !== "APPROVED") {
+        return res.status(403).json({ error: "Approved student account required." });
+      }
+      const [catalog, approvedQuestions, publishedExamRows] = await Promise.all([
+        db.subject.findMany({
+          select: { id: true, name: true, topics: { orderBy: { name: "asc" }, select: { id: true, name: true } } },
+          orderBy: { name: "asc" },
+        }),
+        db.question.findMany({
+          where: { reviewStatus: "APPROVED" },
+          select: {
+            id: true, subjectId: true, topicId: true, audienceScope: true,
+            targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true,
+            targetBranchName: true, targetStudentIdsJson: true,
           },
-        },
-        orderBy: { name: "asc" },
-      });
-      const publishedExamRows = await db.examVersionQuestion.findMany({
-        where: {
-          sourceQuestionId: { not: null },
-          examVersion: { is: { publishedAt: { not: null } } },
-        },
-        select: { sourceQuestionId: true },
-      });
-      const examQuestionIds = publishedExamRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]);
-      const practiceRows = await db.question.findMany({
-        where: { reviewStatus: "APPROVED", id: { notIn: examQuestionIds } },
-        select: { subjectId: true, topicId: true },
-      });
+        }),
+        db.examVersionQuestion.findMany({
+          where: { sourceQuestionId: { not: null }, examVersion: { is: { publishedAt: { not: null } } } },
+          select: { sourceQuestionId: true },
+        }),
+      ]);
+      const visible = approvedQuestions.filter((question) => isContentAudienceVisible(question as ContentAudience, account));
+      const subjectCounts = new Map<number, number>();
+      const topicCounts = new Map<string, number>();
+      for (const question of visible) {
+        subjectCounts.set(question.subjectId, (subjectCounts.get(question.subjectId) ?? 0) + 1);
+        if (question.topicId !== null) {
+          const key = question.subjectId + ":" + question.topicId;
+          topicCounts.set(key, (topicCounts.get(key) ?? 0) + 1);
+        }
+      }
+      const examIds = new Set(publishedExamRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]));
       const practiceSubjectCounts = new Map<number, number>();
       const practiceTopicCounts = new Map<string, number>();
-      for (const question of practiceRows) {
+      for (const question of visible.filter((item) => !examIds.has(item.id))) {
         practiceSubjectCounts.set(question.subjectId, (practiceSubjectCounts.get(question.subjectId) ?? 0) + 1);
         if (question.topicId !== null) {
           const key = question.subjectId + ":" + question.topicId;
           practiceTopicCounts.set(key, (practiceTopicCounts.get(key) ?? 0) + 1);
         }
       }
-      const subjects = rows.map((r) => ({
-        subject: r.name,
-        count: r._count.questions,
-        practiceCount: practiceSubjectCounts.get(r.id) ?? 0,
-        topics: r.topics.map((topic) => ({
+      const subjects = catalog.map((subject) => ({
+        subject: subject.name,
+        count: subjectCounts.get(subject.id) ?? 0,
+        practiceCount: practiceSubjectCounts.get(subject.id) ?? 0,
+        topics: subject.topics.map((topic) => ({
           topic: topic.name,
-          count: topic._count.questions,
-          practiceCount: practiceTopicCounts.get(r.id + ":" + topic.id) ?? 0,
+          count: topicCounts.get(subject.id + ":" + topic.id) ?? 0,
+          practiceCount: practiceTopicCounts.get(subject.id + ":" + topic.id) ?? 0,
         })),
       }));
-      res.json({
+      return res.json({
         subjects,
-        total: subjects.reduce((sum, s) => sum + s.count, 0),
-        practiceTotal: subjects.reduce((sum, s) => sum + s.practiceCount, 0),
+        total: visible.length,
+        practiceTotal: subjects.reduce((sum, subject) => sum + subject.practiceCount, 0),
         serverNow: new Date().toISOString(),
       });
-    } catch (error) {
-      next(error);
-    }
+    } catch (error) { next(error); }
   });
 
   router.get("/learning/concepts", requireAuth, async (req, res, next) => {
@@ -103,10 +114,17 @@ export function testRouter(db: PrismaClient): Router {
     }
   });
 
-  router.get("/learning/package", requireAuth, async (_req, res, next) => {
+  router.get("/learning/package", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      // Downloadable learning content is practice-only. Published exam
-      // snapshots remain in the exam delivery path and are not preloaded here.
+      const account = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, role: true, accessStatus: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
+      });
+      if (!account || account.role !== "STUDENT" || account.accessStatus !== "APPROVED") {
+        return res.status(403).json({ error: "Approved student account required." });
+      }
+      // Downloadable learning content is practice-only. Published exam snapshots
+      // remain in the exam delivery path and are not preloaded here.
       const publishedExamRows = await db.examVersionQuestion.findMany({
         where: {
           sourceQuestionId: { not: null },
@@ -121,15 +139,13 @@ export function testRouter(db: PrismaClient): Router {
         where: { reviewStatus: "APPROVED", id: { notIn: publishedExamQuestionIds } },
         orderBy: [{ subject: { name: "asc" } }, { topic: { name: "asc" } }, { id: "asc" }],
         select: {
-          id: true,
-          text: true,
-          options: true,
-          difficulty: true,
-          subject: { select: { name: true } },
-          topic: { select: { name: true } },
+          id: true, text: true, options: true, difficulty: true,
+          audienceScope: true, targetCollegeCode: true, targetCollegeName: true,
+          targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true,
+          subject: { select: { name: true } }, topic: { select: { name: true } },
         },
       });
-      const questions = rows.map((row) => ({
+      const questions = rows.filter((row) => isContentAudienceVisible(row as ContentAudience, account)).map((row) => ({
         id: row.id,
         subject: row.subject.name,
         topic: row.topic?.name ?? null,
@@ -137,7 +153,7 @@ export function testRouter(db: PrismaClient): Router {
         options: JSON.parse(row.options) as string[],
         difficulty: row.difficulty,
       }));
-      res.json({
+      return res.json({
         schemaVersion: 3,
         practiceOnly: true,
         exportedAt: new Date().toISOString(),

@@ -141,23 +141,22 @@ describe("administrator question bank", () => {
 
 
 describe("Part 3 responsive admin navigation and institution tools", () => {
-  it("exposes institution directory and settings without removing existing tools", async () => {
+  it("removes the institution tab and keeps the combined student workspace and settings", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = new URL(String(input)).pathname;
       if (path === "/admin/question-catalog") return Promise.resolve(response({ subjects: [] }));
-      if (path === "/admin/questions") return Promise.resolve(response({ questions: [], total: 0 }));
+      if (path === "/admin/questions") return Promise.resolve(response({ questions: [], total: 0, pages: 1 }));
       if (path === "/admin/exams") return Promise.resolve(response({ exams: [] }));
-      if (path === "/admin/students") return Promise.resolve(response({ students: [] }));
+      if (path === "/admin/students") return Promise.resolve(response({ students: [], total: 0, totalPages: 0, statusCounts: { PENDING: 0, APPROVED: 0, REJECTED: 0 } }));
       if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
       if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
-      if (path === "/admin/institutions") return Promise.resolve(response({ institutions: [], page: 1, total: 0, totalPages: 0, generatedAt: "2026-11-26T00:00:00.000Z" }));
       return Promise.resolve(response({}));
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminWorkspace email="admin@example.com" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Institutions & branches" }));
-    expect(await screen.findByRole("heading", { name: "Institutions & branches" })).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === "/admin/institutions")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Institutions & branches" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Students" }));
+    expect(await screen.findByRole("heading", { name: "Students" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByRole("heading", { name: "Admin settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dark" })).toBeInTheDocument();
@@ -176,37 +175,3 @@ describe("Part 3 responsive admin navigation and institution tools", () => {
 });
 
 
-describe("Part 3 responsive admin navigation and institution tools", () => {
-  it("exposes institution directory and settings without removing existing tools", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const path = new URL(String(input)).pathname;
-      if (path === "/admin/question-catalog") return Promise.resolve(response({ subjects: [] }));
-      if (path === "/admin/questions") return Promise.resolve(response({ questions: [], total: 0 }));
-      if (path === "/admin/exams") return Promise.resolve(response({ exams: [] }));
-      if (path === "/admin/students") return Promise.resolve(response({ students: [] }));
-      if (path === "/admin/exam-results") return Promise.resolve(response({ results: [] }));
-      if (path === "/admin/announcements") return Promise.resolve(response({ announcements: [] }));
-      if (path === "/admin/institutions") return Promise.resolve(response({ institutions: [], page: 1, total: 0, totalPages: 0, generatedAt: "2026-11-26T00:00:00.000Z" }));
-      return Promise.resolve(response({}));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<AdminWorkspace email="admin@example.com" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Institutions & branches" }));
-    expect(await screen.findByRole("heading", { name: "Institutions & branches" })).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === "/admin/institutions")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(await screen.findByRole("heading", { name: "Admin settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Dark" })).toBeInTheDocument();
-  });
-
-  it("opens and closes the mobile admin drawer from its accessible control", () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({}))));
-    render(<AdminWorkspace email="admin@example.com" theme="light" setTheme={vi.fn()} signOut={vi.fn()} />);
-    const open = screen.getByRole("button", { name: "Open admin navigation" });
-    expect(open).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(open);
-    expect(open).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Close admin navigation" }));
-    expect(open).toHaveAttribute("aria-expanded", "false");
-  });
-});

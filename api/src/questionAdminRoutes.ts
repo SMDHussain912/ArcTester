@@ -165,14 +165,14 @@ export function questionAdminRouter(db: PrismaClient): Router {
         db.question.findMany({
           where, orderBy: { createdAt: "desc" },
           skip: (filter.page - 1) * filter.limit, take: filter.limit,
-          include: { subject: true, topic: true },
+          include: { subject: true, topic: true, createdBy: { select: { id: true, email: true } } },
         }),
       ]);
       res.json({ ok: true, total, page: filter.page, limit: filter.limit, pages: Math.ceil(total / filter.limit),
         questions: questions.map((q) => ({ id: q.id, subject: q.subject.name, topic: q.topic?.name ?? "General",
           text: q.text, options: JSON.parse(q.options), questionType: q.questionType,
           promptData: JSON.parse(q.promptData), answerData: JSON.parse(q.answerData), correctIndex: q.correctIndex,
-          explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, createdAt: q.createdAt })) });
+          explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, audienceScope: q.audienceScope, targetCollegeCode: q.targetCollegeCode, targetCollegeName: q.targetCollegeName, targetBranchCode: q.targetBranchCode, targetBranchName: q.targetBranchName, targetStudentIdsJson: q.targetStudentIdsJson, createdBy: q.createdBy, createdAt: q.createdAt })) });
     } catch (error) { next(error); }
   });
 

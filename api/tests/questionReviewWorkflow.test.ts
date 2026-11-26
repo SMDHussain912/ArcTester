@@ -49,8 +49,8 @@ describe("question review workflow and student approval boundary", () => {
     expect(login.status).toBe(200);
   });
 
-  it("exposes only approved questions in public bank counts and student practice", async () => {
-    const bank = await getJson(server.baseUrl + "/bank");
+  it("exposes only approved questions in student bank counts and practice", async () => {
+    const bank = await getJson(server.baseUrl + "/bank", studentCookie);
     expect(bank.status).toBe(200);
     const maths = (bank.json as { subjects: Array<{ subject: string; count: number; practiceCount: number }> }).subjects.find((subject) => subject.subject === "Mathematics");
     expect(maths).toMatchObject({ count: 1, practiceCount: 1 });

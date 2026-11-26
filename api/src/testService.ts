@@ -7,6 +7,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { decodeOptions } from "./questions.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 import { gradeQuestion, normalizeResponse, type QuestionType } from "./questionTypes.js";
 import {
   nextStat,
@@ -207,6 +208,11 @@ export async function createTest(
   input: z.infer<typeof CreateTestSchema>,
   now: Date = new Date()
 ): Promise<CreatedTest> {
+  const account = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, accessStatus: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
+  });
+  if (!account || account.role !== "STUDENT" || account.accessStatus !== "APPROVED") throw forbidden("Approved student account required.");
   const all = await db.question.findMany({
     where: { reviewStatus: "APPROVED" },
     select: {
@@ -215,9 +221,15 @@ export async function createTest(
       questionType: true,
       subject: { select: { name: true } },
       topic: { select: { name: true } },
+      audienceScope: true,
+      targetCollegeCode: true,
+      targetCollegeName: true,
+      targetBranchCode: true,
+      targetBranchName: true,
+      targetStudentIdsJson: true,
     },
   });
-  const candidates: AttemptRow[] = all.map((row) => ({
+  const candidates: AttemptRow[] = all.filter((row) => isContentAudienceVisible(row as ContentAudience, account)).map((row) => ({
     id: row.id,
     subject: row.subject.name,
     topic: row.topic?.name ?? null,

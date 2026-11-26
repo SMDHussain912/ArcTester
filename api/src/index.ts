@@ -160,6 +160,9 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
   // and /admin/exams/attendance are matched before the /admin/exams/:id param route.
   app.use(sessionRouter(database));
+  // Student administration routes must precede exam routes, which retain legacy
+  // /admin/students handlers for backwards compatibility.
+  app.use(adminStudentRouter(database));
   app.use(examRouter(database));
   app.use(questionRouter(database));
   app.use(submissionRouter(database));
@@ -175,7 +178,6 @@ export function buildApp(database: PrismaClient = db): express.Express {
   app.use(masteryRouter(database));
   app.use(studentMcpRouter(database));
   app.use(adminInstitutionRouter(database));
-  app.use(adminStudentRouter(database));
   app.use(adminMcpRouter(database));
   app.use(modelInferenceRouter(database));
 

@@ -5,7 +5,7 @@ import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminLessonStudio from "./AdminLessonStudio";
-import AdminInvitations, { type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
+import type { StudentAccessRow } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamPreview } from "./AdminExamManagement";
 import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnalytics";
@@ -16,7 +16,6 @@ import AdminMcpAssistant from "./AdminMcpAssistant";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
-import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
 import AdminStudents from "./AdminStudents";
 import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
@@ -37,13 +36,13 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  if(!response.ok) throw new Error(response.status>=500?"ArcTester couldn\u0027t complete this request right now. Please try again.":typeof body.error==="string"?body.error:"Request failed.");
  return body as T;
 }
-type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string };
+type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string; targetStudentIds: number[] };
 
 export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [uploadText,setUploadText]=useState(""),[uploadFormat,setUploadFormat]=useState<"csv"|"json">("csv"),[report,setReport]=useState<AdminImportReport|null>(null),[previewReady,setPreviewReady]=useState(false);
  const questionRequestSequence=useRef(0);
- const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}"});
+ const [form,setForm]=useState<AdminQuestionForm>({subject:"Mathematics",topic:"General",text:"",a:"",b:"",c:"",d:"",correctIndex:"0",difficulty:"medium",explanation:"",source:"",questionType:"mcq",promptData:"{}",answerData:"{}",audienceScope:"ALL",targetCollegeCode:"",targetCollegeName:"",targetBranchCode:"",targetBranchName:"",targetStudentIds:""});
  const [exam,setExam]=useState<AdminPaperDraft>({title:"",description:"",instructions:"Read each question carefully. Select one correct option.",duration:"180",shuffleQuestions:true,shuffleOptions:false,marks:"1",negative:"0.25",selectionMode:"manual",perSubject:""});
  const [examIds,setExamIds]=useState<number[]>([]),[exams,setExams]=useState<AdminManagedExam[]>([]),[subjectQuotas,setSubjectQuotas]=useState<Record<string,number>>({}),[difficultyMix,setDifficultyMix]=useState<AdminPaperDifficultyMix>({easy:30,medium:50,hard:20}),[subjectScoring,setSubjectScoring]=useState<AdminPaperSubjectScoring>({}),[students,setStudents]=useState<StudentAccessRow[]>([]),[assignmentExam,setAssignmentExam]=useState<string|null>(null),[assignedStudents,setAssignedStudents]=useState<number[]>([]),[availableFrom,setAvailableFrom]=useState(""),[dueAt,setDueAt]=useState(""),[preview,setPreview]=useState<AdminExamPreview|null>(null),[results,setResults]=useState<AdminExamResult[]>([]),[announcements,setAnnouncements]=useState<AdminAnnouncement[]>([]),[announcementTitle,setAnnouncementTitle]=useState(""),[announcementMessage,setAnnouncementMessage]=useState(""),[announcementExpiry,setAnnouncementExpiry]=useState(""),[announcementPublishAt,setAnnouncementPublishAt]=useState("");
  const [editingId,setEditingId]=useState<number|null>(null);
@@ -109,8 +108,6 @@ export default function AdminWorkspace(p:Props){
    }
    setStudents(all);
   }
-  async function changeStudentAccess(id:number,accessStatus:StudentAccessStatus){await run(async()=>{await api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus})});setNotice(accessStatus==="APPROVED"?"Student approved. They can sign in now.":accessStatus==="REJECTED"?"Student access rejected.":"Student approval reset.");await loadStudents();});}
-  async function bulkApproveStudents(ids:number[]){if(!ids.length)return;await run(async()=>{const result=await api<{approvedCount:number}>("/admin/students/access/bulk",{method:"PATCH",body:JSON.stringify({ids})});setNotice(`Approved ${result.approvedCount} student account(s).`);await loadStudents();});}
   const approvedStudents=students.filter(student=>student.accessStatus==="APPROVED");
  async function loadResults(){const r=await api<{results:AdminExamResult[]}>("/admin/exam-results");setResults(Array.isArray(r.results) ? r.results : []);}
  async function loadAnnouncements(){const r=await api<{announcements:AdminAnnouncement[]}>("/admin/announcements");setAnnouncements(Array.isArray(r.announcements) ? r.announcements : []);}
@@ -121,7 +118,7 @@ export default function AdminWorkspace(p:Props){
  async function loadStudyMaterials(){const r=await api<{materials:StudyMaterial[]}>("/admin/study-materials");setStudyMaterials(r.materials??[]);}
  async function uploadStudyMaterial(payload:StudyMaterialPayload):Promise<boolean>{const uploaded=await run(async()=>{await api("/admin/study-materials",{method:"POST",body:JSON.stringify(payload)});setNotice("Study link saved as a draft. Publish it when ready.");});if(uploaded){try{await loadStudyMaterials();}catch(e){setError("Uploaded successfully, but the library could not refresh: "+(e as Error).message);}}return uploaded;}
  async function uploadStudyMaterialFile(payload:StudyMaterialPayload,file:File,id?:string):Promise<boolean>{
-  const query=new URLSearchParams({title:payload.title,description:payload.description,subject:payload.subject,topic:payload.topic,fileName:file.name,audienceScope:payload.audienceScope,targetCollegeCode:payload.targetCollegeCode,targetCollegeName:payload.targetCollegeName,targetBranchCode:payload.targetBranchCode,targetBranchName:payload.targetBranchName});
+  const query=new URLSearchParams({title:payload.title,description:payload.description,subject:payload.subject,topic:payload.topic,fileName:file.name,audienceScope:payload.audienceScope,targetCollegeCode:payload.targetCollegeCode,targetCollegeName:payload.targetCollegeName,targetBranchCode:payload.targetBranchCode,targetBranchName:payload.targetBranchName,targetStudentIds:payload.targetStudentIds.join(",")});
   const path=id?"/admin/study-materials/"+encodeURIComponent(id)+"/file":"/admin/study-materials/upload";
   const saved=await run(async()=>{
    const response=await fetch(API+path+"?"+query.toString(),{method:id?"PATCH":"POST",credentials:"include",headers:{"content-type":file.type||"application/octet-stream"},body:file});
@@ -155,8 +152,24 @@ export default function AdminWorkspace(p:Props){
  async function releaseReviewItem(id:string){await run(async()=>{await api(`/admin/submissions/${encodeURIComponent(id)}/release`,{method:"POST",body:JSON.stringify({})});await loadReviewQueue();setNotice("Submission approved and released.");});}
  useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty,reviewStatus]);
  async function run(action:()=>Promise<void>):Promise<boolean>{setBusy(true);setError("");setNotice("");try{await action();return true;}catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}}
- async function saveQuestion(e:FormEvent){e.preventDefault();await run(async()=>{const payload={subject:form.subject,topic:form.topic,text:form.text,options:form.questionType==="mcq"||form.questionType==="multi_select"?[form.a,form.b,form.c,form.d]:form.questionType==="true_false"?[form.a,form.b]:[],correctIndex:Number(form.correctIndex),difficulty:form.difficulty,explanation:form.explanation,source:form.source,questionType:form.questionType,promptData:JSON.parse(form.promptData),answerData:JSON.parse(form.answerData)};await api(editingId?"/admin/questions/"+editingId:"/admin/questions",{method:editingId?"PUT":"POST",body:JSON.stringify(payload)});setNotice(editingId?"Question updated.":"Question added to the bank.");setEditingId(null);setForm({...form,text:"",a:"",b:"",c:"",d:"",explanation:"",questionType:"mcq",promptData:"{}",answerData:"{}"});await Promise.all([loadCatalog(),loadQuestions(1)]);setTab("questions");});}
- function editQuestion(q:Question){setEditingId(q.id);setForm({subject:q.subject,topic:q.topic,text:q.text,a:q.options[0]||"",b:q.options[1]||"",c:q.options[2]||"",d:q.options[3]||"",correctIndex:String(q.correctIndex),difficulty:q.difficulty,explanation:q.explanation,source:q.source,questionType:q.questionType||"mcq",promptData:JSON.stringify(q.promptData||{},null,2),answerData:JSON.stringify(q.answerData||{},null,2)});setTab("add");}
+ async function saveQuestion(e:FormEvent){e.preventDefault();await run(async()=>{
+  const studentIdParts=form.targetStudentIds.split(/[,\s]+/).filter(Boolean);
+  const targetStudentIds=studentIdParts.map(Number);
+  if(form.audienceScope==="STUDENTS"&&(!targetStudentIds.length||targetStudentIds.some(id=>!Number.isSafeInteger(id)||id<1)||new Set(targetStudentIds).size!==targetStudentIds.length))throw new Error("Enter unique positive student account IDs, separated by commas.");
+  const payload={
+    subject:form.subject,topic:form.topic,text:form.text,
+    options:form.questionType==="mcq"||form.questionType==="multi_select"?[form.a,form.b,form.c,form.d]:form.questionType==="true_false"?[form.a,form.b]:[],
+    correctIndex:Number(form.correctIndex),difficulty:form.difficulty,explanation:form.explanation,source:form.source,
+    questionType:form.questionType,promptData:JSON.parse(form.promptData),answerData:JSON.parse(form.answerData),
+    audienceScope:form.audienceScope,targetCollegeCode:form.targetCollegeCode,targetCollegeName:form.targetCollegeName,
+    targetBranchCode:form.targetBranchCode,targetBranchName:form.targetBranchName,targetStudentIds,
+  };
+  await api(editingId?"/admin/questions/"+editingId:"/admin/questions",{method:editingId?"PATCH":"POST",body:JSON.stringify(payload)});
+  setNotice(editingId?"Question updated.":"Question added to the bank.");setEditingId(null);
+  setForm({...form,text:"",a:"",b:"",c:"",d:"",explanation:"",questionType:"mcq",promptData:"{}",answerData:"{}",audienceScope:"ALL",targetCollegeCode:"",targetCollegeName:"",targetBranchCode:"",targetBranchName:"",targetStudentIds:""});
+  await Promise.all([loadCatalog(),loadQuestions(1)]);setTab("questions");
+ });}
+ function editQuestion(q:Question){setEditingId(q.id);setForm({subject:q.subject,topic:q.topic,text:q.text,a:q.options[0]||"",b:q.options[1]||"",c:q.options[2]||"",d:q.options[3]||"",correctIndex:String(q.correctIndex),difficulty:q.difficulty,explanation:q.explanation,source:q.source,questionType:q.questionType||"mcq",promptData:JSON.stringify(q.promptData||{},null,2),answerData:JSON.stringify(q.answerData||{},null,2),audienceScope:q.audienceScope||"ALL",targetCollegeCode:q.targetCollegeCode||"",targetCollegeName:q.targetCollegeName||"",targetBranchCode:q.targetBranchCode||"",targetBranchName:q.targetBranchName||"",targetStudentIds:(()=>{try{const ids=JSON.parse(q.targetStudentIdsJson||"[]");return Array.isArray(ids)?ids.join(", "):"";}catch{return "";}})()});setTab("add");}
  async function previewImport(){await run(async()=>{const r=await api<{report:AdminImportReport}>("/admin/questions/import/preview",{method:"POST",body:JSON.stringify({format:uploadFormat,content:uploadText})});setReport(r.report);setPreviewReady(true);setNotice("Preview ready. No questions have been added yet.");});}
  async function confirmImport(){await run(async()=>{const r=await api<{report:{added:number;duplicates:number;invalid:{row:number;reason:string}[];total:number}}>("/admin/questions/import",{method:"POST",body:JSON.stringify({format:uploadFormat,content:uploadText})});setReport(r.report);setPreviewReady(false);setNotice("Import committed. Review the final row report.");await Promise.all([loadCatalog(),loadQuestions(1)]);});}
  async function readFile(file:File){const ext=file.name.toLowerCase().split(".").pop();setUploadFormat(ext==="json"?"json":"csv");setUploadText(await file.text());setReport(null);setPreviewReady(false);}
@@ -173,18 +186,23 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["institutions","Institutions & branches","▦"],["students","Manage students","♙"],["settings","Settings","⚙"]];
+ const navGroups=[
+  {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
+  {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
+  {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
+  {label:"System",items:[["settings","Settings","⚙"]]}
+ ];
+ const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
   <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
   {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
   <aside className={"admin-sidebar"+(mobileMenuOpen?" is-open":"")}><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
-   <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
+   <div className="admin-nav-label">ADMIN MENU</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{navGroups.map(group=><div className="admin-nav-group" key={group.label}><div className="admin-nav-group-label">{group.label}</div>{group.items.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</div>)}</nav>
    <div className="sidebar-bottom"><span className="admin-avatar">{p.email.slice(0,1).toUpperCase()}</span><div><b>Administrator</b><small>{p.email}</small></div></div>
   </aside>
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
-   {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} email={p.email} onSignOut={p.signOut} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
@@ -242,7 +260,7 @@ export default function AdminWorkspace(p:Props){
       <p className="admin-muted">Snapshot generated {new Date(notificationHealth.generatedAt).toLocaleString()}.</p>
     </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
    </section>}
-   {tab==="mcp-assistant"&&<AdminMcpAssistant />}
+   {tab==="model-lab"&&<AdminMcpAssistant />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
@@ -324,7 +342,7 @@ export default function AdminWorkspace(p:Props){
    {tab==="results"&&<AdminResultsAnalytics results={results} onRefresh={() => void loadResults()} />}
    {tab==="announcements"&&<AdminAnnouncements announcements={announcements} title={announcementTitle} message={announcementMessage} expiry={announcementExpiry} publishAt={announcementPublishAt} busy={busy} onTitleChange={setAnnouncementTitle} onMessageChange={setAnnouncementMessage} onExpiryChange={setAnnouncementExpiry} onPublishAtChange={setAnnouncementPublishAt} onCreate={createAnnouncement} onRefresh={() => void loadAnnouncements()} onDelete={(id) => void deleteAnnouncement(id)} />}
    {tab==="subjects"&&<AdminSubjects catalog={catalog} onRefresh={() => void loadCatalog()} />}
-   {tab==="invitations"&&<AdminInvitations students={students} busy={busy} onRefresh={() => void loadStudents()} onChangeStatus={(id,status)=>void changeStudentAccess(id,status)} onBulkApprove={(ids)=>void bulkApproveStudents(ids)} />}
+
   
   </div></main><div className="toast-container"><Toast open={Boolean(error)} message={error} onClose={()=>setError("")} tone="error" duration={5500}/></div></div>;
 }

@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
-import { requireAdmin, requireAuth } from "./auth.js";
+import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
 import { validateQuestionDraftCsv } from "./questionDraftCsv.js";
 import { parseCsv } from "./csv.js";
@@ -73,10 +73,10 @@ export function questionRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = QuestionInputSchema.parse(req.body);
-      const outcome = await insertQuestion(db, input);
+      const outcome = await insertQuestion(db, input, req.user!.id);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
       const question = await db.question.findFirstOrThrow({
         where: { questionHash: hashQuestion(input.text) },
@@ -86,6 +86,7 @@ export function questionRouter(db: PrismaClient): Router {
         ok: true,
         question: {
           id: question.id,
+          createdById: question.createdById,
           subject: question.subject.name,
           topic: question.topic?.name ?? null,
           text: question.text,
@@ -94,6 +95,12 @@ export function questionRouter(db: PrismaClient): Router {
           promptData: JSON.parse(question.promptData),
           answerData: JSON.parse(question.answerData),
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         },
       });
     } catch (error) {
@@ -156,6 +163,12 @@ export function questionRouter(db: PrismaClient): Router {
           explanation: question.explanation,
           source: question.source,
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         })),
       });
     } catch (error) {
@@ -261,17 +274,30 @@ export function questionRouter(db: PrismaClient): Router {
         data: {
           subjectId: subject.id, topicId: topic.id, text: input.text,
           options: JSON.stringify(input.options), correctIndex: input.correctIndex,
+          questionType: input.questionType, promptData: JSON.stringify(input.promptData), answerData: JSON.stringify(input.answerData),
           explanation: input.explanation, source: input.source,
           difficulty: input.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(input.text),
+          audienceScope: input.audienceScope,
+          targetCollegeCode: input.targetCollegeCode.trim() || null,
+          targetCollegeName: input.targetCollegeName.trim() || null,
+          targetBranchCode: input.targetBranchCode.trim() || null,
+          targetBranchName: input.targetBranchName.trim() || null,
+          targetStudentIdsJson: JSON.stringify(input.targetStudentIds),
         },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
       // Content edits invalidate prior embeddings; queue a fresh index build.
       res.json({ ok: true, question: {
-        id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
-        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
+        id: question.id, createdById: question.createdById, subject: question.subject.name, topic: question.topic?.name ?? null,
+        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex, questionType: question.questionType, promptData: JSON.parse(question.promptData), answerData: JSON.parse(question.answerData),
         explanation: question.explanation, source: question.source, difficulty: question.difficulty,
         reviewStatus: question.reviewStatus,
+        audienceScope: question.audienceScope,
+        targetCollegeCode: question.targetCollegeCode,
+        targetCollegeName: question.targetCollegeName,
+        targetBranchCode: question.targetBranchCode,
+        targetBranchName: question.targetBranchName,
+        targetStudentIdsJson: question.targetStudentIdsJson,
       } });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && (error as {code?: string}).code === "P2002") {
