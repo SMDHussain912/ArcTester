@@ -23,13 +23,13 @@ const AttemptIdSchema = z.object({ id: z.coerce.number().int().positive() });
 export function testRouter(db: PrismaClient): Router {
   const router = Router();
 
-  router.get("/bank", requireAuth, async (req: AuthedRequest, res, next) => {
+  router.get("/bank", async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({
-        where: { id: req.user!.id },
+      const account = req.user?.id ? await db.user.findUnique({
+        where: { id: req.user.id },
         select: { id: true, role: true, accessStatus: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
-      });
-      if (!account || account.role !== "STUDENT" || account.accessStatus !== "APPROVED") {
+      }) : null;
+      if (req.user?.id && (!account || account.role !== "STUDENT" || account.accessStatus !== "APPROVED")) {
         return res.status(403).json({ error: "Approved student account required." });
       }
       const [catalog, approvedQuestions, publishedExamRows] = await Promise.all([
@@ -50,7 +50,7 @@ export function testRouter(db: PrismaClient): Router {
           select: { sourceQuestionId: true },
         }),
       ]);
-      const visible = approvedQuestions.filter((question) => isContentAudienceVisible(question as ContentAudience, account));
+      const visible = approvedQuestions.filter((question) => account ? isContentAudienceVisible(question as ContentAudience, account) : question.audienceScope === "ALL");
       const subjectCounts = new Map<number, number>();
       const topicCounts = new Map<string, number>();
       for (const question of visible) {
