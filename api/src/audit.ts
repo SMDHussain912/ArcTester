@@ -32,7 +32,7 @@ export async function pruneAuditEvents(db: PrismaClient, retentionDays: number, 
   if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) throw new Error("AUDIT_RETENTION_DAYS must be an integer from 30 to 3650.");
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
   return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(73198412)`;
+    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(73198412)`;
     const where = { createdAt: { lt: cutoff } };
     const deletedCount = await tx.auditEvent.count({ where });
     if (!deletedCount) return { deletedCount: 0, cutoff: cutoff.toISOString(), retentionDays };
@@ -52,7 +52,7 @@ export async function pruneAuditEvents(db: PrismaClient, retentionDays: number, 
 /** Appends events in a globally serialized, monotonic hash chain shared by all API instances. */
 export async function writeAuditEvent(db: PrismaClient, input: AuditWrite) {
   return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(73198412)`;
+    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(73198412)`;
     const latest = await tx.auditEvent.findFirst({ orderBy: { createdAt: "desc" }, select: { eventHash: true, createdAt: true } });
     let createdAt = input.createdAt ?? new Date();
     if (latest && createdAt.getTime() <= latest.createdAt.getTime()) createdAt = new Date(latest.createdAt.getTime() + 1);
