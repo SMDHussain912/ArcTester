@@ -12,7 +12,7 @@ const pendingStudent = {
 };
 const approvedStudent = { ...pendingStudent, id: 42, email: "approved@student.test", fullName: "Approved Student", registrationNumber: "24010-CM-042", accessStatus: "APPROVED" };
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("combined student approval and management", () => {
   it("filters between pending and approved/rejected accounts", async () => {
@@ -41,7 +41,7 @@ describe("combined student approval and management", () => {
       return Promise.resolve(response({ ok: true }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<AdminStudents onError={vi.fn()} onNotice={vi.fn()} />);
     expect(await screen.findByText("pending-two@student.test")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select pending@student.test" }));
