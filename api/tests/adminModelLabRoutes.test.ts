@@ -5,6 +5,14 @@ import { startTestServer, signUp } from "./server.js";
 let server: Awaited<ReturnType<typeof startTestServer>>;
 let cookie = "";
 let adminId = 0;
+type ModelLabTestBody = {
+  ok?: boolean;
+  datasets?: Array<{ name?: string; id?: string; fingerprint?: string }>;
+  jobs?: Array<{ status?: string; modelId?: string }>;
+  models?: unknown[];
+  dataset?: { name?: string; id?: string; fingerprint?: string };
+  job?: { status?: string; modelId?: string };
+};
 
 async function request(path: string, method = "GET", body?: unknown) {
   const response = await fetch(server.baseUrl + path, {
@@ -12,7 +20,7 @@ async function request(path: string, method = "GET", body?: unknown) {
     headers: { cookie, "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  return { status: response.status, body: await response.json() as Record<string, any> };
+  return { status: response.status, body: await response.json() as ModelLabTestBody };
 }
 
 describe("administrator Model Lab REST workspace", () => {
