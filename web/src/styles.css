@@ -1307,3 +1307,19 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
 .admin-student-edit-grid label{display:grid;gap:6px;min-width:0}
 .admin-students .pagination{display:flex;justify-content:center;align-items:center;gap:16px;margin:18px 0}
 @media(max-width:760px){.admin-students .admin-stat-grid{grid-template-columns:1fr}.admin-students .table-top{align-items:flex-start;flex-direction:column}.admin-student-row{grid-template-columns:20px minmax(0,1fr)}.admin-student-actions{grid-column:2;justify-content:flex-start}.admin-student-edit-grid{grid-template-columns:1fr}.admin-students .admin-page-title{flex-direction:column}}
+
+/* Searchable selected-student audience control shared by question, lesson and material editors. */
+.admin-student-picker{display:grid;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.admin-student-picker-selected{display:flex;flex-wrap:wrap;gap:7px;min-height:26px;align-items:center}
+.admin-student-picker-chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:11px;overflow-wrap:anywhere}
+.admin-student-picker-chip button{border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:0 2px;cursor:pointer}
+.admin-student-picker-search{display:grid;gap:6px;font-size:11px;font-weight:750;color:var(--muted)}
+.admin-student-picker-search input{width:100%;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--ink)}
+.admin-student-picker-results{display:grid;gap:4px;max-height:230px;overflow:auto;overscroll-behavior:contain}
+.admin-student-picker-option{display:flex;align-items:flex-start;gap:10px;padding:9px;border:1px solid transparent;border-radius:9px;cursor:pointer}
+.admin-student-picker-option:hover{background:var(--surface);border-color:var(--border)}
+.admin-student-picker-option input{margin-top:3px;flex:0 0 auto}
+.admin-student-picker-option>span{display:grid;gap:3px;min-width:0}
+.admin-student-picker-option strong{font-size:12px;overflow-wrap:anywhere}
+.admin-student-picker-option small{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.admin-student-picker-error{margin:0;color:var(--danger);font-size:12px}
