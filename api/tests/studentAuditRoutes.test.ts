@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { pruneAuditEvents, writeAuditEvent } from "../src/audit.js";
 import { buildApp } from "../src/index.js";
 import { getJson, signUp, startTestServer, type TestServer } from "./server.js";
 
@@ -6,6 +8,7 @@ let server: TestServer;
 let adminCookie = "";
 let adminId = 0;
 let studentId = 0;
+let expiredEventId = "";
 
 async function patch(path: string, body: unknown) {
   const response = await fetch(server.baseUrl + path, { method: "PATCH", headers: { cookie: adminCookie, "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -23,6 +26,8 @@ async function waitForAudit(action: string, subjectUserId: number) {
 describe("student audit timeline and exports", () => {
   beforeAll(async () => {
     server = await startTestServer(buildApp);
+    const oldEvent = await writeAuditEvent(server.db, { actorId: null, actorRole: "SYSTEM", subjectUserId: null, action: "RETENTION_TEST_EVENT", outcome: "SUCCESS", resourceType: "SYSTEM", resourceId: "", requestId: randomUUID(), route: "/test/retention", collegeCode: "", branchCode: "", contextJson: "{}", createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000) });
+    expiredEventId = oldEvent.id;
     const admin = await signUp(server.baseUrl, "audit-admin@example.test");
     adminCookie = admin.cookie;
     adminId = admin.userId;
@@ -40,6 +45,16 @@ describe("student audit timeline and exports", () => {
     expect(event.actorRole).toBe("STUDENT");
     expect(event.contextJson).not.toContain("correct-horse-battery");
     expect(event.contextJson).not.toContain("token");
+  });
+
+  it("prunes expired rows into a checkpoint and preserves the retained chain", async () => {
+    const result = await pruneAuditEvents(server.db, 30);
+    expect(result.deletedCount).toBe(1);
+    expect(await server.db.auditEvent.findUnique({ where: { id: expiredEventId } })).toBeNull();
+    expect(await server.db.auditCheckpoint.count()).toBe(1);
+    const verified = await getJson(server.baseUrl + "/admin/audit/integrity", adminCookie);
+    expect(verified.status).toBe(200);
+    expect(verified.json).toMatchObject({ ok: true, valid: true, checkedCheckpoints: 1 });
   });
 
   it("writes a server-derived profile event and returns a filtered student timeline", async () => {
