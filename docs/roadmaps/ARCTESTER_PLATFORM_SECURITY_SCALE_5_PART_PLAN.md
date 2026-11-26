@@ -1,6 +1,6 @@
 # ArcTester Platform Consolidation, Security and Scale Plan
 
-**Status:** Part 1 implementation in progress on `feat/part-1-admin-students-content-scope`. Existing combined Students navigation and server-side audience checks were verified; this branch adds searchable approved-student selection to content targeting and college/branch filters to student management. CI and review are pending.  
+**Status:** Part 1 merged and verified. Part 2 merged in PR #196 (`88f657ce34c18ff1a69cc8277769bab898680d7e`); exact-head CI and standalone Android APK build passed. Part 3 implementation is in progress on `feat/part-3-student-audit-timeline-exports`; CI and review are pending.  
 **Implementation rule:** Deliver one part at a time on a feature branch/PR. Keep CI green before merge; do not deploy unmerged changes to production.
 
 This roadmap consolidates the requested admin UX, academic content targeting, account security, auditability, infrastructure monitoring, and Android parity.
