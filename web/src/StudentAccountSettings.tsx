@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { request } from "./apiClient";
 
 type ToggleRowProps = {
@@ -356,7 +357,7 @@ export default function StudentAccountSettings(props: Props) {
       <SettingSection title="Account actions">
         <div className="account-danger-zone"><div><strong>Sign out</strong><p>End this session on the current device.</p></div><button className="ghost" disabled={busy} onClick={onSignOut}>{busy ? "Signing out…" : "Sign out"}</button></div>
       </SettingSection>
-      {securityReauthAction ? (
+      {securityReauthAction ? createPortal(
         <div className="account-profile-confirm-backdrop" role="presentation">
           <form className="panel account-profile-confirm security-reauth-dialog" role="dialog" aria-modal="true" aria-labelledby="security-reauth-title" onSubmit={submitSecurityReauthentication}>
             <h2 id="security-reauth-title">Confirm it’s you</h2>
@@ -366,7 +367,8 @@ export default function StudentAccountSettings(props: Props) {
             {securityError?<p className="security-form-message error" role="alert">{securityError}</p>:null}
             <div className="security-reauth-actions"><button type="button" className="ghost" disabled={securityBusy} onClick={()=>{setSecurityReauthAction(null);setSecurityReauthPasskeyId(null)}}>Cancel</button><button type="submit" className="button button-primary" disabled={securityBusy||!securityReauthPassword}>{securityBusy?"Verifying…":"Continue"}</button></div>
           </form>
-        </div>
+        </div>,
+        document.body,
       ) : null}
       {profileConfirming ? (
         <div className="account-profile-confirm-backdrop" role="presentation">
