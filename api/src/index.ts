@@ -26,6 +26,8 @@ import { modelInferenceRouter } from "./modelInferenceRoutes.js";
 import { isTrustedCookieMutation } from "./csrf.js";
 import { adminInstitutionRouter } from "./adminInstitutionRoutes.js";
 import { adminStudentRouter } from "./adminStudentRoutes.js";
+import { auditRequestMiddleware } from "./audit.js";
+import { studentAuditRouter } from "./studentAuditRoutes.js";
 
 const db = new PrismaClient();
 
@@ -139,6 +141,7 @@ export function buildApp(database: PrismaClient = db): express.Express {
   });
   app.use(localCors);
   app.use(cookieCsrfGuard);
+  app.use(auditRequestMiddleware(database));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "ecet-api", time: new Date().toISOString() });
@@ -160,6 +163,8 @@ export function buildApp(database: PrismaClient = db): express.Express {
   // sessionRoutes must mount before examRoutes so that /admin/exams/live-sessions
   // and /admin/exams/attendance are matched before the /admin/exams/:id param route.
   app.use(sessionRouter(database));
+  // Audit timeline/export endpoints must be registered before the generic student :id routes.
+  app.use(studentAuditRouter(database));
   // Student administration routes must precede exam routes, which retain legacy
   // /admin/students handlers for backwards compatibility.
   app.use(adminStudentRouter(database));
