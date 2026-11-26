@@ -232,8 +232,15 @@ describe("auth", () => {
     expect(login.status).toBe(200);
     const oldToken = cookieJar.get("ecet_session");
     expect(oldToken).toBeTruthy();
+    const user = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+    const secret = generateTotpSecret();
+    await server.db.totpCredential.create({ data: { userId: user.id, secretEncrypted: encryptTotpSecret(secret), enabledAt: new Date(), lastUsedCounter: -1, recoveryCodesJson: JSON.stringify([]) } });
 
-    const reauth = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123" });
+    const missingMfa = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123" });
+    expect(missingMfa.status).toBe(403);
+    expect((missingMfa.json as { error: string }).error).toContain("authenticator code");
+    const counter = Math.floor(Date.now() / 30_000);
+    const reauth = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123", code: totpAt(secret, counter) });
     expect(reauth.status).toBe(200);
     expect(reauth.json).toMatchObject({ ok: true, reauthenticated: true });
     const newToken = cookieJar.get("ecet_session");
