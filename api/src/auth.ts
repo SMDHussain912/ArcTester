@@ -168,6 +168,29 @@ export const StudentAcademicProfileSchema = z.object({
   branchCode: z.string().trim().max(24).or(z.literal("")).optional(),
 });
 
+export const StudentAcademicProfileUpdateSchema = StudentAcademicProfileSchema.extend({
+  registrationNumber: z.string().trim().regex(/^\\d{5}-[A-Z]{1,3}-\\d{3}$/i, "Enter a valid diploma registration number, e.g. 24010-CM-053.").or(z.literal("")).optional(),
+});
+
+const REGISTRATION_BRANCHES: Record<string, { code: string; name: string }> = {
+  CM: { code: "CM", name: "Computer Engineering (CME)" },
+  EC: { code: "EC", name: "Electronics and Communication Engineering (ECE)" },
+  EE: { code: "EE", name: "Electrical and Electronics Engineering (EEE)" },
+  M: { code: "M", name: "Mechanical Engineering" },
+  C: { code: "C", name: "Civil Engineering" },
+  A: { code: "A", name: "Automobile Engineering" },
+};
+
+function validateRegistrationIdentity(registrationNumber: string, collegeCode: string, branchCode: string, branchName: string): { collegeCode: string; branchCode: string; branchName: string } {
+  const parts = registrationNumber.toUpperCase().match(/^(\\d{2})(\\d{3})-([A-Z]{1,3})-(\\d{3})$/);
+  if (!parts) throw badRequest("Registration number must look like 24010-CM-053.");
+  const branch = REGISTRATION_BRANCHES[parts[3]];
+  if (!branch) throw badRequest("Diploma registration number has an unsupported branch code.");
+  if (collegeCode !== parts[2]) throw badRequest("College code does not match your registration number.");
+  if (branchCode !== branch.code || branchName !== branch.name) throw badRequest("Diploma branch does not match the branch code in your registration number.");
+  return { collegeCode: parts[2], branchCode: branch.code, branchName: branch.name };
+}
+
 export const RegisterSchema = z.object({
   email: z.string().email("Enter a valid email address.").trim().toLowerCase(),
   password: z.string().min(8, "Password must be at least 8 characters.").max(128),
@@ -508,20 +531,10 @@ export function authRouter(db: PrismaClient): Router {
         const parts = registrationNumber.match(/^(\d{2})(\d{3})-([A-Z]{1,3})-(\d{3})$/);
         if (!parts) throw badRequest("Registration number must look like 24010-CM-053.");
         registrationCollegeCode = parts[2];
-        const branches: Record<string, { code: string; name: string }> = {
-          CM: { code: "CM", name: "Computer Engineering (CME)" },
-          EC: { code: "EC", name: "Electronics and Communication Engineering (ECE)" },
-          EE: { code: "EE", name: "Electrical and Electronics Engineering (EEE)" },
-          M: { code: "M", name: "Mechanical Engineering" },
-          C: { code: "C", name: "Civil Engineering" },
-          A: { code: "A", name: "Automobile Engineering" },
-        };
-        const branch = branches[parts[3]];
-        if (!branch) throw badRequest("Registration number branch code must be CM, EC, EE, M, C, or A.");
-        if (input.collegeCode !== registrationCollegeCode) throw badRequest("College code does not match your registration number.");
-        if (input.branchCode !== branch.code || input.branchName !== branch.name) throw badRequest("Diploma branch does not match the branch code in your registration number.");
-        registrationBranchCode = branch.code;
-        registrationBranchName = branch.name;
+        const identity = validateRegistrationIdentity(registrationNumber, input.collegeCode, input.branchCode || "", input.branchName);
+        registrationCollegeCode = identity.collegeCode;
+        registrationBranchCode = identity.branchCode;
+        registrationBranchName = identity.branchName;
       }
       await verifyRegistrationCaptcha(input.captchaToken, req.ip ?? "unknown", nativeClient);
       const passwordHash = await hashPasswordAsync(input.password);
@@ -695,18 +708,84 @@ export function authRouter(db: PrismaClient): Router {
 
   router.patch("/profile", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const input = StudentAcademicProfileSchema.parse(req.body);
-      const profile = await db.user.update({
+      const input = StudentAcademicProfileUpdateSchema.parse(req.body);
+      const current = await db.user.findUnique({
         where: { id: req.user!.id },
-        data: {
-          ...input,
-          postalPin: input.postalPin || null,
-          branchCode: input.branchCode || null,
-        },
-        select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
+        select: { id: true, role: true, accessStatus: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
       });
-      res.json({ ok: true, profile });
+      if (!current || current.role !== "STUDENT") return next(forbidden("Only student accounts can edit an academic profile."));
+      if (current.accessStatus !== "APPROVED") return next(forbidden("Only approved student accounts can edit an academic profile."));
+
+      const registrationNumber = input.registrationNumber?.trim().toUpperCase() || current.registrationNumber;
+      let collegeCode = input.collegeCode;
+      let branchCode = input.branchCode || null;
+      let branchName = input.branchName;
+      if (registrationNumber) {
+        const identity = validateRegistrationIdentity(registrationNumber, input.collegeCode, input.branchCode || "", input.branchName);
+        collegeCode = identity.collegeCode;
+        branchCode = identity.branchCode;
+        branchName = identity.branchName;
+      }
+
+      const data = {
+        fullName: input.fullName,
+        collegeName: input.collegeName,
+        collegeCode,
+        postalPin: input.postalPin || null,
+        branchName,
+        branchCode,
+        registrationNumber: registrationNumber || null,
+      };
+      const changed = current.fullName !== data.fullName ||
+        current.collegeName !== data.collegeName ||
+        current.collegeCode !== data.collegeCode ||
+        current.postalPin !== data.postalPin ||
+        current.branchName !== data.branchName ||
+        current.branchCode !== data.branchCode ||
+        current.registrationNumber !== data.registrationNumber;
+
+      if (!changed) {
+        return res.json({
+          ok: true,
+          changed: false,
+          message: "No profile changes were made.",
+          profile: {
+            id: current.id,
+            fullName: current.fullName,
+            collegeName: current.collegeName,
+            collegeCode: current.collegeCode,
+            postalPin: current.postalPin,
+            branchName: current.branchName,
+            branchCode: current.branchCode,
+            registrationNumber: current.registrationNumber,
+          },
+        });
+      }
+
+      const profile = await db.$transaction(async (tx) => {
+        const updated = await tx.user.update({
+          where: { id: current.id },
+          data: { ...data, sessionVersion: { increment: 1 } },
+          select: { id: true, fullName: true, collegeName: true, collegeCode: true, postalPin: true, branchName: true, branchCode: true, registrationNumber: true },
+        });
+        await tx.authSession.updateMany({
+          where: { userId: current.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+        return updated;
+      });
+      clearSessionCookie(res);
+      res.json({
+        ok: true,
+        changed: true,
+        message: "Settings changed successfully. Please log in again.",
+        profile,
+        requiresReauthentication: true,
+      });
     } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+        return next(conflict("That diploma registration number is already connected to another account."));
+      }
       next(error);
     }
   });
