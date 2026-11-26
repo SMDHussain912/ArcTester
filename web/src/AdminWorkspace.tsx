@@ -153,7 +153,7 @@ export default function AdminWorkspace(p:Props){
  useEffect(()=>{const t=setTimeout(()=>{void loadQuestions(1).catch(e=>setError(e.message));},220);return()=>clearTimeout(t);},[query,subject,topic,difficulty,reviewStatus]);
  async function run(action:()=>Promise<void>):Promise<boolean>{setBusy(true);setError("");setNotice("");try{await action();return true;}catch(e){setError((e as Error).message);return false;}finally{setBusy(false);}}
  async function saveQuestion(e:FormEvent){e.preventDefault();await run(async()=>{
-  const studentIdParts=form.targetStudentIds.split(/[,\\s]+/).filter(Boolean);
+  const studentIdParts=form.targetStudentIds.split(/[,\s]+/).filter(Boolean);
   const targetStudentIds=studentIdParts.map(Number);
   if(form.audienceScope==="STUDENTS"&&(!targetStudentIds.length||targetStudentIds.some(id=>!Number.isSafeInteger(id)||id<1)||new Set(targetStudentIds).size!==targetStudentIds.length))throw new Error("Enter unique positive student account IDs, separated by commas.");
   const payload={
