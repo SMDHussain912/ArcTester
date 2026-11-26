@@ -67,6 +67,29 @@ describe("study materials API",()=>{
   expect((await call("/admin/study-materials/"+file.material.id,"DELETE")).status).toBe(200);
   expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
  });
+ it("restricts published links and uploaded files to selected student account IDs",async()=>{
+  const other=await signUp(server.baseUrl,"materials-other-selected@example.com");
+  const targeted={...resource,audienceScope:"STUDENTS",targetStudentIds:[studentId]};
+  const createdResponse=await call("/admin/study-materials","POST",targeted);
+  expect(createdResponse.status).toBe(201);
+  const created=await createdResponse.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+created.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  const firstList=await call("/study-materials","GET",undefined,studentCookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  const otherList=await call("/study-materials","GET",undefined,other.cookie).then(r=>r.json()) as{materials:Array<{id:string}>};
+  expect(firstList.materials.map(item=>item.id)).toContain(created.material.id);
+  expect(otherList.materials.map(item=>item.id)).not.toContain(created.material.id);
+
+  const bytes=Buffer.from("%PDF-1.4 selected student file");
+  const query=new URLSearchParams({title:"Private Student File",description:"Selected account only",subject:"Computer Science",topic:"Audience",fileName:"private.pdf",audienceScope:"STUDENTS",targetStudentIds:String(studentId)});
+  const upload=await fetch(server.baseUrl+"/admin/study-materials/upload?"+query.toString(),{method:"POST",headers:{cookie:adminCookie,"content-type":"application/pdf"},body:bytes});
+  expect(upload.status).toBe(201);
+  const file=await upload.json() as{material:{id:string}};
+  expect((await call("/admin/study-materials/"+file.material.id,"PATCH",{status:"PUBLISHED"})).status).toBe(200);
+  expect((await call("/study-materials/"+file.material.id+"/file","GET",undefined,studentCookie)).status).toBe(200);
+  expect((await call("/study-materials/"+file.material.id+"/file","GET",undefined,other.cookie)).status).toBe(404);
+  expect((await call("/admin/study-materials/"+file.material.id,"DELETE")).status).toBe(200);
+  expect((await call("/admin/study-materials/"+created.material.id,"DELETE")).status).toBe(200);
+ });
  it("rejects non-HTTPS and credential-bearing resource links",async()=>{
   expect((await call("/admin/study-materials","POST",{...resource,url:"http://example.org/notes"})).status).toBe(400);
   expect((await call("/admin/study-materials","POST",{...resource,url:"https://user:pass@example.org/notes"})).status).toBe(400);
