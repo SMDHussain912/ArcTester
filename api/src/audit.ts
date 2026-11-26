@@ -27,6 +27,28 @@ export function computeAuditEventHash(event: AuditHashFields): string {
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
+/** Prunes expired audit detail and writes a chained checkpoint in the same locked transaction. */
+export async function pruneAuditEvents(db: PrismaClient, retentionDays: number, now = new Date()) {
+  if (!Number.isInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) throw new Error("AUDIT_RETENTION_DAYS must be an integer from 30 to 3650.");
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(73198412)`;
+    const where = { createdAt: { lt: cutoff } };
+    const deletedCount = await tx.auditEvent.count({ where });
+    if (!deletedCount) return { deletedCount: 0, cutoff: cutoff.toISOString(), retentionDays };
+    const last = await tx.auditEvent.findFirst({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { eventHash: true, createdAt: true } });
+    if (!last) return { deletedCount: 0, cutoff: cutoff.toISOString(), retentionDays };
+    const previous = await tx.auditCheckpoint.findFirst({ orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { checkpointHash: true, createdAt: true } });
+    const id = randomUUID();
+    const createdAt = new Date(Math.max(now.getTime(), last.createdAt.getTime() + 1, (previous?.createdAt.getTime() ?? 0) + 1));
+    const fields = { id, lastEventHash: last.eventHash, lastEventCreatedAt: last.createdAt, deletedCount, previousCheckpointHash: previous?.checkpointHash ?? "GENESIS", createdAt };
+    const checkpointHash = computeAuditCheckpointHash(fields);
+    await tx.auditCheckpoint.create({ data: { ...fields, checkpointHash } });
+    const deleted = await tx.auditEvent.deleteMany({ where });
+    return { deletedCount: deleted.count, cutoff: cutoff.toISOString(), retentionDays, checkpointId: id, checkpointHash };
+  }, { timeout: 30000 });
+}
+
 /** Appends events in a globally serialized, monotonic hash chain shared by all API instances. */
 export async function writeAuditEvent(db: PrismaClient, input: AuditWrite) {
   return db.$transaction(async (tx) => {
