@@ -136,6 +136,7 @@ model User {
   adminMcpAuditLogs AdminMcpAuditLog[]
   modelDatasets ModelDataset[]
   modelTrainingJobs ModelTrainingJob[]
+  auditEvents AuditEvent[] @relation("AuditEventActor")
   modelRegistryAudits ModelRegistryAudit[]
   modelEvaluations ModelEvaluation[]
 
@@ -1046,3 +1047,30 @@ model ModelDriftBucket {
   @@index([modelId, version, periodStart])
 }
 
+
+
+/// Server-generated activity trail. Subject IDs intentionally have no FK so audit history
+/// survives account anonymization/deletion; actor identity is nulled if the actor is removed.
+model AuditEvent {
+  id             String   @id @default(cuid())
+  actor           User?    @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId         Int?
+  actorRole       String   @default("UNKNOWN")
+  subjectUserId   Int?
+  action          String
+  outcome         String
+  resourceType    String   @default("")
+  resourceId      String   @default("")
+  requestId       String
+  route           String
+  collegeCode     String   @default("")
+  branchCode      String   @default("")
+  contextJson     String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([subjectUserId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([outcome, createdAt])
+  @@index([requestId])
+}
