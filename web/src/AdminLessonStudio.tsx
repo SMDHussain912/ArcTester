@@ -1,4 +1,5 @@
-import AdminStudentPicker from "./AdminStudentPicker";\nimport { useEffect, useMemo, useRef, useState } from "react";
+import AdminStudentPicker from "./AdminStudentPicker";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AP_DIPLOMA_BRANCHES } from "./polytechnicCatalog";
 
 const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
