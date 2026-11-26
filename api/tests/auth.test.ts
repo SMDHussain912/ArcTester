@@ -226,13 +226,22 @@ describe("auth", () => {
 
   it("reauthenticates with password and rotates the current session for security changes", async () => {
     const previousKey = process.env.TOTP_ENCRYPTION_KEY;
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousSameSite = process.env.COOKIE_SAME_SITE;
     process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
     try {
       const email = "reauth-session@example.com";
       await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "reauth-password-123" });
       await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+      process.env.NODE_ENV = "production";
+      process.env.COOKIE_SAME_SITE = "Lax";
       const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" });
       expect(login.status).toBe(200);
+      expect(login.headers.get("set-cookie")).toMatch(/SameSite=None; Secure/);
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSameSite === undefined) delete process.env.COOKIE_SAME_SITE;
+      else process.env.COOKIE_SAME_SITE = previousSameSite;
       const oldToken = cookieJar.get("ecet_session");
       expect(oldToken).toBeTruthy();
       const user = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
@@ -257,6 +266,10 @@ describe("auth", () => {
     } finally {
       if (previousKey === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
       else process.env.TOTP_ENCRYPTION_KEY = previousKey;
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousSameSite === undefined) delete process.env.COOKIE_SAME_SITE;
+      else process.env.COOKIE_SAME_SITE = previousSameSite;
     }
   });
 
