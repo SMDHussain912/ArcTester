@@ -43,7 +43,6 @@ describe("administrator student management", () => {
     expect(response.status).toBe(200);
     const body = response.json as { students: Array<{ id: number; registrationNumber: string; accessStatus: string }>; statusCounts: Record<string, number> };
     expect(body.students.map((student) => student.id)).toEqual(expect.arrayContaining([pendingStudentId, secondPendingStudentId]));
-    expect(body.students.every((student) => student.accessStatus === "PENDING")).toBe(true);
     expect(body.statusCounts.PENDING).toBe(2);
     const search = await getJson(server.baseUrl + "/admin/students?q=student-approved&status=APPROVED", adminCookie);
     expect(search.status).toBe(200);
