@@ -10,7 +10,7 @@ const pendingStudent = {
   collegeCode: "010", postalPin: "533001", branchName: "Computer Engineering", branchCode: "CM",
   registrationNumber: "24010-CM-041", accessStatus: "PENDING", createdAt: "2026-11-20T00:00:00.000Z",
 };
-const approvedStudent = { ...pendingStudent, id: 42, email: "approved@student.test", fullName: "Approved Student", registrationNumber: "24010-CM-042", accessStatus: "REJECTED" };
+const approvedStudent = { ...pendingStudent, id: 42, email: "approved@student.test", fullName: "Approved Student", registrationNumber: "24010-CM-042", accessStatus: "APPROVED" };
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
