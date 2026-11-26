@@ -5,7 +5,7 @@ import AdminQuestionBank, { type AdminBankQuestion } from "./AdminQuestionBank";
 import AdminAnnouncements, { type AdminAnnouncement } from "./AdminAnnouncements";
 import AdminStudyMaterials, { type StudyMaterial } from "./AdminStudyMaterials";
 import AdminLessonStudio from "./AdminLessonStudio";
-import AdminInvitations, { type StudentAccessRow, type StudentAccessStatus } from "./AdminInvitations";
+import type { StudentAccessRow } from "./AdminInvitations";
 import AdminQuestionEditor, { type AdminQuestionForm } from "./AdminQuestionEditor";
 import AdminExamManagement, { type AdminManagedExam, type AdminExamPreview } from "./AdminExamManagement";
 import AdminResultsAnalytics, { type AdminExamResult } from "./AdminResultsAnalytics";
@@ -16,7 +16,6 @@ import AdminMcpAssistant from "./AdminMcpAssistant";
 import AdminLiveMonitor, { type LiveSession } from "./AdminLiveMonitor";
 import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } from "./AdminAttendanceRegister";
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
-import AdminInstitutionDirectory from "./AdminInstitutionDirectory";
 import AdminStudents from "./AdminStudents";
 import AdminSettings from "./AdminSettings";
 import Toast from "./components/Toast";
@@ -109,8 +108,6 @@ export default function AdminWorkspace(p:Props){
    }
    setStudents(all);
   }
-  async function changeStudentAccess(id:number,accessStatus:StudentAccessStatus){await run(async()=>{await api(`/admin/students/${id}/access`,{method:"PATCH",body:JSON.stringify({accessStatus})});setNotice(accessStatus==="APPROVED"?"Student approved. They can sign in now.":accessStatus==="REJECTED"?"Student access rejected.":"Student approval reset.");await loadStudents();});}
-  async function bulkApproveStudents(ids:number[]){if(!ids.length)return;await run(async()=>{const result=await api<{approvedCount:number}>("/admin/students/access/bulk",{method:"PATCH",body:JSON.stringify({ids})});setNotice(`Approved ${result.approvedCount} student account(s).`);await loadStudents();});}
   const approvedStudents=students.filter(student=>student.accessStatus==="APPROVED");
  async function loadResults(){const r=await api<{results:AdminExamResult[]}>("/admin/exam-results");setResults(Array.isArray(r.results) ? r.results : []);}
  async function loadAnnouncements(){const r=await api<{announcements:AdminAnnouncement[]}>("/admin/announcements");setAnnouncements(Array.isArray(r.announcements) ? r.announcements : []);}
@@ -173,7 +170,7 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["mcp-assistant","Mini Admin Assistant","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["invitations","Student access","♙"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["institutions","Institutions & branches","▦"],["students","Manage students","♙"],["settings","Settings","⚙"]];
+ const nav=[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["students","Students","♙"],["settings","Settings","⚙"]];
  return <div className="admin-shell">
   <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
   {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
@@ -184,7 +181,6 @@ export default function AdminWorkspace(p:Props){
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
-   {tab==="institutions"&&<AdminInstitutionDirectory onError={setError} />}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
    {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} email={p.email} onSignOut={p.signOut} />}
    {tab==="live-monitor"&&<AdminLiveMonitor
@@ -242,7 +238,7 @@ export default function AdminWorkspace(p:Props){
       <p className="admin-muted">Snapshot generated {new Date(notificationHealth.generatedAt).toLocaleString()}.</p>
     </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
    </section>}
-   {tab==="mcp-assistant"&&<AdminMcpAssistant />}
+   {tab==="model-lab"&&<AdminMcpAssistant />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
