@@ -1515,3 +1515,12 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
 .admin-security-panel .security-secret-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-width:0;}
 .admin-security-panel .security-secret-actions .security-secret-key{min-width:0;}
 @media(max-width:620px){.admin-security-panel .account-device-row{grid-template-columns:minmax(0,1fr);align-items:stretch;gap:10px;}.admin-security-panel .account-device-row>button{justify-self:start;}.admin-security-panel .security-secret-actions{grid-template-columns:minmax(0,1fr);}}
+
+
+/* Authenticator enrollment QR is generated locally; keep it crisp and scan-friendly. */
+.admin-security-panel .security-authenticator-qr{display:block;width:min(240px,100%);height:auto;aspect-ratio:1;margin:6px auto 10px;padding:10px;box-sizing:border-box;border-radius:12px;background:#fff;image-rendering:pixelated;}
+.admin-security-panel .security-enrollment-panel{align-items:start;}
+.admin-security-panel .security-enrollment-panel>strong{line-height:1.5;}
+.admin-security-panel .security-secret-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-width:0;}
+.admin-security-panel .security-secret-actions .security-secret-key{min-width:0;}
+@media(max-width:620px){.admin-security-panel .security-secret-actions{grid-template-columns:minmax(0,1fr);}.admin-security-panel .security-secret-actions button{justify-self:start;}}
