@@ -23,6 +23,8 @@ describe("AdminSystemMonitor", () => {
     expect(screen.getByText("HEALTHY")).toBeTruthy();
     expect(screen.getByText("12.5%")).toBeTruthy();
     expect(screen.getByText("72 ms")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "CPU 12.5 percent" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Heap 50 percent of RSS" })).toBeTruthy();
     expect(screen.getByText(/shared PostgreSQL/)).toBeTruthy();
   });
 
