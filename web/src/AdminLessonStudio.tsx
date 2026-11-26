@@ -135,7 +135,7 @@ export default function AdminLessonStudio() {
     let script: unknown, storyboard: unknown;
     try { script = JSON.parse(scriptText); } catch { setError("Script editor contains invalid JSON."); return; }
     try { storyboard = JSON.parse(storyboardText); } catch { setError("Storyboard editor contains invalid JSON."); return; }
-    const studentIdParts = targetStudentIds.split(/[,\\s]+/).filter(Boolean);
+    const studentIdParts = targetStudentIds.split(/[,\s]+/).filter(Boolean);
     const selectedStudentIds = studentIdParts.map(Number);
     if (audienceScope === "STUDENTS" && (!selectedStudentIds.length || selectedStudentIds.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(selectedStudentIds).size !== selectedStudentIds.length)) { setError("Enter unique positive student account IDs, separated by commas."); return; }
     setBusy(true);
