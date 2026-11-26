@@ -500,7 +500,7 @@ export function authRouter(db: PrismaClient): Router {
       const input = RegisterSchema.parse(req.body);
       const nativeClient = req.header("x-arctester-client") === "mobile";
       if (!input.registrationNumber && !nativeClient) throw badRequest("Enter your diploma registration number.");
-      let registrationNumber: string | null = input.registrationNumber?.toUpperCase() ?? null;
+      const registrationNumber: string | null = input.registrationNumber?.toUpperCase() ?? null;
       let registrationCollegeCode = input.collegeCode;
       let registrationBranchCode = input.branchCode || null;
       let registrationBranchName = input.branchName;
