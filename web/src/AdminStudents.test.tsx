@@ -33,7 +33,7 @@ describe("combined student approval and management", () => {
   });
 
   it("passes college and branch filters to the student directory API", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(response({ students: [], page: 1, limit: 25, total: 0, totalPages: 1, statusCounts: { PENDING: 0, APPROVED: 0, REJECTED: 0 } })));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => { void input; return Promise.resolve(response({ students: [], page: 1, limit: 25, total: 0, totalPages: 1, statusCounts: { PENDING: 0, APPROVED: 0, REJECTED: 0 } })); });
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminStudents onError={vi.fn()} onNotice={vi.fn()} />);
     await screen.findByText("No students found");
