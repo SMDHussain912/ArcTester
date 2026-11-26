@@ -50,6 +50,22 @@ describe("StudentAccountSettings", () => {
     expect(screen.getByRole("button", { name: "Add a passkey" })).toBeInTheDocument();
   });
 
+  it("reauthenticates before starting authenticator enrollment", async () => {
+    vi.mocked(request).mockImplementation(async (path: string) => {
+      if (path === "/auth/reauthenticate") return { ok: true } as never;
+      if (path === "/auth/2fa/totp/setup") return { secret: "TESTSECRET", otpauthUri: "otpauth://totp/ArcTester:test" } as never;
+      return { sessions: [], events: [], passkeys: [], authenticatorEnabled: false, recoveryCodesRemaining: 0, passkeyCount: 0 } as never;
+    });
+    render(<StudentAccountSettings page="settings" email="student@example.com" userId={12} role="STUDENT" theme="light" onThemeChange={vi.fn()} reduceMotion={false} onReduceMotionChange={vi.fn()} showAnnouncementPopups onShowAnnouncementPopupsChange={vi.fn()} busy={false} onSignOut={vi.fn()} onProfileChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set up authenticator" }));
+    expect(screen.getByRole("dialog", { name: "Confirm it’s you" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "current-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/auth/reauthenticate", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/auth/2fa/totp/setup", expect.objectContaining({ method: "POST" })));
+    expect(await screen.findByText("TESTSECRET")).toBeInTheDocument();
+  });
+
   it("requires reauthentication after an academic identity change", async () => {
     vi.mocked(request).mockResolvedValue({ changed: true, requiresReauthentication: true });
     const onProfileChanged = vi.fn();

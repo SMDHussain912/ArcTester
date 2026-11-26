@@ -1358,3 +1358,15 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
   .admin-topbar{padding-left:68px!important}
   .admin-content{min-width:0!important}
 }
+
+
+/* Recent-auth confirmation used before authenticator and passkey enrollment. */
+.account-profile-confirm-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:18px;background:rgba(4,9,18,.72);backdrop-filter:blur(5px)}
+.account-profile-confirm{width:min(100%,520px);box-sizing:border-box;padding:24px;border:1px solid var(--border);border-radius:18px;background:var(--surface);box-shadow:0 24px 80px rgba(0,0,0,.35)}
+.account-profile-confirm h2{margin:0 0 12px;font-size:clamp(20px,3vw,26px);line-height:1.25}
+.account-profile-confirm p{color:var(--muted);line-height:1.55}
+.security-reauth-dialog{display:grid;gap:12px}
+.security-reauth-dialog label{display:grid;gap:6px;color:var(--ink);font-size:12px;font-weight:700}
+.security-reauth-dialog input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+.security-reauth-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:8px}
+@media(max-width:560px){.account-profile-confirm{padding:18px}.security-reauth-actions button{flex:1}}

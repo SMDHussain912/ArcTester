@@ -405,11 +405,11 @@ function getCookie(req: Request, name: string): string | null {
 }
 
 function sessionCookieSameSite(secure: boolean): "Lax" | "None" {
-  // The web app and API are hosted on different sites (Vercel/localhost + Render).
-  // Production cookies therefore need SameSite=None; Secure to accompany CORS credentials.
-  // Set COOKIE_SAME_SITE=lax explicitly only for a same-site deployment.
-  if (!secure || process.env.COOKIE_SAME_SITE?.toLowerCase() === "lax") return "Lax";
-  return "None";
+  // The production web client (Vercel) and API (Render) are cross-site.
+  // Always use SameSite=None; Secure in production so credentialed browser
+  // requests can carry the session cookie. COOKIE_SAME_SITE=Lax from an old
+  // deployment setting must not silently break /auth/me and security flows.
+  return secure ? "None" : "Lax";
 }
 
 function setSessionCookie(res: Response, token: string): void {
@@ -720,6 +720,51 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/reauthenticate", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ password: z.string().min(1).max(128), code: z.string().trim().max(32).optional() }).parse(req.body);
+      const user = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, email: true, sessionVersion: true, passwordHash: true, accessStatus: true },
+      });
+      if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Your account is not approved for security changes."));
+      if (!await verifyPasswordAsync(input.password, user.passwordHash)) return next(forbidden("Password is incorrect."));
+
+      const credential = await db.totpCredential.findUnique({
+        where: { userId: user.id },
+        select: { enabledAt: true, secretEncrypted: true, lastUsedCounter: true, recoveryCodesJson: true },
+      });
+      if (credential?.enabledAt) {
+        const submitted = input.code?.trim() ?? "";
+        const counter = /^\d{6}$/.test(submitted) ? verifyTotp(decryptTotpSecret(credential.secretEncrypted), submitted) : null;
+        if (counter !== null) {
+          if (counter <= credential.lastUsedCounter) return next(forbidden("That authenticator code was already used. Wait for the next code."));
+          await db.totpCredential.update({ where: { userId: user.id }, data: { lastUsedCounter: counter } });
+        } else {
+          const recoveryHashes = JSON.parse(credential.recoveryCodesJson) as string[];
+          const recoveryHash = hashRecoveryCode(submitted);
+          const recoveryIndex = recoveryHashes.indexOf(recoveryHash);
+          if (!submitted || recoveryIndex < 0) return next(forbidden("Enter your current authenticator code or an unused recovery code."));
+          recoveryHashes.splice(recoveryIndex, 1);
+          await db.totpCredential.update({ where: { userId: user.id }, data: { recoveryCodesJson: JSON.stringify(recoveryHashes) } });
+        }
+      }
+
+      const oldToken = readSessionToken(req);
+      const oldPayload = oldToken ? verifyJwt(oldToken) : {};
+      const { token } = await createAuthSession(db, req, user, "reauthentication");
+      if (typeof oldPayload.sid === "string") {
+        await db.authSession.updateMany({
+          where: { id: oldPayload.sid, userId: user.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      setSessionCookie(res, token);
+      await recordLoginEvent(db, req, user.email, user.id, "reauthenticated", "password");
+      res.json({ ok: true, reauthenticated: true, expiresIn: JWT_TTL_SECONDS });
+    } catch (error) { next(error); }
+  });
+
   router.post("/change-password", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = ChangePasswordSchema.parse(req.body);
@@ -908,7 +953,7 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/2fa/totp/verify-setup", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
+  router.post("/2fa/totp/verify-setup", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ code: z.string().regex(/^\d{6}$/) }).parse(req.body);
       const credential = await db.totpCredential.findUnique({ where: { userId: req.user!.id } });
@@ -1025,7 +1070,7 @@ export function authRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/passkeys/register/verify", requireAuth, requireRecentAuth(), async (req: AuthedRequest, res, next) => {
+  router.post("/passkeys/register/verify", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = z.object({ challenge: z.string().min(20), credentialId: z.string().min(8), clientDataJSON: z.string().min(20), attestationObject: z.string().min(20), name: z.string().trim().min(1).max(80).optional(), transports: z.array(z.string().max(32)).max(8).optional() }).parse(req.body);
       const { origin, rpId } = passkeyOrigin(req);
