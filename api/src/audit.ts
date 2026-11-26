@@ -44,6 +44,8 @@ export async function writeAuditEvent(db: PrismaClient, input: AuditWrite) {
 function classify(method: string, path: string, status: number): Classified | null {
   const upper = method.toUpperCase();
   if (path === "/auth/profile" && upper === "PATCH") return { action: "STUDENT_PROFILE_CHANGE", resourceType: "STUDENT", resourceId: "" };
+  if (path === "/auth/logout" || (/^\/auth\/sessions\/(?:revoke-all|[^/]+)/i.test(path) && upper !== "GET")) return { action: "SESSION_REVOKED", resourceType: "SESSION", resourceId: "" };
+  if (/^\/auth\/(?:change-password|devices|invitations)/i.test(path) && upper !== "GET") return { action: "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH", resourceId: "" };
   if (/^\/auth\/(?:login|signin|sign-in|verify|totp|2fa|passkey)/i.test(path)) {
     return { action: /login|signin|sign-in/i.test(path) ? (status < 400 ? "LOGIN" : "LOGIN_FAILURE") : "AUTHENTICATION_SECURITY_CHANGE", resourceType: "AUTH", resourceId: "" };
   }
@@ -59,12 +61,15 @@ function classify(method: string, path: string, status: number): Classified | nu
   if (/^\/admin\/students\/access\/bulk$/.test(path)) return { action: "STUDENT_APPROVAL_BULK", resourceType: "STUDENT", resourceId: "bulk" };
   if (/\/auth\/(?:sessions|session)|^\/sessions/i.test(path)) return { action: /revoke|delete/i.test(path) || upper === "DELETE" ? "SESSION_REVOKED" : "SESSION_ACTIVITY", resourceType: "SESSION", resourceId: "" };
   if (/lesson/i.test(path) && /(complete|progress|finish|submit)/i.test(path)) return { action: "LESSON_COMPLETION", resourceType: "LESSON", resourceId: path.match(/\/(?:lessons?|lesson-packages?)\/([^/]+)/i)?.[1] ?? "" };
+  if (/^\/path\/(?:lessons\/[^/]+\/answer|units\/[^/]+\/test\/answer)/i.test(path)) return { action: "QUESTION_ACTIVITY", resourceType: "LEARNING_PATH_QUESTION", resourceId: path.match(/\/lessons?\/([^/]+)/i)?.[1] ?? path.match(/\/units?\/([^/]+)/i)?.[1] ?? "" };
+  if (/^\/path\/units\/[^/]+\/test\/complete/i.test(path)) return { action: "EXAM_SUBMIT", resourceType: "UNIT_TEST", resourceId: path.match(/\/units?\/([^/]+)/i)?.[1] ?? "" };
   if (/lesson/i.test(path) && upper === "GET") return { action: "LESSON_ACCESS", resourceType: "LESSON", resourceId: path.match(/\/(?:lessons?|lesson-packages?)\/([^/]+)/i)?.[1] ?? "" };
   if (/question/i.test(path) && !/^\/admin\//.test(path)) return { action: "QUESTION_ACTIVITY", resourceType: "QUESTION", resourceId: path.match(/\/questions?\/([^/]+)/i)?.[1] ?? "" };
   if (/exam|attempt|submission/i.test(path) && upper !== "GET") {
     const isSubmit = /submit|finish|complete|answer/i.test(path);
     return { action: isSubmit ? "EXAM_SUBMIT" : "EXAM_START", resourceType: "EXAM", resourceId: path.match(/\/(?:exams?|attempts?)\/([^/]+)/i)?.[1] ?? "" };
   }
+  if (/^\/admin\/(?:questions|question-bank|subjects|topics|lesson-drafts|lessons|study-materials|materials|path|exams)(?:\/|$)/i.test(path) && upper !== "GET") return { action: "CONTENT_EDIT", resourceType: "CONTENT", resourceId: path.match(/^\/admin\/[^/]+\/([^/]+)/)?.[1] ?? "" };
   if (/^\/admin\//.test(path) && upper !== "GET") return { action: "ADMIN_OPERATION", resourceType: "ADMIN_RESOURCE", resourceId: path.match(/^\/admin\/[^/]+\/([^/]+)/)?.[1] ?? "" };
   if (/^\/(?:questions|question-bank|practice)/i.test(path)) return { action: "QUESTION_ACTIVITY", resourceType: "QUESTION", resourceId: "" };
   return null;
