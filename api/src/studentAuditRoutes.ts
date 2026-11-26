@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { computeAuditEventHash, writeAuditEvent } from "./audit.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 
 const FilterSchema = z.object({
@@ -39,6 +40,27 @@ function toCsv(events: Array<Record<string, unknown>>): string {
 
 export function studentAuditRouter(db: PrismaClient): Router {
   const router = Router();
+  router.get("/admin/audit/integrity", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const events = await db.auditEvent.findMany({
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true, actorId: true, actorRole: true, subjectUserId: true, action: true, outcome: true, resourceType: true, resourceId: true, requestId: true, route: true, collegeCode: true, branchCode: true, contextJson: true, createdAt: true, previousHash: true, eventHash: true },
+      });
+      let expectedPrevious = "GENESIS";
+      let firstInvalidEventId: string | null = null;
+      for (const event of events) {
+        const hash = computeAuditEventHash(event);
+        if (event.previousHash !== expectedPrevious || event.eventHash !== hash) {
+          firstInvalidEventId = event.id;
+          break;
+        }
+        expectedPrevious = event.eventHash;
+      }
+      const valid = firstInvalidEventId === null;
+      await writeAuditEvent(db, { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: null, action: "AUDIT_INTEGRITY_CHECK", outcome: valid ? "SUCCESS" : "FAILURE", resourceType: "AUDIT_LOG", resourceId: "", requestId: randomUUID(), route: "/admin/audit/integrity", collegeCode: "", branchCode: "", contextJson: JSON.stringify({ checkedEvents: events.length, valid, firstInvalidEventId }) });
+      res.json({ ok: true, valid, checkedEvents: events.length, firstInvalidEventId, checkedAt: new Date().toISOString() });
+    } catch (error) { next(error); }
+  });
   router.get("/admin/students/:id/audit", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const studentId = z.coerce.number().int().positive().safeParse(req.params.id);
@@ -52,7 +74,7 @@ export function studentAuditRouter(db: PrismaClient): Router {
         db.auditEvent.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (filters.page - 1) * filters.limit, take: filters.limit, select: { id: true, createdAt: true, action: true, outcome: true, actorId: true, actorRole: true, resourceType: true, resourceId: true, requestId: true, route: true, collegeCode: true, branchCode: true, contextJson: true } }),
         db.auditEvent.count({ where }),
       ]);
-      await db.auditEvent.create({ data: { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: student.id, action: "AUDIT_TIMELINE_VIEW", outcome: "SUCCESS", resourceType: "STUDENT", resourceId: String(student.id), requestId: randomUUID(), route: "/admin/students/:id/audit", contextJson: JSON.stringify({ page: filters.page, limit: filters.limit, filters: { action: filters.action, outcome: filters.outcome, from: filters.from, to: filters.to } }) } });
+      await writeAuditEvent(db, { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: student.id, action: "AUDIT_TIMELINE_VIEW", outcome: "SUCCESS", resourceType: "STUDENT", resourceId: String(student.id), requestId: randomUUID(), route: "/admin/students/:id/audit", collegeCode: student.collegeCode ?? "", branchCode: student.branchCode ?? "", contextJson: JSON.stringify({ page: filters.page, limit: filters.limit, filters: { action: filters.action, outcome: filters.outcome, from: filters.from, to: filters.to } }) });
       res.json({ ok: true, student, events, page: filters.page, limit: filters.limit, total, totalPages: Math.ceil(total / filters.limit) });
     } catch (error) { next(error); }
   });
@@ -68,7 +90,7 @@ export function studentAuditRouter(db: PrismaClient): Router {
       const { format, limit, ...filterValues } = filters;
       const where = eventWhere(student.id, { ...filterValues, page: 1, limit });
       const events = await db.auditEvent.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit, select: { id: true, createdAt: true, action: true, outcome: true, actorId: true, actorRole: true, resourceType: true, resourceId: true, requestId: true, route: true, collegeCode: true, branchCode: true } });
-      await db.auditEvent.create({ data: { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: student.id, action: "AUDIT_EXPORT", outcome: "SUCCESS", resourceType: "STUDENT", resourceId: String(student.id), requestId: randomUUID(), route: "/admin/students/:id/audit/export", contextJson: JSON.stringify({ format, filteredCount: events.length, filters: filterValues }) } });
+      await writeAuditEvent(db, { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: student.id, action: "AUDIT_EXPORT", outcome: "SUCCESS", resourceType: "STUDENT", resourceId: String(student.id), requestId: randomUUID(), route: "/admin/students/:id/audit/export", collegeCode: student.collegeCode ?? "", branchCode: student.branchCode ?? "", contextJson: JSON.stringify({ format, filteredCount: events.length, filters: filterValues }) });
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       if (format === "json") {
         res.setHeader("Content-Type", "application/json; charset=utf-8");
