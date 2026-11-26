@@ -41,7 +41,7 @@ describe("administrator workspace navigation", () => {
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
       ["Lesson Studio", "Lesson Studio"],
-      ["MCP keys", "MCP keys"],
+      ["API Handling", "API Handling"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
