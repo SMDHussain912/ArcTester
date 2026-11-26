@@ -199,8 +199,15 @@ describe("auth", () => {
   it("denies academic profile edits for accounts that are not approved students", async () => {
     const email = "profile-pending@example.com";
     await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "profile-password-123" });
-    const before = await server.db.user.findUnique({ where: { email }, select: { fullName: true, sessionVersion: true } });
-    const response = await postJsonWithCookie(`${server.baseUrl}/auth/profile`, { ...STUDENT_PROFILE, fullName: "Pending Changed" });
+    const pending = await server.db.user.findUnique({ where: { email }, select: { id: true, email: true, sessionVersion: true, fullName: true } });
+    expect(pending).toBeTruthy();
+    const before = { fullName: pending!.fullName, sessionVersion: pending!.sessionVersion };
+    const token = signJwt({ sub: String(pending!.id), email: pending!.email, sv: pending!.sessionVersion });
+    const response = await fetch(`${server.baseUrl}/auth/profile`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(STUDENT_PROFILE),
+    });
     expect(response.status).toBe(403);
     const after = await server.db.user.findUnique({ where: { email }, select: { fullName: true, sessionVersion: true } });
     expect(after).toEqual(before);
