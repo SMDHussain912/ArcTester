@@ -41,7 +41,7 @@ describe("Admin Model Lab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit model ID" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/admin/model-lab/models/readiness_classifier/1"), expect.objectContaining({ method: "PATCH" })));
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/admin/model-lab/models/readiness_classifier/1"), expect.objectContaining({ method: "DELETE" })));
   });
 });
