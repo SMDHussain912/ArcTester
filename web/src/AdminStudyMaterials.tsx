@@ -45,7 +45,7 @@ export default function AdminStudyMaterials({ materials, busy, onUpload, onUpdat
   async function submit() {
     setError("");
     if (!form.title.trim() || !form.subject.trim()) return setError("Title and subject are required.");
-    const studentIdParts = form.targetStudentIds.split(/[ ,\\t\\r\\n]+/).filter(Boolean);
+    const studentIdParts = form.targetStudentIds.split(/[,\s]+/).filter(Boolean);
     const selectedStudentIds = studentIdParts.map(Number);
     if (form.audienceScope === "STUDENTS" && (!selectedStudentIds.length || selectedStudentIds.some((id) => !Number.isSafeInteger(id) || id < 1) || new Set(selectedStudentIds).size !== selectedStudentIds.length)) return setError("Enter unique positive student account IDs, separated by commas.");
     const metadata: Payload = { ...form, title: form.title.trim(), description: form.description.trim(), subject: form.subject.trim(), topic: form.topic.trim(), targetCollegeCode: form.targetCollegeCode.trim(), targetCollegeName: form.targetCollegeName.trim(), targetBranchCode: form.targetBranchCode.trim(), targetBranchName: form.targetBranchName.trim(), targetStudentIds: selectedStudentIds };
