@@ -225,32 +225,39 @@ describe("auth", () => {
   });
 
   it("reauthenticates with password and rotates the current session for security changes", async () => {
-    const email = "reauth-session@example.com";
-    await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "reauth-password-123" });
-    await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
-    const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" });
-    expect(login.status).toBe(200);
-    const oldToken = cookieJar.get("ecet_session");
-    expect(oldToken).toBeTruthy();
-    const user = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
-    const secret = generateTotpSecret();
-    await server.db.totpCredential.create({ data: { userId: user.id, secretEncrypted: encryptTotpSecret(secret), enabledAt: new Date(), lastUsedCounter: -1, recoveryCodesJson: JSON.stringify([]) } });
+    const previousKey = process.env.TOTP_ENCRYPTION_KEY;
+    process.env.TOTP_ENCRYPTION_KEY = "ab".repeat(32);
+    try {
+      const email = "reauth-session@example.com";
+      await postJsonWithCookie(`${server.baseUrl}/auth/register`, { ...STUDENT_PROFILE, email, password: "reauth-password-123" });
+      await server.db.user.update({ where: { email }, data: { accessStatus: "APPROVED" } });
+      const login = await postJsonWithCookie(`${server.baseUrl}/auth/login`, { email, password: "reauth-password-123" });
+      expect(login.status).toBe(200);
+      const oldToken = cookieJar.get("ecet_session");
+      expect(oldToken).toBeTruthy();
+      const user = await server.db.user.findUniqueOrThrow({ where: { email }, select: { id: true } });
+      const secret = generateTotpSecret();
+      await server.db.totpCredential.create({ data: { userId: user.id, secretEncrypted: encryptTotpSecret(secret), enabledAt: new Date(), lastUsedCounter: -1, recoveryCodesJson: JSON.stringify([]) } });
 
-    const missingMfa = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123" });
-    expect(missingMfa.status).toBe(403);
-    expect((missingMfa.json as { error: string }).error).toContain("authenticator code");
-    const counter = Math.floor(Date.now() / 30_000);
-    const reauth = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123", code: totpAt(secret, counter) });
-    expect(reauth.status).toBe(200);
-    expect(reauth.json).toMatchObject({ ok: true, reauthenticated: true });
-    const newToken = cookieJar.get("ecet_session");
-    expect(newToken).toBeTruthy();
-    expect(newToken).not.toBe(oldToken);
+      const missingMfa = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123" });
+      expect(missingMfa.status).toBe(403);
+      expect((missingMfa.json as { error: string }).error).toContain("authenticator code");
+      const counter = Math.floor(Date.now() / 30_000);
+      const reauth = await postJsonWithCookie(`${server.baseUrl}/auth/reauthenticate`, { password: "reauth-password-123", code: totpAt(secret, counter) });
+      expect(reauth.status).toBe(200);
+      expect(reauth.json).toMatchObject({ ok: true, reauthenticated: true });
+      const newToken = cookieJar.get("ecet_session");
+      expect(newToken).toBeTruthy();
+      expect(newToken).not.toBe(oldToken);
 
-    const oldSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${oldToken}` } });
-    expect(oldSession.status).toBe(403);
-    const currentSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${newToken}` } });
-    expect(currentSession.status).toBe(200);
+      const oldSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${oldToken}` } });
+      expect(oldSession.status).toBe(403);
+      const currentSession = await fetch(`${server.baseUrl}/auth/me`, { headers: { cookie: `ecet_session=${newToken}` } });
+      expect(currentSession.status).toBe(200);
+    } finally {
+      if (previousKey === undefined) delete process.env.TOTP_ENCRYPTION_KEY;
+      else process.env.TOTP_ENCRYPTION_KEY = previousKey;
+    }
   });
 
   it("rejects academic profile edits when registration number, college and branch disagree", async () => {
