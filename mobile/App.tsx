@@ -1088,9 +1088,9 @@ export default function App() {
 
   function continueAfterProfileChange() {
     setProfileSuccessVisible(false);
-    void signOut();
+    void signOut(true);
   }
-  async function signOut() {
+  async function signOut(clearIdentityCache = false) {
     sessionIdentityRef.current = null;
     setBusy(false);
     await SecureStore.deleteItemAsync("arctester-token").catch(() => undefined);
@@ -1102,7 +1102,9 @@ export default function App() {
     setProfileRegistrationNumber("");
     setProfileEditing(false);
     setProfileSuccessVisible(false);
-    if (previousUserId !== undefined) await clearOfflineLearningPackage(String(previousUserId)).catch(() => undefined);
+    if (clearIdentityCache && previousUserId !== undefined) {
+      await clearOfflineLearningPackage(String(previousUserId)).catch(() => undefined);
+    }
     setBank(null);
     setAnnouncements([]);
     setNotifications([]);
