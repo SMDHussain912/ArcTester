@@ -25,7 +25,7 @@ export default function StudentNotificationsInbox({
           <h1 id="student-notifications-heading">Notification inbox</h1>
           <p className="muted">Important learning updates and account messages.</p>
         </div>
-        <div className="row">
+        <div className="student-notifications-actions">
           <button className="ghost" onClick={onBack}>← Back to dashboard</button>
           <button className="ghost" onClick={onRefresh}>Refresh</button>
           {items.some((item) => !item.readAt) ? <button className="ghost" onClick={onMarkAllRead}>Mark all as read</button> : null}
