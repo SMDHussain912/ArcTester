@@ -88,6 +88,9 @@ export default function StudentAccountSettings(props: Props) {
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileConfirming, setProfileConfirming] = useState(false);
+  const [securityReauthAction, setSecurityReauthAction] = useState<"totp" | "passkey" | null>(null);
+  const [securityReauthPassword, setSecurityReauthPassword] = useState("");
+  const [securityReauthCode, setSecurityReauthCode] = useState("");
 
   useEffect(() => {
     if (!isSettings) return;
@@ -188,7 +191,7 @@ export default function StudentAccountSettings(props: Props) {
     setDevices(sessionResult.sessions??[]);setLoginEvents(historyResult.events??[]);setPasskeys(passkeyResult.passkeys??[]);
     setSecurityStatus({authenticatorEnabled:statusResult.authenticatorEnabled,recoveryCodesRemaining:statusResult.recoveryCodesRemaining,passkeyCount:statusResult.passkeyCount});
   }
-  async function beginTotpSetup(){
+  function beginTotpSetup(){setSecurityReauthAction("totp");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");}\n  async function beginTotpSetupAfterReauth(){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");setRecoveryCodes([]);
     try{const result=await request<{secret:string;otpauthUri:string}>("/auth/2fa/totp/setup",{method:"POST",body:"{}"});setTotpSecret(result.secret);setTotpUri(result.otpauthUri);setTotpCode("");}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not start authenticator setup.");}finally{setSecurityBusy(false);}
@@ -203,7 +206,7 @@ export default function StudentAccountSettings(props: Props) {
     try{const result=await request<{message:string}>("/auth/2fa/totp/disable",{method:"POST",body:JSON.stringify({password:disablePassword,code:disableCode})});setSecurityMessage(result.message);setDisablePassword("");setDisableCode("");await reloadSecurity();}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not disable authenticator.");}finally{setSecurityBusy(false);}
   }
-  async function addPasskey(){
+  function addPasskey(){setSecurityReauthAction("passkey");setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");}\n  async function addPasskeyAfterReauth(){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
     try{
       if(!navigator.credentials)throw new Error("Passkeys are not supported by this browser.");
@@ -215,6 +218,16 @@ export default function StudentAccountSettings(props: Props) {
       setSecurityMessage("Passkey added to your account.");await reloadSecurity();
     }catch(error){setSecurityError(error instanceof Error?error.message:"Could not add passkey.");}finally{setSecurityBusy(false);}
   }
+  async function submitSecurityReauthentication(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();if(!securityReauthAction)return;setSecurityBusy(true);setSecurityError("");
+    try{
+      await request("/auth/reauthenticate",{method:"POST",body:JSON.stringify({password:securityReauthPassword,code:securityReauthCode.trim()||undefined})});
+      const action=securityReauthAction;setSecurityReauthAction(null);setSecurityReauthPassword("");setSecurityReauthCode("");
+      if(action==="totp")await beginTotpSetupAfterReauth();else await addPasskeyAfterReauth();
+    }catch(error){setSecurityError(error instanceof Error?error.message:"Could not confirm your identity. Please try again.");}
+    finally{setSecurityBusy(false);}
+  }
+
   async function removePasskey(id:string){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
     try{await request("/auth/passkeys/"+encodeURIComponent(id),{method:"DELETE"});setSecurityMessage("Passkey removed.");await reloadSecurity();}
@@ -339,6 +352,18 @@ export default function StudentAccountSettings(props: Props) {
       <SettingSection title="Account actions">
         <div className="account-danger-zone"><div><strong>Sign out</strong><p>End this session on the current device.</p></div><button className="ghost" disabled={busy} onClick={onSignOut}>{busy ? "Signing out…" : "Sign out"}</button></div>
       </SettingSection>
+      {securityReauthAction ? (
+        <div className="account-profile-confirm-backdrop" role="presentation">
+          <form className="panel account-profile-confirm security-reauth-dialog" role="dialog" aria-modal="true" aria-labelledby="security-reauth-title" onSubmit={submitSecurityReauthentication}>
+            <h2 id="security-reauth-title">Confirm it’s you</h2>
+            <p>Enter your account password to continue with this security change. If authenticator verification is enabled, enter its current code or an unused recovery code too.</p>
+            <label>Password<input type="password" autoComplete="current-password" value={securityReauthPassword} onChange={event=>setSecurityReauthPassword(event.target.value)} required maxLength={128}/></label>
+            <label>Authenticator / recovery code (if enabled)<input value={securityReauthCode} onChange={event=>setSecurityReauthCode(event.target.value)} autoComplete="one-time-code" maxLength={32}/></label>
+            {securityError?<p className="security-form-message error" role="alert">{securityError}</p>:null}
+            <div className="security-reauth-actions"><button type="button" className="ghost" disabled={securityBusy} onClick={()=>setSecurityReauthAction(null)}>Cancel</button><button type="submit" className="button button-primary" disabled={securityBusy||!securityReauthPassword}>{securityBusy?"Verifying…":"Continue"}</button></div>
+          </form>
+        </div>
+      ) : null}
       {profileConfirming ? (
         <div className="account-profile-confirm-backdrop" role="presentation">
           <div className="panel account-profile-confirm" role="dialog" aria-modal="true" aria-labelledby="profile-change-title">
