@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, notFound } from "./errors.js";
 import { hashQuestion, QuestionInputSchema } from "./questions.js";
 import { insertQuestion } from "./questionRepository.js";
-import { requireAdmin, requireAuth } from "./auth.js";
+import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 import { importFromCsv, importFromJson } from "./importService.js";
 import { validateQuestionDraftCsv } from "./questionDraftCsv.js";
 import { parseCsv } from "./csv.js";
@@ -73,7 +73,7 @@ export function questionRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
-  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req, res, next) => {
+  router.post("/admin/questions", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const input = QuestionInputSchema.parse(req.body);
       const outcome = await insertQuestion(db, input, req.user!.id);
