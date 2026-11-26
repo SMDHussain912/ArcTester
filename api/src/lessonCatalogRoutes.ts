@@ -26,7 +26,7 @@ async function getActiveLessonVersion(db: PrismaClient, lessonId: string, versio
       targetCollegeCode: true,
       targetCollegeName: true,
       targetBranchCode: true,
-      targetBranchName: true,
+      targetBranchName: true, targetStudentIdsJson: true,
       activeVersion: {
         select: {
           id: true,
@@ -85,7 +85,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
 
   router.get("/lessons/:id/versions/:versionId/manifest", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
 
       const lessonId = req.params.id;
@@ -119,7 +119,7 @@ export function lessonCatalogRouter(db: PrismaClient): Router {
 
   router.get("/lessons/:id/versions/:versionId/objects/:assetId", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
-      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
+      const account = await db.user.findUnique({ where: { id: req.user!.id }, select: { id: true, role: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true } });
       if (account?.role !== "STUDENT") return res.status(403).json({ error: "Published lessons are available to student accounts." });
       const { id: lessonId, versionId, assetId } = req.params;
       if (!lessonId || !Identifier.test(lessonId) || !versionId || !Identifier.test(versionId) || !assetId || !Identifier.test(assetId)) {
