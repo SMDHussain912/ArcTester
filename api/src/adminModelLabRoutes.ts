@@ -149,6 +149,22 @@ export function adminModelLabRouter(db: PrismaClient): Router {
     } catch (error) { next(error); }
   });
 
+  router.patch("/admin/model-lab/models/:modelId/:version", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
+    try {
+      const currentModelId = modelIdSchema.parse(req.params.modelId);
+      const version = z.coerce.number().int().min(1).parse(req.params.version);
+      const input = z.object({ modelId: modelIdSchema }).parse(req.body);
+      const candidate = await db.registeredModel.findUnique({ where: { modelId_version: { modelId: currentModelId, version } } });
+      if (!candidate) return next(notFound("Model version not found."));
+      if (candidate.isActive) return next(badRequest("Activate another passing version before editing an active model ID."));
+      const collision = await db.registeredModel.findUnique({ where: { modelId_version: { modelId: input.modelId, version } } });
+      if (collision && collision.id !== candidate.id) return next(badRequest("That model ID already has this version."));
+      const updated = await db.registeredModel.update({ where: { id: candidate.id }, data: { modelId: input.modelId }, select: { id: true, modelId: true, version: true, isActive: true } });
+      await db.modelRegistryAudit.create({ data: { id: id(), actorId: req.user!.id, modelId: input.modelId, version, action: "MODEL_ID_UPDATED", details: stableJson({ previousModelId: currentModelId }) } });
+      res.json({ ok: true, model: updated });
+    } catch (error) { next(error); }
+  });
+
   router.delete("/admin/model-lab/models/:modelId/:version", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
       const modelId = modelIdSchema.parse(req.params.modelId);
