@@ -17,7 +17,7 @@ const UpdateSchema = StudentAcademicProfileSchema.partial().extend({
   email: z.string().email().trim().toLowerCase().optional(),
   registrationNumber: z.preprocess(
     (value) => value === "" ? null : value,
-    z.string().trim().regex(/^\\d{5}-[A-Z]{1,3}-\\d{3}$/i, "Enter a valid diploma registration number.").nullable().optional(),
+    z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\\d{3}$/i, "Enter a valid diploma registration number.").nullable().optional(),
   ),
 }).strict().refine((value) => Object.keys(value).length > 0, {
   message: "Provide at least one field to update.",
@@ -50,7 +50,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
         ...(query.branch ? { branchName: { contains: query.branch, mode: "insensitive" as const } } : {}),
       };
       const where = { ...baseWhere, ...(query.status ? { accessStatus: query.status } : {}) };
-      const [students, total, statusGroups] = await Promise.all([
+      const [students, total, pendingCount, approvedCount, rejectedCount] = await Promise.all([
         db.user.findMany({
           where,
           select: {
@@ -63,16 +63,11 @@ export function adminStudentRouter(db: PrismaClient): Router {
           take: query.limit,
         }),
         db.user.count({ where }),
-        db.user.groupBy({
-          by: ["accessStatus"],
-          where: baseWhere,
-          _count: { _all: true },
-        }),
+        db.user.count({ where: { ...baseWhere, accessStatus: "PENDING" } }),
+        db.user.count({ where: { ...baseWhere, accessStatus: "APPROVED" } }),
+        db.user.count({ where: { ...baseWhere, accessStatus: "REJECTED" } }),
       ]);
-      const statusCounts = { PENDING: 0, APPROVED: 0, REJECTED: 0 };
-      for (const group of statusGroups) {
-        if (group.accessStatus in statusCounts) statusCounts[group.accessStatus as keyof typeof statusCounts] = group._count._all;
-      }
+      const statusCounts = { PENDING: pendingCount, APPROVED: approvedCount, REJECTED: rejectedCount };
       res.json({
         ok: true, students, page: query.page, limit: query.limit, total,
         totalPages: Math.ceil(total / query.limit), statusCounts,
