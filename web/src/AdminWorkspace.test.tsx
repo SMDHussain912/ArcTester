@@ -159,7 +159,7 @@ describe("Part 3 responsive admin navigation and institution tools", () => {
     expect(await screen.findByRole("heading", { name: "Students" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(await screen.findByRole("heading", { name: "Protect this administrator account" })).toBeInTheDocument();
-    expect(screen.getByText(/appearance/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Theme" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Dark" })).toBeInTheDocument();
   });
 
