@@ -194,7 +194,7 @@ export default function AdminWorkspace(p:Props){
   {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
   {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
   {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
-  {label:"System",items:[["system-monitor","Server monitor","▥"],["mcp-keys","MCP keys","⌘"]]},{label:"Account",items:[["account-security","Account","♙"]]}
+  {label:"System",items:[["system-monitor","Server monitor","▥"],["api-handling","API Handling","⌘"]]},{label:"Account",items:[["account-security","Account","♙"]]}
  ];
  const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
@@ -266,7 +266,7 @@ export default function AdminWorkspace(p:Props){
     </> : <p>{notificationHealthLoading?"Loading notification metrics…":"Notification metrics are unavailable. Refresh to try again."}</p>}
    </section>}
    {tab==="model-lab"&&<AdminModelLab />}
-   {tab==="mcp-keys"&&<AdminMcpAssistant />}
+   {tab==="api-handling"&&<AdminMcpAssistant />}
    {tab==="overview"&&<AdminOverview
     stats={stats}
     exams={exams}
