@@ -1,6 +1,6 @@
 # ArcTester Part 5 — Server Operations and Android Parity
 
-**Status:** Part 5 implementation merged in PR #199 at `1b4b62a34b98478a7180c4f9c824a35570986378`. CI run #45754209925 passed on exact PR head `7ef45d42dabba823286006d7ba075f8bf` (all five jobs). No production deployment or hosting instance-count change was performed.
+**Status:** Part 5 implementation merged in PR #199 at `1b4b62a34b98478a7180c4f9c824a35570986378`. CI run #45754209925 passed on exact PR head `7ef45d42dabba823286490040e61e3eb876e1f83` (all five jobs). No production deployment or hosting instance-count change was performed.
 
 ## Verified starting point
 
