@@ -18,7 +18,7 @@ export type AcademicAudienceProfile = {
 };
 
 function normalize(value: string | null | undefined): string {
-  return (value ?? "").normalize("NFKC").trim().toLocaleLowerCase().replace(/\\s+/g, " ");
+  return (value ?? "").normalize("NFKC").trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }
 
 function matchesOneOf(profileValues: Array<string | null | undefined>, targetValues: Array<string | null | undefined>): boolean {
