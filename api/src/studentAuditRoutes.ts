@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { computeAuditEventHash, writeAuditEvent } from "./audit.js";
+import { computeAuditCheckpointHash, computeAuditEventHash, writeAuditEvent } from "./audit.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
 
 const FilterSchema = z.object({
@@ -42,23 +42,38 @@ export function studentAuditRouter(db: PrismaClient): Router {
   const router = Router();
   router.get("/admin/audit/integrity", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
     try {
+      const checkpoints = await db.auditCheckpoint.findMany({
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true, lastEventHash: true, lastEventCreatedAt: true, deletedCount: true, previousCheckpointHash: true, checkpointHash: true, createdAt: true },
+      });
       const events = await db.auditEvent.findMany({
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: { id: true, actorId: true, actorRole: true, subjectUserId: true, action: true, outcome: true, resourceType: true, resourceId: true, requestId: true, route: true, collegeCode: true, branchCode: true, contextJson: true, createdAt: true, previousHash: true, eventHash: true },
       });
-      let expectedPrevious = "GENESIS";
+      let expectedCheckpoint = "GENESIS";
       let firstInvalidEventId: string | null = null;
-      for (const event of events) {
-        const hash = computeAuditEventHash(event);
-        if (event.previousHash !== expectedPrevious || event.eventHash !== hash) {
-          firstInvalidEventId = event.id;
+      for (const checkpoint of checkpoints) {
+        const hash = computeAuditCheckpointHash(checkpoint);
+        if (checkpoint.previousCheckpointHash !== expectedCheckpoint || checkpoint.checkpointHash !== hash) {
+          firstInvalidEventId = checkpoint.id;
           break;
         }
-        expectedPrevious = event.eventHash;
+        expectedCheckpoint = checkpoint.checkpointHash;
+      }
+      let expectedPrevious = checkpoints.length ? checkpoints[checkpoints.length - 1]!.lastEventHash : "GENESIS";
+      if (!firstInvalidEventId) {
+        for (const event of events) {
+          const hash = computeAuditEventHash(event);
+          if (event.previousHash !== expectedPrevious || event.eventHash !== hash) {
+            firstInvalidEventId = event.id;
+            break;
+          }
+          expectedPrevious = event.eventHash;
+        }
       }
       const valid = firstInvalidEventId === null;
-      await writeAuditEvent(db, { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: null, action: "AUDIT_INTEGRITY_CHECK", outcome: valid ? "SUCCESS" : "FAILURE", resourceType: "AUDIT_LOG", resourceId: "", requestId: randomUUID(), route: "/admin/audit/integrity", collegeCode: "", branchCode: "", contextJson: JSON.stringify({ checkedEvents: events.length, valid, firstInvalidEventId }) });
-      res.json({ ok: true, valid, checkedEvents: events.length, firstInvalidEventId, checkedAt: new Date().toISOString() });
+      await writeAuditEvent(db, { actorId: req.user!.id, actorRole: "ADMIN", subjectUserId: null, action: "AUDIT_INTEGRITY_CHECK", outcome: valid ? "SUCCESS" : "FAILURE", resourceType: "AUDIT_LOG", resourceId: "", requestId: randomUUID(), route: "/admin/audit/integrity", collegeCode: "", branchCode: "", contextJson: JSON.stringify({ checkedEvents: events.length, checkedCheckpoints: checkpoints.length, valid, firstInvalidEventId }) });
+      res.json({ ok: true, valid, checkedEvents: events.length, checkedCheckpoints: checkpoints.length, firstInvalidEventId, checkedAt: new Date().toISOString() });
     } catch (error) { next(error); }
   });
   router.get("/admin/students/:id/audit", requireAuth, requireAdmin(db), async (req: AuthedRequest, res, next) => {
