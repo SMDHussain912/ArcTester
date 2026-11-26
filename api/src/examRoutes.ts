@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict, forbidden, notFound } from "./errors.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "./auth.js";
+import { isContentAudienceVisible, type ContentAudience } from "./contentAudience.js";
 import {
   QUESTION_ANALYTICS_MINIMUM_ANSWERS,
   QUESTION_ANALYTICS_WEAK_ACCURACY,
@@ -399,10 +400,24 @@ export function examRouter(db: PrismaClient): Router {
 
       const students = await db.user.findMany({
         where: { id: { in: input.studentIds }, role: "STUDENT", accessStatus: "APPROVED" },
-        select: { id: true },
+        select: { id: true, collegeCode: true, collegeName: true, branchCode: true, branchName: true },
       });
       if (students.length !== input.studentIds.length) {
         return next(badRequest("One or more selected accounts are not approved students."));
+      }
+
+      const versionQuestionRows = await db.examVersionQuestion.findMany({
+        where: { examVersionId: version.id, sourceQuestionId: { not: null } },
+        select: { sourceQuestionId: true },
+      });
+      const sourceQuestionIds = versionQuestionRows.flatMap((row) => row.sourceQuestionId === null ? [] : [row.sourceQuestionId]);
+      if (sourceQuestionIds.length) {
+        const scopedQuestions = await db.question.findMany({
+          where: { id: { in: sourceQuestionIds }, audienceScope: { not: "ALL" } },
+          select: { id: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true },
+        });
+        const ineligible = students.filter((student) => scopedQuestions.some((question) => !isContentAudienceVisible(question as ContentAudience, student)));
+        if (ineligible.length) return next(badRequest("Scoped questions in this exam are not available to every selected student. Remove ineligible students or use content with a wider audience. Student IDs: " + ineligible.map((student) => student.id).join(", ") + "."));
       }
 
       const assignments = await db.$transaction(async (tx) => {
