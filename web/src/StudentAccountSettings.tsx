@@ -88,9 +88,10 @@ export default function StudentAccountSettings(props: Props) {
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileConfirming, setProfileConfirming] = useState(false);
-  const [securityReauthAction, setSecurityReauthAction] = useState<"totp" | "passkey" | null>(null);
+  const [securityReauthAction, setSecurityReauthAction] = useState<"totp" | "passkey" | "removePasskey" | null>(null);
   const [securityReauthPassword, setSecurityReauthPassword] = useState("");
   const [securityReauthCode, setSecurityReauthCode] = useState("");
+  const [securityReauthPasskeyId, setSecurityReauthPasskeyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isSettings) return;
@@ -225,12 +226,13 @@ export default function StudentAccountSettings(props: Props) {
     try{
       await request("/auth/reauthenticate",{method:"POST",body:JSON.stringify({password:securityReauthPassword,code:securityReauthCode.trim()||undefined})});
       const action=securityReauthAction;setSecurityReauthAction(null);setSecurityReauthPassword("");setSecurityReauthCode("");
-      if(action==="totp")await beginTotpSetupAfterReauth();else await addPasskeyAfterReauth();
+      if(action==="totp")await beginTotpSetupAfterReauth();else if(action==="passkey")await addPasskeyAfterReauth();else if(securityReauthPasskeyId)await removePasskeyAfterReauth(securityReauthPasskeyId);
     }catch(error){setSecurityError(error instanceof Error?error.message:"Could not confirm your identity. Please try again.");}
     finally{setSecurityBusy(false);}
   }
 
-  async function removePasskey(id:string){
+  function removePasskey(id:string){setSecurityReauthAction("removePasskey");setSecurityReauthPasskeyId(id);setSecurityReauthPassword("");setSecurityReauthCode("");setSecurityError("");}
+  async function removePasskeyAfterReauth(id:string){
     setSecurityBusy(true);setSecurityError("");setSecurityMessage("");
     try{await request("/auth/passkeys/"+encodeURIComponent(id),{method:"DELETE"});setSecurityMessage("Passkey removed.");await reloadSecurity();}
     catch(error){setSecurityError(error instanceof Error?error.message:"Could not remove passkey.");}finally{setSecurityBusy(false);}
@@ -362,7 +364,7 @@ export default function StudentAccountSettings(props: Props) {
             <label>Password<input type="password" autoComplete="current-password" value={securityReauthPassword} onChange={event=>setSecurityReauthPassword(event.target.value)} required maxLength={128}/></label>
             <label>Authenticator / recovery code (if enabled)<input value={securityReauthCode} onChange={event=>setSecurityReauthCode(event.target.value)} autoComplete="one-time-code" maxLength={32}/></label>
             {securityError?<p className="security-form-message error" role="alert">{securityError}</p>:null}
-            <div className="security-reauth-actions"><button type="button" className="ghost" disabled={securityBusy} onClick={()=>setSecurityReauthAction(null)}>Cancel</button><button type="submit" className="button button-primary" disabled={securityBusy||!securityReauthPassword}>{securityBusy?"Verifying…":"Continue"}</button></div>
+            <div className="security-reauth-actions"><button type="button" className="ghost" disabled={securityBusy} onClick={()=>{setSecurityReauthAction(null);setSecurityReauthPasskeyId(null)}}>Cancel</button><button type="submit" className="button button-primary" disabled={securityBusy||!securityReauthPassword}>{securityBusy?"Verifying…":"Continue"}</button></div>
           </form>
         </div>
       ) : null}
