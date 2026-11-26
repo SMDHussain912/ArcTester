@@ -3,6 +3,15 @@ export type AdminBankQuestion = { id: number; subject: string; topic: string; te
 export type QuestionReviewProgress = { subjects: Array<{ subject: string; paperQuota: number; requiredQuota: number; drafted: number; approved: number; rejected: number; remaining: number }>; totals: { drafted: number; approved: number; rejected: number; requiredQuota: number; remaining: number } };
 export type AdminQuestionCatalogSubject = { id: number; name: string; count: number; topics: { id: number; name: string; _count: { questions: number } }[] };
 type Topic = { id: number; name: string; _count: { questions: number } };
+function questionAudienceLabel(question: AdminBankQuestion): string {
+  if (question.audienceScope === "COLLEGE") return "College · " + (question.targetCollegeName || question.targetCollegeCode || "target missing");
+  if (question.audienceScope === "BRANCH") return "Branch · " + (question.targetBranchName || question.targetBranchCode || "target missing") + (question.targetCollegeName || question.targetCollegeCode ? " · " + (question.targetCollegeName || question.targetCollegeCode) : " · all colleges");
+  if (question.audienceScope === "STUDENTS") {
+    try { const ids = JSON.parse(question.targetStudentIdsJson ?? "[]"); return "Selected students · " + (Array.isArray(ids) ? ids.length + " account(s)" : "target missing"); }
+    catch { return "Selected students · target missing"; }
+  }
+  return "Global · all students";
+}
 
 type AdminQuestionBankProps = {
   questions: AdminBankQuestion[];
@@ -81,7 +90,7 @@ export default function AdminQuestionBank({ questions, total, page, query, subje
         {questions.length === 0 ? <div className="empty-state"><b>No questions match these filters</b><span>Upload a question set or add the first question.</span></div> : questions.map((question) => (
           <article className="bank-question" key={question.id}>
             <input type="checkbox" aria-label={`Select question ${question.id}`} checked={selected.includes(question.id)} onChange={() => onToggleSelected(question.id)} />
-            <div className="bank-q-main"><div className="bank-q-meta"><b>{question.subject}</b><span>{question.topic}</span><span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span><span className={`status ${question.reviewStatus === "APPROVED" ? "status-used" : question.reviewStatus === "REJECTED" ? "status-expired" : "status-pending"}`}>{question.reviewStatus ?? "DRAFT"}</span></div>
+            <div className="bank-q-main"><div className="bank-q-meta"><b>{question.subject}</b><span>{question.topic}</span><span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span><span className="audience-scope-label">{questionAudienceLabel(question)}</span><span className={`status ${question.reviewStatus === "APPROVED" ? "status-used" : question.reviewStatus === "REJECTED" ? "status-expired" : "status-pending"}`}>{question.reviewStatus ?? "DRAFT"}</span></div>
               <p>{question.text}</p><div className="bank-options">{question.options.map((option, index) => <span className={index === question.correctIndex ? "correct-option" : ""} key={index}>{String.fromCharCode(65 + index)}. {option}{index === question.correctIndex ? " ✓" : ""}</span>)}</div>
               {question.explanation && <small className="muted">Explanation: {question.explanation}</small>}
               <label className="question-review-source">Source (required before approval)<input aria-label={`Source for question ${question.id}`} value={(sourceDrafts[question.id] ?? question.source ?? "")} onChange={(event) => setSourceDrafts((current) => ({ ...current, [question.id]: event.target.value }))} placeholder="Add a real book, syllabus or reference source" /></label>
