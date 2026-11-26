@@ -172,7 +172,7 @@ export function questionAdminRouter(db: PrismaClient): Router {
         questions: questions.map((q) => ({ id: q.id, subject: q.subject.name, topic: q.topic?.name ?? "General",
           text: q.text, options: JSON.parse(q.options), questionType: q.questionType,
           promptData: JSON.parse(q.promptData), answerData: JSON.parse(q.answerData), correctIndex: q.correctIndex,
-          explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, createdAt: q.createdAt })) });
+          explanation: q.explanation, source: q.source, difficulty: q.difficulty, reviewStatus: q.reviewStatus, audienceScope: q.audienceScope, targetCollegeCode: q.targetCollegeCode, targetCollegeName: q.targetCollegeName, targetBranchCode: q.targetBranchCode, targetBranchName: q.targetBranchName, targetStudentIdsJson: q.targetStudentIdsJson, createdAt: q.createdAt })) });
     } catch (error) { next(error); }
   });
 
