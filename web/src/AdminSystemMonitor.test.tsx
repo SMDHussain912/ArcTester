@@ -39,7 +39,7 @@ describe("AdminSystemMonitor", () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<AdminSystemMonitor />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh metrics" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Refresh metrics" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
