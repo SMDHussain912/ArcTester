@@ -36,7 +36,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  if(!response.ok) throw new Error(response.status>=500?"ArcTester couldn\u0027t complete this request right now. Please try again.":typeof body.error==="string"?body.error:"Request failed.");
  return body as T;
 }
-type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string };
+type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string; targetStudentIds: number[] };
 
 export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
@@ -118,7 +118,7 @@ export default function AdminWorkspace(p:Props){
  async function loadStudyMaterials(){const r=await api<{materials:StudyMaterial[]}>("/admin/study-materials");setStudyMaterials(r.materials??[]);}
  async function uploadStudyMaterial(payload:StudyMaterialPayload):Promise<boolean>{const uploaded=await run(async()=>{await api("/admin/study-materials",{method:"POST",body:JSON.stringify(payload)});setNotice("Study link saved as a draft. Publish it when ready.");});if(uploaded){try{await loadStudyMaterials();}catch(e){setError("Uploaded successfully, but the library could not refresh: "+(e as Error).message);}}return uploaded;}
  async function uploadStudyMaterialFile(payload:StudyMaterialPayload,file:File,id?:string):Promise<boolean>{
-  const query=new URLSearchParams({title:payload.title,description:payload.description,subject:payload.subject,topic:payload.topic,fileName:file.name,audienceScope:payload.audienceScope,targetCollegeCode:payload.targetCollegeCode,targetCollegeName:payload.targetCollegeName,targetBranchCode:payload.targetBranchCode,targetBranchName:payload.targetBranchName});
+  const query=new URLSearchParams({title:payload.title,description:payload.description,subject:payload.subject,topic:payload.topic,fileName:file.name,audienceScope:payload.audienceScope,targetCollegeCode:payload.targetCollegeCode,targetCollegeName:payload.targetCollegeName,targetBranchCode:payload.targetBranchCode,targetBranchName:payload.targetBranchName,targetStudentIds:payload.targetStudentIds.join(",")});
   const path=id?"/admin/study-materials/"+encodeURIComponent(id)+"/file":"/admin/study-materials/upload";
   const saved=await run(async()=>{
    const response=await fetch(API+path+"?"+query.toString(),{method:id?"PATCH":"POST",credentials:"include",headers:{"content-type":file.type||"application/octet-stream"},body:file});
