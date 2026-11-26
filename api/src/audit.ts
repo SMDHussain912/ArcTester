@@ -121,14 +121,18 @@ export function auditRequestMiddleware(db: PrismaClient) {
         if (!classified) return;
         let actorId = auditReq.user?.id ?? null;
         let subjectUserId = classified.subjectIdFromPath ?? actorId;
-        // Login identity is resolved by database lookup; submitted email is not stored in the event.
-        if (!actorId && classified.action.startsWith("LOGIN")) {
+        // Login identity is resolved from the account/challenge row; submitted identifiers are never stored.
+        if (!actorId && (classified.action.startsWith("LOGIN") || classified.action.startsWith("PASSKEY_LOGIN"))) {
           const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
           if (email) {
             const matched = await db.user.findUnique({ where: { email }, select: { id: true } });
             subjectUserId = matched?.id ?? null;
-            if (res.statusCode < 400 && matched) actorId = matched.id;
+          } else if (typeof req.body?.challengeId === "string") {
+            const challengeHash = createHash("sha256").update(req.body.challengeId).digest("hex");
+            const challenge = await db.authChallenge.findUnique({ where: { challenge: challengeHash }, select: { userId: true } });
+            subjectUserId = challenge?.userId ?? null;
           }
+          if (res.statusCode < 400 && subjectUserId) actorId = subjectUserId;
         }
         const identityId = subjectUserId ?? actorId;
         const [actor, subject] = await Promise.all([
