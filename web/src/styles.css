@@ -1468,3 +1468,33 @@ html[data-admin-density="compact"] .bank-question{padding:12px 16px}
 /* Reauthentication dialogs remain fully visible and scroll internally on short mobile screens. */
 .account-profile-confirm-backdrop{height:100dvh;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;}
 .account-profile-confirm{margin:auto;max-height:calc(100dvh - 36px);overflow-y:auto;overscroll-behavior:contain;}
+
+
+/* Restored model control workspace: readable cards and safe horizontal table scrolling. */
+.admin-model-lab{display:grid;gap:18px;min-width:0;width:100%;}
+.admin-model-lab .admin-page-title{align-items:flex-start;gap:16px;}
+.admin-model-lab .admin-page-title>div{min-width:0;max-width:820px;}
+.admin-model-lab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start;min-width:0;}
+.admin-model-lab .admin-panel{min-width:0;}
+.admin-model-lab .admin-panel>label{display:grid;gap:7px;margin:12px 0;font-weight:650;font-size:13px;min-width:0;}
+.admin-model-lab input,.admin-model-lab select,.admin-model-lab textarea{width:100%;min-width:0;max-width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg);color:var(--ink);font:inherit;}
+.admin-model-lab textarea{resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.5;}
+.admin-model-lab-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0;}
+.admin-model-lab-fields label{display:grid;gap:7px;margin:10px 0;font-size:13px;font-weight:650;min-width:0;}
+.admin-model-lab .admin-setting-toggle{display:flex!important;align-items:center;justify-content:space-between;gap:12px;}
+.admin-model-lab .admin-setting-toggle input{width:auto;flex:0 0 auto;}
+.admin-model-table-wrap{width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;}
+.admin-model-table{width:100%;min-width:700px;border-collapse:collapse;}
+.admin-model-table th,.admin-model-table td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;}
+.admin-model-table td:first-child{max-width:220px;overflow-wrap:anywhere;}
+.admin-model-table td small,.admin-model-dataset-row small,.admin-model-job small{display:block;color:var(--muted);font-size:11px;margin-top:4px;overflow-wrap:anywhere;}
+.admin-model-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;}
+.admin-model-actions button{white-space:normal;}
+.admin-model-job,.admin-model-dataset-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);min-width:0;}
+.admin-model-job>div:first-child,.admin-model-dataset-row>div:first-child{min-width:0;overflow-wrap:anywhere;}
+.admin-model-job:last-child,.admin-model-dataset-row:last-child{border-bottom:0;}
+.admin-model-progress{flex:0 0 min(140px,25%);height:8px;border-radius:999px;background:var(--border);overflow:hidden;}
+.admin-model-progress span{display:block;height:100%;background:var(--accent);border-radius:inherit;}
+.admin-model-dataset-row>div:last-child{display:flex;flex-wrap:wrap;gap:8px;}
+@media(max-width:900px){.admin-model-lab-grid{grid-template-columns:minmax(0,1fr);}.admin-model-lab .admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.admin-model-lab .admin-page-title{display:grid;grid-template-columns:minmax(0,1fr);}.admin-model-lab-fields{grid-template-columns:minmax(0,1fr);gap:0;}.admin-model-job,.admin-model-dataset-row{align-items:flex-start;flex-direction:column;}.admin-model-progress{width:100%;flex-basis:auto;}.admin-model-dataset-row>div:last-child{width:100%;}.admin-model-dataset-row>div:last-child button{flex:1;min-width:0;}}
