@@ -1,4 +1,5 @@
-import AdminStudentPicker from "./AdminStudentPicker";\nimport { useState } from "react";
+import AdminStudentPicker from "./AdminStudentPicker";
+import { useState } from "react";
 import { AP_DIPLOMA_BRANCHES } from "./polytechnicCatalog";
 
 export type StudyMaterial = {
