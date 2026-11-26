@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type StudentSummary = { id: number; fullName: string | null; email: string; registrationNumber: string | null; collegeName: string | null; collegeCode: string | null; branchName: string | null; branchCode: string | null };
 type AuditEvent = { id: string; createdAt: string; action: string; outcome: "SUCCESS" | "FAILURE"; actorId: number | null; actorRole: string; resourceType: string; resourceId: string; requestId: string; route: string; collegeCode: string; branchCode: string; contextJson: string };
@@ -25,13 +25,16 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
   const [exporting, setExporting] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [integrity, setIntegrity] = useState<{ valid: boolean; checkedEvents: number; checkedAt: string; firstInvalidEventId: string | null } | null>(null);
-  const params = new URLSearchParams({ page: String(page), limit: "25" });
-  if (action) params.set("action", action);
-  if (outcome) params.set("outcome", outcome);
-  if (from) params.set("from", new Date(from).toISOString());
-  if (to) params.set("to", new Date(to).toISOString());
-  if (collegeCode.trim()) params.set("collegeCode", collegeCode.trim());
-  if (branchCode.trim()) params.set("branchCode", branchCode.trim());
+  const params = useMemo(() => {
+    const query = new URLSearchParams({ page: String(page), limit: "25" });
+    if (action) query.set("action", action);
+    if (outcome) query.set("outcome", outcome);
+    if (from) query.set("from", new Date(from).toISOString());
+    if (to) query.set("to", new Date(to).toISOString());
+    if (collegeCode.trim()) query.set("collegeCode", collegeCode.trim());
+    if (branchCode.trim()) query.set("branchCode", branchCode.trim());
+    return query;
+  }, [page, action, outcome, from, to, collegeCode, branchCode]);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -40,7 +43,7 @@ export default function AdminStudentAudit({ student, onClose, onError }: Props) 
       .catch((error: unknown) => { if (active) onError(error instanceof Error ? error.message : "Could not load audit timeline."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [student.id, page, action, outcome, from, to, collegeCode, branchCode, refresh, onError]);
+  }, [student.id, params, refresh, onError]);
   async function verifyIntegrity() {
     try {
       const result = await request<{ valid: boolean; checkedEvents: number; checkedAt: string; firstInvalidEventId: string | null }>("/admin/audit/integrity");
