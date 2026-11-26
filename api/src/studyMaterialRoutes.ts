@@ -103,7 +103,7 @@ const MaterialPatch = z.object({
 
 const publicSelect = {
   id: true, title: true, description: true, subject: true, topic: true, url: true,
-  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, createdAt: true, updatedAt: true,
+  fileName: true, mimeType: true, sizeBytes: true, audienceScope: true, targetCollegeCode: true, targetCollegeName: true, targetBranchCode: true, targetBranchName: true, targetStudentIdsJson: true, createdAt: true, updatedAt: true,
 } as const;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -156,7 +156,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const materials = profile.role === "ADMIN" ? published : published.filter((item) =>
         isContentAudienceVisible(item as ContentAudience, profile),
       );
-      res.json({ ok: true, materials });
+      res.json({ ok: true, materials: materials.map((item) => { const publicItem = { ...item }; delete publicItem.targetStudentIdsJson; return publicItem; }) });
     } catch (error) { next(error); }
   });
 
