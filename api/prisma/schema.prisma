@@ -47,6 +47,14 @@ model Question {
   source       String    @default("")
   difficulty   String    @default("medium")
   reviewStatus String    @default("DRAFT")
+  audienceScope String   @default("ALL")
+  targetCollegeCode String?
+  targetCollegeName String?
+  targetBranchCode String?
+  targetBranchName String?
+  targetStudentIdsJson String @default("[]")
+  createdById Int?
+  createdBy User? @relation("QuestionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   questionHash String    @unique
   createdAt    DateTime  @default(now())
   answers      AttemptAnswer[]
@@ -57,6 +65,8 @@ model Question {
   reviews UserQuestionReview[]
   @@index([subjectId])
   @@index([reviewStatus, subjectId])
+  @@index([reviewStatus, audienceScope, subjectId])
+  @@index([createdById])
 }
 
 model Attempt {
@@ -115,6 +125,7 @@ model User {
   questionReviews UserQuestionReview[]
   badges UserBadge[]
   lessonDrafts LessonDraft[]
+  questionsCreated Question[] @relation("QuestionCreator")
   uploadedLessonAudio LessonAudioAsset[]
   createdLessonVersions LessonVersion[]
   privateQuestions StudentPrivateQuestion[]
@@ -552,6 +563,7 @@ model StudyMaterial {
   targetCollegeName String?
   targetBranchCode String?
   targetBranchName String?
+  targetStudentIdsJson String @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -753,6 +765,7 @@ model LessonDraft {
   targetCollegeName String?
   targetBranchCode String?
   targetBranchName String?
+  targetStudentIdsJson String @default("[]")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
