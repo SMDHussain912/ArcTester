@@ -72,6 +72,18 @@ describe("student audit timeline and exports", () => {
     expect(exports.every(event => event.actorId === adminId && event.outcome === "SUCCESS")).toBe(true);
   });
 
+  it("verifies the event hash chain and detects a modified audit record", async () => {
+    const valid = await getJson(server.baseUrl + "/admin/audit/integrity", adminCookie);
+    expect(valid.status).toBe(200);
+    expect(valid.json).toMatchObject({ ok: true, valid: true });
+    const first = await server.db.auditEvent.findFirst({ orderBy: { createdAt: "asc" } });
+    expect(first).toBeTruthy();
+    await server.db.auditEvent.update({ where: { id: first!.id }, data: { contextJson: '{"modified":true}' } });
+    const invalid = await getJson(server.baseUrl + "/admin/audit/integrity", adminCookie);
+    expect(invalid.status).toBe(200);
+    expect(invalid.json).toMatchObject({ ok: true, valid: false, firstInvalidEventId: first!.id });
+  });
+
   it("rejects student access and invalid date ranges", async () => {
     const student = await signUp(server.baseUrl, "audit-denied-student@example.test");
     const denied = await getJson(server.baseUrl + "/admin/students/" + studentId + "/audit", student.cookie);
