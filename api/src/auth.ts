@@ -720,6 +720,51 @@ export function authRouter(db: PrismaClient): Router {
     }
   });
 
+  router.post("/reauthenticate", requireAuth, async (req: AuthedRequest, res, next) => {
+    try {
+      const input = z.object({ password: z.string().min(1).max(128), code: z.string().trim().max(32).optional() }).parse(req.body);
+      const user = await db.user.findUnique({
+        where: { id: req.user!.id },
+        select: { id: true, email: true, sessionVersion: true, passwordHash: true, accessStatus: true },
+      });
+      if (!user || user.accessStatus !== "APPROVED") return next(forbidden("Your account is not approved for security changes."));
+      if (!await verifyPasswordAsync(input.password, user.passwordHash)) return next(forbidden("Password is incorrect."));
+
+      const credential = await db.totpCredential.findUnique({
+        where: { userId: user.id },
+        select: { enabledAt: true, secretEncrypted: true, lastUsedCounter: true, recoveryCodesJson: true },
+      });
+      if (credential?.enabledAt) {
+        const submitted = input.code?.trim() ?? "";
+        const counter = /^\d{6}$/.test(submitted) ? verifyTotp(decryptTotpSecret(credential.secretEncrypted), submitted) : null;
+        if (counter !== null) {
+          if (counter <= credential.lastUsedCounter) return next(forbidden("That authenticator code was already used. Wait for the next code."));
+          await db.totpCredential.update({ where: { userId: user.id }, data: { lastUsedCounter: counter } });
+        } else {
+          const recoveryHashes = JSON.parse(credential.recoveryCodesJson) as string[];
+          const recoveryHash = hashRecoveryCode(submitted);
+          const recoveryIndex = recoveryHashes.indexOf(recoveryHash);
+          if (!submitted || recoveryIndex < 0) return next(forbidden("Enter your current authenticator code or an unused recovery code."));
+          recoveryHashes.splice(recoveryIndex, 1);
+          await db.totpCredential.update({ where: { userId: user.id }, data: { recoveryCodesJson: JSON.stringify(recoveryHashes) } });
+        }
+      }
+
+      const oldToken = readSessionToken(req);
+      const oldPayload = oldToken ? verifyJwt(oldToken) : {};
+      const { token } = await createAuthSession(db, req, user, "reauthentication");
+      if (typeof oldPayload.sid === "string") {
+        await db.authSession.updateMany({
+          where: { id: oldPayload.sid, userId: user.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      setSessionCookie(res, token);
+      await recordLoginEvent(db, req, user.email, user.id, "reauthenticated", "password");
+      res.json({ ok: true, reauthenticated: true, expiresIn: JWT_TTL_SECONDS });
+    } catch (error) { next(error); }
+  });
+
   router.post("/change-password", requireAuth, async (req: AuthedRequest, res, next) => {
     try {
       const input = ChangePasswordSchema.parse(req.body);
