@@ -1517,6 +1517,32 @@ export default function App() {
             <Text style={[styles.heading, { textAlign: "center" }, darkMode && { color: "#f1f5f9" }]}>Your account</Text>
             <Text style={[styles.muted, { textAlign: "center" }, darkMode && { color: "#a7b4c8" }]}>{user.email}</Text>
             <View style={styles.profileInfo}>
+              <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>ACADEMIC IDENTITY</Text>
+              <Text style={[styles.profileValue, darkMode && { color: "#f1f5f9" }]}>{user.fullName || "Student"}</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{user.registrationNumber || "Registration number not set"}</Text>
+              <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>{user.collegeName || "College not set"} · {user.branchName || "Branch not set"}</Text>
+              {!profileEditing ? (
+                <TouchableOpacity onPress={() => {
+                  setProfileDraft({ fullName: user.fullName ?? "", collegeName: user.collegeName ?? "", collegeCode: user.collegeCode ?? "", postalPin: user.postalPin ?? "", branchName: user.branchName ?? "", branchCode: user.branchCode ?? "" });
+                  setProfileRegistrationNumber(user.registrationNumber ?? "");
+                  setProfileEditing(true);
+                  setError("");
+                }} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Edit academic profile</Text></TouchableOpacity>
+              ) : (
+                <View>
+                  <TextInput accessibilityLabel="Profile full name" placeholder="Full name" value={profileDraft.fullName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, fullName: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile diploma registration number" placeholder="Diploma registration number" autoCapitalize="characters" value={profileRegistrationNumber} onChangeText={setProfileRegistrationNumber} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile college" placeholder="College / Polytechnic" value={profileDraft.collegeName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, collegeName: value, collegeCode: getCollegeCode(value) || current.collegeCode }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile college code" placeholder="College PIN / institute code" value={profileDraft.collegeCode} onChangeText={(value) => setProfileDraft((current) => ({ ...current, collegeCode: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile postal PIN" placeholder="Postal PIN (optional)" keyboardType="number-pad" maxLength={6} value={profileDraft.postalPin} onChangeText={(value) => setProfileDraft((current) => ({ ...current, postalPin: value.replace(/[^0-9]/g, "").slice(0, 6) }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile diploma branch" placeholder="Diploma branch" value={profileDraft.branchName} onChangeText={(value) => setProfileDraft((current) => ({ ...current, branchName: value, branchCode: getBranchCode(value) || current.branchCode }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TextInput accessibilityLabel="Profile branch code" placeholder="Branch code" value={profileDraft.branchCode} onChangeText={(value) => setProfileDraft((current) => ({ ...current, branchCode: value }))} style={[styles.input, darkMode && { backgroundColor: "#1e293b", borderColor: "#334155", color: "#f1f5f9" }]} />
+                  <TouchableOpacity disabled={profileBusy} onPress={() => void saveAcademicProfile()} style={styles.primary}><Text style={styles.primaryText}>{profileBusy ? "Saving…" : "Save academic profile"}</Text></TouchableOpacity>
+                  <TouchableOpacity disabled={profileBusy} onPress={() => setProfileEditing(false)} style={styles.secondary}><Text style={[styles.secondaryText, darkMode && { color: "#cbd5e1" }]}>Cancel</Text></TouchableOpacity>
+                </View>
+              )}
+            </View>
+            <View style={styles.profileInfo}>
               <Text style={[styles.profileLabel, darkMode && { color: "#94a3b8" }]}>LEVEL & REWARDS</Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <View style={{ flex: 1 }}><Text style={[styles.statValue, darkMode && { color: "#f1f5f9" }]}>{gamification ? "Lv " + gamification.level : "—"}</Text><Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Level</Text></View>
@@ -1719,6 +1745,15 @@ export default function App() {
           </TouchableOpacity>
         </Animated.View>
       )}
+      {profileSuccessVisible ? (
+        <View style={styles.profileChangeOverlay}>
+          <View style={[styles.card, { width: "100%", maxWidth: 360 }, darkMode && { backgroundColor: "#172235", borderColor: "#334155" }]}>
+            <Text style={[styles.heading, darkMode && { color: "#f1f5f9" }]}>Settings changed successfully. Please log in again.</Text>
+            <Text style={[styles.muted, darkMode && { color: "#a7b4c8" }]}>Your academic identity was updated and existing sessions were revoked.</Text>
+            <TouchableOpacity onPress={continueAfterProfileChange} style={styles.primary}><Text style={styles.primaryText}>Continue to login</Text></TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
       {startupVisible && (
         <Animated.View style={[styles.startupOverlay, { opacity: startupFade }]}>
           <View style={styles.startupContent}>
@@ -1765,6 +1800,7 @@ function animatedEntrance(value: Animated.Value) {
 }
 
 const styles = StyleSheet.create({
+  profileChangeOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 200, elevation: 200, backgroundColor: "rgba(3, 7, 18, 0.72)", alignItems: "center", justifyContent: "center", padding: 24 },
   startupOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
