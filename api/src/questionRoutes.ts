@@ -76,7 +76,7 @@ export function questionRouter(db: PrismaClient): Router {
   router.post("/admin/questions", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const input = QuestionInputSchema.parse(req.body);
-      const outcome = await insertQuestion(db, input);
+      const outcome = await insertQuestion(db, input, req.user!.id);
       if (outcome === "duplicate") return next(conflict("A question with the same text already exists."));
       const question = await db.question.findFirstOrThrow({
         where: { questionHash: hashQuestion(input.text) },
@@ -94,6 +94,12 @@ export function questionRouter(db: PrismaClient): Router {
           promptData: JSON.parse(question.promptData),
           answerData: JSON.parse(question.answerData),
           difficulty: question.difficulty,
+          audienceScope: question.audienceScope,
+          targetCollegeCode: question.targetCollegeCode,
+          targetCollegeName: question.targetCollegeName,
+          targetBranchCode: question.targetBranchCode,
+          targetBranchName: question.targetBranchName,
+          targetStudentIdsJson: question.targetStudentIdsJson,
         },
       });
     } catch (error) {
@@ -263,6 +269,12 @@ export function questionRouter(db: PrismaClient): Router {
           options: JSON.stringify(input.options), correctIndex: input.correctIndex,
           explanation: input.explanation, source: input.source,
           difficulty: input.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(input.text),
+          audienceScope: input.audienceScope,
+          targetCollegeCode: input.targetCollegeCode.trim() || null,
+          targetCollegeName: input.targetCollegeName.trim() || null,
+          targetBranchCode: input.targetBranchCode.trim() || null,
+          targetBranchName: input.targetBranchName.trim() || null,
+          targetStudentIdsJson: JSON.stringify(input.targetStudentIds),
         },
         include: { subject: { select: { name: true } }, topic: { select: { name: true } } },
       });
@@ -272,6 +284,12 @@ export function questionRouter(db: PrismaClient): Router {
         text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
         explanation: question.explanation, source: question.source, difficulty: question.difficulty,
         reviewStatus: question.reviewStatus,
+        audienceScope: question.audienceScope,
+        targetCollegeCode: question.targetCollegeCode,
+        targetCollegeName: question.targetCollegeName,
+        targetBranchCode: question.targetBranchCode,
+        targetBranchName: question.targetBranchName,
+        targetStudentIdsJson: question.targetStudentIdsJson,
       } });
     } catch (error) {
       if (typeof error === "object" && error !== null && "code" in error && (error as {code?: string}).code === "P2002") {
