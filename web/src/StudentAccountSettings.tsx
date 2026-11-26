@@ -24,7 +24,8 @@ type LoginEvent = { id:string; email:string; result:string; method:string; ipAdd
 type Passkey = { id:string; name:string; createdAt:string; lastUsedAt:string|null; transports:string[] };
 type SecurityStatus = { authenticatorEnabled:boolean; recoveryCodesRemaining:number; passkeyCount:number };
 function fromBase64Url(value:string):Uint8Array{const base=value.replace(/-/g,"+").replace(/_/g,"/");const padded=base+"=".repeat((4-base.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
-function toWebAuthnBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}\nfunction toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/g,"")}
+function toWebAuthnBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}
+function toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
 type Props = {
   page: "account" | "settings";
   email: string;
