@@ -187,7 +187,7 @@ async function verifyRegistrationCaptcha(token: string | undefined, ip: string, 
   if (!token?.trim()) throw badRequest("Complete the CAPTCHA security check.");
   const body = new URLSearchParams({ secret, response: token });
   if (ip && ip !== "unknown") body.set("remoteip", ip);
-  let response: Response;
+  let response: globalThis.Response;
   try {
     response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",
