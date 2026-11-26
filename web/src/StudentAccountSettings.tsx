@@ -24,7 +24,7 @@ type LoginEvent = { id:string; email:string; result:string; method:string; ipAdd
 type Passkey = { id:string; name:string; createdAt:string; lastUsedAt:string|null; transports:string[] };
 type SecurityStatus = { authenticatorEnabled:boolean; recoveryCodesRemaining:number; passkeyCount:number };
 function fromBase64Url(value:string):Uint8Array{const base=value.replace(/-/g,"+").replace(/_/g,"/");const padded=base+"=".repeat((4-base.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
-function toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/g,"")}
+function toWebAuthnBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}\nfunction toBase64Url(value:ArrayBuffer):string{const bytes=new Uint8Array(value);let binary="";bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/g,"")}
 type Props = {
   page: "account" | "settings";
   email: string;
@@ -157,7 +157,7 @@ export default function StudentAccountSettings(props: Props) {
     try{
       if(!navigator.credentials)throw new Error("Passkeys are not supported by this browser.");
       const options=await request<{publicKey:{challenge:string;rp:{name:string;id:string};user:{id:string;name:string;displayName:string};pubKeyCredParams:PublicKeyCredentialParameters[];timeout:number;attestation:AttestationConveyancePreference;authenticatorSelection:AuthenticatorSelectionCriteria;excludeCredentials:{type:"public-key";id:string}[]}}>("/auth/passkeys/register/options",{method:"POST",body:"{}"});
-      const publicKey:PublicKeyCredentialCreationOptions={...options.publicKey,challenge:fromBase64Url(options.publicKey.challenge),user:{...options.publicKey.user,id:fromBase64Url(options.publicKey.user.id)},excludeCredentials:options.publicKey.excludeCredentials.map(item=>({...item,id:fromBase64Url(item.id)}))};
+      const publicKey:PublicKeyCredentialCreationOptions={...options.publicKey,challenge:toWebAuthnBufferSource(fromBase64Url(options.publicKey.challenge)),user:{...options.publicKey.user,id:toWebAuthnBufferSource(fromBase64Url(options.publicKey.user.id))},excludeCredentials:options.publicKey.excludeCredentials.map(item=>({...item,id:toWebAuthnBufferSource(fromBase64Url(item.id))}))};
       const credential=await navigator.credentials.create({publicKey}) as PublicKeyCredential|null;if(!credential)throw new Error("Passkey creation was cancelled.");
       const response=credential.response as AuthenticatorAttestationResponse;
       await request("/auth/passkeys/register/verify",{method:"POST",body:JSON.stringify({challenge:options.publicKey.challenge,credentialId:credential.id,clientDataJSON:toBase64Url(response.clientDataJSON),attestationObject:toBase64Url(response.attestationObject),name:"This device",transports:response.getTransports?.()??[]})});
