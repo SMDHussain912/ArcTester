@@ -36,7 +36,7 @@ describe("StudentAccountSettings", () => {
 
   it("changes password and shows authenticator and passkey security controls", async () => {
     vi.mocked(request).mockResolvedValue({ sessions: [], events: [], passkeys: [], authenticatorEnabled: false, recoveryCodesRemaining: 0, passkeyCount: 0 });
-    render(<StudentAccountSettings page="settings" email="student@example.com" userId={12} role="STUDENT" theme="light" onThemeChange={vi.fn()} reduceMotion={false} onReduceMotionChange={vi.fn()} showAnnouncementPopups onShowAnnouncementPopupsChange={vi.fn()} busy={false} onSignOut={vi.fn()} />);
+    render(<StudentAccountSettings page="settings" email="student@example.com" userId={12} role="STUDENT" theme="light" onThemeChange={vi.fn()} reduceMotion={false} onReduceMotionChange={vi.fn()} showAnnouncementPopups onShowAnnouncementPopupsChange={vi.fn()} busy={false} onSignOut={vi.fn()} onProfileChanged={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "old-password" } });
     fireEvent.change(screen.getByLabelText("New password"), { target: { value: "new-password-12345" } });
     fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "new-password-12345" } });
@@ -47,5 +47,17 @@ describe("StudentAccountSettings", () => {
     expect(screen.getByText("Passkeys")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Set up authenticator" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add a passkey" })).toBeInTheDocument();
+  });
+
+  it("requires reauthentication after an academic identity change", async () => {
+    vi.mocked(request).mockResolvedValue({ changed: true, requiresReauthentication: true });
+    const onProfileChanged = vi.fn();
+    render(<StudentAccountSettings page="settings" email="student@example.com" userId={12} role="STUDENT" fullName="Test Student" registrationNumber="24999-CM-053" collegeName="Test Polytechnic" collegeCode="999" branchName="Computer Engineering (CME)" branchCode="CM" theme="light" onThemeChange={vi.fn()} reduceMotion={false} onReduceMotionChange={vi.fn()} showAnnouncementPopups onShowAnnouncementPopupsChange={vi.fn()} busy={false} onSignOut={vi.fn()} onProfileChanged={onProfileChanged} />);
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Updated Test Student" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save academic profile" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/auth/profile", expect.objectContaining({ method: "PATCH", body: expect.stringContaining("Updated Test Student") })));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Settings changed successfully. Please log in again.");
+    fireEvent.click(screen.getByRole("button", { name: "Continue to login" }));
+    expect(onProfileChanged).toHaveBeenCalledTimes(1);
   });
 });
