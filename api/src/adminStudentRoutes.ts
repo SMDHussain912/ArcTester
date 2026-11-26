@@ -17,7 +17,7 @@ const UpdateSchema = StudentAcademicProfileSchema.partial().extend({
   email: z.string().email().trim().toLowerCase().optional(),
   registrationNumber: z.preprocess(
     (value) => value === "" ? null : value,
-    z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\\d{3}$/i, "Enter a valid diploma registration number.").nullable().optional(),
+    z.string().trim().regex(/^\d{5}-[A-Z]{1,3}-\d{3}$/i, "Enter a valid diploma registration number.").nullable().optional(),
   ),
 }).strict().refine((value) => Object.keys(value).length > 0, {
   message: "Provide at least one field to update.",
