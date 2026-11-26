@@ -1,4 +1,5 @@
-import AdminStudentPicker from "./AdminStudentPicker";\nimport type { FormEvent } from "react";
+import AdminStudentPicker from "./AdminStudentPicker";
+import type { FormEvent } from "react";
 export type AdminQuestionForm = { subject:string;topic:string;text:string;a:string;b:string;c:string;d:string;correctIndex:string;difficulty:string;explanation:string;source:string;questionType:string;promptData:string;answerData:string;audienceScope:"ALL"|"COLLEGE"|"BRANCH"|"STUDENTS";targetCollegeCode:string;targetCollegeName:string;targetBranchCode:string;targetBranchName:string;targetStudentIds:string };
 export type AdminQuestionFormField=keyof AdminQuestionForm;
 type Props={form:AdminQuestionForm;editing:boolean;busy:boolean;onChange:(field:AdminQuestionFormField,value:string)=>void;onSubmit:(event:FormEvent<HTMLFormElement>)=>void;onBack:()=>void};
