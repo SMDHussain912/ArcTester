@@ -36,11 +36,12 @@ describe("administrator workspace navigation", () => {
       ["Announcements", "Announcements"],
       ["Subjects & topics", "Subjects & topics"],
       ["Students", "Students"],
-      ["Model Lab", "Model Lab & MCP"],
+      ["Model Lab", "Model Lab"],
       ["Review queue", "Review queue"],
       ["Live invigilation", "Live invigilation"],
       ["Study materials", "Study resources"],
       ["Lesson Studio", "Lesson Studio"],
+      ["MCP keys", "MCP keys"],
     ] as const;
 
     for (const [navigationLabel, heading] of workspaces) {
