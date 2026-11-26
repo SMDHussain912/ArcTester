@@ -1076,3 +1076,15 @@ model AuditEvent {
   @@index([outcome, createdAt])
   @@index([requestId])
 }
+
+/// Retention checkpoint anchors the hash chain before old audit rows are pruned.
+model AuditCheckpoint {
+  id                    String   @id
+  lastEventHash          String
+  lastEventCreatedAt     DateTime
+  deletedCount           Int
+  previousCheckpointHash String   @default("GENESIS")
+  checkpointHash         String   @unique
+  createdAt              DateTime @default(now())
+  @@index([createdAt])
+}
