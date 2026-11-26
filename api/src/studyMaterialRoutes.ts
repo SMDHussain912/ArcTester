@@ -156,7 +156,7 @@ export function studyMaterialRouter(db: PrismaClient): Router {
       const materials = profile.role === "ADMIN" ? published : published.filter((item) =>
         isContentAudienceVisible(item as ContentAudience, profile),
       );
-      res.json({ ok: true, materials: materials.map((item) => { const publicItem = { ...item }; delete publicItem.targetStudentIdsJson; return publicItem; }) });
+      res.json({ ok: true, materials: materials.map((item) => ({ ...item, targetStudentIdsJson: undefined })) });
     } catch (error) { next(error); }
   });
 
