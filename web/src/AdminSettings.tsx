@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 type Props = { theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void };
 
-export default function AdminSettings({ theme, onThemeChange, email, onSignOut }: Props) {
+export default function AdminSettings({ theme, onThemeChange }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [compactNavigation, setCompactNavigation] = useState(() => {
     try { return window.localStorage.getItem("arctester-admin-compact-nav") === "true"; } catch { return false; }
