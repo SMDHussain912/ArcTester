@@ -18,6 +18,8 @@ import AdminAttendanceRegister, { type AttendanceRow, type AssignmentAudit } fro
 import AdminReviewQueue, { type ReviewQueueItem } from "./AdminReviewQueue";
 import AdminStudents from "./AdminStudents";
 import AdminSettings from "./AdminSettings";
+import AccountSecurityPanel from "./AccountSecurityPanel";
+import ArcTesterMascot from "./components/ArcTesterMascot";
 import AdminSystemMonitor from "./AdminSystemMonitor";
 import Toast from "./components/Toast";
 import { AP_ECET_CSE_2026_QUOTAS, canonicalPaperSubject, selectPaperQuestions } from "./apEcet2026";
@@ -188,16 +190,16 @@ export default function AdminWorkspace(p:Props){
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
  const navGroups=[
-  {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
+  {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
   {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
   {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
-  {label:"System",items:[["system-monitor","Server monitor","▥"],["settings","Settings","⚙"]]}
+  {label:"System",items:[["system-monitor","Server monitor","▥"],["settings","Settings","⚙"]]},{label:"Account",items:[["account-security","Account","♙"]]}
  ];
  const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
   <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
   {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
-  <aside className={"admin-sidebar"+(mobileMenuOpen?" is-open":"")}><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
+  <aside className={"admin-sidebar"+(mobileMenuOpen?" is-open":"")}><div className="admin-brand"><ArcTesterMascot variant="mark" size={36} decorative /><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
    <div className="admin-nav-label">ADMIN MENU</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{navGroups.map(group=><div className="admin-nav-group" key={group.label}><div className="admin-nav-group-label">{group.label}</div>{group.items.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</div>)}</nav>
    <div className="sidebar-bottom"><span className="admin-avatar">{p.email.slice(0,1).toUpperCase()}</span><div><b>Administrator</b><small>{p.email}</small></div></div>
   </aside>
@@ -205,7 +207,8 @@ export default function AdminWorkspace(p:Props){
   <div className="admin-content">
    {notice&&<div role="status" aria-live="polite" className="admin-alert success">{notice}<button onClick={()=>setNotice("")}>×</button></div>}
     {tab==="students"&&<AdminStudents onError={setError} onNotice={setNotice} />}
-   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} email={p.email} onSignOut={p.signOut} />}
+   {tab==="settings"&&<AdminSettings theme={p.theme} onThemeChange={p.setTheme} />}
+    {tab==="account-security"&&<AccountSecurityPanel email={p.email} onSignOut={p.signOut} />}
    {tab==="system-monitor"&&<AdminSystemMonitor />}
    {tab==="live-monitor"&&<AdminLiveMonitor
     sessions={liveSessions}
