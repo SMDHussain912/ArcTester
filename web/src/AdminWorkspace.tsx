@@ -36,7 +36,7 @@ async function api<T>(path:string, init:RequestInit={}):Promise<T>{
  if(!response.ok) throw new Error(response.status>=500?"ArcTester couldn\u0027t complete this request right now. Please try again.":typeof body.error==="string"?body.error:"Request failed.");
  return body as T;
 }
-type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string; targetStudentIds: number[] };
+type StudyMaterialPayload = { title: string; description: string; subject: string; topic: string; url: string; audienceScope: "ALL" | "COLLEGE" | "BRANCH" | "STUDENTS"; targetCollegeCode: string; targetCollegeName: string; targetBranchCode: string; targetBranchName: string; targetStudentIds: number[] };
 
 export default function AdminWorkspace(p:Props){
  const [tab,setTab]=useState("overview"),[mobileMenuOpen,setMobileMenuOpen]=useState(false),[catalog,setCatalog]=useState<AdminCatalogSubject[]>([]),[questions,setQuestions]=useState<AdminBankQuestion[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(1),[query,setQuery]=useState(""),[subject,setSubject]=useState(""),[topic,setTopic]=useState(""),[difficulty,setDifficulty]=useState(""),[reviewStatus,setReviewStatus]=useState("DRAFT"),[reviewProgress,setReviewProgress]=useState<import("./AdminQuestionBank").QuestionReviewProgress|null>(null),[selected,setSelected]=useState<number[]>([]),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
@@ -186,12 +186,18 @@ export default function AdminWorkspace(p:Props){
  function toggleId(id:number){setExamIds(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  function toggleSelected(id:number){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
  const stats=useMemo(()=>({subjects:catalog.length,topics:catalog.reduce((n,s)=>n+s.topics.length,0),questions:catalog.reduce((n,s)=>n+s.count,0)}),[catalog]);
- const nav=[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"],["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["announcements","Announcements","◈"],["notifications","Notification health","♧"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["students","Students","♙"],["settings","Settings","⚙"]];
+ const navGroups=[
+  {label:"Workspace",items:[["overview","Overview","⌂"],["model-lab","Model Lab & MCP","✧"],["questions","Question bank","▤"],["add","Add question","＋"],["import","Import questions","⇧"]]},
+  {label:"Exams",items:[["builder","Mock test builder","✦"],["exams","Exam management","▣"],["results","Results & analytics","◉"],["live-monitor","Live invigilation","◉"],["attendance","Attendance","▤"]]},
+  {label:"Students & content",items:[["students","Students","♙"],["subjects","Subjects & topics","◫"],["review-queue","Review queue","✓"],["study-materials","Study materials","▧"],["lesson-studio","Lesson Studio","✦"],["announcements","Announcements","◈"],["notifications","Notification health","♧"]]},
+  {label:"System",items:[["settings","Settings","⚙"]]}
+ ];
+ const nav=navGroups.flatMap(group=>group.items);
  return <div className="admin-shell">
   <button className="admin-mobile-menu-button" type="button" aria-label="Open admin navigation" aria-expanded={mobileMenuOpen} onClick={()=>setMobileMenuOpen(value=>!value)}>☰</button>
   {mobileMenuOpen&&<button className="admin-mobile-backdrop" aria-label="Close admin navigation" onClick={()=>setMobileMenuOpen(false)} />}
   <aside className={"admin-sidebar"+(mobileMenuOpen?" is-open":"")}><div className="admin-brand"><span className="brand-mark">A</span><div><b>ArcTester</b><small>EXAMINER CONSOLE</small></div></div>
-   <div className="admin-nav-label">WORKSPACE</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{nav.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</nav>
+   <div className="admin-nav-label">ADMIN MENU</div><nav className="admin-sidebar-navigation" aria-label="Admin workspace navigation">{navGroups.map(group=><div className="admin-nav-group" key={group.label}><div className="admin-nav-group-label">{group.label}</div>{group.items.map(([id,label,icon])=><button key={id} type="button" aria-label={label} aria-current={tab===id?"page":undefined} title={label} className={tab===id?"admin-nav active":"admin-nav"} onClick={()=>{setTab(id);setMobileMenuOpen(false);}}><span aria-hidden="true">{icon}</span><span className="admin-nav-text">{label}</span>{id==="questions"&&<small aria-hidden="true">{stats.questions}</small>}</button>)}</div>)}</nav>
    <div className="sidebar-bottom"><span className="admin-avatar">{p.email.slice(0,1).toUpperCase()}</span><div><b>Administrator</b><small>{p.email}</small></div></div>
   </aside>
   <main className="admin-main"><header className="admin-topbar"><div><span className="admin-crumb">ArcTester /</span> <b>{nav.find(n=>n[0]===tab)?.[1]}</b></div><div className="top-actions"><button className="icon-button" onClick={()=>p.setTheme(p.theme==="light"?"dark":"light")} title="Toggle theme">{p.theme==="light"?"☾":"☀"}</button><span className="user-email">{p.email}</span><button className="ghost" onClick={p.signOut}>Sign out</button></div></header>
@@ -336,7 +342,7 @@ export default function AdminWorkspace(p:Props){
    {tab==="results"&&<AdminResultsAnalytics results={results} onRefresh={() => void loadResults()} />}
    {tab==="announcements"&&<AdminAnnouncements announcements={announcements} title={announcementTitle} message={announcementMessage} expiry={announcementExpiry} publishAt={announcementPublishAt} busy={busy} onTitleChange={setAnnouncementTitle} onMessageChange={setAnnouncementMessage} onExpiryChange={setAnnouncementExpiry} onPublishAtChange={setAnnouncementPublishAt} onCreate={createAnnouncement} onRefresh={() => void loadAnnouncements()} onDelete={(id) => void deleteAnnouncement(id)} />}
    {tab==="subjects"&&<AdminSubjects catalog={catalog} onRefresh={() => void loadCatalog()} />}
-   {tab==="invitations"&&<AdminInvitations students={students} busy={busy} onRefresh={() => void loadStudents()} onChangeStatus={(id,status)=>void changeStudentAccess(id,status)} onBulkApprove={(ids)=>void bulkApproveStudents(ids)} />}
+
   
   </div></main><div className="toast-container"><Toast open={Boolean(error)} message={error} onClose={()=>setError("")} tone="error" duration={5500}/></div></div>;
 }
