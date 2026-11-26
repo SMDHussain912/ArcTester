@@ -23,6 +23,7 @@ describe("StudentAccountSettings", () => {
         onShowAnnouncementPopupsChange={vi.fn()}
         busy={false}
         onSignOut={vi.fn()}
+        onProfileChanged={vi.fn()}
       />,
     );
 
