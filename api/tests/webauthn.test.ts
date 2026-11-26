@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { base64urlEncode, verifyClientData, verifyPasskeyAssertion } from "../src/webauthn.js";
+import { verifyClientData, verifyPasskeyAssertion } from "../src/webauthn.js";
 
 function cborHead(major:number,length:number):Buffer{
   if(length<24)return Buffer.from([(major<<5)|length]);
