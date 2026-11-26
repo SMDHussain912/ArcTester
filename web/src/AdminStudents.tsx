@@ -120,7 +120,7 @@ export default function AdminStudents({ onError, onNotice }: Props) {
           <option value="PENDING">Pending approval</option><option value="APPROVED">Approved students</option><option value="REJECTED">Rejected / disabled</option><option value="ALL">All students</option>
         </select>
       </div>
-      <div className="table-top"><span>{data ? data.total.toLocaleString() + " student account(s)" : "Loading students…"}</span>
+      <div className="table-top"><span>{data ? (data.total ?? 0).toLocaleString() + " student account(s)" : "Loading students…"}</span>
         <button className="primary" type="button" disabled={busy || !selected.length || status !== "PENDING"} onClick={() => void approveSelected()}>Approve selected ({selected.length})</button>
       </div>
       {editing && <div className="admin-panel" role="dialog" aria-label="Edit student profile">
@@ -141,7 +141,7 @@ export default function AdminStudents({ onError, onNotice }: Props) {
         </div>
       </article>)}</div>
       {!busy && visibleStudents.length === 0 && <div className="empty-state"><h3>No students found</h3><p>Try another search or status filter.</p></div>}
-      {data && data.totalPages > 1 && <div className="pagination"><button className="ghost" disabled={page <= 1 || busy} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {data.totalPages}</span><button className="ghost" disabled={page >= data.totalPages || busy} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
+      {data && (data.totalPages ?? 1) > 1 && <div className="pagination"><button className="ghost" disabled={page <= 1 || busy} onClick={() => setPage((value) => value - 1)}>Previous</button><span>Page {page} of {data.totalPages}</span><button className="ghost" disabled={page >= data.totalPages || busy} onClick={() => setPage((value) => value + 1)}>Next</button></div>}
     </div>
   </section>;
 }
