@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { page: "assignments", label: "Assigned / real exams", icon: "▣", group: "EXAMS" },
   { page: "analytics", label: "Performance analytics", icon: "▥", group: "EXAMS" },
   { page: "history", label: "Practice history", icon: "◷", group: "EXAMS" },
+  { page: "ai-practice", label: "AI Practice & MCP", icon: "✧", group: "EXAMS" },
   { page: "question-bank", label: "Question bank", icon: "▦", group: "EXAMS" },
   { page: "account", label: "Account", icon: "◉", group: "ACCOUNT" },
   { page: "about", label: "About & contact", icon: "ⓘ", group: "ACCOUNT" },
