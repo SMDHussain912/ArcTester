@@ -36,6 +36,14 @@ describe("StudentNavigation", () => {
     expect(setActivePage).toHaveBeenCalledWith("assignments");
   });
 
+  it("exposes the separate student AI Practice & MCP workspace", () => {
+    const setActivePage = vi.fn();
+    render(<StudentNavigation {...props} setActivePage={setActivePage} />);
+    const nav = screen.getByRole("navigation", { name: "Student navigation" });
+    fireEvent.click(within(nav).getByRole("button", { name: "AI Practice & MCP" }));
+    expect(setActivePage).toHaveBeenCalledWith("ai-practice");
+  });
+
   it("keeps unfinished learning pages out of More and puts account access there", () => {
     const setActivePage = vi.fn();
     const onOpenNotifications = vi.fn();
