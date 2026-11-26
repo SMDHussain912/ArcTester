@@ -11,7 +11,7 @@ type Page = {
   statusCounts: Record<AccessStatus, number>;
 };
 type Props = { onError: (message: string) => void; onNotice: (message: string) => void };
-const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\\/+$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://arctester.onrender.com").replace(/\/+$/, "");
 const fields: Array<{ key: keyof Student; label: string }> = [
   { key: "fullName", label: "Full name" }, { key: "email", label: "Email" },
   { key: "registrationNumber", label: "Diploma registration number" }, { key: "postalPin", label: "Mandal PIN" },
