@@ -86,6 +86,7 @@ export function questionRouter(db: PrismaClient): Router {
         ok: true,
         question: {
           id: question.id,
+          createdById: question.createdById,
           subject: question.subject.name,
           topic: question.topic?.name ?? null,
           text: question.text,
@@ -273,6 +274,7 @@ export function questionRouter(db: PrismaClient): Router {
         data: {
           subjectId: subject.id, topicId: topic.id, text: input.text,
           options: JSON.stringify(input.options), correctIndex: input.correctIndex,
+          questionType: input.questionType, promptData: JSON.stringify(input.promptData), answerData: JSON.stringify(input.answerData),
           explanation: input.explanation, source: input.source,
           difficulty: input.difficulty, reviewStatus: "DRAFT", questionHash: hashQuestion(input.text),
           audienceScope: input.audienceScope,
@@ -286,8 +288,8 @@ export function questionRouter(db: PrismaClient): Router {
       });
       // Content edits invalidate prior embeddings; queue a fresh index build.
       res.json({ ok: true, question: {
-        id: question.id, subject: question.subject.name, topic: question.topic?.name ?? null,
-        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex,
+        id: question.id, createdById: question.createdById, subject: question.subject.name, topic: question.topic?.name ?? null,
+        text: question.text, options: parseOptions(question.options), correctIndex: question.correctIndex, questionType: question.questionType, promptData: JSON.parse(question.promptData), answerData: JSON.parse(question.answerData),
         explanation: question.explanation, source: question.source, difficulty: question.difficulty,
         reviewStatus: question.reviewStatus,
         audienceScope: question.audienceScope,
