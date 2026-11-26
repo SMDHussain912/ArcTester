@@ -6,9 +6,11 @@ import { StudentAcademicProfileSchema, requireAdmin, requireAuth } from "./auth.
 
 const ListSchema = z.object({
   q: z.string().trim().max(120).optional(),
+  search: z.string().trim().max(120).optional(),
   college: z.string().trim().max(180).optional(),
   branch: z.string().trim().max(120).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+  accessStatus: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
   page: z.coerce.number().int().min(1).max(100000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 }).strict();
@@ -33,7 +35,7 @@ export function adminStudentRouter(db: PrismaClient): Router {
   router.get("/admin/students", requireAuth, requireAdmin(db), async (req, res, next) => {
     try {
       const query = ListSchema.parse(req.query);
-      const q = query.q?.trim();
+      const q = query.q?.trim() ?? query.search?.trim();
       const baseWhere = {
         role: "STUDENT",
         NOT: { email: { endsWith: ".deleted.invalid" } },
@@ -49,7 +51,8 @@ export function adminStudentRouter(db: PrismaClient): Router {
         ...(query.college ? { collegeName: { contains: query.college, mode: "insensitive" as const } } : {}),
         ...(query.branch ? { branchName: { contains: query.branch, mode: "insensitive" as const } } : {}),
       };
-      const where = { ...baseWhere, ...(query.status ? { accessStatus: query.status } : {}) };
+      const status = query.status ?? query.accessStatus;
+      const where = { ...baseWhere, ...(status ? { accessStatus: status } : {}) };
       const [students, total, pendingCount, approvedCount, rejectedCount] = await Promise.all([
         db.user.findMany({
           where,
