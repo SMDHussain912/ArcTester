@@ -6,7 +6,8 @@ type LoginEvent={id:string;result:string;method:string;ipAddress:string;userAgen
 type Passkey={id:string;name:string;createdAt:string;lastUsedAt:string|null};
 type Status={authenticatorEnabled:boolean;recoveryCodesRemaining:number;passkeyCount:number};
 function decode(value:string):Uint8Array{const text=value.replace(/-/g,"+").replace(/_/g,"/");return Uint8Array.from(atob(text+"=".repeat((4-text.length%4)%4)),c=>c.charCodeAt(0))}
-function toBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}\nfunction encode(value:ArrayBuffer):string{let text="";new Uint8Array(value).forEach(b=>text+=String.fromCharCode(b));return btoa(text).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
+function toBufferSource(value:Uint8Array):ArrayBuffer{const buffer=new ArrayBuffer(value.byteLength);new Uint8Array(buffer).set(value);return buffer}
+function encode(value:ArrayBuffer):string{let text="";new Uint8Array(value).forEach(b=>text+=String.fromCharCode(b));return btoa(text).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
 export default function AccountSecurityPanel({email,onSignOut}:{email:string;onSignOut:()=>void}){
  const[status,setStatus]=useState<Status>({authenticatorEnabled:false,recoveryCodesRemaining:0,passkeyCount:0});
  const[sessions,setSessions]=useState<Session[]>([]);const[history,setHistory]=useState<LoginEvent[]>([]);const[passkeys,setPasskeys]=useState<Passkey[]>([]);
